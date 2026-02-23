@@ -1,30 +1,42 @@
 import type Database from "better-sqlite3";
 
 /**
- * Get the start of the current ISO week (Monday 00:00:00) as an ISO string.
+ * Format a Date as local YYYY-MM-DD.
+ */
+function toLocalDateStr(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+/**
+ * Get the start of the current ISO week (Monday 00:00:00 local) as a UTC ISO string.
+ * Used for comparing against created_at/updated_at which are stored in UTC.
  */
 function getISOWeekStart(): string {
   const now = new Date();
   const day = now.getDay(); // 0=Sun, 1=Mon, ...
   const diff = day === 0 ? -6 : 1 - day;
   const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() + diff);
-  return monday.toISOString().split("T")[0] + "T00:00:00.000Z";
+  return monday.toISOString();
 }
 
 /**
- * Get the start of the current calendar month as an ISO string.
+ * Get the start of the current calendar month (1st 00:00:00 local) as a UTC ISO string.
+ * Used for comparing against created_at/updated_at which are stored in UTC.
  */
 function getMonthStart(): string {
   const now = new Date();
-  const first = new Date(now.getFullYear(), now.getMonth(), 1);
-  return first.toISOString().split("T")[0] + "T00:00:00.000Z";
+  return new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
 }
 
 /**
- * Get today's date as YYYY-MM-DD (for due_date comparisons).
+ * Get today's date as local YYYY-MM-DD (for due_date comparisons).
+ * due_date is stored as YYYY-MM-DD without timezone, implicitly local.
  */
 function getTodayDate(): string {
-  return new Date().toISOString().split("T")[0];
+  return toLocalDateStr(new Date());
 }
 
 export interface Stats {
