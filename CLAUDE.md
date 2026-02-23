@@ -135,6 +135,16 @@ LINE_CHANNEL_ACCESS_TOKEN=<from-line-console>
 - Cert covers: `YOUR_VPN_IP`, `localhost`, `127.0.0.1`
 - CA installed on: Windows (certutil), iOS/Android (profile)
 
+### Firewall (iptables)
+
+Port 3000 透過 iptables 限制只允許 localhost 和 WireGuard 子網存取，規則在 `sparkle.service` 的 `ExecStartPre` 自動設定（WSL2 重開後 iptables 規則會消失，service 啟動時自動重建）：
+
+- `127.0.0.1` → ACCEPT
+- `YOUR_VPN_SUBNET/24` → ACCEPT
+- 其餘 → DROP
+
+需要 `iptables` 套件：`sudo apt install -y iptables`
+
 ### WSL2 Port Forwarding
 
 After PC reboot, right-click `scripts/update-portproxy.ps1` → Run as Administrator.
