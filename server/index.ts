@@ -2,6 +2,8 @@ import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { logger } from "hono/logger";
+import { readFileSync } from "node:fs";
+import { createServer } from "node:https";
 import { authMiddleware } from "./middleware/auth.js";
 import { itemsRouter } from "./routes/items.js";
 import { searchRouter } from "./routes/search.js";
@@ -121,11 +123,15 @@ if (process.env.NODE_ENV === "production") {
 
 const port = Number(process.env.PORT) || 3000;
 
-console.log(`Server running on http://localhost:${port}`);
-
-serve({
-  fetch: app.fetch,
-  port,
-});
+if (process.env.TLS_CERT && process.env.TLS_KEY) {
+  const cert = readFileSync(process.env.TLS_CERT);
+  const key = readFileSync(process.env.TLS_KEY);
+  createServer({ cert, key }, app.fetch as never).listen(port, () => {
+    console.log(`Server running on https://0.0.0.0:${port}`);
+  });
+} else {
+  serve({ fetch: app.fetch, port });
+  console.log(`Server running on http://localhost:${port}`);
+}
 
 export default app;
