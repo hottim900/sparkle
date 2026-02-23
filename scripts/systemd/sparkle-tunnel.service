@@ -1,11 +1,11 @@
 [Unit]
 Description=Sparkle Cloudflare Tunnel
-After=network.target capture-hub.service
+After=network.target sparkle.service
 
 [Service]
 Type=simple
 User=YOUR_USER
-ExecStart=/home/YOUR_USER/.local/bin/cloudflared tunnel run capture-hub
+ExecStart=/home/YOUR_USER/.local/bin/cloudflared tunnel run sparkle
 Restart=always
 RestartSec=5
 

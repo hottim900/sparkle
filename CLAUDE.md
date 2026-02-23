@@ -63,8 +63,8 @@ scripts/
   setup-cloudflared.sh  # Cloudflare Tunnel setup (interactive)
   update-portproxy.ps1  # Windows port forwarding (run as admin)
   systemd/
-    capture-hub.service         # Node.js HTTPS server
-    capture-hub-tunnel.service  # Cloudflare Tunnel
+    sparkle.service         # Node.js HTTPS server
+    sparkle-tunnel.service  # Cloudflare Tunnel
 
 certs/                  # mkcert TLS certificates (gitignored)
 data/                   # SQLite database (gitignored)
@@ -99,9 +99,9 @@ sudo ./scripts/install-services.sh   # Install and start systemd services
 
 ```bash
 sudo ./scripts/start.sh                                    # Restart all
-sudo systemctl restart capture-hub capture-hub-tunnel      # Restart manually
-sudo systemctl status capture-hub                          # Check status
-journalctl -u capture-hub -f                               # Tail logs
+sudo systemctl restart sparkle sparkle-tunnel      # Restart manually
+sudo systemctl status sparkle                          # Check status
+journalctl -u sparkle -f                               # Tail logs
 ```
 
 ### After PC reboot
@@ -147,10 +147,10 @@ netsh interface portproxy add v4tov4 listenaddress=YOUR_VPN_IP listenport=3000 c
 
 ### Cloudflare Tunnel
 
-- Named tunnel: `capture-hub` (ID: YOUR_OLD_TUNNEL_ID)
+- Named tunnel: `sparkle` (ID: YOUR_TUNNEL_ID)
 - Domain: `YOUR_WEBHOOK_DOMAIN` → only `/api/webhook/*` is public
 - Config: `~/.cloudflared/config.yml`
-- Credentials: `~/.cloudflared/YOUR_OLD_TUNNEL_ID-*.json`
+- Credentials: `~/.cloudflared/YOUR_TUNNEL_ID-*.json`
 
 ### LINE Bot
 

@@ -23,7 +23,7 @@ warn()    { echo -e "${YELLOW}[WARN]${NC}  $*"; }
 error()   { echo -e "${RED}[ERROR]${NC} $*"; }
 
 # ── Constants ────────────────────────────────────────────────────────────────
-TUNNEL_NAME="capture-hub"
+TUNNEL_NAME="sparkle"
 LOCAL_SERVICE="http://localhost:3000"
 CLOUDFLARED_DIR="$HOME/.cloudflared"
 CONFIG_FILE="$CLOUDFLARED_DIR/config.yml"
