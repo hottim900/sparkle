@@ -1,0 +1,10 @@
+tunnel: TUNNEL_ID
+credentials-file: CREDENTIALS_PATH
+
+ingress:
+  # Only expose the LINE webhook endpoint to the public internet.
+  # All other paths return 404 — the TODO app UI stays VPN/localhost only.
+  - hostname: YOUR_HOSTNAME
+    path: /api/webhook/*
+    service: LOCAL_SERVICE
+  - service: http_status:404

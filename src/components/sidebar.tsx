@@ -13,6 +13,7 @@ import {
   FileText,
   CheckCircle,
   Archive,
+  LayoutDashboard,
   ListTodo,
   LogOut,
   Sun,
@@ -30,6 +31,7 @@ interface SidebarProps {
 }
 
 const views: { id: ViewType; label: string; icon: React.ReactNode }[] = [
+  { id: "dashboard" as ViewType, label: "總覽", icon: <LayoutDashboard className="h-4 w-4" /> },
   { id: "inbox", label: "收件匣", icon: <Inbox className="h-4 w-4" /> },
   { id: "active", label: "進行中", icon: <Zap className="h-4 w-4" /> },
   { id: "all", label: "全部", icon: <FileText className="h-4 w-4" /> },
