@@ -60,6 +60,10 @@ async function request<T>(
   });
 
   if (!res.ok) {
+    if (res.status === 401) {
+      clearToken();
+      window.location.reload();
+    }
     const body = await res.json().catch(() => ({ error: "Request failed" }));
     throw new ApiClientError(
       (body as { error?: string }).error ?? "Request failed",
