@@ -1,6 +1,11 @@
 import type { Context, Next } from "hono";
 
 export async function authMiddleware(c: Context, next: Next) {
+  const pathname = new URL(c.req.url).pathname;
+  if (pathname.startsWith("/api/webhook/")) {
+    return next();
+  }
+
   const authToken = process.env.AUTH_TOKEN;
 
   if (!authToken) {
