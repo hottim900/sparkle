@@ -149,6 +149,18 @@ export function searchItems(
   query: string,
   limit = 20,
 ) {
+  // Trigram tokenizer requires at least 3 characters; fall back to LIKE for shorter queries
+  if (query.length < 3) {
+    const pattern = `%${query}%`;
+    const stmt = sqlite.prepare(`
+      SELECT * FROM items
+      WHERE title LIKE ? OR content LIKE ?
+      ORDER BY created_at DESC
+      LIMIT ?
+    `);
+    return stmt.all(pattern, pattern, limit) as (typeof items.$inferSelect)[];
+  }
+
   const stmt = sqlite.prepare(`
     SELECT items.*
     FROM items_fts

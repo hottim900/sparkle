@@ -170,10 +170,9 @@ async function replyWithQuickReply(token: string, replyToken: string, text: stri
           text,
           quickReply: {
             items: [
-              { type: "action", action: { type: "message", label: "\u{1F4DD} 筆記", text: " " } },
-              { type: "action", action: { type: "message", label: "\u2705 待辦", text: "!todo " } },
               { type: "action", action: { type: "message", label: "\u{1F4E5} 收件匣", text: "!inbox" } },
               { type: "action", action: { type: "message", label: "\u{1F4C5} 今日", text: "!today" } },
+              { type: "action", action: { type: "message", label: "\u{1F4CA} 統計", text: "!stats" } },
               { type: "action", action: { type: "message", label: "\u2753 說明", text: "?" } },
             ],
           },
