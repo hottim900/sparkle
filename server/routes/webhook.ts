@@ -157,7 +157,7 @@ const HELP_TEXT = `\u{1F4DD} Sparkle 使用說明
 
 async function replyWithQuickReply(token: string, replyToken: string, text: string) {
   try {
-    await fetch("https://api.line.me/v2/bot/message/reply", {
+    const res = await fetch("https://api.line.me/v2/bot/message/reply", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -170,7 +170,7 @@ async function replyWithQuickReply(token: string, replyToken: string, text: stri
           text,
           quickReply: {
             items: [
-              { type: "action", action: { type: "message", label: "\u{1F4DD} 筆記", text: "" } },
+              { type: "action", action: { type: "message", label: "\u{1F4DD} 筆記", text: " " } },
               { type: "action", action: { type: "message", label: "\u2705 待辦", text: "!todo " } },
               { type: "action", action: { type: "message", label: "\u{1F4E5} 收件匣", text: "!inbox" } },
               { type: "action", action: { type: "message", label: "\u{1F4C5} 今日", text: "!today" } },
@@ -180,6 +180,10 @@ async function replyWithQuickReply(token: string, replyToken: string, text: stri
         }],
       }),
     });
+    if (!res.ok) {
+      const body = await res.text();
+      console.error("LINE reply API error:", res.status, body);
+    }
   } catch (err) {
     console.error("Failed to reply LINE message:", err);
   }
@@ -187,7 +191,7 @@ async function replyWithQuickReply(token: string, replyToken: string, text: stri
 
 async function replyMessage(token: string, replyToken: string, text: string) {
   try {
-    await fetch("https://api.line.me/v2/bot/message/reply", {
+    const res = await fetch("https://api.line.me/v2/bot/message/reply", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -198,6 +202,10 @@ async function replyMessage(token: string, replyToken: string, text: string) {
         messages: [{ type: "text", text }],
       }),
     });
+    if (!res.ok) {
+      const body = await res.text();
+      console.error("LINE reply API error:", res.status, body);
+    }
   } catch (err) {
     console.error("Failed to reply LINE message:", err);
   }
