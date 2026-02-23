@@ -5,6 +5,7 @@ import { QuickCapture } from "@/components/quick-capture";
 import { ItemList } from "@/components/item-list";
 import { ItemDetail } from "@/components/item-detail";
 import { InboxTriage } from "@/components/inbox-triage";
+import { Dashboard } from "@/components/dashboard";
 import { SearchBar } from "@/components/search-bar";
 import { Sidebar } from "@/components/sidebar";
 import { BottomNav } from "@/components/bottom-nav";
@@ -58,7 +59,7 @@ function MainApp() {
 
   // Map view to status filter
   const statusFilter: ItemStatus | undefined =
-    currentView === "all" || currentView === "triage" || currentView === "search" || currentView === "notes"
+    currentView === "all" || currentView === "triage" || currentView === "search" || currentView === "notes" || currentView === "dashboard"
       ? undefined
       : (currentView as ItemStatus);
 
@@ -92,7 +93,12 @@ function MainApp() {
         >
           <QuickCapture onCreated={refresh} />
 
-          {currentView === "triage" ? (
+          {currentView === "dashboard" ? (
+            <Dashboard
+              onViewChange={handleViewChange}
+              onSelectItem={handleSelect}
+            />
+          ) : currentView === "triage" ? (
             <div className="flex-1 overflow-y-auto">
               <InboxTriage onDone={() => handleViewChange("inbox")} />
             </div>
@@ -130,7 +136,7 @@ function MainApp() {
         )}
 
         {/* Empty state for desktop when no item selected */}
-        {!selectedItem && currentView !== "triage" && currentView !== "search" && (
+        {!selectedItem && currentView !== "triage" && currentView !== "search" && currentView !== "dashboard" && (
           <div className="hidden md:flex flex-1 items-center justify-center text-muted-foreground">
             <p>選擇一個項目以查看詳情</p>
           </div>
