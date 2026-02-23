@@ -5,6 +5,8 @@ import type {
   TagsResponse,
   ExportResponse,
   ImportResponse,
+  StatsResponse,
+  FocusResponse,
 } from "./types";
 
 const API_BASE = "/api";
@@ -172,6 +174,15 @@ export async function importData(data: {
     method: "POST",
     body: JSON.stringify(data),
   });
+}
+
+// Stats API
+export async function getStats(): Promise<StatsResponse> {
+  return request<StatsResponse>("/stats");
+}
+
+export async function getFocus(): Promise<FocusResponse> {
+  return request<FocusResponse>("/stats/focus");
 }
 
 export { ApiClientError };
