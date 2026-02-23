@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -11,13 +12,14 @@ import {
 import { createItem } from "@/lib/api";
 import { toast } from "sonner";
 import type { ItemType, ItemPriority } from "@/lib/types";
-import { ChevronDown, ChevronUp, Send } from "lucide-react";
+import { ChevronDown, ChevronUp, Send, Sun, Moon } from "lucide-react";
 
 interface QuickCaptureProps {
   onCreated?: () => void;
 }
 
 export function QuickCapture({ onCreated }: QuickCaptureProps) {
+  const { theme, setTheme } = useTheme();
   const [title, setTitle] = useState("");
   const [expanded, setExpanded] = useState(false);
   const [type, setType] = useState<ItemType>("note");
@@ -72,6 +74,19 @@ export function QuickCapture({ onCreated }: QuickCaptureProps) {
           autoFocus
           className="flex-1"
         />
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+          className="shrink-0 md:hidden"
+        >
+          {theme === "dark" ? (
+            <Sun className="h-4 w-4" />
+          ) : (
+            <Moon className="h-4 w-4" />
+          )}
+        </Button>
         <Button
           type="button"
           variant="ghost"

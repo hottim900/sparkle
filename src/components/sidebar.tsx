@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { SearchBar } from "./search-bar";
@@ -13,6 +14,8 @@ import {
   Archive,
   ListTodo,
   LogOut,
+  Sun,
+  Moon,
 } from "lucide-react";
 
 interface SidebarProps {
@@ -48,6 +51,7 @@ export function Sidebar({
   onSearchSelect,
 }: SidebarProps) {
   const [tags, setTags] = useState<string[]>([]);
+  const { theme, setTheme } = useTheme();
 
   useEffect(() => {
     getTags()
@@ -103,8 +107,20 @@ export function Sidebar({
         </div>
       )}
 
-      {/* Logout */}
-      <div className="p-2 border-t">
+      {/* Theme toggle + Logout */}
+      <div className="p-2 border-t space-y-1">
+        <Button
+          variant="ghost"
+          className="w-full justify-start gap-2 text-muted-foreground"
+          onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+        >
+          {theme === "dark" ? (
+            <Sun className="h-4 w-4" />
+          ) : (
+            <Moon className="h-4 w-4" />
+          )}
+          {theme === "dark" ? "淺色模式" : "深色模式"}
+        </Button>
         <Button
           variant="ghost"
           className="w-full justify-start gap-2 text-muted-foreground"
