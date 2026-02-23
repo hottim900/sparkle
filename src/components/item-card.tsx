@@ -10,6 +10,33 @@ const priorityColors: Record<string, string> = {
   low: "border-l-blue-500",
 };
 
+function getDueDateInfo(dueDate: string): { label: string; className: string } {
+  const today = new Date().toISOString().split("T")[0]!;
+  const diffDays = Math.ceil(
+    (new Date(dueDate).getTime() - new Date(today).getTime()) / 86400000
+  );
+
+  if (diffDays < 0) {
+    return {
+      label: `已過期 ${Math.abs(diffDays)} 天`,
+      className: "text-red-500",
+    };
+  }
+  if (diffDays === 0) {
+    return { label: "今天到期", className: "text-orange-500" };
+  }
+  if (diffDays === 1) {
+    return {
+      label: "明天",
+      className: "text-yellow-600 dark:text-yellow-400",
+    };
+  }
+  if (diffDays <= 7) {
+    return { label: `剩 ${diffDays} 天`, className: "text-muted-foreground" };
+  }
+  return { label: dueDate, className: "text-muted-foreground" };
+}
+
 interface ItemCardProps {
   item: ParsedItem;
   selected?: boolean;
@@ -32,6 +59,10 @@ export function ItemCard({
   const borderColor = item.priority
     ? priorityColors[item.priority] ?? ""
     : "";
+
+  const dueDateInfo = item.due_date ? getDueDateInfo(item.due_date) : null;
+  const isOverdue =
+    dueDateInfo?.className === "text-red-500" && item.status !== "done";
 
   const handleToggleDone = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -57,7 +88,7 @@ export function ItemCard({
     <div
       className={`p-3 border-l-4 cursor-pointer transition-colors hover:bg-accent ${borderColor} ${
         selected && !selectionMode ? "bg-accent" : ""
-      } ${checked ? "bg-accent/50" : ""} ${item.status === "done" ? "opacity-60" : ""}`}
+      } ${checked ? "bg-accent/50" : ""} ${item.status === "done" ? "opacity-60" : ""} ${isOverdue ? "ring-1 ring-red-200 dark:ring-red-900" : ""}`}
       onClick={handleClick}
     >
       <div className="flex items-start gap-2">
@@ -107,9 +138,9 @@ export function ItemCard({
                 {tag}
               </Badge>
             ))}
-            {item.due_date && (
-              <span className="text-xs text-muted-foreground">
-                {item.due_date}
+            {dueDateInfo && (
+              <span className={`text-xs ${dueDateInfo.className}`}>
+                {dueDateInfo.label}
               </span>
             )}
           </div>
