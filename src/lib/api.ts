@@ -71,6 +71,8 @@ export async function listItems(params?: {
   status?: string;
   type?: string;
   tag?: string;
+  sort?: string;
+  order?: string;
   limit?: number;
   offset?: number;
 }): Promise<ListItemsResponse> {
@@ -78,6 +80,8 @@ export async function listItems(params?: {
   if (params?.status) search.set("status", params.status);
   if (params?.type) search.set("type", params.type);
   if (params?.tag) search.set("tag", params.tag);
+  if (params?.sort) search.set("sort", params.sort);
+  if (params?.order) search.set("order", params.order);
   if (params?.limit) search.set("limit", String(params.limit));
   if (params?.offset) search.set("offset", String(params.offset));
 

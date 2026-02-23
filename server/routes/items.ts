@@ -24,6 +24,8 @@ itemsRouter.get("/", (c) => {
       status: c.req.query("status"),
       type: c.req.query("type"),
       tag: c.req.query("tag"),
+      sort: c.req.query("sort"),
+      order: c.req.query("order"),
       limit: c.req.query("limit"),
       offset: c.req.query("offset"),
     });

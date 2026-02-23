@@ -1,4 +1,4 @@
-import { eq, desc, sql, and } from "drizzle-orm";
+import { eq, desc, asc, sql, and } from "drizzle-orm";
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import type Database from "better-sqlite3";
 import { v4 as uuidv4 } from "uuid";
@@ -43,6 +43,8 @@ export function listItems(
     status?: string;
     type?: string;
     tag?: string;
+    sort?: "created_at" | "priority" | "due_date";
+    order?: "asc" | "desc";
     limit?: number;
     offset?: number;
   },
@@ -56,7 +58,6 @@ export function listItems(
     conditions.push(eq(items.type, filters.type as "note"));
   }
   if (filters?.tag) {
-    // JSON array contains check using LIKE with escaped tag
     conditions.push(
       sql`json_each.value = ${filters.tag}`,
     );
@@ -64,9 +65,15 @@ export function listItems(
 
   const limit = filters?.limit ?? 50;
   const offset = filters?.offset ?? 0;
+  const sortField = filters?.sort ?? "created_at";
+  const sortOrder = filters?.order ?? "desc";
+
+  const sortColumn = sortField === "priority" ? items.priority
+    : sortField === "due_date" ? items.due_date
+    : items.created_at;
+  const orderFn = sortOrder === "asc" ? asc : desc;
 
   if (filters?.tag) {
-    // Need to join with json_each for tag filtering
     const whereClause = conditions.length > 0
       ? sql`WHERE ${and(...conditions)}`
       : sql``;
@@ -76,8 +83,12 @@ export function listItems(
     );
     const total = countResult[0]?.count ?? 0;
 
+    const orderSql = sortOrder === "asc"
+      ? sql`ORDER BY items.${sql.raw(sortField)} ASC`
+      : sql`ORDER BY items.${sql.raw(sortField)} DESC`;
+
     const rows = db.all<typeof items.$inferSelect>(
-      sql`SELECT DISTINCT items.* FROM items, json_each(items.tags) ${whereClause} ORDER BY items.created_at DESC LIMIT ${limit} OFFSET ${offset}`,
+      sql`SELECT DISTINCT items.* FROM items, json_each(items.tags) ${whereClause} ${orderSql} LIMIT ${limit} OFFSET ${offset}`,
     );
 
     return { items: rows, total };
@@ -96,7 +107,7 @@ export function listItems(
     .select()
     .from(items)
     .where(whereClause)
-    .orderBy(desc(items.created_at))
+    .orderBy(orderFn(sortColumn))
     .limit(limit)
     .offset(offset)
     .all();
