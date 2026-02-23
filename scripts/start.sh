@@ -1,73 +1,50 @@
 #!/bin/bash
-# Capture Hub — 一鍵啟動腳本
-# 用法: ./scripts/start.sh
+# Capture Hub — 一鍵啟動/重啟
+# 用法: sudo ./scripts/start.sh
 
 set -euo pipefail
 
-PROJECT_DIR="/home/YOUR_USER/sparkle"
-NODE_BIN="/home/YOUR_USER/.nvm/versions/node/v22.22.0/bin"
-CLOUDFLARED="$HOME/.local/bin/cloudflared"
-VPN_IP="YOUR_VPN_IP"
-PORT=3000
-
-export PATH="$NODE_BIN:$PATH"
-
 echo "🚀 Capture Hub 啟動中..."
 
-# 1. 殺掉舊 process
-echo "[1/4] 清理舊 process..."
-fuser $PORT/tcp 2>/dev/null | xargs kill 2>/dev/null || true
-pkill -f "cloudflared tunnel run" 2>/dev/null || true
-sleep 1
-
-# 2. 啟動 server
-echo "[2/4] 啟動 HTTPS server..."
-cd "$PROJECT_DIR"
-NODE_ENV=production node --env-file=.env --import tsx server/index.ts &
-SERVER_PID=$!
+# 1. 重啟 systemd services
+echo "[1/2] 重啟 services..."
+systemctl restart capture-hub.service
+systemctl restart capture-hub-tunnel.service
 sleep 3
 
-if kill -0 $SERVER_PID 2>/dev/null; then
-  echo "  ✅ Server 啟動 (PID: $SERVER_PID)"
+# 檢查狀態
+if systemctl is-active --quiet capture-hub.service; then
+  echo "  ✅ Server 運行中"
 else
   echo "  ❌ Server 啟動失敗"
+  journalctl -u capture-hub.service --no-pager -n 5
   exit 1
 fi
 
-# 3. 啟動 Cloudflare Tunnel
-echo "[3/4] 啟動 Cloudflare Tunnel..."
-$CLOUDFLARED tunnel run capture-hub &>/dev/null &
-TUNNEL_PID=$!
-sleep 3
-
-if kill -0 $TUNNEL_PID 2>/dev/null; then
-  echo "  ✅ Tunnel 啟動 (PID: $TUNNEL_PID)"
+if systemctl is-active --quiet capture-hub-tunnel.service; then
+  echo "  ✅ Tunnel 運行中"
 else
   echo "  ❌ Tunnel 啟動失敗"
+  journalctl -u capture-hub-tunnel.service --no-pager -n 5
 fi
 
-# 4. 更新 Windows port forwarding
-echo "[4/4] 更新 Windows port forwarding..."
+# 2. 提示 port forwarding
 WSL_IP=$(hostname -I | awk '{print $1}')
-# 透過 PowerShell 更新 portproxy
-powershell.exe -Command "
-  netsh interface portproxy delete v4tov4 listenaddress=$VPN_IP listenport=$PORT 2>\$null;
-  netsh interface portproxy add v4tov4 listenaddress=$VPN_IP listenport=$PORT connectaddress=$WSL_IP connectport=$PORT
-" 2>/dev/null && echo "  ✅ Port forwarding: $VPN_IP:$PORT → $WSL_IP:$PORT" \
-             || echo "  ⚠️  Port forwarding 需要管理員權限，請手動執行：
-  netsh interface portproxy add v4tov4 listenaddress=$VPN_IP listenport=$PORT connectaddress=$WSL_IP connectport=$PORT"
+echo ""
+echo "[2/2] Port forwarding"
+echo "  如果手機連不上，在 Windows PowerShell (管理員) 執行："
+echo "  右鍵執行 scripts/update-portproxy.ps1"
+echo "  或手動: netsh interface portproxy add v4tov4 listenaddress=YOUR_VPN_IP listenport=3000 connectaddress=$WSL_IP connectport=3000"
 
 echo ""
 echo "========================================="
 echo "  Capture Hub 已啟動"
-echo "  PC:     https://localhost:$PORT"
-echo "  手機:   https://$VPN_IP:$PORT"
+echo "  PC:     https://localhost:3000"
+echo "  手機:   https://YOUR_VPN_IP:3000"
 echo "  LINE:   https://YOUR_WEBHOOK_DOMAIN/api/webhook/line"
 echo "========================================="
 echo ""
-echo "停止: kill $SERVER_PID $TUNNEL_PID"
-echo "或按 Ctrl+C"
-
-# 等待，Ctrl+C 時清理
-trap "echo '正在停止...'; kill $SERVER_PID $TUNNEL_PID 2>/dev/null; exit 0" INT TERM
-wait
+echo "常用指令："
+echo "  狀態:  systemctl status capture-hub"
+echo "  Log:   journalctl -u capture-hub -f"
+echo "  重啟:  sudo systemctl restart capture-hub capture-hub-tunnel"
