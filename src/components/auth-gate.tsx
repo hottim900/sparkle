@@ -46,7 +46,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <div className="w-full max-w-sm space-y-6">
         <div className="text-center space-y-2">
-          <h1 className="text-2xl font-bold">Capture Hub</h1>
+          <h1 className="text-2xl font-bold">Sparkle</h1>
           <p className="text-muted-foreground text-sm">請輸入存取權杖以登入</p>
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">

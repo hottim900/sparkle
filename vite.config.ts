@@ -15,9 +15,9 @@ export default defineConfig({
       registerType: "prompt",
       injectRegister: false,
       manifest: {
-        name: "Capture Hub",
-        short_name: "Capture",
-        description: "Personal TODO list & idea capture hub",
+        name: "Sparkle",
+        short_name: "Sparkle",
+        description: "Personal TODO list & idea management",
         theme_color: "#0f172a",
         background_color: "#ffffff",
         display: "standalone",

@@ -1,5 +1,5 @@
 #!/bin/bash
-# 安裝 Capture Hub systemd services
+# 安裝 Sparkle systemd services
 # 用法: sudo ./scripts/install-services.sh
 
 set -euo pipefail
@@ -7,7 +7,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SERVICE_DIR="$SCRIPT_DIR/systemd"
 
-echo "📦 安裝 Capture Hub systemd services..."
+echo "📦 安裝 Sparkle systemd services..."
 
 # 複製 service 檔案
 cp "$SERVICE_DIR/capture-hub.service" /etc/systemd/system/

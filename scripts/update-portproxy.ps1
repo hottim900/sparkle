@@ -1,4 +1,4 @@
-# Capture Hub — 更新 WSL Port Forwarding
+# Sparkle — 更新 WSL Port Forwarding
 # 右鍵 → 以系統管理員身分執行
 
 $VpnIp = "YOUR_VPN_IP"

@@ -1,6 +1,6 @@
 /**
  * Generate minimal valid PNG icon files for PWA.
- * Creates a dark background (#0f172a) with the letter "C" for "Capture Hub".
+ * Creates a dark background (#0f172a) with the letter "S" for "Sparkle".
  * Uses raw binary PNG generation without external dependencies.
  */
 

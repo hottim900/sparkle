@@ -83,7 +83,7 @@ webhookRouter.post("/line", async (c) => {
   return c.json({ ok: true });
 });
 
-const HELP_TEXT = `📝 Capture Hub 使用說明
+const HELP_TEXT = `📝 Sparkle 使用說明
 
 直接輸入文字 → 存為筆記
 !todo 買牛奶 → 存為待辦
