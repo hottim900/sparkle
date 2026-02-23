@@ -80,8 +80,9 @@ export async function listItems(params?: {
   limit?: number;
   offset?: number;
 }): Promise<ListItemsResponse> {
+  const validStatuses = new Set(["inbox", "active", "done", "archived"]);
   const search = new URLSearchParams();
-  if (params?.status) search.set("status", params.status);
+  if (params?.status && validStatuses.has(params.status)) search.set("status", params.status);
   if (params?.type) search.set("type", params.type);
   if (params?.tag) search.set("tag", params.tag);
   if (params?.sort) search.set("sort", params.sort);
