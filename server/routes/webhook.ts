@@ -39,6 +39,16 @@ webhookRouter.post("/line", async (c) => {
     }
 
     const text: string = event.message.text;
+    const trimmed = text.trim().toLowerCase();
+
+    // Help command
+    if (trimmed === "?" || trimmed === "help" || trimmed === "說明") {
+      if (event.replyToken) {
+        await replyMessage(channelToken, event.replyToken, HELP_TEXT);
+      }
+      continue;
+    }
+
     const parsed = parseLineMessage(text);
 
     if (!parsed.title) continue;
@@ -54,18 +64,64 @@ webhookRouter.post("/line", async (c) => {
       });
 
       if (event.replyToken) {
-        await replyMessage(channelToken, event.replyToken, `\u2705 \u5DF2\u5B58\u5165\u6536\u4EF6\u5323\uFF1A${item.title}`);
+        const typeLabel = item.type === "todo" ? "待辦" : "筆記";
+        const priorityLabel = parsed.priority === "high" ? " [高優先]" : "";
+        await replyWithQuickReply(
+          channelToken,
+          event.replyToken,
+          `\u2705 已存入收件匣（${typeLabel}${priorityLabel}）\n${item.title}`,
+        );
       }
     } catch (err) {
       console.error("Failed to create item from LINE:", err);
       if (event.replyToken) {
-        await replyMessage(channelToken, event.replyToken, "\u274C \u5132\u5B58\u5931\u6557\uFF0C\u8ACB\u7A0D\u5F8C\u518D\u8A66");
+        await replyMessage(channelToken, event.replyToken, "\u274C 儲存失敗，請稍後再試");
       }
     }
   }
 
   return c.json({ ok: true });
 });
+
+const HELP_TEXT = `📝 Capture Hub 使用說明
+
+直接輸入文字 → 存為筆記
+!todo 買牛奶 → 存為待辦
+!high 緊急事項 → 高優先筆記
+!todo !high 繳費 → 高優先待辦
+
+多行訊息：第一行為標題，其餘為內容
+
+輸入 ? 顯示此說明`;
+
+async function replyWithQuickReply(token: string, replyToken: string, text: string) {
+  try {
+    await fetch("https://api.line.me/v2/bot/message/reply", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        replyToken,
+        messages: [{
+          type: "text",
+          text,
+          quickReply: {
+            items: [
+              { type: "action", action: { type: "message", label: "📝 筆記", text: "" } },
+              { type: "action", action: { type: "message", label: "✅ 待辦", text: "!todo " } },
+              { type: "action", action: { type: "message", label: "🔴 緊急", text: "!todo !high " } },
+              { type: "action", action: { type: "message", label: "❓ 說明", text: "?" } },
+            ],
+          },
+        }],
+      }),
+    });
+  } catch (err) {
+    console.error("Failed to reply LINE message:", err);
+  }
+}
 
 async function replyMessage(token: string, replyToken: string, text: string) {
   try {
