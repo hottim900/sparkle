@@ -40,6 +40,11 @@ export const listItemsSchema = z.object({
   offset: z.coerce.number().int().min(0).default(0),
 });
 
+export const batchSchema = z.object({
+  ids: z.array(z.string().uuid()).min(1, "At least one id is required"),
+  action: z.enum(["archive", "done", "active", "delete"]),
+});
+
 export const searchSchema = z.object({
   q: z.string().min(1, "Search query is required"),
   limit: z.coerce.number().int().min(1).max(100).default(20),

@@ -3,6 +3,8 @@ import type {
   ListItemsResponse,
   SearchResponse,
   TagsResponse,
+  ExportResponse,
+  ImportResponse,
 } from "./types";
 
 const API_BASE = "/api";
@@ -132,6 +134,17 @@ export async function deleteItem(id: string): Promise<void> {
   await request(`/items/${id}`, { method: "DELETE" });
 }
 
+// Batch API
+export async function batchAction(
+  ids: string[],
+  action: string,
+): Promise<{ affected: number }> {
+  return request<{ affected: number }>("/items/batch", {
+    method: "POST",
+    body: JSON.stringify({ ids, action }),
+  });
+}
+
 // Search API
 export async function searchItemsApi(
   q: string,
@@ -145,6 +158,20 @@ export async function searchItemsApi(
 // Tags API
 export async function getTags(): Promise<TagsResponse> {
   return request<TagsResponse>("/tags");
+}
+
+// Export/Import API
+export async function exportData(): Promise<ExportResponse> {
+  return request<ExportResponse>("/export");
+}
+
+export async function importData(data: {
+  items: Item[];
+}): Promise<ImportResponse> {
+  return request<ImportResponse>("/import", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
 }
 
 export { ApiClientError };

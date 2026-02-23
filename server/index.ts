@@ -5,8 +5,11 @@ import { logger } from "hono/logger";
 import { authMiddleware } from "./middleware/auth.js";
 import { itemsRouter } from "./routes/items.js";
 import { searchRouter } from "./routes/search.js";
-import { sqlite } from "./db/index.js";
+import { db, sqlite } from "./db/index.js";
+import { items } from "./db/schema.js";
+import { eq } from "drizzle-orm";
 import { getAllTags } from "./lib/items.js";
+import { z, ZodError } from "zod";
 
 const app = new Hono();
 
@@ -23,6 +26,85 @@ app.route("/api/search", searchRouter);
 app.get("/api/tags", (c) => {
   const tags = getAllTags(sqlite);
   return c.json({ tags });
+});
+
+// Export all items
+app.get("/api/export", (c) => {
+  const allItems = db.select().from(items).all();
+  return c.json({
+    version: 1,
+    exported_at: new Date().toISOString(),
+    items: allItems,
+  });
+});
+
+// Import items (upsert)
+const importItemSchema = z.object({
+  id: z.string().min(1),
+  type: z.enum(["note", "todo"]).default("note"),
+  title: z.string().min(1).max(500),
+  content: z.string().default(""),
+  status: z.enum(["inbox", "active", "done", "archived"]).default("inbox"),
+  priority: z.enum(["low", "medium", "high"]).nullable().default(null),
+  due_date: z.string().nullable().default(null),
+  tags: z.string().default("[]"),
+  source: z.string().default(""),
+  created_at: z.string().min(1),
+  updated_at: z.string().min(1),
+});
+
+const importSchema = z.object({
+  items: z.array(importItemSchema),
+});
+
+app.post("/api/import", async (c) => {
+  try {
+    const body = await c.req.json();
+    const { items: importItems } = importSchema.parse(body);
+
+    let imported = 0;
+    let updated = 0;
+
+    for (const item of importItems) {
+      const existing = db
+        .select()
+        .from(items)
+        .where(eq(items.id, item.id))
+        .get();
+
+      if (existing) {
+        db.update(items)
+          .set({
+            type: item.type,
+            title: item.title,
+            content: item.content,
+            status: item.status,
+            priority: item.priority,
+            due_date: item.due_date,
+            tags: item.tags,
+            source: item.source,
+            created_at: item.created_at,
+            updated_at: item.updated_at,
+          })
+          .where(eq(items.id, item.id))
+          .run();
+        updated++;
+      } else {
+        db.insert(items).values(item).run();
+        imported++;
+      }
+    }
+
+    return c.json({ imported, updated });
+  } catch (e) {
+    if (e instanceof ZodError) {
+      return c.json(
+        { error: e.errors[0]?.message ?? "Validation error" },
+        400,
+      );
+    }
+    throw e;
+  }
 });
 
 // Global error handler

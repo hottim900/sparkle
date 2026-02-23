@@ -27,7 +27,7 @@ import {
 } from "@/lib/api";
 import { parseItem, type ParsedItem } from "@/lib/types";
 import { toast } from "sonner";
-import { Trash2, X, ArrowLeft } from "lucide-react";
+import { Trash2, X, ArrowLeft, Eye, Pencil } from "lucide-react";
 
 interface ItemDetailProps {
   itemId: string;
@@ -48,7 +48,8 @@ export function ItemDetail({
   const [showTagSuggestions, setShowTagSuggestions] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [loading, setLoading] = useState(true);
-  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
+  const [previewMode, setPreviewMode] = useState(false);
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => {
     setLoading(true);
@@ -120,6 +121,84 @@ export function ItemDetail({
     setItem({ ...item, tags: newTags });
     saveField("tags", newTags);
   };
+
+  const renderMarkdown = useCallback((text: string): React.ReactNode[] => {
+    if (!text) return [];
+    const blocks = text.split(/\n\n+/);
+    const nodes: React.ReactNode[] = [];
+
+    const renderInline = (line: string): React.ReactNode[] => {
+      const parts: React.ReactNode[] = [];
+      const regex = /(\*\*(.+?)\*\*|\*(.+?)\*|`(.+?)`)/g;
+      let lastIndex = 0;
+      let match: RegExpExecArray | null;
+      let key = 0;
+      while ((match = regex.exec(line)) !== null) {
+        if (match.index > lastIndex) {
+          parts.push(line.slice(lastIndex, match.index));
+        }
+        if (match[2]) {
+          parts.push(<strong key={key++}>{match[2]}</strong>);
+        } else if (match[3]) {
+          parts.push(<em key={key++}>{match[3]}</em>);
+        } else if (match[4]) {
+          parts.push(
+            <code key={key++} className="bg-muted px-1 py-0.5 rounded text-sm">
+              {match[4]}
+            </code>
+          );
+        }
+        lastIndex = match.index + match[0].length;
+      }
+      if (lastIndex < line.length) {
+        parts.push(line.slice(lastIndex));
+      }
+      return parts;
+    };
+
+    blocks.forEach((block, blockIdx) => {
+      const trimmed = block.trim();
+      if (!trimmed) return;
+
+      // Headings
+      const headingMatch = trimmed.match(/^(#{1,3})\s+(.+)$/m);
+      if (headingMatch && trimmed.split("\n").length === 1) {
+        const level = headingMatch[1]!.length;
+        const content = renderInline(headingMatch[2]!);
+        if (level === 1) nodes.push(<h1 key={blockIdx} className="text-2xl font-bold mt-4 mb-2">{content}</h1>);
+        else if (level === 2) nodes.push(<h2 key={blockIdx} className="text-xl font-bold mt-3 mb-2">{content}</h2>);
+        else nodes.push(<h3 key={blockIdx} className="text-lg font-semibold mt-2 mb-1">{content}</h3>);
+        return;
+      }
+
+      // Unordered list
+      const lines = trimmed.split("\n");
+      if (lines.every((l) => /^[-*]\s+/.test(l.trim()))) {
+        nodes.push(
+          <ul key={blockIdx} className="list-disc pl-5 my-2 space-y-1">
+            {lines.map((l, i) => (
+              <li key={i}>{renderInline(l.trim().replace(/^[-*]\s+/, ""))}</li>
+            ))}
+          </ul>
+        );
+        return;
+      }
+
+      // Regular paragraph (with line breaks)
+      nodes.push(
+        <p key={blockIdx} className="my-2">
+          {lines.map((l, i) => (
+            <span key={i}>
+              {renderInline(l)}
+              {i < lines.length - 1 && <br />}
+            </span>
+          ))}
+        </p>
+      );
+    });
+
+    return nodes;
+  }, []);
 
   const tagSuggestions = allTags.filter(
     (t) =>
@@ -345,25 +424,57 @@ export function ItemDetail({
 
         {/* Content / Markdown */}
         <div>
-          <label className="text-sm text-muted-foreground block mb-1">
-            內容
-          </label>
-          <Textarea
-            value={item.content}
-            onChange={(e) => {
-              setItem({ ...item, content: e.target.value });
-              debouncedSave("content", e.target.value);
-            }}
-            onBlur={() => {
-              if (saveTimeoutRef.current) {
-                clearTimeout(saveTimeoutRef.current);
-                saveField("content", item.content);
-              }
-            }}
-            placeholder="Markdown 內容..."
-            rows={10}
-            className="font-mono text-sm"
-          />
+          <div className="flex items-center justify-between mb-1">
+            <label className="text-sm text-muted-foreground">
+              內容
+            </label>
+            <div className="flex gap-1">
+              <Button
+                variant={previewMode ? "ghost" : "secondary"}
+                size="sm"
+                className="h-7 px-2 text-xs gap-1"
+                onClick={() => setPreviewMode(false)}
+              >
+                <Pencil className="h-3 w-3" />
+                編輯
+              </Button>
+              <Button
+                variant={previewMode ? "secondary" : "ghost"}
+                size="sm"
+                className="h-7 px-2 text-xs gap-1"
+                onClick={() => setPreviewMode(true)}
+              >
+                <Eye className="h-3 w-3" />
+                預覽
+              </Button>
+            </div>
+          </div>
+          {previewMode ? (
+            <div className="min-h-[240px] rounded-md border p-3 text-sm">
+              {item.content ? (
+                renderMarkdown(item.content)
+              ) : (
+                <p className="text-muted-foreground">無內容</p>
+              )}
+            </div>
+          ) : (
+            <Textarea
+              value={item.content}
+              onChange={(e) => {
+                setItem({ ...item, content: e.target.value });
+                debouncedSave("content", e.target.value);
+              }}
+              onBlur={() => {
+                if (saveTimeoutRef.current) {
+                  clearTimeout(saveTimeoutRef.current);
+                  saveField("content", item.content);
+                }
+              }}
+              placeholder="Markdown 內容..."
+              rows={10}
+              className="font-mono text-sm"
+            />
+          )}
         </div>
 
         {/* Metadata */}

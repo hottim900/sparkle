@@ -12,6 +12,7 @@ import {
   createItemSchema,
   updateItemSchema,
   listItemsSchema,
+  batchSchema,
 } from "../schemas/items.js";
 import { ZodError } from "zod";
 
@@ -46,6 +47,34 @@ itemsRouter.post("/", async (c) => {
     const input = createItemSchema.parse(body);
     const item = createItem(db, input);
     return c.json(item, 201);
+  } catch (e) {
+    if (e instanceof ZodError) {
+      return c.json({ error: e.errors[0]?.message ?? "Validation error" }, 400);
+    }
+    throw e;
+  }
+});
+
+// Batch operations
+itemsRouter.post("/batch", async (c) => {
+  try {
+    const body = await c.req.json();
+    const { ids, action } = batchSchema.parse(body);
+
+    let affected = 0;
+    if (action === "delete") {
+      for (const id of ids) {
+        if (deleteItem(db, id)) affected++;
+      }
+    } else {
+      const statusMap = { archive: "archived", done: "done", active: "active" } as const;
+      const status = statusMap[action];
+      for (const id of ids) {
+        if (updateItem(db, id, { status })) affected++;
+      }
+    }
+
+    return c.json({ affected });
   } catch (e) {
     if (e instanceof ZodError) {
       return c.json({ error: e.errors[0]?.message ?? "Validation error" }, 400);

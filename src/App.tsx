@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { AuthGate } from "@/components/auth-gate";
 import { Toaster } from "@/components/ui/sonner";
 import { QuickCapture } from "@/components/quick-capture";
@@ -10,6 +10,7 @@ import { Sidebar } from "@/components/sidebar";
 import { BottomNav } from "@/components/bottom-nav";
 import { OfflineIndicator } from "@/components/offline-indicator";
 import { InstallPrompt } from "@/components/install-prompt";
+import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
 import type { ViewType, ParsedItem, ItemStatus, ItemType } from "@/lib/types";
 
 function MainApp() {
@@ -31,6 +32,29 @@ function MainApp() {
     setSelectedItem(null);
     setSelectedTag(undefined);
   };
+
+  const keyboardHandlers = useMemo(
+    () => ({
+      onNewItem: () => {
+        const input = document.querySelector<HTMLInputElement>(
+          'input[placeholder="快速記錄..."]'
+        );
+        input?.focus();
+      },
+      onSearch: () => {
+        const input = document.querySelector<HTMLInputElement>(
+          'input[placeholder="搜尋..."]'
+        );
+        input?.focus();
+      },
+      onClose: () => {
+        setSelectedItem(null);
+      },
+    }),
+    []
+  );
+
+  useKeyboardShortcuts(keyboardHandlers);
 
   // Map view to status filter
   const statusFilter: ItemStatus | undefined =
