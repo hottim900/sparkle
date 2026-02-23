@@ -48,16 +48,6 @@ async function dequeueAll(): Promise<{ id: number; body: unknown }[]> {
   });
 }
 
-async function clearQueue() {
-  const db = await openDB();
-  const tx = db.transaction(STORE_NAME, "readwrite");
-  tx.objectStore(STORE_NAME).clear();
-  await new Promise((resolve, reject) => {
-    tx.oncomplete = resolve;
-    tx.onerror = reject;
-  });
-}
-
 async function deleteFromQueue(ids: number[]) {
   if (ids.length === 0) return;
   const db = await openDB();
