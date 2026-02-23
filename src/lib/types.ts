@@ -25,6 +25,17 @@ export interface TagsResponse {
   tags: string[];
 }
 
+export interface ExportResponse {
+  version: number;
+  exported_at: string;
+  items: Item[];
+}
+
+export interface ImportResponse {
+  imported: number;
+  updated: number;
+}
+
 export interface ApiError {
   error: string;
 }

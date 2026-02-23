@@ -15,6 +15,9 @@ interface ItemCardProps {
   selected?: boolean;
   onSelect?: (item: ParsedItem) => void;
   onUpdated?: () => void;
+  selectionMode?: boolean;
+  checked?: boolean;
+  onToggle?: (id: string) => void;
 }
 
 export function ItemCard({
@@ -22,6 +25,9 @@ export function ItemCard({
   selected,
   onSelect,
   onUpdated,
+  selectionMode,
+  checked,
+  onToggle,
 }: ItemCardProps) {
   const borderColor = item.priority
     ? priorityColors[item.priority] ?? ""
@@ -39,15 +45,38 @@ export function ItemCard({
     }
   };
 
+  const handleClick = () => {
+    if (selectionMode) {
+      onToggle?.(item.id);
+    } else {
+      onSelect?.(item);
+    }
+  };
+
   return (
     <div
       className={`p-3 border-l-4 cursor-pointer transition-colors hover:bg-accent ${borderColor} ${
-        selected ? "bg-accent" : ""
-      } ${item.status === "done" ? "opacity-60" : ""}`}
-      onClick={() => onSelect?.(item)}
+        selected && !selectionMode ? "bg-accent" : ""
+      } ${checked ? "bg-accent/50" : ""} ${item.status === "done" ? "opacity-60" : ""}`}
+      onClick={handleClick}
     >
       <div className="flex items-start gap-2">
-        {item.type === "todo" && (
+        {selectionMode && (
+          <button
+            className="mt-0.5 text-muted-foreground hover:text-foreground"
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggle?.(item.id);
+            }}
+          >
+            {checked ? (
+              <CheckSquare className="h-4 w-4" />
+            ) : (
+              <Square className="h-4 w-4" />
+            )}
+          </button>
+        )}
+        {!selectionMode && item.type === "todo" && (
           <button
             onClick={handleToggleDone}
             className="mt-0.5 text-muted-foreground hover:text-foreground"
