@@ -58,6 +58,20 @@ async function clearQueue() {
   });
 }
 
+async function deleteFromQueue(ids: number[]) {
+  if (ids.length === 0) return;
+  const db = await openDB();
+  const tx = db.transaction(STORE_NAME, "readwrite");
+  const store = tx.objectStore(STORE_NAME);
+  for (const id of ids) {
+    store.delete(id);
+  }
+  await new Promise((resolve, reject) => {
+    tx.oncomplete = resolve;
+    tx.onerror = reject;
+  });
+}
+
 // Intercept POST /api/items when offline
 self.addEventListener("fetch", (event: FetchEvent) => {
   const url = new URL(event.request.url);
@@ -95,7 +109,7 @@ async function replayQueue() {
   const items = await dequeueAll();
   if (items.length === 0) return;
 
-  let synced = 0;
+  const syncedIds: number[] = [];
   for (const item of items) {
     try {
       // We need the auth token — get it from clients
@@ -121,19 +135,19 @@ async function replayQueue() {
         },
         body: JSON.stringify(item.body),
       });
-      synced++;
+      syncedIds.push(item.id);
     } catch {
       // If any request fails, stop and try again later
       break;
     }
   }
 
-  if (synced > 0) {
-    await clearQueue();
+  if (syncedIds.length > 0) {
+    await deleteFromQueue(syncedIds);
     // Notify clients about synced items
     const clients = await self.clients.matchAll({ type: "window" });
     for (const client of clients) {
-      client.postMessage({ type: "OFFLINE_SYNC", count: synced });
+      client.postMessage({ type: "OFFLINE_SYNC", count: syncedIds.length });
     }
   }
 }
