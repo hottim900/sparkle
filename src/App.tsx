@@ -85,61 +85,69 @@ function MainApp() {
 
       {/* Main content area */}
       <div className="flex-1 flex flex-col md:flex-row min-w-0 overflow-hidden">
-        {/* List panel */}
-        <div
-          className={`flex-1 flex flex-col min-w-0 overflow-hidden ${
-            selectedItem ? "hidden md:flex" : "flex"
-          } md:w-96 md:max-w-none md:flex-none md:border-r`}
-        >
-          <QuickCapture onCreated={refresh} />
+        {currentView === "dashboard" ? (
+          /* Dashboard takes full width */
+          <Dashboard
+            onViewChange={handleViewChange}
+            onSelectItem={(item) => {
+              handleSelect(item);
+              handleViewChange("all");
+            }}
+          />
+        ) : (
+          <>
+            {/* List panel */}
+            <div
+              className={`flex-1 flex flex-col min-w-0 overflow-hidden ${
+                selectedItem ? "hidden md:flex" : "flex"
+              } md:w-96 md:max-w-none md:flex-none md:border-r`}
+            >
+              <QuickCapture onCreated={refresh} />
 
-          {currentView === "dashboard" ? (
-            <Dashboard
-              onViewChange={handleViewChange}
-              onSelectItem={handleSelect}
-            />
-          ) : currentView === "triage" ? (
-            <div className="flex-1 overflow-y-auto">
-              <InboxTriage onDone={() => handleViewChange("inbox")} />
+              {currentView === "triage" ? (
+                <div className="flex-1 overflow-y-auto">
+                  <InboxTriage onDone={() => handleViewChange("inbox")} />
+                </div>
+              ) : currentView === "search" ? (
+                <div className="flex-1 overflow-y-auto p-3 md:hidden">
+                  <SearchBar onSelect={handleSelect} />
+                </div>
+              ) : (
+                <div className="flex-1 overflow-y-auto">
+                  <ItemList
+                    status={statusFilter}
+                    type={typeFilter}
+                    tag={selectedTag}
+                    selectedId={selectedItem?.id}
+                    onSelect={handleSelect}
+                    refreshKey={refreshKey}
+                  />
+                </div>
+              )}
             </div>
-          ) : currentView === "search" ? (
-            <div className="flex-1 overflow-y-auto p-3 md:hidden">
-              <SearchBar onSelect={handleSelect} />
-            </div>
-          ) : (
-            <div className="flex-1 overflow-y-auto">
-              <ItemList
-                status={statusFilter}
-                type={typeFilter}
-                tag={selectedTag}
-                selectedId={selectedItem?.id}
-                onSelect={handleSelect}
-                refreshKey={refreshKey}
-              />
-            </div>
-          )}
-        </div>
 
-        {/* Detail panel */}
-        {selectedItem && (
-          <div className="fixed inset-0 z-50 bg-background md:static md:z-auto md:flex-1 md:border-l">
-            <ItemDetail
-              itemId={selectedItem.id}
-              onClose={() => setSelectedItem(null)}
-              onUpdated={refresh}
-              onDeleted={() => {
-                setSelectedItem(null);
-                refresh();
-              }}
-            />
-          </div>
-        )}
+            {/* Detail panel */}
+            {selectedItem && (
+              <div className="fixed inset-0 z-50 bg-background md:static md:z-auto md:flex-1 md:border-l">
+                <ItemDetail
+                  itemId={selectedItem.id}
+                  onClose={() => setSelectedItem(null)}
+                  onUpdated={refresh}
+                  onDeleted={() => {
+                    setSelectedItem(null);
+                    refresh();
+                  }}
+                />
+              </div>
+            )}
 
-        {/* Empty state for desktop when no item selected */}
-        {!selectedItem && currentView !== "triage" && currentView !== "search" && currentView !== "dashboard" && (
-          <div className="hidden md:flex flex-1 items-center justify-center text-muted-foreground">
-            <p>選擇一個項目以查看詳情</p>
-          </div>
+            {/* Empty state for desktop when no item selected */}
+            {!selectedItem && currentView !== "triage" && currentView !== "search" && (
+              <div className="hidden md:flex flex-1 items-center justify-center text-muted-foreground">
+                <p>選擇一個項目以查看詳情</p>
+              </div>
+            )}
+          </>
         )}
       </div>
 
