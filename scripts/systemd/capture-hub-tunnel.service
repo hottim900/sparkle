@@ -1,0 +1,13 @@
+[Unit]
+Description=Capture Hub Cloudflare Tunnel
+After=network.target capture-hub.service
+
+[Service]
+Type=simple
+User=YOUR_USER
+ExecStart=/home/YOUR_USER/.local/bin/cloudflared tunnel run capture-hub
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
