@@ -4,6 +4,14 @@ import { ThemeProvider } from "next-themes";
 import { toast } from "sonner";
 import "./index.css";
 import App from "./App";
+import { setDeferredPrompt } from "./components/install-prompt";
+
+// Listen for PWA install prompt before render
+window.addEventListener("beforeinstallprompt", (e) => {
+  e.preventDefault();
+  setDeferredPrompt(e as Parameters<typeof setDeferredPrompt>[0]);
+  window.dispatchEvent(new Event("pwa-install-available"));
+});
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

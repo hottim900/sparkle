@@ -9,6 +9,7 @@ import { SearchBar } from "@/components/search-bar";
 import { Sidebar } from "@/components/sidebar";
 import { BottomNav } from "@/components/bottom-nav";
 import { OfflineIndicator } from "@/components/offline-indicator";
+import { InstallPrompt } from "@/components/install-prompt";
 import type { ViewType, ParsedItem, ItemStatus, ItemType } from "@/lib/types";
 
 function MainApp() {
@@ -44,6 +45,7 @@ function MainApp() {
   return (
     <div className="h-screen flex flex-col md:flex-row overflow-hidden">
       <OfflineIndicator />
+      <InstallPrompt />
 
       {/* Desktop Sidebar */}
       <div className="hidden md:flex">
@@ -62,7 +64,7 @@ function MainApp() {
         <div
           className={`flex-1 flex flex-col min-w-0 overflow-hidden ${
             selectedItem ? "hidden md:flex" : "flex"
-          } ${selectedItem ? "md:max-w-sm md:border-r" : ""}`}
+          } md:w-96 md:max-w-none md:flex-none md:border-r`}
         >
           <QuickCapture onCreated={refresh} />
 
@@ -90,7 +92,7 @@ function MainApp() {
 
         {/* Detail panel */}
         {selectedItem && (
-          <div className="fixed inset-0 z-50 bg-background md:static md:z-auto md:flex-1">
+          <div className="fixed inset-0 z-50 bg-background md:static md:z-auto md:flex-1 md:border-l">
             <ItemDetail
               itemId={selectedItem.id}
               onClose={() => setSelectedItem(null)}
