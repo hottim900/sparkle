@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { searchItemsApi } from "@/lib/api";
 import { parseItems, type ParsedItem } from "@/lib/types";
@@ -9,6 +9,13 @@ import { Search, Loader2 } from "lucide-react";
 interface SearchBarProps {
   onSelect?: (item: ParsedItem) => void;
 }
+
+const STATUS_LABEL: Record<string, string> = {
+  inbox: "收件匣",
+  active: "進行中",
+  done: "已完成",
+  archived: "已封存",
+};
 
 function highlightText(text: string, query: string) {
   if (!query.trim()) return text;
@@ -31,26 +38,84 @@ function escapeRegex(str: string) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+function StatusBadge({ status }: { status: string }) {
+  switch (status) {
+    case "inbox":
+      return <Badge variant="outline" className="text-xs shrink-0">{STATUS_LABEL.inbox}</Badge>;
+    case "active":
+      return <Badge variant="default" className="text-xs shrink-0">{STATUS_LABEL.active}</Badge>;
+    case "done":
+      return <Badge variant="secondary" className="text-xs shrink-0 line-through">{STATUS_LABEL.done}</Badge>;
+    case "archived":
+      return <Badge variant="secondary" className="text-xs shrink-0 opacity-50">{STATUS_LABEL.archived}</Badge>;
+    default:
+      return null;
+  }
+}
+
 export function SearchBar({ onSelect }: SearchBarProps) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<ParsedItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const handleSearch = useCallback(async () => {
-    const q = query.trim();
-    if (!q) return;
+  const executeSearch = useCallback(async (q: string) => {
+    const trimmed = q.trim();
+    if (!trimmed) return;
     setLoading(true);
     setSearched(true);
     try {
-      const res = await searchItemsApi(q);
+      const res = await searchItemsApi(trimmed);
       setResults(parseItems(res.results));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "搜尋失敗");
     } finally {
       setLoading(false);
     }
-  }, [query]);
+  }, []);
+
+  const handleInputChange = useCallback(
+    (value: string) => {
+      setQuery(value);
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+        debounceRef.current = null;
+      }
+      if (!value.trim()) {
+        setResults([]);
+        setSearched(false);
+        return;
+      }
+      if (value.trim().length > 1) {
+        debounceRef.current = setTimeout(() => {
+          executeSearch(value);
+        }, 300);
+      }
+    },
+    [executeSearch],
+  );
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === "Enter") {
+        if (debounceRef.current) {
+          clearTimeout(debounceRef.current);
+          debounceRef.current = null;
+        }
+        executeSearch(query);
+      }
+    },
+    [executeSearch, query],
+  );
+
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+      }
+    };
+  }, []);
 
   return (
     <div className="space-y-2">
@@ -60,10 +125,8 @@ export function SearchBar({ onSelect }: SearchBarProps) {
           <Input
             placeholder="搜尋..."
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") handleSearch();
-            }}
+            onChange={(e) => handleInputChange(e.target.value)}
+            onKeyDown={handleKeyDown}
             className="pl-8"
           />
         </div>
@@ -82,30 +145,48 @@ export function SearchBar({ onSelect }: SearchBarProps) {
       )}
 
       {!loading && results.length > 0 && (
-        <div className="divide-y border rounded-md">
-          {results.map((item) => (
-            <div
-              key={item.id}
-              className="p-3 cursor-pointer hover:bg-accent"
-              onClick={() => onSelect?.(item)}
-            >
-              <p className="text-sm font-medium">
-                {highlightText(item.title, query)}
-              </p>
-              {item.content && (
-                <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                  {highlightText(item.content.slice(0, 200), query)}
-                </p>
-              )}
-              <div className="flex gap-1 mt-1">
-                {item.tags.map((tag) => (
-                  <Badge key={tag} variant="secondary" className="text-xs">
-                    {tag}
-                  </Badge>
-                ))}
+        <div className="space-y-2">
+          <p className="text-xs text-muted-foreground">
+            找到 {results.length} 個結果
+          </p>
+          <div className="divide-y border rounded-md">
+            {results.map((item) => (
+              <div
+                key={item.id}
+                className="p-3 cursor-pointer hover:bg-accent"
+                onClick={() => onSelect?.(item)}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-sm font-medium min-w-0">
+                    {highlightText(item.title, query)}
+                  </p>
+                  <StatusBadge status={item.status} />
+                </div>
+                {item.content && (
+                  <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                    {highlightText(item.content.slice(0, 200), query)}
+                  </p>
+                )}
+                <div className="flex flex-wrap items-center gap-1 mt-1">
+                  {item.tags.map((tag) => (
+                    <Badge key={tag} variant="secondary" className="text-xs">
+                      {tag}
+                    </Badge>
+                  ))}
+                  {item.due_date && (
+                    <span className="text-xs text-muted-foreground">
+                      {item.due_date}
+                    </span>
+                  )}
+                  {item.source && (
+                    <span className="text-[10px] text-muted-foreground/70">
+                      來源：{item.source}
+                    </span>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       )}
     </div>

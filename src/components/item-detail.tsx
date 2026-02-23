@@ -27,7 +27,7 @@ import {
 } from "@/lib/api";
 import { parseItem, type ParsedItem } from "@/lib/types";
 import { toast } from "sonner";
-import { Trash2, X, ArrowLeft, Eye, Pencil } from "lucide-react";
+import { Trash2, X, ArrowLeft, Eye, Pencil, Loader2, Check } from "lucide-react";
 
 interface ItemDetailProps {
   itemId: string;
@@ -49,7 +49,9 @@ export function ItemDetail({
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [previewMode, setPreviewMode] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const savedTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => {
     setLoading(true);
@@ -67,11 +69,16 @@ export function ItemDetail({
   const saveField = useCallback(
     async (field: string, value: unknown) => {
       if (!item) return;
+      setSaveStatus("saving");
+      if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
       try {
         const updated = await updateItem(item.id, { [field]: value });
         setItem(parseItem(updated));
         onUpdated?.();
+        setSaveStatus("saved");
+        savedTimerRef.current = setTimeout(() => setSaveStatus("idle"), 2000);
       } catch (err) {
+        setSaveStatus("idle");
         toast.error(err instanceof Error ? err.message : "儲存失敗");
       }
     },
@@ -89,6 +96,7 @@ export function ItemDetail({
   useEffect(() => {
     return () => {
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+      if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
     };
   }, []);
 
@@ -229,6 +237,20 @@ export function ItemDetail({
         <Button variant="ghost" size="icon" onClick={onClose}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
+        <div className="flex items-center gap-1">
+          {saveStatus === "saving" && (
+            <span className="text-xs text-muted-foreground flex items-center gap-1 animate-fade-in">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              儲存中...
+            </span>
+          )}
+          {saveStatus === "saved" && (
+            <span className="text-xs text-muted-foreground flex items-center gap-1 animate-fade-in">
+              <Check className="h-3 w-3" />
+              已儲存
+            </span>
+          )}
+        </div>
         <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
           <DialogTrigger asChild>
             <Button variant="ghost" size="icon">
@@ -255,7 +277,7 @@ export function ItemDetail({
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 animate-fade-in">
         {/* Title */}
         <Input
           value={item.title}
