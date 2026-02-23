@@ -7,6 +7,7 @@ import { createServer } from "node:https";
 import { authMiddleware } from "./middleware/auth.js";
 import { itemsRouter } from "./routes/items.js";
 import { searchRouter } from "./routes/search.js";
+import { statsRouter } from "./routes/stats.js";
 import { db, sqlite } from "./db/index.js";
 import { items } from "./db/schema.js";
 import { eq } from "drizzle-orm";
@@ -23,6 +24,7 @@ app.use("/api/*", authMiddleware);
 // Mount API routes
 app.route("/api/items", itemsRouter);
 app.route("/api/search", searchRouter);
+app.route("/api/stats", statsRouter);
 
 // Tags endpoint (separate from items CRUD to avoid /:id conflict)
 app.get("/api/tags", (c) => {
