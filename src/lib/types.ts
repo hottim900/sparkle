@@ -40,6 +40,20 @@ export interface ApiError {
   error: string;
 }
 
+export interface StatsResponse {
+  completed_this_week: number;
+  completed_this_month: number;
+  created_this_week: number;
+  created_this_month: number;
+  inbox_count: number;
+  active_count: number;
+  overdue_count: number;
+}
+
+export interface FocusResponse {
+  items: Item[];
+}
+
 // Parsed item with tags as array
 export interface ParsedItem extends Omit<Item, "tags"> {
   tags: string[];
@@ -68,4 +82,5 @@ export type ViewType =
   | "archived"
   | "triage"
   | "search"
-  | "notes";
+  | "notes"
+  | "dashboard";
