@@ -9,7 +9,7 @@ import { SearchBar } from "@/components/search-bar";
 import { Sidebar } from "@/components/sidebar";
 import { BottomNav } from "@/components/bottom-nav";
 import { OfflineIndicator } from "@/components/offline-indicator";
-import type { ViewType, ParsedItem, ItemStatus } from "@/lib/types";
+import type { ViewType, ParsedItem, ItemStatus, ItemType } from "@/lib/types";
 
 function MainApp() {
   const [currentView, setCurrentView] = useState<ViewType>("inbox");
@@ -33,9 +33,13 @@ function MainApp() {
 
   // Map view to status filter
   const statusFilter: ItemStatus | undefined =
-    currentView === "all" || currentView === "triage" || currentView === "search"
+    currentView === "all" || currentView === "triage" || currentView === "search" || currentView === "notes"
       ? undefined
       : (currentView as ItemStatus);
+
+  // Map view to type filter
+  const typeFilter: ItemType | undefined =
+    currentView === "notes" ? "note" : undefined;
 
   return (
     <div className="h-screen flex flex-col md:flex-row overflow-hidden">
@@ -74,6 +78,7 @@ function MainApp() {
             <div className="flex-1 overflow-y-auto">
               <ItemList
                 status={statusFilter}
+                type={typeFilter}
                 tag={selectedTag}
                 selectedId={selectedItem?.id}
                 onSelect={handleSelect}

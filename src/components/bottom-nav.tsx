@@ -9,7 +9,7 @@ interface BottomNavProps {
 const navItems: { id: ViewType; label: string; icon: React.ReactNode }[] = [
   { id: "inbox", label: "收件匣", icon: <Inbox className="h-5 w-5" /> },
   { id: "active", label: "進行中", icon: <Zap className="h-5 w-5" /> },
-  { id: "all", label: "筆記", icon: <FileText className="h-5 w-5" /> },
+  { id: "notes", label: "筆記", icon: <FileText className="h-5 w-5" /> },
   { id: "search", label: "搜尋", icon: <Search className="h-5 w-5" /> },
 ];
 

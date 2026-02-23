@@ -56,4 +56,5 @@ export type ViewType =
   | "done"
   | "archived"
   | "triage"
-  | "search";
+  | "search"
+  | "notes";
