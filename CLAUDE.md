@@ -58,7 +58,13 @@ src/
   sw.ts                 # Service worker (offline capture queue)
 
 scripts/
+  start.sh              # One-command restart (uses systemctl)
+  install-services.sh   # Install systemd services
   setup-cloudflared.sh  # Cloudflare Tunnel setup (interactive)
+  update-portproxy.ps1  # Windows port forwarding (run as admin)
+  systemd/
+    capture-hub.service         # Node.js HTTPS server
+    capture-hub-tunnel.service  # Cloudflare Tunnel
 
 certs/                  # mkcert TLS certificates (gitignored)
 data/                   # SQLite database (gitignored)
@@ -81,15 +87,26 @@ npm run build        # Production frontend → dist/
 
 ## Production Deployment
 
-Currently deployed on home PC (WSL2) with WireGuard VPN.
+Deployed on home PC (WSL2) with WireGuard VPN. Managed by systemd.
+
+### First-time setup
 
 ```bash
-# Start production server
-NODE_ENV=production node --env-file=.env --import tsx server/index.ts
-
-# Start Cloudflare Tunnel (for LINE webhook)
-cloudflared tunnel run capture-hub
+sudo ./scripts/install-services.sh   # Install and start systemd services
 ```
+
+### Restart / manage
+
+```bash
+sudo ./scripts/start.sh                                    # Restart all
+sudo systemctl restart capture-hub capture-hub-tunnel      # Restart manually
+sudo systemctl status capture-hub                          # Check status
+journalctl -u capture-hub -f                               # Tail logs
+```
+
+### After PC reboot
+
+WSL services auto-start. Only manual step: run `scripts/update-portproxy.ps1` as admin in Windows (right-click → Run as Administrator) to update port forwarding.
 
 ### Environment Variables (.env)
 
@@ -117,15 +134,16 @@ LINE_CHANNEL_ACCESS_TOKEN=<from-line-console>
 - CA root: `~/.local/share/mkcert/rootCA.pem`
 - Cert covers: `YOUR_VPN_IP`, `localhost`, `127.0.0.1`
 - CA installed on: Windows (certutil), iOS/Android (profile)
-- CA also served at: `https://localhost:3000/ca/rootCA.pem` (copy in dist/)
 
 ### WSL2 Port Forwarding
 
-Windows PowerShell (admin):
+After PC reboot, right-click `scripts/update-portproxy.ps1` → Run as Administrator.
+
+Or manually in PowerShell (admin):
 ```powershell
-netsh interface portproxy add v4tov4 listenaddress=YOUR_VPN_IP listenport=3000 connectaddress=<WSL_IP> connectport=3000
+$wslIp = wsl hostname -I | ForEach-Object { $_.Trim().Split()[0] }
+netsh interface portproxy add v4tov4 listenaddress=YOUR_VPN_IP listenport=3000 connectaddress=$wslIp connectport=3000
 ```
-WSL IP may change on restart — check with `hostname -I` in WSL.
 
 ### Cloudflare Tunnel
 
@@ -140,7 +158,7 @@ WSL IP may change on restart — check with `hostname -I` in WSL.
 - Webhook: `https://YOUR_WEBHOOK_DOMAIN/api/webhook/line`
 - Commands: `?`=help, `!todo`=todo, `!high`=high priority
 - Quick reply buttons shown after each save
-- Auto-reply must be OFF in LINE Official Account Manager
+- Chat mode must be OFF, Webhook must be ON in LINE Official Account Manager
 
 ## Conventions
 
