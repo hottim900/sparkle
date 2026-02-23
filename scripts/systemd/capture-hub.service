@@ -1,5 +1,5 @@
 [Unit]
-Description=Capture Hub Server
+Description=Sparkle Server
 After=network.target
 
 [Service]

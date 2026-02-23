@@ -1,4 +1,4 @@
-# Capture Hub — Project Guide
+# Sparkle — Project Guide
 
 ## What is this
 

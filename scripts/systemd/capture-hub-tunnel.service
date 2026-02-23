@@ -1,5 +1,5 @@
 [Unit]
-Description=Capture Hub Cloudflare Tunnel
+Description=Sparkle Cloudflare Tunnel
 After=network.target capture-hub.service
 
 [Service]

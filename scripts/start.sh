@@ -1,10 +1,10 @@
 #!/bin/bash
-# Capture Hub — 一鍵啟動/重啟
+# Sparkle — 一鍵啟動/重啟
 # 用法: sudo ./scripts/start.sh
 
 set -euo pipefail
 
-echo "🚀 Capture Hub 啟動中..."
+echo "🚀 Sparkle 啟動中..."
 
 # 1. 重啟 systemd services
 echo "[1/2] 重啟 services..."
@@ -38,7 +38,7 @@ echo "  或手動: netsh interface portproxy add v4tov4 listenaddress=YOUR_VPN_I
 
 echo ""
 echo "========================================="
-echo "  Capture Hub 已啟動"
+echo "  Sparkle 已啟動"
 echo "  PC:     https://localhost:3000"
 echo "  手機:   https://YOUR_VPN_IP:3000"
 echo "  LINE:   https://YOUR_WEBHOOK_DOMAIN/api/webhook/line"
