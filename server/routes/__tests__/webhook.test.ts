@@ -279,6 +279,229 @@ describe("POST /api/webhook/line", () => {
     expect(allItems).toHaveLength(0);
   });
 
+  // ============================================================
+  // Query command tests
+  // ============================================================
+
+  function sendLineMessage(app: Hono, text: string) {
+    const body = JSON.stringify({
+      events: [
+        {
+          type: "message",
+          message: { type: "text", text },
+          replyToken: "reply-token-query",
+        },
+      ],
+    });
+    const signature = makeSignature(body, TEST_LINE_SECRET);
+    return app.request("/api/webhook/line", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-line-signature": signature,
+      },
+      body,
+    });
+  }
+
+  function seedItems() {
+    const now = new Date().toISOString();
+    const today = new Date();
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, "0")}-${String(yesterday.getDate()).padStart(2, "0")}`;
+
+    testSqlite.exec(`
+      INSERT INTO items (id, type, title, content, status, priority, due_date, tags, source, created_at, updated_at) VALUES
+        ('id-1', 'todo', '買牛奶', '', 'inbox', NULL, NULL, '[]', 'LINE', '${now}', '${now}'),
+        ('id-2', 'note', '研究 Hono', '', 'inbox', NULL, NULL, '[]', 'LINE', '${now}', '${now}'),
+        ('id-3', 'todo', '繳電費', '', 'active', 'high', '${yesterdayStr}', '[]', '', '${now}', '${now}'),
+        ('id-4', 'todo', '開會準備', '', 'active', NULL, '${todayStr}', '[]', '', '${now}', '${now}'),
+        ('id-5', 'todo', '牛奶品牌比較', '', 'inbox', NULL, NULL, '[]', '', '${now}', '${now}'),
+        ('id-6', 'note', '讀書筆記', '', 'done', NULL, NULL, '[]', '', '${now}', '${now}');
+    `);
+  }
+
+  describe("!inbox command", () => {
+    it("returns inbox items when inbox has items", async () => {
+      process.env.LINE_CHANNEL_SECRET = TEST_LINE_SECRET;
+      process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
+      seedItems();
+
+      const res = await sendLineMessage(app, "!inbox");
+      expect(res.status).toBe(200);
+
+      // Should NOT create any new items
+      const allItems = testDb.select().from(items).all();
+      expect(allItems).toHaveLength(6); // Only seeded items
+
+      // Verify reply was sent with quick reply
+      const fetchMock = vi.mocked(fetch);
+      expect(fetchMock).toHaveBeenCalled();
+      const callBody = JSON.parse(fetchMock.mock.calls[0][1]!.body as string);
+      const replyText: string = callBody.messages[0].text;
+      expect(replyText).toContain("收件匣");
+      expect(replyText).toContain("買牛奶");
+      // Should have quick reply buttons
+      expect(callBody.messages[0].quickReply).toBeDefined();
+    });
+
+    it("returns empty inbox message when no items", async () => {
+      process.env.LINE_CHANNEL_SECRET = TEST_LINE_SECRET;
+      process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
+
+      const res = await sendLineMessage(app, "!inbox");
+      expect(res.status).toBe(200);
+
+      const fetchMock = vi.mocked(fetch);
+      const callBody = JSON.parse(fetchMock.mock.calls[0][1]!.body as string);
+      expect(callBody.messages[0].text).toContain("收件匣是空的");
+    });
+
+    it("does not create items (query only)", async () => {
+      process.env.LINE_CHANNEL_SECRET = TEST_LINE_SECRET;
+      process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
+
+      await sendLineMessage(app, "!inbox");
+      const allItems = testDb.select().from(items).all();
+      expect(allItems).toHaveLength(0);
+    });
+  });
+
+  describe("!find command", () => {
+    it("returns matching items", async () => {
+      process.env.LINE_CHANNEL_SECRET = TEST_LINE_SECRET;
+      process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
+      // Use ASCII text for FTS5 default tokenizer compatibility
+      const now = new Date().toISOString();
+      testSqlite.exec(`
+        INSERT INTO items (id, type, title, content, status, priority, due_date, tags, source, created_at, updated_at) VALUES
+          ('id-f1', 'note', 'Hono middleware research', '', 'inbox', NULL, NULL, '[]', 'LINE', '${now}', '${now}'),
+          ('id-f2', 'todo', 'Hono framework setup', '', 'active', NULL, NULL, '[]', '', '${now}', '${now}');
+      `);
+
+      const res = await sendLineMessage(app, "!find Hono");
+      expect(res.status).toBe(200);
+
+      const fetchMock = vi.mocked(fetch);
+      const callBody = JSON.parse(fetchMock.mock.calls[0][1]!.body as string);
+      const replyText: string = callBody.messages[0].text;
+      expect(replyText).toContain("搜尋「Hono」");
+      expect(replyText).toContain("Hono middleware research");
+      expect(callBody.messages[0].quickReply).toBeDefined();
+    });
+
+    it("returns no-results message when nothing matches", async () => {
+      process.env.LINE_CHANNEL_SECRET = TEST_LINE_SECRET;
+      process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
+
+      const res = await sendLineMessage(app, "!find nonexistentkeyword");
+      expect(res.status).toBe(200);
+
+      const fetchMock = vi.mocked(fetch);
+      const callBody = JSON.parse(fetchMock.mock.calls[0][1]!.body as string);
+      expect(callBody.messages[0].text).toContain("找不到");
+    });
+
+    it("does not create items (query only)", async () => {
+      process.env.LINE_CHANNEL_SECRET = TEST_LINE_SECRET;
+      process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
+
+      await sendLineMessage(app, "!find something");
+      const allItems = testDb.select().from(items).all();
+      expect(allItems).toHaveLength(0);
+    });
+  });
+
+  describe("!today command", () => {
+    it("returns focus items when there are due/high-priority items", async () => {
+      process.env.LINE_CHANNEL_SECRET = TEST_LINE_SECRET;
+      process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
+      seedItems();
+
+      const res = await sendLineMessage(app, "!today");
+      expect(res.status).toBe(200);
+
+      const fetchMock = vi.mocked(fetch);
+      const callBody = JSON.parse(fetchMock.mock.calls[0][1]!.body as string);
+      const replyText: string = callBody.messages[0].text;
+      expect(replyText).toContain("今日焦點");
+      // Should include overdue and today items
+      expect(replyText).toContain("繳電費");
+      expect(replyText).toContain("開會準備");
+      expect(callBody.messages[0].quickReply).toBeDefined();
+    });
+
+    it("returns empty message when no focus items", async () => {
+      process.env.LINE_CHANNEL_SECRET = TEST_LINE_SECRET;
+      process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
+
+      const res = await sendLineMessage(app, "!today");
+      expect(res.status).toBe(200);
+
+      const fetchMock = vi.mocked(fetch);
+      const callBody = JSON.parse(fetchMock.mock.calls[0][1]!.body as string);
+      expect(callBody.messages[0].text).toContain("今天沒有待處理的項目");
+    });
+
+    it("does not create items (query only)", async () => {
+      process.env.LINE_CHANNEL_SECRET = TEST_LINE_SECRET;
+      process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
+
+      await sendLineMessage(app, "!today");
+      const allItems = testDb.select().from(items).all();
+      expect(allItems).toHaveLength(0);
+    });
+  });
+
+  describe("!stats command", () => {
+    it("returns formatted stats", async () => {
+      process.env.LINE_CHANNEL_SECRET = TEST_LINE_SECRET;
+      process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
+      seedItems();
+
+      const res = await sendLineMessage(app, "!stats");
+      expect(res.status).toBe(200);
+
+      const fetchMock = vi.mocked(fetch);
+      const callBody = JSON.parse(fetchMock.mock.calls[0][1]!.body as string);
+      const replyText: string = callBody.messages[0].text;
+      expect(replyText).toContain("Sparkle 統計");
+      expect(replyText).toContain("收件匣：3");
+      expect(replyText).toContain("進行中：2");
+      expect(replyText).toContain("逾期：1");
+      expect(callBody.messages[0].quickReply).toBeDefined();
+    });
+
+    it("does not create items (query only)", async () => {
+      process.env.LINE_CHANNEL_SECRET = TEST_LINE_SECRET;
+      process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
+
+      await sendLineMessage(app, "!stats");
+      const allItems = testDb.select().from(items).all();
+      expect(allItems).toHaveLength(0);
+    });
+  });
+
+  describe("help text", () => {
+    it("includes query commands in help text", async () => {
+      process.env.LINE_CHANNEL_SECRET = TEST_LINE_SECRET;
+      process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
+
+      const res = await sendLineMessage(app, "?");
+      expect(res.status).toBe(200);
+
+      const fetchMock = vi.mocked(fetch);
+      const callBody = JSON.parse(fetchMock.mock.calls[0][1]!.body as string);
+      const replyText: string = callBody.messages[0].text;
+      expect(replyText).toContain("!inbox");
+      expect(replyText).toContain("!today");
+      expect(replyText).toContain("!find");
+      expect(replyText).toContain("!stats");
+    });
+  });
+
   it("does not require Bearer token auth", async () => {
     process.env.LINE_CHANNEL_SECRET = TEST_LINE_SECRET;
     process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
