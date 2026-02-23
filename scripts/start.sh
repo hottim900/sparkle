@@ -8,24 +8,24 @@ echo "🚀 Sparkle 啟動中..."
 
 # 1. 重啟 systemd services
 echo "[1/2] 重啟 services..."
-systemctl restart capture-hub.service
-systemctl restart capture-hub-tunnel.service
+systemctl restart sparkle.service
+systemctl restart sparkle-tunnel.service
 sleep 3
 
 # 檢查狀態
-if systemctl is-active --quiet capture-hub.service; then
+if systemctl is-active --quiet sparkle.service; then
   echo "  ✅ Server 運行中"
 else
   echo "  ❌ Server 啟動失敗"
-  journalctl -u capture-hub.service --no-pager -n 5
+  journalctl -u sparkle.service --no-pager -n 5
   exit 1
 fi
 
-if systemctl is-active --quiet capture-hub-tunnel.service; then
+if systemctl is-active --quiet sparkle-tunnel.service; then
   echo "  ✅ Tunnel 運行中"
 else
   echo "  ❌ Tunnel 啟動失敗"
-  journalctl -u capture-hub-tunnel.service --no-pager -n 5
+  journalctl -u sparkle-tunnel.service --no-pager -n 5
 fi
 
 # 2. 提示 port forwarding
@@ -45,6 +45,6 @@ echo "  LINE:   https://YOUR_WEBHOOK_DOMAIN/api/webhook/line"
 echo "========================================="
 echo ""
 echo "常用指令："
-echo "  狀態:  systemctl status capture-hub"
-echo "  Log:   journalctl -u capture-hub -f"
-echo "  重啟:  sudo systemctl restart capture-hub capture-hub-tunnel"
+echo "  狀態:  systemctl status sparkle"
+echo "  Log:   journalctl -u sparkle -f"
+echo "  重啟:  sudo systemctl restart sparkle sparkle-tunnel"
