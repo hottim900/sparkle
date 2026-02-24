@@ -9,6 +9,7 @@ WorkingDirectory=/home/YOUR_USER/sparkle
 Environment=PATH=/home/YOUR_USER/.nvm/versions/node/v22.22.0/bin:/usr/bin
 ExecStartPre=+/bin/sh -c '/usr/sbin/iptables -C INPUT -s 127.0.0.1 -p tcp --dport 3000 -j ACCEPT 2>/dev/null || /usr/sbin/iptables -A INPUT -s 127.0.0.1 -p tcp --dport 3000 -j ACCEPT'
 ExecStartPre=+/bin/sh -c '/usr/sbin/iptables -C INPUT -s YOUR_VPN_SUBNET/24 -p tcp --dport 3000 -j ACCEPT 2>/dev/null || /usr/sbin/iptables -A INPUT -s YOUR_VPN_SUBNET/24 -p tcp --dport 3000 -j ACCEPT'
+ExecStartPre=+/bin/sh -c '/usr/sbin/iptables -C INPUT -s 172.16.0.0/12 -p tcp --dport 3000 -j ACCEPT 2>/dev/null || /usr/sbin/iptables -A INPUT -s 172.16.0.0/12 -p tcp --dport 3000 -j ACCEPT'
 ExecStartPre=+/bin/sh -c '/usr/sbin/iptables -C INPUT -p tcp --dport 3000 -j DROP 2>/dev/null || /usr/sbin/iptables -A INPUT -p tcp --dport 3000 -j DROP'
 ExecStart=/home/YOUR_USER/.nvm/versions/node/v22.22.0/bin/node --env-file=.env --import tsx server/index.ts
 Restart=always
