@@ -138,4 +138,33 @@ describe("parseCommand", () => {
       expect(parseCommand("!archive")).toEqual({ type: "unknown" });
     });
   });
+
+  // Priority command
+  describe("priority command", () => {
+    it("parses !priority N high", () => {
+      expect(parseCommand("!priority 1 high")).toEqual({ type: "priority", index: 1, priority: "high" });
+    });
+
+    it("parses !priority N medium", () => {
+      expect(parseCommand("!priority 2 medium")).toEqual({ type: "priority", index: 2, priority: "medium" });
+    });
+
+    it("parses !priority N low", () => {
+      expect(parseCommand("!priority 3 low")).toEqual({ type: "priority", index: 3, priority: "low" });
+    });
+
+    it("parses !priority N none to clear", () => {
+      expect(parseCommand("!priority 1 none")).toEqual({ type: "priority", index: 1, priority: null });
+      expect(parseCommand("!priority 1 清除")).toEqual({ type: "priority", index: 1, priority: null });
+    });
+
+    it("rejects invalid priority level", () => {
+      expect(parseCommand("!priority 1 urgent")).toEqual({ type: "unknown" });
+    });
+
+    it("rejects missing parameters", () => {
+      expect(parseCommand("!priority")).toEqual({ type: "unknown" });
+      expect(parseCommand("!priority 1")).toEqual({ type: "unknown" });
+    });
+  });
 });

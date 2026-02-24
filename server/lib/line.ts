@@ -78,6 +78,7 @@ export type LineCommand =
   | { type: "tag"; index: number; tags: string[] }
   | { type: "done"; index: number }
   | { type: "archive"; index: number }
+  | { type: "priority"; index: number; priority: "high" | "medium" | "low" | null }
   | { type: "unknown" };
 
 export function parseCommand(text: string): LineCommand {
@@ -117,6 +118,21 @@ export function parseCommand(text: string): LineCommand {
       if (!rest) return { type: "unknown" };
       const num = parseInt(rest, 10);
       return !isNaN(num) && num > 0 ? { type: "archive", index: num } : { type: "unknown" };
+    }
+
+    // !priority <N> <level>
+    if (lower.startsWith("!priority ")) {
+      const rest = trimmed.slice(10).trim();
+      const spaceIdx = rest.indexOf(" ");
+      if (spaceIdx === -1) return { type: "unknown" };
+      const num = parseInt(rest.slice(0, spaceIdx), 10);
+      const level = rest.slice(spaceIdx + 1).trim().toLowerCase();
+      if (isNaN(num) || num <= 0) return { type: "unknown" };
+      if (level === "none" || level === "清除") return { type: "priority", index: num, priority: null };
+      if (["high", "medium", "low"].includes(level)) {
+        return { type: "priority", index: num, priority: level as "high" | "medium" | "low" };
+      }
+      return { type: "unknown" };
     }
 
     // !list <tag>
