@@ -12,3 +12,4 @@ data/
 certs/
 logs/
 *.log
+coverage/
