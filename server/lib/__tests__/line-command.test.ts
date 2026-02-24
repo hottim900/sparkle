@@ -167,4 +167,20 @@ describe("parseCommand", () => {
       expect(parseCommand("!priority 1")).toEqual({ type: "unknown" });
     });
   });
+
+  // Untag command
+  describe("untag command", () => {
+    it("parses !untag N tag1", () => {
+      expect(parseCommand("!untag 1 work")).toEqual({ type: "untag", index: 1, tags: ["work"] });
+    });
+
+    it("parses !untag N with multiple tags", () => {
+      expect(parseCommand("!untag 2 work urgent")).toEqual({ type: "untag", index: 2, tags: ["work", "urgent"] });
+    });
+
+    it("rejects missing parameters", () => {
+      expect(parseCommand("!untag")).toEqual({ type: "unknown" });
+      expect(parseCommand("!untag 1")).toEqual({ type: "unknown" });
+    });
+  });
 });

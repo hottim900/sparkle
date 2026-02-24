@@ -79,6 +79,7 @@ export type LineCommand =
   | { type: "done"; index: number }
   | { type: "archive"; index: number }
   | { type: "priority"; index: number; priority: "high" | "medium" | "low" | null }
+  | { type: "untag"; index: number; tags: string[] }
   | { type: "unknown" };
 
 export function parseCommand(text: string): LineCommand {
@@ -157,6 +158,17 @@ export function parseCommand(text: string): LineCommand {
       return !isNaN(num) && num > 0 && dateInput
         ? { type: "due", index: num, dateInput }
         : { type: "unknown" };
+    }
+
+    // !untag <N> <tag1> <tag2> ... (must be before !tag)
+    if (lower.startsWith("!untag ")) {
+      const rest = trimmed.slice(7).trim();
+      const parts = rest.split(/\s+/);
+      if (parts.length < 2) return { type: "unknown" };
+      const num = parseInt(parts[0], 10);
+      if (isNaN(num) || num <= 0) return { type: "unknown" };
+      const tags = parts.slice(1);
+      return { type: "untag", index: num, tags };
     }
 
     // !tag <N> <tag1> <tag2> ...
