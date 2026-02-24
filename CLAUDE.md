@@ -48,7 +48,7 @@ src/
     item-card.tsx        # List item display with due date indicators
     search-bar.tsx       # FTS search with keyword highlighting
     sidebar.tsx          # Desktop nav + tags + export/import
-    bottom-nav.tsx       # Mobile nav (inbox, active, notes, search)
+    bottom-nav.tsx       # Mobile nav (inbox, active, notes, todos, search)
     inbox-triage.tsx     # GTD triage mode
     offline-indicator.tsx
     install-prompt.tsx   # PWA install banner
@@ -171,7 +171,7 @@ netsh interface portproxy add v4tov4 listenaddress=YOUR_VPN_IP listenport=3000 c
 - Webhook: `https://YOUR_WEBHOOK_DOMAIN/api/webhook/line`
 - Commands:
   - 新增：`!todo`=待辦, `!high`=高優先, 直接輸入=筆記
-  - 查詢：`!inbox`=收件匣, `!active`=進行中, `!today`=今日焦點, `!find <keyword>`=搜尋, `!list <tag>`=標籤篩選, `!stats`=統計
+  - 查詢：`!inbox`=收件匣, `!active`=進行中, `!notes`=所有筆記, `!todos`=所有待辦, `!today`=今日焦點, `!find <keyword>`=搜尋, `!list <tag>`=標籤篩選, `!stats`=統計
   - 操作（需先查詢建立 session）：`!detail N`=詳情, `!due N <日期>`=設到期日, `!tag N <標籤...>`=加標籤
   - `?`/`help`/`說明`=說明
 - Session: 查詢結果以 [N] 編號，後續用編號操作，10 分鐘 TTL，純記憶體

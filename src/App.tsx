@@ -59,13 +59,15 @@ function MainApp() {
 
   // Map view to status filter
   const statusFilter: ItemStatus | undefined =
-    currentView === "all" || currentView === "triage" || currentView === "search" || currentView === "notes" || currentView === "dashboard"
+    currentView === "all" || currentView === "triage" || currentView === "search" || currentView === "notes" || currentView === "todos" || currentView === "dashboard"
       ? undefined
       : (currentView as ItemStatus);
 
   // Map view to type filter
   const typeFilter: ItemType | undefined =
-    currentView === "notes" ? "note" : undefined;
+    currentView === "notes" ? "note"
+      : currentView === "todos" ? "todo"
+      : undefined;
 
   return (
     <div className="h-screen flex flex-col md:flex-row overflow-hidden">

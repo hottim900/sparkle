@@ -1,5 +1,5 @@
 import type { ViewType } from "@/lib/types";
-import { Inbox, Zap, FileText, Search } from "lucide-react";
+import { Inbox, Zap, FileText, ListTodo, Search } from "lucide-react";
 
 interface BottomNavProps {
   currentView: ViewType;
@@ -10,6 +10,7 @@ const navItems: { id: ViewType; label: string; icon: React.ReactNode }[] = [
   { id: "inbox", label: "收件匣", icon: <Inbox className="h-5 w-5" /> },
   { id: "active", label: "進行中", icon: <Zap className="h-5 w-5" /> },
   { id: "notes", label: "筆記", icon: <FileText className="h-5 w-5" /> },
+  { id: "todos", label: "待辦", icon: <ListTodo className="h-5 w-5" /> },
   { id: "search", label: "搜尋", icon: <Search className="h-5 w-5" /> },
 ];
 

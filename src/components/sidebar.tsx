@@ -31,21 +31,15 @@ interface SidebarProps {
 }
 
 const views: { id: ViewType; label: string; icon: React.ReactNode }[] = [
-  { id: "dashboard" as ViewType, label: "總覽", icon: <LayoutDashboard className="h-4 w-4" /> },
+  { id: "dashboard", label: "總覽", icon: <LayoutDashboard className="h-4 w-4" /> },
   { id: "inbox", label: "收件匣", icon: <Inbox className="h-4 w-4" /> },
   { id: "active", label: "進行中", icon: <Zap className="h-4 w-4" /> },
   { id: "all", label: "全部", icon: <FileText className="h-4 w-4" /> },
+  { id: "notes", label: "筆記", icon: <FileText className="h-4 w-4" /> },
+  { id: "todos", label: "待辦", icon: <ListTodo className="h-4 w-4" /> },
   { id: "done", label: "已完成", icon: <CheckCircle className="h-4 w-4" /> },
-  {
-    id: "archived",
-    label: "已封存",
-    icon: <Archive className="h-4 w-4" />,
-  },
-  {
-    id: "triage",
-    label: "分類模式",
-    icon: <ListTodo className="h-4 w-4" />,
-  },
+  { id: "archived", label: "已封存", icon: <Archive className="h-4 w-4" /> },
+  { id: "triage", label: "分類模式", icon: <ListTodo className="h-4 w-4" /> },
 ];
 
 export function Sidebar({
