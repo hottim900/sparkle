@@ -6,6 +6,7 @@ import { getStats, getFocusItems } from "../lib/stats.js";
 import { parseCommand } from "../lib/line.js";
 import { setSession, getItemId } from "../lib/line-session.js";
 import { parseDate } from "../lib/line-date.js";
+import { formatNumberedList, formatDetail, formatStats } from "../lib/line-format.js";
 
 export const webhookRouter = new Hono();
 
@@ -281,13 +282,6 @@ const HELP_TEXT = `📝 Sparkle 使用說明
 
 輸入 ? 顯示此說明`;
 
-const STATUS_LABELS: Record<string, string> = {
-  inbox: "收件匣",
-  active: "進行中",
-  done: "已完成",
-  archived: "已封存",
-};
-
 async function replyWithQuickReply(token: string, replyToken: string, text: string) {
   try {
     const res = await fetch("https://api.line.me/v2/bot/message/reply", {
@@ -344,63 +338,3 @@ async function replyMessage(token: string, replyToken: string, text: string) {
   }
 }
 
-interface ItemLike {
-  id: string;
-  title: string;
-  due_date?: string | null;
-  priority?: string | null;
-}
-
-function formatNumberedList(header: string, items: ItemLike[], total: number): string {
-  const countNote = total > 5 ? `共 ${total} 筆，顯示 5 筆` : `共 ${total} 筆`;
-  const title = `${header}（${countNote}）`;
-  const lines = items.map((item, i) => {
-    let suffix = "";
-    if (item.due_date) suffix += ` 📅${item.due_date}`;
-    if (item.priority === "high") suffix += " ⚡";
-    return `[${i + 1}] ${item.title}${suffix}`;
-  });
-  return [title, ...lines].join("\n");
-}
-
-const LINE_TEXT_MAX = 5000;
-
-function formatDetail(item: {
-  title: string;
-  type: string;
-  status: string;
-  priority: string | null;
-  due_date: string | null;
-  tags: string;
-  content: string | null;
-}): string {
-  const lines = [`📋 ${item.title}`];
-  lines.push(`類型：${item.type === "todo" ? "待辦" : "筆記"}`);
-  lines.push(`狀態：${STATUS_LABELS[item.status] ?? item.status}`);
-  if (item.priority) lines.push(`優先：${item.priority}`);
-  if (item.due_date) lines.push(`到期：${item.due_date}`);
-  const tags: string[] = JSON.parse(item.tags || "[]");
-  if (tags.length > 0) lines.push(`標籤：${tags.join("、")}`);
-
-  if (item.content) {
-    const header = lines.join("\n");
-    const remaining = LINE_TEXT_MAX - header.length - 2; // 2 for \n\n
-    if (remaining > 50) {
-      const content = item.content.length > remaining
-        ? item.content.slice(0, remaining - 10) + "\n⋯（已截斷）"
-        : item.content;
-      lines.push(`\n${content}`);
-    }
-  }
-
-  return lines.join("\n");
-}
-
-function formatStats(stats: import("../lib/stats.js").Stats): string {
-  return `📊 Sparkle 統計
-📥 收件匣：${stats.inbox_count}
-🔵 進行中：${stats.active_count}
-⚠️ 逾期：${stats.overdue_count}
-✅ 本週完成：${stats.completed_this_week}
-✅ 本月完成：${stats.completed_this_month}`;
-}
