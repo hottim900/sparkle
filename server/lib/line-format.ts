@@ -76,34 +76,12 @@ const QUICK_REPLY_ITEMS = [
   { type: "action" as const, action: { type: "message" as const, label: "❓ 說明", text: "?" } },
 ];
 
-export async function replyWithQuickReply(token: string, replyToken: string, text: string) {
+export async function replyLine(token: string, replyToken: string, text: string, withQuickReply = false) {
   try {
-    const res = await fetch("https://api.line.me/v2/bot/message/reply", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        replyToken,
-        messages: [{
-          type: "text",
-          text,
-          quickReply: { items: QUICK_REPLY_ITEMS },
-        }],
-      }),
-    });
-    if (!res.ok) {
-      const body = await res.text();
-      console.error("LINE reply API error:", res.status, body);
+    const message: Record<string, unknown> = { type: "text", text };
+    if (withQuickReply) {
+      message.quickReply = { items: QUICK_REPLY_ITEMS };
     }
-  } catch (err) {
-    console.error("Failed to reply LINE message:", err);
-  }
-}
-
-export async function replyMessage(token: string, replyToken: string, text: string) {
-  try {
     const res = await fetch("https://api.line.me/v2/bot/message/reply", {
       method: "POST",
       headers: {
@@ -112,7 +90,7 @@ export async function replyMessage(token: string, replyToken: string, text: stri
       },
       body: JSON.stringify({
         replyToken,
-        messages: [{ type: "text", text }],
+        messages: [message],
       }),
     });
     if (!res.ok) {

@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import { listItems, updateItem } from "@/lib/api";
+import { listItems, updateItem, getTags } from "@/lib/api";
 import { parseItems, type ParsedItem } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -58,6 +58,7 @@ export function InboxTriage({ onDone }: InboxTriageProps) {
   const [loading, setLoading] = useState(true);
   const [pending, setPending] = useState<PendingChanges>({});
   const [showDateInput, setShowDateInput] = useState(false);
+  const [allTags, setAllTags] = useState<string[]>([]);
 
   const fetchInbox = useCallback(async () => {
     setLoading(true);
@@ -74,6 +75,7 @@ export function InboxTriage({ onDone }: InboxTriageProps) {
 
   useEffect(() => {
     fetchInbox();
+    getTags().then((res) => setAllTags(res.tags)).catch(() => {});
   }, [fetchInbox]);
 
   const current = items[currentIndex];
@@ -213,7 +215,7 @@ export function InboxTriage({ onDone }: InboxTriageProps) {
           <div className="flex-1">
             <TagInput
               tags={resolvedTags}
-              allTags={[]}
+              allTags={allTags}
               onAdd={addTag}
               onRemove={removeTag}
               placeholder="輸入標籤"

@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { X } from "lucide-react";
@@ -14,7 +14,6 @@ interface TagInputProps {
 export function TagInput({ tags, allTags, onAdd, onRemove, placeholder = "新增標籤..." }: TagInputProps) {
   const [input, setInput] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
 
   const suggestions = input.trim()
     ? allTags.filter(
@@ -47,7 +46,6 @@ export function TagInput({ tags, allTags, onAdd, onRemove, placeholder = "新增
       </div>
       <div className="relative">
         <Input
-          ref={inputRef}
           value={input}
           onChange={(e) => {
             setInput(e.target.value);
