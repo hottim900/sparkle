@@ -12,6 +12,8 @@ import { BottomNav } from "@/components/bottom-nav";
 import { OfflineIndicator } from "@/components/offline-indicator";
 import { InstallPrompt } from "@/components/install-prompt";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
+import { Button } from "@/components/ui/button";
+import { List, ListTodo } from "lucide-react";
 import type { ViewType, ParsedItem, ItemStatus, ItemType } from "@/lib/types";
 
 function MainApp() {
@@ -19,6 +21,7 @@ function MainApp() {
   const [selectedItem, setSelectedItem] = useState<ParsedItem | null>(null);
   const [selectedTag, setSelectedTag] = useState<string | undefined>();
   const [refreshKey, setRefreshKey] = useState(0);
+  const [inboxMode, setInboxMode] = useState<"list" | "triage">("list");
 
   const refresh = useCallback(() => {
     setRefreshKey((k) => k + 1);
@@ -32,6 +35,9 @@ function MainApp() {
     setCurrentView(view);
     setSelectedItem(null);
     setSelectedTag(undefined);
+    if (view !== "inbox") {
+      setInboxMode("list");
+    }
   };
 
   const keyboardHandlers = useMemo(
@@ -59,7 +65,7 @@ function MainApp() {
 
   // Map view to status filter
   const statusFilter: ItemStatus | undefined =
-    currentView === "all" || currentView === "triage" || currentView === "search" || currentView === "notes" || currentView === "todos" || currentView === "dashboard"
+    currentView === "all" || currentView === "search" || currentView === "notes" || currentView === "todos" || currentView === "dashboard"
       ? undefined
       : (currentView as ItemStatus);
 
@@ -68,6 +74,8 @@ function MainApp() {
     currentView === "notes" ? "note"
       : currentView === "todos" ? "todo"
       : undefined;
+
+  const isInboxTriage = currentView === "inbox" && inboxMode === "triage";
 
   return (
     <div className="h-screen flex flex-col md:flex-row overflow-hidden">
@@ -106,9 +114,31 @@ function MainApp() {
             >
               <QuickCapture onCreated={refresh} />
 
-              {currentView === "triage" ? (
+              {/* Inbox mode toggle */}
+              {currentView === "inbox" && (
+                <div className="flex border-b">
+                  <Button
+                    variant="ghost"
+                    className={`flex-1 rounded-none gap-1.5 ${inboxMode === "list" ? "border-b-2 border-primary text-primary" : "text-muted-foreground"}`}
+                    onClick={() => setInboxMode("list")}
+                  >
+                    <List className="h-4 w-4" />
+                    列表
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    className={`flex-1 rounded-none gap-1.5 ${inboxMode === "triage" ? "border-b-2 border-primary text-primary" : "text-muted-foreground"}`}
+                    onClick={() => setInboxMode("triage")}
+                  >
+                    <ListTodo className="h-4 w-4" />
+                    分類
+                  </Button>
+                </div>
+              )}
+
+              {isInboxTriage ? (
                 <div className="flex-1 overflow-y-auto">
-                  <InboxTriage onDone={() => handleViewChange("inbox")} />
+                  <InboxTriage onDone={() => setInboxMode("list")} />
                 </div>
               ) : currentView === "search" ? (
                 <div className="flex-1 overflow-y-auto p-3 md:hidden">
@@ -144,7 +174,7 @@ function MainApp() {
             )}
 
             {/* Empty state for desktop when no item selected */}
-            {!selectedItem && currentView !== "triage" && currentView !== "search" && (
+            {!selectedItem && !isInboxTriage && currentView !== "search" && (
               <div className="hidden md:flex flex-1 items-center justify-center text-muted-foreground">
                 <p>選擇一個項目以查看詳情</p>
               </div>

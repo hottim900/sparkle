@@ -11,17 +11,56 @@ import {
   SkipForward,
   Inbox,
   Loader2,
+  FileText,
+  ListTodo,
+  Plus,
+  X,
+  Calendar,
 } from "lucide-react";
 
 interface InboxTriageProps {
   onDone?: () => void;
 }
 
+interface PendingChanges {
+  type?: "note" | "todo";
+  tags?: string[];
+  due_date?: string | null;
+}
+
+function toDateStr(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function getTodayStr(): string {
+  return toDateStr(new Date());
+}
+
+function getTomorrowStr(): string {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  return toDateStr(d);
+}
+
+function getNextMondayStr(): string {
+  const d = new Date();
+  const day = d.getDay();
+  const diff = day === 0 ? 1 : 8 - day;
+  d.setDate(d.getDate() + diff);
+  return toDateStr(d);
+}
+
 export function InboxTriage({ onDone }: InboxTriageProps) {
   const [items, setItems] = useState<ParsedItem[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [pending, setPending] = useState<PendingChanges>({});
   const [tagInput, setTagInput] = useState("");
+  const [showTagInput, setShowTagInput] = useState(false);
+  const [showDateInput, setShowDateInput] = useState(false);
 
   const fetchInbox = useCallback(async () => {
     setLoading(true);
@@ -43,27 +82,16 @@ export function InboxTriage({ onDone }: InboxTriageProps) {
   const current = items[currentIndex];
   const remaining = items.length - currentIndex;
 
-  const handleAction = async (
-    action: "active" | "archived",
-    extraTags?: string[],
-  ) => {
-    if (!current) return;
-    try {
-      const updates: Record<string, unknown> = { status: action };
-      if (extraTags && extraTags.length > 0) {
-        const existingTags = current.tags;
-        updates.tags = [...new Set([...existingTags, ...extraTags])];
-      }
-      await updateItem(current.id, updates);
-      toast.success(action === "active" ? "已設為進行中" : "已封存");
-      next();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "操作失敗");
-    }
-  };
+  // Resolved values: pending overrides current
+  const resolvedType = pending.type ?? current?.type ?? "note";
+  const resolvedTags = pending.tags ?? current?.tags ?? [];
+  const resolvedDueDate = pending.due_date !== undefined ? pending.due_date : (current?.due_date ?? null);
 
-  const next = () => {
+  const resetAndNext = () => {
+    setPending({});
     setTagInput("");
+    setShowTagInput(false);
+    setShowDateInput(false);
     if (currentIndex + 1 >= items.length) {
       toast.success("收件匣已清空！");
       onDone?.();
@@ -72,12 +100,47 @@ export function InboxTriage({ onDone }: InboxTriageProps) {
     }
   };
 
-  const addTagAndActivate = () => {
-    const tags = tagInput
-      .split(",")
-      .map((t) => t.trim())
-      .filter(Boolean);
-    handleAction("active", tags);
+  const handleAction = async (action: "active" | "archived") => {
+    if (!current) return;
+    try {
+      const updates: Record<string, unknown> = { status: action };
+      if (pending.type !== undefined) updates.type = pending.type;
+      if (pending.tags !== undefined) updates.tags = pending.tags;
+      if (pending.due_date !== undefined) updates.due_date = pending.due_date;
+      await updateItem(current.id, updates);
+      toast.success(action === "active" ? "已設為進行中" : "已封存");
+      resetAndNext();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "操作失敗");
+    }
+  };
+
+  const toggleType = () => {
+    setPending((p) => ({
+      ...p,
+      type: resolvedType === "note" ? "todo" : "note",
+    }));
+  };
+
+  const addTag = (tag: string) => {
+    const trimmed = tag.trim();
+    if (!trimmed) return;
+    if (!resolvedTags.includes(trimmed)) {
+      setPending((p) => ({ ...p, tags: [...resolvedTags, trimmed] }));
+    }
+    setTagInput("");
+  };
+
+  const removeTag = (tag: string) => {
+    setPending((p) => ({
+      ...p,
+      tags: resolvedTags.filter((t) => t !== tag),
+    }));
+  };
+
+  const setDueDate = (date: string | null) => {
+    setPending((p) => ({ ...p, due_date: date }));
+    setShowDateInput(false);
   };
 
   if (loading) {
@@ -100,54 +163,145 @@ export function InboxTriage({ onDone }: InboxTriageProps) {
     );
   }
 
+  const todayStr = getTodayStr();
+  const tomorrowStr = getTomorrowStr();
+  const nextMondayStr = getNextMondayStr();
+
   return (
-    <div className="max-w-lg mx-auto p-4 space-y-6">
+    <div className="max-w-lg mx-auto p-4 space-y-4">
       {/* Progress */}
       <div className="text-center text-sm text-muted-foreground">
         剩餘 {remaining} 項
       </div>
 
       {/* Card */}
-      <div className="border rounded-lg p-6 space-y-4">
+      <div className="border rounded-lg p-5 space-y-3">
         <h2 className="text-lg font-semibold">{current.title}</h2>
         {current.content && (
-          <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+          <p className="text-sm text-muted-foreground whitespace-pre-wrap line-clamp-4">
             {current.content}
           </p>
         )}
-        {current.tags.length > 0 && (
-          <div className="flex gap-1 flex-wrap">
-            {current.tags.map((tag) => (
-              <Badge key={tag} variant="secondary">
-                {tag}
-              </Badge>
-            ))}
-          </div>
-        )}
-        {current.source && (
-          <p className="text-xs text-muted-foreground">
-            來源: {current.source}
-          </p>
-        )}
-        <p className="text-xs text-muted-foreground">
-          {new Date(current.created_at).toLocaleString("zh-TW")}
-        </p>
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          {current.source && <span>來源: {current.source}</span>}
+          <span>{new Date(current.created_at).toLocaleString("zh-TW")}</span>
+        </div>
       </div>
 
-      {/* Tag input */}
-      <div className="flex gap-2">
-        <Input
-          placeholder="加標籤（逗號分隔）"
-          value={tagInput}
-          onChange={(e) => setTagInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              addTagAndActivate();
-            }
-          }}
-          className="flex-1"
-        />
+      {/* Properties */}
+      <div className="border rounded-lg p-4 space-y-3">
+        {/* Type toggle */}
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-muted-foreground w-10">類型</span>
+          <div className="flex gap-1">
+            <Button
+              size="sm"
+              variant={resolvedType === "note" ? "default" : "outline"}
+              className="gap-1 h-7 text-xs"
+              onClick={toggleType}
+            >
+              <FileText className="h-3 w-3" />
+              筆記
+            </Button>
+            <Button
+              size="sm"
+              variant={resolvedType === "todo" ? "default" : "outline"}
+              className="gap-1 h-7 text-xs"
+              onClick={toggleType}
+            >
+              <ListTodo className="h-3 w-3" />
+              待辦
+            </Button>
+          </div>
+        </div>
+
+        {/* Tags */}
+        <div className="flex items-start gap-2">
+          <span className="text-sm text-muted-foreground w-10 pt-0.5">標籤</span>
+          <div className="flex flex-wrap gap-1 flex-1">
+            {resolvedTags.map((tag) => (
+              <Badge key={tag} variant="secondary" className="gap-0.5 pr-1">
+                {tag}
+                <button onClick={() => removeTag(tag)} className="ml-0.5 hover:text-destructive">
+                  <X className="h-3 w-3" />
+                </button>
+              </Badge>
+            ))}
+            {showTagInput ? (
+              <Input
+                autoFocus
+                placeholder="輸入標籤"
+                value={tagInput}
+                onChange={(e) => setTagInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    addTag(tagInput);
+                  }
+                  if (e.key === "Escape") {
+                    setShowTagInput(false);
+                    setTagInput("");
+                  }
+                }}
+                onBlur={() => {
+                  if (tagInput.trim()) addTag(tagInput);
+                  setShowTagInput(false);
+                }}
+                className="h-6 w-24 text-xs"
+              />
+            ) : (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-6 w-6 p-0"
+                onClick={() => setShowTagInput(true)}
+              >
+                <Plus className="h-3 w-3" />
+              </Button>
+            )}
+          </div>
+        </div>
+
+        {/* Due date */}
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-muted-foreground w-10">到期</span>
+          {resolvedDueDate ? (
+            <Badge variant="outline" className="gap-1">
+              <Calendar className="h-3 w-3" />
+              {resolvedDueDate}
+              <button onClick={() => setDueDate(null)} className="ml-0.5 hover:text-destructive">
+                <X className="h-3 w-3" />
+              </button>
+            </Badge>
+          ) : (
+            <div className="flex flex-wrap gap-1">
+              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setDueDate(todayStr)}>
+                今天
+              </Button>
+              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setDueDate(tomorrowStr)}>
+                明天
+              </Button>
+              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setDueDate(nextMondayStr)}>
+                下週一
+              </Button>
+              {showDateInput ? (
+                <input
+                  type="date"
+                  autoFocus
+                  className="h-7 text-xs border rounded px-2 bg-background"
+                  onChange={(e) => {
+                    if (e.target.value) setDueDate(e.target.value);
+                  }}
+                  onBlur={() => setShowDateInput(false)}
+                />
+              ) : (
+                <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setShowDateInput(true)}>
+                  自訂...
+                </Button>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Actions */}
@@ -164,9 +318,9 @@ export function InboxTriage({ onDone }: InboxTriageProps) {
           <Archive className="h-4 w-4" />
           封存
         </Button>
-        <Button variant="ghost" onClick={next} className="gap-1">
+        <Button variant="ghost" onClick={resetAndNext} className="gap-1">
           <SkipForward className="h-4 w-4" />
-          跳過
+          保留
         </Button>
       </div>
     </div>

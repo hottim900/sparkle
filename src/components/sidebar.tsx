@@ -30,16 +30,37 @@ interface SidebarProps {
   onSearchSelect?: (item: ParsedItem) => void;
 }
 
-const views: { id: ViewType; label: string; icon: React.ReactNode }[] = [
-  { id: "dashboard", label: "總覽", icon: <LayoutDashboard className="h-4 w-4" /> },
-  { id: "inbox", label: "收件匣", icon: <Inbox className="h-4 w-4" /> },
-  { id: "active", label: "進行中", icon: <Zap className="h-4 w-4" /> },
-  { id: "all", label: "全部", icon: <FileText className="h-4 w-4" /> },
-  { id: "notes", label: "筆記", icon: <FileText className="h-4 w-4" /> },
-  { id: "todos", label: "待辦", icon: <ListTodo className="h-4 w-4" /> },
-  { id: "done", label: "已完成", icon: <CheckCircle className="h-4 w-4" /> },
-  { id: "archived", label: "已封存", icon: <Archive className="h-4 w-4" /> },
-  { id: "triage", label: "分類模式", icon: <ListTodo className="h-4 w-4" /> },
+type NavItem = { id: ViewType; label: string; icon: React.ReactNode };
+type NavGroup = { label?: string; items: NavItem[] };
+
+const navGroups: NavGroup[] = [
+  {
+    items: [
+      { id: "dashboard", label: "總覽", icon: <LayoutDashboard className="h-4 w-4" /> },
+    ],
+  },
+  {
+    label: "主要",
+    items: [
+      { id: "inbox", label: "收件匣", icon: <Inbox className="h-4 w-4" /> },
+      { id: "active", label: "進行中", icon: <Zap className="h-4 w-4" /> },
+    ],
+  },
+  {
+    label: "依類型",
+    items: [
+      { id: "all", label: "全部", icon: <FileText className="h-4 w-4" /> },
+      { id: "notes", label: "筆記", icon: <FileText className="h-4 w-4" /> },
+      { id: "todos", label: "待辦", icon: <ListTodo className="h-4 w-4" /> },
+    ],
+  },
+  {
+    label: "已處理",
+    items: [
+      { id: "done", label: "已完成", icon: <CheckCircle className="h-4 w-4" /> },
+      { id: "archived", label: "已封存", icon: <Archive className="h-4 w-4" /> },
+    ],
+  },
 ];
 
 export function Sidebar({
@@ -103,19 +124,28 @@ export function Sidebar({
 
       {/* Views */}
       <nav className="p-2 space-y-1">
-        {views.map((v) => (
-          <Button
-            key={v.id}
-            variant={currentView === v.id ? "secondary" : "ghost"}
-            className="w-full justify-start gap-2"
-            onClick={() => {
-              onViewChange(v.id);
-              onTagSelect(undefined);
-            }}
-          >
-            {v.icon}
-            {v.label}
-          </Button>
+        {navGroups.map((group, gi) => (
+          <div key={gi}>
+            {group.label && (
+              <p className="text-xs text-muted-foreground px-3 pt-3 pb-1 font-medium">
+                {group.label}
+              </p>
+            )}
+            {group.items.map((v) => (
+              <Button
+                key={v.id}
+                variant={currentView === v.id ? "secondary" : "ghost"}
+                className="w-full justify-start gap-2"
+                onClick={() => {
+                  onViewChange(v.id);
+                  onTagSelect(undefined);
+                }}
+              >
+                {v.icon}
+                {v.label}
+              </Button>
+            ))}
+          </div>
         ))}
       </nav>
 

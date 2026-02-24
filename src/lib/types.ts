@@ -80,7 +80,6 @@ export type ViewType =
   | "all"
   | "done"
   | "archived"
-  | "triage"
   | "search"
   | "notes"
   | "todos"
