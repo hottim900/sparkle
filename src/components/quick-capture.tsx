@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -11,9 +10,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { createItem, getTags } from "@/lib/api";
+import { TagInput } from "@/components/tag-input";
 import { toast } from "sonner";
 import type { ItemType, ItemPriority } from "@/lib/types";
-import { ChevronDown, ChevronUp, Send, Sun, Moon, X } from "lucide-react";
+import { ChevronDown, ChevronUp, Send, Sun, Moon } from "lucide-react";
 
 interface QuickCaptureProps {
   onCreated?: () => void;
@@ -26,9 +26,7 @@ export function QuickCapture({ onCreated }: QuickCaptureProps) {
   const [type, setType] = useState<ItemType>("note");
   const [priority, setPriority] = useState<ItemPriority | "none">("none");
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
-  const [tagInput, setTagInput] = useState("");
   const [allTags, setAllTags] = useState<string[]>([]);
-  const [showTagSuggestions, setShowTagSuggestions] = useState(false);
   const [source, setSource] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -38,23 +36,12 @@ export function QuickCapture({ onCreated }: QuickCaptureProps) {
       .catch(() => {});
   }, []);
 
-  const tagSuggestions = allTags.filter(
-    (t) =>
-      t.toLowerCase().includes(tagInput.toLowerCase()) &&
-      !selectedTags.includes(t),
-  );
-
   const addTag = (tag: string) => {
-    const trimmed = tag.trim();
-    if (trimmed && !selectedTags.includes(trimmed)) {
-      setSelectedTags([...selectedTags, trimmed]);
-    }
-    setTagInput("");
-    setShowTagSuggestions(false);
+    setSelectedTags((prev) => [...prev, tag]);
   };
 
   const removeTag = (tag: string) => {
-    setSelectedTags(selectedTags.filter((t) => t !== tag));
+    setSelectedTags((prev) => prev.filter((t) => t !== tag));
   };
 
   const handleSubmit = async (e?: React.FormEvent) => {
@@ -73,7 +60,6 @@ export function QuickCapture({ onCreated }: QuickCaptureProps) {
       });
       setTitle("");
       setSelectedTags([]);
-      setTagInput("");
       setSource("");
       setPriority("none");
       setExpanded(false);
@@ -179,54 +165,12 @@ export function QuickCapture({ onCreated }: QuickCaptureProps) {
             />
           </div>
 
-          <div className="flex flex-wrap gap-1 items-center">
-            {selectedTags.map((tag) => (
-              <Badge key={tag} variant="secondary" className="gap-1">
-                {tag}
-                <button type="button" onClick={() => removeTag(tag)}>
-                  <X className="h-3 w-3" />
-                </button>
-              </Badge>
-            ))}
-            <div className="relative flex-1 min-w-32">
-              <Input
-                placeholder="新增標籤..."
-                value={tagInput}
-                onChange={(e) => {
-                  setTagInput(e.target.value);
-                  setShowTagSuggestions(true);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    addTag(tagInput);
-                  }
-                }}
-                onFocus={() => setShowTagSuggestions(true)}
-                onBlur={() =>
-                  setTimeout(() => setShowTagSuggestions(false), 200)
-                }
-              />
-              {showTagSuggestions && tagInput && tagSuggestions.length > 0 && (
-                <div className="absolute top-full left-0 right-0 bg-popover border rounded-md shadow-md z-10 mt-1">
-                  {tagSuggestions.slice(0, 5).map((tag) => (
-                    <button
-                      key={tag}
-                      type="button"
-                      className="w-full text-left px-3 py-2 text-sm hover:bg-accent"
-                      onMouseDown={(e) => {
-                        e.preventDefault();
-                        addTag(tag);
-                      }}
-                    >
-                      {tag}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
+          <TagInput
+            tags={selectedTags}
+            allTags={allTags}
+            onAdd={addTag}
+            onRemove={removeTag}
+          />
         </>
       )}
     </div>
