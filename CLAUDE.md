@@ -28,7 +28,9 @@ server/
   lib/
     items.ts            # DB query functions (Drizzle + raw SQLite)
     stats.ts            # Stats + focus query functions
-    line.ts             # LINE message parser (!todo, !high prefixes)
+    line.ts             # LINE message/command parser
+    line-session.ts     # LINE Bot session (numbered item mapping, in-memory)
+    line-date.ts        # Natural language date parser (chrono-node zh.hant)
   schemas/items.ts      # Zod validation schemas
   db/
     index.ts            # DB connection (better-sqlite3 + Drizzle)
@@ -167,8 +169,14 @@ netsh interface portproxy add v4tov4 listenaddress=YOUR_VPN_IP listenport=3000 c
 
 - LINE Official Account with Messaging API enabled
 - Webhook: `https://YOUR_WEBHOOK_DOMAIN/api/webhook/line`
-- Commands: `?`=help, `!todo`=todo, `!high`=high priority, `!find <keyword>`=搜尋, `!inbox`=未處理項目, `!today`=今日到期, `!stats`=統計
-- Quick reply buttons shown after each save
+- Commands:
+  - 新增：`!todo`=待辦, `!high`=高優先, 直接輸入=筆記
+  - 查詢：`!inbox`=收件匣, `!active`=進行中, `!today`=今日焦點, `!find <keyword>`=搜尋, `!list <tag>`=標籤篩選, `!stats`=統計
+  - 操作（需先查詢建立 session）：`!detail N`=詳情, `!due N <日期>`=設到期日, `!tag N <標籤...>`=加標籤
+  - `?`/`help`/`說明`=說明
+- Session: 查詢結果以 [N] 編號，後續用編號操作，10 分鐘 TTL，純記憶體
+- Date parsing: chrono-node zh.hant，支援「明天」「3天後」「下週一」「3/15」「清除」
+- Quick reply buttons shown after each response
 - Chat mode must be OFF, Webhook must be ON in LINE Official Account Manager
 
 ## Conventions

@@ -283,13 +283,14 @@ describe("POST /api/webhook/line", () => {
   // Query command tests
   // ============================================================
 
-  function sendLineMessage(app: Hono, text: string) {
+  function sendLineMessage(app: Hono, text: string, userId = "test-user") {
     const body = JSON.stringify({
       events: [
         {
           type: "message",
           message: { type: "text", text },
           replyToken: "reply-token-query",
+          source: { userId },
         },
       ],
     });
@@ -485,7 +486,7 @@ describe("POST /api/webhook/line", () => {
   });
 
   describe("help text", () => {
-    it("includes query commands in help text", async () => {
+    it("includes all commands in help text", async () => {
       process.env.LINE_CHANNEL_SECRET = TEST_LINE_SECRET;
       process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
 
@@ -499,6 +500,261 @@ describe("POST /api/webhook/line", () => {
       expect(replyText).toContain("!today");
       expect(replyText).toContain("!find");
       expect(replyText).toContain("!stats");
+      expect(replyText).toContain("!active");
+      expect(replyText).toContain("!detail");
+      expect(replyText).toContain("!due");
+      expect(replyText).toContain("!tag");
+      expect(replyText).toContain("!list");
+    });
+  });
+
+  // ============================================================
+  // New browse & edit command tests
+  // ============================================================
+
+  describe("!active command", () => {
+    it("returns active items with numbered format", async () => {
+      process.env.LINE_CHANNEL_SECRET = TEST_LINE_SECRET;
+      process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
+      seedItems();
+
+      const res = await sendLineMessage(app, "!active");
+      expect(res.status).toBe(200);
+
+      const fetchMock = vi.mocked(fetch);
+      const callBody = JSON.parse(fetchMock.mock.calls[0][1]!.body as string);
+      const replyText: string = callBody.messages[0].text;
+      expect(replyText).toContain("進行中");
+      expect(replyText).toContain("[1]");
+      expect(replyText).toContain("繳電費");
+      expect(replyText).toContain("開會準備");
+      expect(callBody.messages[0].quickReply).toBeDefined();
+    });
+
+    it("returns empty message when no active items", async () => {
+      process.env.LINE_CHANNEL_SECRET = TEST_LINE_SECRET;
+      process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
+
+      const res = await sendLineMessage(app, "!active");
+      expect(res.status).toBe(200);
+
+      const fetchMock = vi.mocked(fetch);
+      const callBody = JSON.parse(fetchMock.mock.calls[0][1]!.body as string);
+      expect(callBody.messages[0].text).toContain("沒有進行中的項目");
+    });
+  });
+
+  describe("!list command", () => {
+    it("returns items filtered by tag", async () => {
+      process.env.LINE_CHANNEL_SECRET = TEST_LINE_SECRET;
+      process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
+      const now = new Date().toISOString();
+      testSqlite.exec(`
+        INSERT INTO items (id, type, title, content, status, priority, due_date, tags, source, created_at, updated_at) VALUES
+          ('id-t1', 'todo', '寫報告', '', 'active', NULL, NULL, '["工作"]', '', '${now}', '${now}'),
+          ('id-t2', 'todo', '回信', '', 'inbox', NULL, NULL, '["工作","重要"]', '', '${now}', '${now}');
+      `);
+
+      const res = await sendLineMessage(app, "!list 工作");
+      expect(res.status).toBe(200);
+
+      const fetchMock = vi.mocked(fetch);
+      const callBody = JSON.parse(fetchMock.mock.calls[0][1]!.body as string);
+      const replyText: string = callBody.messages[0].text;
+      expect(replyText).toContain("標籤「工作」");
+      expect(replyText).toContain("寫報告");
+      expect(replyText).toContain("回信");
+    });
+
+    it("returns empty message when no items match tag", async () => {
+      process.env.LINE_CHANNEL_SECRET = TEST_LINE_SECRET;
+      process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
+
+      const res = await sendLineMessage(app, "!list 不存在的標籤");
+      expect(res.status).toBe(200);
+
+      const fetchMock = vi.mocked(fetch);
+      const callBody = JSON.parse(fetchMock.mock.calls[0][1]!.body as string);
+      expect(callBody.messages[0].text).toContain("找不到標籤");
+    });
+  });
+
+  describe("!detail command", () => {
+    it("returns full detail after query establishes session", async () => {
+      process.env.LINE_CHANNEL_SECRET = TEST_LINE_SECRET;
+      process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
+      seedItems();
+
+      // First, query to establish session
+      await sendLineMessage(app, "!inbox");
+      vi.mocked(fetch).mockClear();
+
+      // Then get detail of item 1
+      const res = await sendLineMessage(app, "!detail 1");
+      expect(res.status).toBe(200);
+
+      const fetchMock = vi.mocked(fetch);
+      const callBody = JSON.parse(fetchMock.mock.calls[0][1]!.body as string);
+      const replyText: string = callBody.messages[0].text;
+      expect(replyText).toContain("📋");
+      expect(replyText).toContain("類型：");
+      expect(replyText).toContain("狀態：");
+    });
+
+    it("returns error when no session exists", async () => {
+      process.env.LINE_CHANNEL_SECRET = TEST_LINE_SECRET;
+      process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
+
+      const res = await sendLineMessage(app, "!detail 1", "no-session-user");
+      expect(res.status).toBe(200);
+
+      const fetchMock = vi.mocked(fetch);
+      const callBody = JSON.parse(fetchMock.mock.calls[0][1]!.body as string);
+      expect(callBody.messages[0].text).toContain("編號 1 不存在");
+    });
+  });
+
+  describe("!due command", () => {
+    it("sets due date after query session", async () => {
+      process.env.LINE_CHANNEL_SECRET = TEST_LINE_SECRET;
+      process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
+      seedItems();
+
+      // Establish session
+      await sendLineMessage(app, "!inbox");
+      vi.mocked(fetch).mockClear();
+
+      // Set due date
+      const res = await sendLineMessage(app, "!due 1 2026-03-15");
+      expect(res.status).toBe(200);
+
+      const fetchMock = vi.mocked(fetch);
+      const callBody = JSON.parse(fetchMock.mock.calls[0][1]!.body as string);
+      const replyText: string = callBody.messages[0].text;
+      expect(replyText).toContain("已設定");
+      expect(replyText).toContain("2026-03-15");
+
+      // Verify DB was updated
+      const allItems = testDb.select().from(items).all();
+      const updated = allItems.find((i) => i.title === "牛奶品牌比較" || i.due_date === "2026-03-15");
+      expect(updated).toBeDefined();
+    });
+
+    it("clears due date with '清除'", async () => {
+      process.env.LINE_CHANNEL_SECRET = TEST_LINE_SECRET;
+      process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
+      seedItems();
+
+      // Query active items (includes items with due dates)
+      await sendLineMessage(app, "!active");
+      vi.mocked(fetch).mockClear();
+
+      // Clear due date of first item
+      const res = await sendLineMessage(app, "!due 1 清除");
+      expect(res.status).toBe(200);
+
+      const fetchMock = vi.mocked(fetch);
+      const callBody = JSON.parse(fetchMock.mock.calls[0][1]!.body as string);
+      expect(callBody.messages[0].text).toContain("已清除");
+    });
+
+    it("returns error for invalid date", async () => {
+      process.env.LINE_CHANNEL_SECRET = TEST_LINE_SECRET;
+      process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
+      seedItems();
+
+      await sendLineMessage(app, "!inbox");
+      vi.mocked(fetch).mockClear();
+
+      const res = await sendLineMessage(app, "!due 1 不知道什麼");
+      expect(res.status).toBe(200);
+
+      const fetchMock = vi.mocked(fetch);
+      const callBody = JSON.parse(fetchMock.mock.calls[0][1]!.body as string);
+      expect(callBody.messages[0].text).toContain("無法辨識日期");
+    });
+
+    it("returns error when no session exists", async () => {
+      process.env.LINE_CHANNEL_SECRET = TEST_LINE_SECRET;
+      process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
+
+      const res = await sendLineMessage(app, "!due 1 明天", "no-session-user");
+      expect(res.status).toBe(200);
+
+      const fetchMock = vi.mocked(fetch);
+      const callBody = JSON.parse(fetchMock.mock.calls[0][1]!.body as string);
+      expect(callBody.messages[0].text).toContain("編號 1 不存在");
+    });
+  });
+
+  describe("!tag command", () => {
+    it("appends tags to item after query session", async () => {
+      process.env.LINE_CHANNEL_SECRET = TEST_LINE_SECRET;
+      process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
+      seedItems();
+
+      await sendLineMessage(app, "!inbox");
+      vi.mocked(fetch).mockClear();
+
+      const res = await sendLineMessage(app, "!tag 1 工作 重要");
+      expect(res.status).toBe(200);
+
+      const fetchMock = vi.mocked(fetch);
+      const callBody = JSON.parse(fetchMock.mock.calls[0][1]!.body as string);
+      const replyText: string = callBody.messages[0].text;
+      expect(replyText).toContain("已為");
+      expect(replyText).toContain("加上標籤");
+      expect(replyText).toContain("工作");
+      expect(replyText).toContain("重要");
+    });
+
+    it("does not duplicate existing tags", async () => {
+      process.env.LINE_CHANNEL_SECRET = TEST_LINE_SECRET;
+      process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
+      const now = new Date().toISOString();
+      testSqlite.exec(`
+        INSERT INTO items (id, type, title, content, status, priority, due_date, tags, source, created_at, updated_at) VALUES
+          ('id-dup', 'todo', '有標籤的項目', '', 'inbox', NULL, NULL, '["工作"]', '', '${now}', '${now}');
+      `);
+
+      await sendLineMessage(app, "!inbox");
+      vi.mocked(fetch).mockClear();
+
+      await sendLineMessage(app, "!tag 1 工作 新標籤");
+
+      // Check DB: should have ["工作", "新標籤"] not ["工作", "工作", "新標籤"]
+      const allItems = testDb.select().from(items).all();
+      const item = allItems.find((i) => i.id === "id-dup")!;
+      const tags = JSON.parse(item.tags);
+      expect(tags).toEqual(["工作", "新標籤"]);
+    });
+
+    it("returns error when no session exists", async () => {
+      process.env.LINE_CHANNEL_SECRET = TEST_LINE_SECRET;
+      process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
+
+      const res = await sendLineMessage(app, "!tag 1 工作", "no-session-user");
+      expect(res.status).toBe(200);
+
+      const fetchMock = vi.mocked(fetch);
+      const callBody = JSON.parse(fetchMock.mock.calls[0][1]!.body as string);
+      expect(callBody.messages[0].text).toContain("編號 1 不存在");
+    });
+  });
+
+  describe("session numbering", () => {
+    it("inbox results use [N] format", async () => {
+      process.env.LINE_CHANNEL_SECRET = TEST_LINE_SECRET;
+      process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
+      seedItems();
+
+      await sendLineMessage(app, "!inbox");
+
+      const fetchMock = vi.mocked(fetch);
+      const callBody = JSON.parse(fetchMock.mock.calls[0][1]!.body as string);
+      const replyText: string = callBody.messages[0].text;
+      expect(replyText).toContain("[1]");
+      expect(replyText).toContain("[2]");
     });
   });
 
