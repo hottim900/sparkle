@@ -219,6 +219,74 @@ webhookRouter.post("/line", async (c) => {
         break;
       }
 
+      case "done": {
+        const doneItemId = getItemId(userId, cmd.index);
+        if (!doneItemId) {
+          reply = `❌ 編號 ${cmd.index} 不存在，請重新查詢`;
+          break;
+        }
+        const doneItem = getItem(db, doneItemId);
+        if (!doneItem) {
+          reply = "❌ 項目不存在";
+          break;
+        }
+        updateItem(db, doneItemId, { status: "done" });
+        reply = `✅ 已將「${doneItem.title}」標記為已完成`;
+        break;
+      }
+
+      case "archive": {
+        const archiveItemId = getItemId(userId, cmd.index);
+        if (!archiveItemId) {
+          reply = `❌ 編號 ${cmd.index} 不存在，請重新查詢`;
+          break;
+        }
+        const archiveItem = getItem(db, archiveItemId);
+        if (!archiveItem) {
+          reply = "❌ 項目不存在";
+          break;
+        }
+        updateItem(db, archiveItemId, { status: "archived" });
+        reply = `✅ 已封存「${archiveItem.title}」`;
+        break;
+      }
+
+      case "priority": {
+        const priItemId = getItemId(userId, cmd.index);
+        if (!priItemId) {
+          reply = `❌ 編號 ${cmd.index} 不存在，請重新查詢`;
+          break;
+        }
+        const priItem = getItem(db, priItemId);
+        if (!priItem) {
+          reply = "❌ 項目不存在";
+          break;
+        }
+        updateItem(db, priItemId, { priority: cmd.priority });
+        reply = cmd.priority === null
+          ? `✅ 已清除「${priItem.title}」的優先度`
+          : `✅ 已將「${priItem.title}」優先度設為 ${cmd.priority}`;
+        break;
+      }
+
+      case "untag": {
+        const untagItemId = getItemId(userId, cmd.index);
+        if (!untagItemId) {
+          reply = `❌ 編號 ${cmd.index} 不存在，請重新查詢`;
+          break;
+        }
+        const untagItem = getItem(db, untagItemId);
+        if (!untagItem) {
+          reply = "❌ 項目不存在";
+          break;
+        }
+        const currentTags: string[] = JSON.parse(untagItem.tags || "[]");
+        const remaining = currentTags.filter((t) => !cmd.tags.includes(t));
+        updateItem(db, untagItemId, { tags: remaining });
+        reply = `✅ 已從「${untagItem.title}」移除標籤：${cmd.tags.join("、")}`;
+        break;
+      }
+
       case "save": {
         if (!cmd.parsed.title) continue;
         try {
@@ -276,6 +344,10 @@ const HELP_TEXT = `📝 Sparkle 使用說明
 !detail N → 查看第 N 筆詳情
 !due N 日期 → 設定到期日
 !tag N 標籤 → 加標籤
+!untag N 標籤 → 移除標籤
+!done N → 標記為已完成
+!archive N → 封存
+!priority N high/medium/low/none → 設定優先度
 
 日期格式：明天、3天後、下週一、3/15、2026-03-15
 清除到期日：!due N 清除
