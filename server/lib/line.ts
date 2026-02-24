@@ -76,6 +76,8 @@ export type LineCommand =
   | { type: "detail"; index: number }
   | { type: "due"; index: number; dateInput: string }
   | { type: "tag"; index: number; tags: string[] }
+  | { type: "done"; index: number }
+  | { type: "archive"; index: number }
   | { type: "unknown" };
 
 export function parseCommand(text: string): LineCommand {
@@ -100,6 +102,22 @@ export function parseCommand(text: string): LineCommand {
     if (lower === "!active") return { type: "active" };
     if (lower === "!notes") return { type: "notes" };
     if (lower === "!todos") return { type: "todos" };
+
+    // !done <N>
+    if (lower.startsWith("!done")) {
+      const rest = trimmed.slice(5).trim();
+      if (!rest) return { type: "unknown" };
+      const num = parseInt(rest, 10);
+      return !isNaN(num) && num > 0 ? { type: "done", index: num } : { type: "unknown" };
+    }
+
+    // !archive <N>
+    if (lower.startsWith("!archive")) {
+      const rest = trimmed.slice(8).trim();
+      if (!rest) return { type: "unknown" };
+      const num = parseInt(rest, 10);
+      return !isNaN(num) && num > 0 ? { type: "archive", index: num } : { type: "unknown" };
+    }
 
     // !list <tag>
     if (lower.startsWith("!list ")) {

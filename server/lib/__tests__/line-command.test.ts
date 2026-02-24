@@ -113,4 +113,29 @@ describe("parseCommand", () => {
   it("parses empty string as unknown", () => {
     expect(parseCommand("")).toEqual({ type: "unknown" });
   });
+
+  // Status change commands (!done, !archive)
+  describe("status change commands", () => {
+    it("parses !done N", () => {
+      expect(parseCommand("!done 3")).toEqual({ type: "done", index: 3 });
+    });
+
+    it("parses !archive N", () => {
+      expect(parseCommand("!archive 2")).toEqual({ type: "archive", index: 2 });
+    });
+
+    it("rejects !done without number", () => {
+      expect(parseCommand("!done")).toEqual({ type: "unknown" });
+    });
+
+    it("rejects !done with invalid number", () => {
+      expect(parseCommand("!done abc")).toEqual({ type: "unknown" });
+      expect(parseCommand("!done 0")).toEqual({ type: "unknown" });
+      expect(parseCommand("!done -1")).toEqual({ type: "unknown" });
+    });
+
+    it("rejects !archive without number", () => {
+      expect(parseCommand("!archive")).toEqual({ type: "unknown" });
+    });
+  });
 });
