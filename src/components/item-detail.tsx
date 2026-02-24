@@ -3,7 +3,6 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -28,8 +27,9 @@ import {
   getTags,
 } from "@/lib/api";
 import { parseItem, type ParsedItem } from "@/lib/types";
+import { TagInput } from "@/components/tag-input";
 import { toast } from "sonner";
-import { Trash2, X, ArrowLeft, Eye, Pencil, Loader2, Check } from "lucide-react";
+import { Trash2, ArrowLeft, Eye, Pencil, Loader2, Check } from "lucide-react";
 
 interface ItemDetailProps {
   itemId: string;
@@ -46,8 +46,6 @@ export function ItemDetail({
 }: ItemDetailProps) {
   const [item, setItem] = useState<ParsedItem | null>(null);
   const [allTags, setAllTags] = useState<string[]>([]);
-  const [tagInput, setTagInput] = useState("");
-  const [showTagSuggestions, setShowTagSuggestions] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [previewMode, setPreviewMode] = useState(false);
@@ -115,14 +113,10 @@ export function ItemDetail({
   };
 
   const addTag = (tag: string) => {
-    if (!item || !tag.trim()) return;
-    const trimmed = tag.trim();
-    if (item.tags.includes(trimmed)) return;
-    const newTags = [...item.tags, trimmed];
+    if (!item) return;
+    const newTags = [...item.tags, tag];
     setItem({ ...item, tags: newTags });
     saveField("tags", newTags);
-    setTagInput("");
-    setShowTagSuggestions(false);
   };
 
   const removeTag = (tag: string) => {
@@ -131,12 +125,6 @@ export function ItemDetail({
     setItem({ ...item, tags: newTags });
     saveField("tags", newTags);
   };
-
-  const tagSuggestions = allTags.filter(
-    (t) =>
-      t.toLowerCase().includes(tagInput.toLowerCase()) &&
-      !item?.tags.includes(t),
-  );
 
   if (loading) {
     return (
@@ -320,52 +308,12 @@ export function ItemDetail({
           <label className="text-sm text-muted-foreground block mb-1">
             標籤
           </label>
-          <div className="flex flex-wrap gap-1 mb-2">
-            {item.tags.map((tag) => (
-              <Badge key={tag} variant="secondary" className="gap-1">
-                {tag}
-                <button onClick={() => removeTag(tag)}>
-                  <X className="h-3 w-3" />
-                </button>
-              </Badge>
-            ))}
-          </div>
-          <div className="relative">
-            <Input
-              placeholder="新增標籤..."
-              value={tagInput}
-              onChange={(e) => {
-                setTagInput(e.target.value);
-                setShowTagSuggestions(true);
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  addTag(tagInput);
-                }
-              }}
-              onFocus={() => setShowTagSuggestions(true)}
-              onBlur={() =>
-                setTimeout(() => setShowTagSuggestions(false), 200)
-              }
-            />
-            {showTagSuggestions && tagInput && tagSuggestions.length > 0 && (
-              <div className="absolute top-full left-0 right-0 bg-popover border rounded-md shadow-md z-10 mt-1">
-                {tagSuggestions.slice(0, 5).map((tag) => (
-                  <button
-                    key={tag}
-                    className="w-full text-left px-3 py-2 text-sm hover:bg-accent"
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      addTag(tag);
-                    }}
-                  >
-                    {tag}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+          <TagInput
+            tags={item.tags}
+            allTags={allTags}
+            onAdd={addTag}
+            onRemove={removeTag}
+          />
         </div>
 
         {/* Content / Markdown */}

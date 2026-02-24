@@ -3,7 +3,7 @@ import { listItems, updateItem } from "@/lib/api";
 import { parseItems, type ParsedItem } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
+import { TagInput } from "@/components/tag-input";
 import { toast } from "sonner";
 import {
   CheckCircle,
@@ -13,7 +13,6 @@ import {
   Loader2,
   FileText,
   ListTodo,
-  Plus,
   X,
   Calendar,
 } from "lucide-react";
@@ -58,8 +57,6 @@ export function InboxTriage({ onDone }: InboxTriageProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [pending, setPending] = useState<PendingChanges>({});
-  const [tagInput, setTagInput] = useState("");
-  const [showTagInput, setShowTagInput] = useState(false);
   const [showDateInput, setShowDateInput] = useState(false);
 
   const fetchInbox = useCallback(async () => {
@@ -89,8 +86,6 @@ export function InboxTriage({ onDone }: InboxTriageProps) {
 
   const resetAndNext = () => {
     setPending({});
-    setTagInput("");
-    setShowTagInput(false);
     setShowDateInput(false);
     if (currentIndex + 1 >= items.length) {
       toast.success("收件匣已清空！");
@@ -123,12 +118,9 @@ export function InboxTriage({ onDone }: InboxTriageProps) {
   };
 
   const addTag = (tag: string) => {
-    const trimmed = tag.trim();
-    if (!trimmed) return;
-    if (!resolvedTags.includes(trimmed)) {
-      setPending((p) => ({ ...p, tags: [...resolvedTags, trimmed] }));
+    if (!resolvedTags.includes(tag)) {
+      setPending((p) => ({ ...p, tags: [...resolvedTags, tag] }));
     }
-    setTagInput("");
   };
 
   const removeTag = (tag: string) => {
@@ -218,47 +210,14 @@ export function InboxTriage({ onDone }: InboxTriageProps) {
         {/* Tags */}
         <div className="flex items-start gap-2">
           <span className="text-sm text-muted-foreground w-10 pt-0.5">標籤</span>
-          <div className="flex flex-wrap gap-1 flex-1">
-            {resolvedTags.map((tag) => (
-              <Badge key={tag} variant="secondary" className="gap-0.5 pr-1">
-                {tag}
-                <button onClick={() => removeTag(tag)} className="ml-0.5 hover:text-destructive">
-                  <X className="h-3 w-3" />
-                </button>
-              </Badge>
-            ))}
-            {showTagInput ? (
-              <Input
-                autoFocus
-                placeholder="輸入標籤"
-                value={tagInput}
-                onChange={(e) => setTagInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    addTag(tagInput);
-                  }
-                  if (e.key === "Escape") {
-                    setShowTagInput(false);
-                    setTagInput("");
-                  }
-                }}
-                onBlur={() => {
-                  if (tagInput.trim()) addTag(tagInput);
-                  setShowTagInput(false);
-                }}
-                className="h-6 w-24 text-xs"
-              />
-            ) : (
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-6 w-6 p-0"
-                onClick={() => setShowTagInput(true)}
-              >
-                <Plus className="h-3 w-3" />
-              </Button>
-            )}
+          <div className="flex-1">
+            <TagInput
+              tags={resolvedTags}
+              allTags={[]}
+              onAdd={addTag}
+              onRemove={removeTag}
+              placeholder="輸入標籤"
+            />
           </div>
         </div>
 
