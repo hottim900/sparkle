@@ -573,6 +573,10 @@ describe("POST /api/webhook/line", () => {
       expect(replyText).toContain("!detail");
       expect(replyText).toContain("!due");
       expect(replyText).toContain("!tag");
+      expect(replyText).toContain("!untag");
+      expect(replyText).toContain("!done");
+      expect(replyText).toContain("!archive");
+      expect(replyText).toContain("!priority");
       expect(replyText).toContain("!list");
     });
   });
@@ -808,6 +812,182 @@ describe("POST /api/webhook/line", () => {
       const fetchMock = vi.mocked(fetch);
       const callBody = JSON.parse(fetchMock.mock.calls[0][1]!.body as string);
       expect(callBody.messages[0].text).toContain("編號 1 不存在");
+    });
+  });
+
+  describe("!done command", () => {
+    it("marks item as done after query session", async () => {
+      process.env.LINE_CHANNEL_SECRET = TEST_LINE_SECRET;
+      process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
+      seedItems();
+
+      // Establish session with active items
+      await sendLineMessage(app, "!active");
+      vi.mocked(fetch).mockClear();
+
+      // Mark first item as done
+      const res = await sendLineMessage(app, "!done 1");
+      expect(res.status).toBe(200);
+
+      const fetchMock = vi.mocked(fetch);
+      const callBody = JSON.parse(fetchMock.mock.calls[0][1]!.body as string);
+      const replyText: string = callBody.messages[0].text;
+      expect(replyText).toContain("✅");
+      expect(replyText).toContain("已完成");
+
+      // Verify DB state
+      const item = testSqlite.prepare("SELECT status FROM items WHERE id = ?").get("id-3") as any;
+      expect(item.status).toBe("done");
+    });
+
+    it("returns error when no session exists", async () => {
+      process.env.LINE_CHANNEL_SECRET = TEST_LINE_SECRET;
+      process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
+
+      const res = await sendLineMessage(app, "!done 1", "no-session-user");
+      expect(res.status).toBe(200);
+
+      const fetchMock = vi.mocked(fetch);
+      const callBody = JSON.parse(fetchMock.mock.calls[0][1]!.body as string);
+      expect(callBody.messages[0].text).toContain("不存在");
+    });
+  });
+
+  describe("!archive command", () => {
+    it("archives item after query session", async () => {
+      process.env.LINE_CHANNEL_SECRET = TEST_LINE_SECRET;
+      process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
+      seedItems();
+
+      // Establish session
+      await sendLineMessage(app, "!inbox");
+      vi.mocked(fetch).mockClear();
+
+      // Archive first item
+      const res = await sendLineMessage(app, "!archive 1");
+      expect(res.status).toBe(200);
+
+      const fetchMock = vi.mocked(fetch);
+      const callBody = JSON.parse(fetchMock.mock.calls[0][1]!.body as string);
+      const replyText: string = callBody.messages[0].text;
+      expect(replyText).toContain("✅");
+      expect(replyText).toContain("已封存");
+
+      // Verify at least one inbox item is now archived
+      const archivedItems = testSqlite.prepare("SELECT * FROM items WHERE status = 'archived'").all() as any[];
+      expect(archivedItems.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it("returns error when no session exists", async () => {
+      process.env.LINE_CHANNEL_SECRET = TEST_LINE_SECRET;
+      process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
+
+      const res = await sendLineMessage(app, "!archive 1", "no-session-user");
+      expect(res.status).toBe(200);
+
+      const fetchMock = vi.mocked(fetch);
+      const callBody = JSON.parse(fetchMock.mock.calls[0][1]!.body as string);
+      expect(callBody.messages[0].text).toContain("不存在");
+    });
+  });
+
+  describe("!priority command", () => {
+    it("sets item priority after query session", async () => {
+      process.env.LINE_CHANNEL_SECRET = TEST_LINE_SECRET;
+      process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
+      seedItems();
+
+      await sendLineMessage(app, "!inbox");
+      vi.mocked(fetch).mockClear();
+
+      const res = await sendLineMessage(app, "!priority 1 high");
+      expect(res.status).toBe(200);
+
+      const fetchMock = vi.mocked(fetch);
+      const callBody = JSON.parse(fetchMock.mock.calls[0][1]!.body as string);
+      const replyText: string = callBody.messages[0].text;
+      expect(replyText).toContain("✅");
+      expect(replyText).toContain("high");
+
+      // Verify at least one item now has high priority
+      const highItems = testSqlite.prepare("SELECT * FROM items WHERE priority = 'high' AND status = 'inbox'").all() as any[];
+      expect(highItems.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it("clears priority with none", async () => {
+      process.env.LINE_CHANNEL_SECRET = TEST_LINE_SECRET;
+      process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
+      seedItems();
+
+      // Query active (includes id-3 with priority=high)
+      await sendLineMessage(app, "!active");
+      vi.mocked(fetch).mockClear();
+
+      const res = await sendLineMessage(app, "!priority 1 none");
+      expect(res.status).toBe(200);
+
+      const fetchMock = vi.mocked(fetch);
+      const callBody = JSON.parse(fetchMock.mock.calls[0][1]!.body as string);
+      expect(callBody.messages[0].text).toContain("已清除");
+
+      // Verify DB state
+      const item = testSqlite.prepare("SELECT priority FROM items WHERE id = ?").get("id-3") as any;
+      expect(item.priority).toBeNull();
+    });
+
+    it("returns error when no session exists", async () => {
+      process.env.LINE_CHANNEL_SECRET = TEST_LINE_SECRET;
+      process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
+
+      const res = await sendLineMessage(app, "!priority 1 high", "no-session-user");
+      expect(res.status).toBe(200);
+
+      const fetchMock = vi.mocked(fetch);
+      const callBody = JSON.parse(fetchMock.mock.calls[0][1]!.body as string);
+      expect(callBody.messages[0].text).toContain("不存在");
+    });
+  });
+
+  describe("!untag command", () => {
+    it("removes tags from item after query session", async () => {
+      process.env.LINE_CHANNEL_SECRET = TEST_LINE_SECRET;
+      process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
+      const now = new Date().toISOString();
+      testSqlite.exec(`
+        INSERT INTO items (id, type, title, content, status, priority, due_date, tags, source, created_at, updated_at) VALUES
+          ('id-ut1', 'todo', '有很多標籤', '', 'inbox', NULL, NULL, '["工作","個人","重要"]', '', '${now}', '${now}');
+      `);
+
+      await sendLineMessage(app, "!inbox");
+      vi.mocked(fetch).mockClear();
+
+      const res = await sendLineMessage(app, "!untag 1 工作 重要");
+      expect(res.status).toBe(200);
+
+      const fetchMock = vi.mocked(fetch);
+      const callBody = JSON.parse(fetchMock.mock.calls[0][1]!.body as string);
+      const replyText: string = callBody.messages[0].text;
+      expect(replyText).toContain("✅");
+      expect(replyText).toContain("移除標籤");
+      expect(replyText).toContain("工作");
+      expect(replyText).toContain("重要");
+
+      // Verify DB state
+      const item = testSqlite.prepare("SELECT tags FROM items WHERE id = ?").get("id-ut1") as any;
+      const tags = JSON.parse(item.tags);
+      expect(tags).toEqual(["個人"]);
+    });
+
+    it("returns error when no session exists", async () => {
+      process.env.LINE_CHANNEL_SECRET = TEST_LINE_SECRET;
+      process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
+
+      const res = await sendLineMessage(app, "!untag 1 工作", "no-session-user");
+      expect(res.status).toBe(200);
+
+      const fetchMock = vi.mocked(fetch);
+      const callBody = JSON.parse(fetchMock.mock.calls[0][1]!.body as string);
+      expect(callBody.messages[0].text).toContain("不存在");
     });
   });
 
