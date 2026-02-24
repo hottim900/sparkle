@@ -61,3 +61,87 @@ export function parseLineMessage(
     source,
   };
 }
+
+export type LineCommand =
+  | { type: "save"; parsed: ParsedLineMessage }
+  | { type: "help" }
+  | { type: "find"; keyword: string }
+  | { type: "inbox" }
+  | { type: "today" }
+  | { type: "stats" }
+  | { type: "active" }
+  | { type: "list"; tag: string }
+  | { type: "detail"; index: number }
+  | { type: "due"; index: number; dateInput: string }
+  | { type: "tag"; index: number; tags: string[] }
+  | { type: "unknown" };
+
+export function parseCommand(text: string): LineCommand {
+  const trimmed = text.trim();
+  const lower = trimmed.toLowerCase();
+
+  // Help commands
+  if (lower === "?" || lower === "help" || lower === "說明") {
+    return { type: "help" };
+  }
+
+  // ! commands
+  if (lower.startsWith("!")) {
+    // !find <keyword>
+    if (lower.startsWith("!find ")) {
+      const keyword = trimmed.slice(6).trim();
+      return keyword ? { type: "find", keyword } : { type: "unknown" };
+    }
+    if (lower === "!inbox") return { type: "inbox" };
+    if (lower === "!today") return { type: "today" };
+    if (lower === "!stats") return { type: "stats" };
+    if (lower === "!active") return { type: "active" };
+
+    // !list <tag>
+    if (lower.startsWith("!list ")) {
+      const tag = trimmed.slice(6).trim();
+      return tag ? { type: "list", tag } : { type: "unknown" };
+    }
+
+    // !detail <N>
+    if (lower.startsWith("!detail ")) {
+      const num = parseInt(trimmed.slice(8).trim(), 10);
+      return !isNaN(num) && num > 0 ? { type: "detail", index: num } : { type: "unknown" };
+    }
+
+    // !due <N> <dateInput>
+    if (lower.startsWith("!due ")) {
+      const rest = trimmed.slice(5).trim();
+      const spaceIdx = rest.indexOf(" ");
+      if (spaceIdx === -1) return { type: "unknown" };
+      const num = parseInt(rest.slice(0, spaceIdx), 10);
+      const dateInput = rest.slice(spaceIdx + 1).trim();
+      return !isNaN(num) && num > 0 && dateInput
+        ? { type: "due", index: num, dateInput }
+        : { type: "unknown" };
+    }
+
+    // !tag <N> <tag1> <tag2> ...
+    if (lower.startsWith("!tag ")) {
+      const rest = trimmed.slice(5).trim();
+      const parts = rest.split(/\s+/);
+      if (parts.length < 2) return { type: "unknown" };
+      const num = parseInt(parts[0], 10);
+      if (isNaN(num) || num <= 0) return { type: "unknown" };
+      const tags = parts.slice(1);
+      return { type: "tag", index: num, tags };
+    }
+
+    // !todo / !high → save command (existing behavior)
+    if (lower.startsWith("!todo") || lower.startsWith("!high")) {
+      return { type: "save", parsed: parseLineMessage(trimmed) };
+    }
+
+    return { type: "unknown" };
+  }
+
+  // Regular text → save
+  const parsed = parseLineMessage(trimmed);
+  if (!parsed.title) return { type: "unknown" };
+  return { type: "save", parsed };
+}

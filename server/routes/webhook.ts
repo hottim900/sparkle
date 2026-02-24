@@ -1,9 +1,11 @@
 import { Hono } from "hono";
 import crypto from "node:crypto";
 import { db, sqlite } from "../db/index.js";
-import { createItem, listItems, searchItems } from "../lib/items.js";
+import { createItem, getItem, listItems, searchItems, updateItem } from "../lib/items.js";
 import { getStats, getFocusItems } from "../lib/stats.js";
-import { parseLineMessage } from "../lib/line.js";
+import { parseCommand } from "../lib/line.js";
+import { setSession, getItemId } from "../lib/line-session.js";
+import { parseDate } from "../lib/line-date.js";
 
 export const webhookRouter = new Hono();
 
@@ -34,126 +36,223 @@ webhookRouter.post("/line", async (c) => {
   for (const event of events) {
     if (event.type !== "message" || event.message.type !== "text") {
       if (event.type === "message" && event.message.type !== "text" && event.replyToken) {
-        await replyMessage(channelToken, event.replyToken, "\u{1F4CE} \u76EE\u524D\u50C5\u652F\u63F4\u6587\u5B57\u8A0A\u606F");
+        await replyMessage(channelToken, event.replyToken, "📎 目前僅支援文字訊息");
       }
       continue;
     }
 
     const text: string = event.message.text;
-    const trimmed = text.trim().toLowerCase();
+    const userId: string = event.source?.userId ?? "unknown";
+    const cmd = parseCommand(text);
 
-    // Help command
-    if (trimmed === "?" || trimmed === "help" || trimmed === "說明") {
-      if (event.replyToken) {
+    if (!event.replyToken) continue;
+
+    let reply: string;
+
+    switch (cmd.type) {
+      case "help": {
         await replyMessage(channelToken, event.replyToken, HELP_TEXT);
+        continue;
       }
-      continue;
-    }
 
-    // Query commands
-    if (trimmed.startsWith("!find ")) {
-      const keyword = text.trim().slice(6).trim();
-      if (keyword && event.replyToken) {
+      case "find": {
         try {
-          const results = searchItems(sqlite, keyword, 5);
-          const reply = results.length === 0
-            ? `\u{1F50D} 找不到「${keyword}」相關的項目`
-            : formatSearchResults(keyword, results);
-          await replyWithQuickReply(channelToken, event.replyToken, reply);
+          const results = searchItems(sqlite, cmd.keyword, 5);
+          if (results.length === 0) {
+            reply = `🔍 找不到「${cmd.keyword}」相關的項目`;
+          } else {
+            setSession(userId, results.map((r) => r.id));
+            reply = formatNumberedList(`🔍 搜尋「${cmd.keyword}」`, results, results.length);
+          }
         } catch {
-          await replyWithQuickReply(channelToken, event.replyToken, `\u{1F50D} 找不到「${keyword}」相關的項目`);
+          reply = `🔍 找不到「${cmd.keyword}」相關的項目`;
         }
+        break;
       }
-      continue;
-    }
 
-    if (trimmed === "!inbox") {
-      if (event.replyToken) {
+      case "inbox": {
         const { items: inboxItems, total } = listItems(db, {
           status: "inbox",
           sort: "created_at",
           order: "desc",
           limit: 5,
         });
-        const reply = total === 0
-          ? "\u{1F4E5} 收件匣是空的！"
-          : formatInboxResults(inboxItems, total);
-        await replyWithQuickReply(channelToken, event.replyToken, reply);
+        if (total === 0) {
+          reply = "📥 收件匣是空的！";
+        } else {
+          setSession(userId, inboxItems.map((r) => r.id));
+          reply = formatNumberedList("📥 收件匣", inboxItems, total);
+        }
+        break;
       }
-      continue;
-    }
 
-    if (trimmed === "!today") {
-      if (event.replyToken) {
+      case "today": {
         const focusItems = getFocusItems(sqlite);
-        const reply = focusItems.length === 0
-          ? "\u{1F4C5} 今天沒有待處理的項目！"
-          : formatFocusResults(focusItems);
-        await replyWithQuickReply(channelToken, event.replyToken, reply);
+        if (focusItems.length === 0) {
+          reply = "📅 今天沒有待處理的項目！";
+        } else {
+          setSession(userId, focusItems.map((r) => r.id));
+          reply = formatNumberedList("📅 今日焦點", focusItems, focusItems.length);
+        }
+        break;
       }
-      continue;
-    }
 
-    if (trimmed === "!stats") {
-      if (event.replyToken) {
+      case "stats": {
         const stats = getStats(sqlite);
-        const reply = formatStats(stats);
-        await replyWithQuickReply(channelToken, event.replyToken, reply);
+        reply = formatStats(stats);
+        break;
       }
-      continue;
+
+      case "active": {
+        const { items: activeItems, total } = listItems(db, {
+          status: "active",
+          sort: "due_date",
+          order: "asc",
+          limit: 5,
+        });
+        if (total === 0) {
+          reply = "🔵 沒有進行中的項目";
+        } else {
+          setSession(userId, activeItems.map((r) => r.id));
+          reply = formatNumberedList("🔵 進行中", activeItems, total);
+        }
+        break;
+      }
+
+      case "list": {
+        const { items: tagItems, total } = listItems(db, {
+          tag: cmd.tag,
+          limit: 5,
+        });
+        if (total === 0) {
+          reply = `🏷️ 找不到標籤「${cmd.tag}」的項目`;
+        } else {
+          setSession(userId, tagItems.map((r) => r.id));
+          reply = formatNumberedList(`🏷️ 標籤「${cmd.tag}」`, tagItems, total);
+        }
+        break;
+      }
+
+      case "detail": {
+        const detailItemId = getItemId(userId, cmd.index);
+        if (!detailItemId) {
+          reply = `❌ 編號 ${cmd.index} 不存在，請重新查詢`;
+          break;
+        }
+        const detailItem = getItem(db, detailItemId);
+        if (!detailItem) {
+          reply = "❌ 項目不存在";
+          break;
+        }
+        reply = formatDetail(detailItem);
+        break;
+      }
+
+      case "due": {
+        const dueItemId = getItemId(userId, cmd.index);
+        if (!dueItemId) {
+          reply = `❌ 編號 ${cmd.index} 不存在，請重新查詢`;
+          break;
+        }
+        const dateParsed = parseDate(cmd.dateInput);
+        if (!dateParsed.success) {
+          reply = "❌ 無法辨識日期，請用 YYYY-MM-DD 或中文如『明天』『3天後』";
+          break;
+        }
+        const dueDate = dateParsed.clear ? null : dateParsed.date;
+        updateItem(db, dueItemId, { due_date: dueDate });
+        const dueItem = getItem(db, dueItemId);
+        reply = dateParsed.clear
+          ? `✅ 已清除「${dueItem!.title}」的到期日`
+          : `✅ 已設定「${dueItem!.title}」到期日為 ${dueDate}`;
+        break;
+      }
+
+      case "tag": {
+        const tagItemId = getItemId(userId, cmd.index);
+        if (!tagItemId) {
+          reply = `❌ 編號 ${cmd.index} 不存在，請重新查詢`;
+          break;
+        }
+        const tagItem = getItem(db, tagItemId);
+        if (!tagItem) {
+          reply = "❌ 項目不存在";
+          break;
+        }
+        const existingTags: string[] = JSON.parse(tagItem.tags || "[]");
+        const newTags = [...new Set([...existingTags, ...cmd.tags])];
+        updateItem(db, tagItemId, { tags: newTags });
+        reply = `✅ 已為「${tagItem.title}」加上標籤：${cmd.tags.join("、")}`;
+        break;
+      }
+
+      case "save": {
+        if (!cmd.parsed.title) continue;
+        try {
+          const item = createItem(db, {
+            title: cmd.parsed.title,
+            content: cmd.parsed.content,
+            type: cmd.parsed.type,
+            status: "inbox",
+            priority: cmd.parsed.priority,
+            source: cmd.parsed.source,
+          });
+          const typeLabel = item.type === "todo" ? "待辦" : "筆記";
+          const priorityLabel = cmd.parsed.priority === "high" ? " [高優先]" : "";
+          reply = `✅ 已存入收件匣（${typeLabel}${priorityLabel}）\n${item.title}`;
+        } catch (err) {
+          console.error("Failed to create item from LINE:", err);
+          await replyMessage(channelToken, event.replyToken, "❌ 儲存失敗，請稍後再試");
+          continue;
+        }
+        break;
+      }
+
+      case "unknown":
+      default:
+        continue;
     }
 
-    const parsed = parseLineMessage(text);
-
-    if (!parsed.title) continue;
-
-    try {
-      const item = createItem(db, {
-        title: parsed.title,
-        content: parsed.content,
-        type: parsed.type,
-        status: "inbox",
-        priority: parsed.priority,
-        source: parsed.source,
-      });
-
-      if (event.replyToken) {
-        const typeLabel = item.type === "todo" ? "待辦" : "筆記";
-        const priorityLabel = parsed.priority === "high" ? " [高優先]" : "";
-        await replyWithQuickReply(
-          channelToken,
-          event.replyToken,
-          `\u2705 已存入收件匣（${typeLabel}${priorityLabel}）\n${item.title}`,
-        );
-      }
-    } catch (err) {
-      console.error("Failed to create item from LINE:", err);
-      if (event.replyToken) {
-        await replyMessage(channelToken, event.replyToken, "\u274C 儲存失敗，請稍後再試");
-      }
-    }
+    await replyWithQuickReply(channelToken, event.replyToken, reply!);
   }
 
   return c.json({ ok: true });
 });
 
-const HELP_TEXT = `\u{1F4DD} Sparkle 使用說明
+const HELP_TEXT = `📝 Sparkle 使用說明
 
 【新增】
-直接輸入文字 \u2192 存為筆記
-!todo 買牛奶 \u2192 存為待辦
-!high 緊急事項 \u2192 高優先筆記
-!todo !high 繳費 \u2192 高優先待辦
+直接輸入文字 → 存為筆記
+!todo 買牛奶 → 存為待辦
+!high 緊急事項 → 高優先筆記
+!todo !high 繳費 → 高優先待辦
 
 多行訊息：第一行為標題，其餘為內容
 
 【查詢】
-!inbox \u2192 查看收件匣
-!today \u2192 今日焦點
-!find 關鍵字 \u2192 搜尋項目
-!stats \u2192 統計摘要
+!inbox → 查看收件匣
+!active → 進行中項目
+!today → 今日焦點
+!find 關鍵字 → 搜尋項目
+!list 標籤 → 按標籤篩選
+!stats → 統計摘要
+
+【操作】查詢後用編號操作
+!detail N → 查看第 N 筆詳情
+!due N 日期 → 設定到期日
+!tag N 標籤 → 加標籤
+
+日期格式：明天、3天後、下週一、3/15、2026-03-15
+清除到期日：!due N 清除
 
 輸入 ? 顯示此說明`;
+
+const STATUS_LABELS: Record<string, string> = {
+  inbox: "收件匣",
+  active: "進行中",
+  done: "已完成",
+  archived: "已封存",
+};
 
 async function replyWithQuickReply(token: string, replyToken: string, text: string) {
   try {
@@ -170,10 +269,11 @@ async function replyWithQuickReply(token: string, replyToken: string, text: stri
           text,
           quickReply: {
             items: [
-              { type: "action", action: { type: "message", label: "\u{1F4E5} 收件匣", text: "!inbox" } },
-              { type: "action", action: { type: "message", label: "\u{1F4C5} 今日", text: "!today" } },
-              { type: "action", action: { type: "message", label: "\u{1F4CA} 統計", text: "!stats" } },
-              { type: "action", action: { type: "message", label: "\u2753 說明", text: "?" } },
+              { type: "action", action: { type: "message", label: "📥 收件匣", text: "!inbox" } },
+              { type: "action", action: { type: "message", label: "🔵 進行中", text: "!active" } },
+              { type: "action", action: { type: "message", label: "📅 今日", text: "!today" } },
+              { type: "action", action: { type: "message", label: "📊 統計", text: "!stats" } },
+              { type: "action", action: { type: "message", label: "❓ 說明", text: "?" } },
             ],
           },
         }],
@@ -210,48 +310,63 @@ async function replyMessage(token: string, replyToken: string, text: string) {
   }
 }
 
-function formatSearchResults(keyword: string, results: { title: string }[]): string {
-  const header = `\u{1F50D} 搜尋「${keyword}」（找到 ${results.length} 筆）`;
-  const lines = results.map((item, i) => `${i + 1}. ${item.title}`);
-  return [header, ...lines].join("\n");
+interface ItemLike {
+  id: string;
+  title: string;
+  due_date?: string | null;
+  priority?: string | null;
 }
 
-function formatInboxResults(inboxItems: { title: string }[], total: number): string {
-  const countNote = total > 5 ? `共 ${total} 筆，顯示最新 5 筆` : `共 ${total} 筆`;
-  const header = `\u{1F4E5} 收件匣（${countNote}）`;
-  const lines = inboxItems.map((item, i) => `${i + 1}. ${item.title}`);
-  return [header, ...lines].join("\n");
-}
-
-function formatFocusResults(focusItems: { title: string; due_date: string | null }[]): string {
-  const today = new Date();
-  const todayStr = toLocalDateStr(today);
-
-  const header = "\u{1F4C5} 今日焦點";
-  const lines = focusItems.map((item, i) => {
-    let tag = "";
-    if (item.due_date) {
-      if (item.due_date < todayStr) tag = " [逾期]";
-      else if (item.due_date === todayStr) tag = " [今日]";
-      else tag = ` [${item.due_date}]`;
-    }
-    return `${i + 1}.${tag} ${item.title}`;
+function formatNumberedList(header: string, items: ItemLike[], total: number): string {
+  const countNote = total > 5 ? `共 ${total} 筆，顯示 5 筆` : `共 ${total} 筆`;
+  const title = `${header}（${countNote}）`;
+  const lines = items.map((item, i) => {
+    let suffix = "";
+    if (item.due_date) suffix += ` 📅${item.due_date}`;
+    if (item.priority === "high") suffix += " ⚡";
+    return `[${i + 1}] ${item.title}${suffix}`;
   });
-  return [header, ...lines].join("\n");
+  return [title, ...lines].join("\n");
+}
+
+const LINE_TEXT_MAX = 5000;
+
+function formatDetail(item: {
+  title: string;
+  type: string;
+  status: string;
+  priority: string | null;
+  due_date: string | null;
+  tags: string;
+  content: string | null;
+}): string {
+  const lines = [`📋 ${item.title}`];
+  lines.push(`類型：${item.type === "todo" ? "待辦" : "筆記"}`);
+  lines.push(`狀態：${STATUS_LABELS[item.status] ?? item.status}`);
+  if (item.priority) lines.push(`優先：${item.priority}`);
+  if (item.due_date) lines.push(`到期：${item.due_date}`);
+  const tags: string[] = JSON.parse(item.tags || "[]");
+  if (tags.length > 0) lines.push(`標籤：${tags.join("、")}`);
+
+  if (item.content) {
+    const header = lines.join("\n");
+    const remaining = LINE_TEXT_MAX - header.length - 2; // 2 for \n\n
+    if (remaining > 50) {
+      const content = item.content.length > remaining
+        ? item.content.slice(0, remaining - 10) + "\n⋯（已截斷）"
+        : item.content;
+      lines.push(`\n${content}`);
+    }
+  }
+
+  return lines.join("\n");
 }
 
 function formatStats(stats: import("../lib/stats.js").Stats): string {
-  return `\u{1F4CA} Sparkle 統計
-\u{1F4E5} 收件匣：${stats.inbox_count}
-\u{1F535} 進行中：${stats.active_count}
-\u26A0\uFE0F 逾期：${stats.overdue_count}
-\u2705 本週完成：${stats.completed_this_week}
-\u2705 本月完成：${stats.completed_this_month}`;
-}
-
-function toLocalDateStr(date: Date): string {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
+  return `📊 Sparkle 統計
+📥 收件匣：${stats.inbox_count}
+🔵 進行中：${stats.active_count}
+⚠️ 逾期：${stats.overdue_count}
+✅ 本週完成：${stats.completed_this_week}
+✅ 本月完成：${stats.completed_this_month}`;
 }
