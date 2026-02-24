@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 
 interface DashboardProps {
-  onViewChange: (view: "inbox" | "triage") => void;
+  onViewChange: (view: "inbox") => void;
   onSelectItem: (item: ParsedItem) => void;
 }
 
@@ -265,7 +265,7 @@ export function Dashboard({ onViewChange, onSelectItem }: DashboardProps) {
                 variant="outline"
                 size="sm"
                 className="mt-2"
-                onClick={() => onViewChange("triage")}
+                onClick={() => onViewChange("inbox")}
               >
                 開始整理
                 <ChevronRight className="h-4 w-4 ml-1" />
