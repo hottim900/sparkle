@@ -137,10 +137,11 @@ LINE_CHANNEL_ACCESS_TOKEN=<from-line-console>
 
 ### Firewall (iptables)
 
-Port 3000 透過 iptables 限制只允許 localhost 和 WireGuard 子網存取，規則在 `sparkle.service` 的 `ExecStartPre` 自動設定（WSL2 重開後 iptables 規則會消失，service 啟動時自動重建）：
+Port 3000 透過 iptables 限制只允許特定來源存取，規則在 `sparkle.service` 的 `ExecStartPre` 自動設定（WSL2 重開後 iptables 規則會消失，service 啟動時自動重建）：
 
-- `127.0.0.1` → ACCEPT
-- `YOUR_VPN_SUBNET/24` → ACCEPT
+- `127.0.0.1` → ACCEPT（localhost / Cloudflare Tunnel）
+- `YOUR_VPN_SUBNET/24` → ACCEPT（WireGuard VPN 子網）
+- `172.16.0.0/12` → ACCEPT（Windows host 經 port proxy 轉發進 WSL2 的流量）
 - 其餘 → DROP
 
 需要 `iptables` 套件：`sudo apt install -y iptables`
@@ -166,7 +167,7 @@ netsh interface portproxy add v4tov4 listenaddress=YOUR_VPN_IP listenport=3000 c
 
 - LINE Official Account with Messaging API enabled
 - Webhook: `https://YOUR_WEBHOOK_DOMAIN/api/webhook/line`
-- Commands: `?`=help, `!todo`=todo, `!high`=high priority
+- Commands: `?`=help, `!todo`=todo, `!high`=high priority, `!find <keyword>`=搜尋, `!inbox`=未處理項目, `!today`=今日到期, `!stats`=統計
 - Quick reply buttons shown after each save
 - Chat mode must be OFF, Webhook must be ON in LINE Official Account Manager
 
@@ -176,5 +177,5 @@ netsh interface portproxy add v4tov4 listenaddress=YOUR_VPN_IP listenport=3000 c
 - API: REST, JSON, Bearer token auth on /api/* (except /api/webhook/)
 - Tags stored as JSON array string in SQLite
 - Timestamps: ISO 8601 strings
-- Database: SQLite WAL mode, FTS5 for search
+- Database: SQLite WAL mode, FTS5 trigram tokenizer for search (supports Chinese)
 - Tests: Vitest, in-memory SQLite, mock db module with vi.mock
