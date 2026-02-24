@@ -70,6 +70,8 @@ export type LineCommand =
   | { type: "today" }
   | { type: "stats" }
   | { type: "active" }
+  | { type: "notes" }
+  | { type: "todos" }
   | { type: "list"; tag: string }
   | { type: "detail"; index: number }
   | { type: "due"; index: number; dateInput: string }
@@ -96,6 +98,8 @@ export function parseCommand(text: string): LineCommand {
     if (lower === "!today") return { type: "today" };
     if (lower === "!stats") return { type: "stats" };
     if (lower === "!active") return { type: "active" };
+    if (lower === "!notes") return { type: "notes" };
+    if (lower === "!todos") return { type: "todos" };
 
     // !list <tag>
     if (lower.startsWith("!list ")) {

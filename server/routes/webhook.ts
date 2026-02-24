@@ -119,6 +119,38 @@ webhookRouter.post("/line", async (c) => {
         break;
       }
 
+      case "notes": {
+        const { items: noteItems, total } = listItems(db, {
+          type: "note",
+          sort: "created_at",
+          order: "desc",
+          limit: 5,
+        });
+        if (total === 0) {
+          reply = "📝 沒有筆記";
+        } else {
+          setSession(userId, noteItems.map((r) => r.id));
+          reply = formatNumberedList("📝 筆記", noteItems, total);
+        }
+        break;
+      }
+
+      case "todos": {
+        const { items: todoItems, total } = listItems(db, {
+          type: "todo",
+          sort: "created_at",
+          order: "desc",
+          limit: 5,
+        });
+        if (total === 0) {
+          reply = "☑️ 沒有待辦事項";
+        } else {
+          setSession(userId, todoItems.map((r) => r.id));
+          reply = formatNumberedList("☑️ 待辦事項", todoItems, total);
+        }
+        break;
+      }
+
       case "list": {
         const { items: tagItems, total } = listItems(db, {
           tag: cmd.tag,
@@ -232,6 +264,8 @@ const HELP_TEXT = `📝 Sparkle 使用說明
 【查詢】
 !inbox → 查看收件匣
 !active → 進行中項目
+!notes → 所有筆記
+!todos → 所有待辦
 !today → 今日焦點
 !find 關鍵字 → 搜尋項目
 !list 標籤 → 按標籤篩選

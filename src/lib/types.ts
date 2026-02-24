@@ -83,4 +83,5 @@ export type ViewType =
   | "triage"
   | "search"
   | "notes"
+  | "todos"
   | "dashboard";

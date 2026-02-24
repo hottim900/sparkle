@@ -38,6 +38,14 @@ describe("parseCommand", () => {
     expect(parseCommand("!active")).toEqual({ type: "active" });
   });
 
+  it("parses '!notes' as notes command", () => {
+    expect(parseCommand("!notes")).toEqual({ type: "notes" });
+  });
+
+  it("parses '!todos' as todos command", () => {
+    expect(parseCommand("!todos")).toEqual({ type: "todos" });
+  });
+
   it("parses '!list 工作' as list command with tag", () => {
     expect(parseCommand("!list 工作")).toEqual({ type: "list", tag: "工作" });
   });

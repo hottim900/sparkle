@@ -485,6 +485,73 @@ describe("POST /api/webhook/line", () => {
     });
   });
 
+  describe("!notes command", () => {
+    it("returns only notes with numbered format", async () => {
+      process.env.LINE_CHANNEL_SECRET = TEST_LINE_SECRET;
+      process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
+      seedItems();
+
+      const res = await sendLineMessage(app, "!notes");
+      expect(res.status).toBe(200);
+
+      const fetchMock = vi.mocked(fetch);
+      const callBody = JSON.parse(fetchMock.mock.calls[0][1]!.body as string);
+      const replyText: string = callBody.messages[0].text;
+      expect(replyText).toContain("筆記");
+      // seedItems has 2 notes: '研究 Hono' (inbox), '讀書筆記' (done)
+      expect(replyText).toContain("研究 Hono");
+      expect(replyText).toContain("讀書筆記");
+      // Should NOT contain todos
+      expect(replyText).not.toContain("買牛奶");
+      expect(replyText).not.toContain("繳電費");
+    });
+
+    it("returns empty message when no notes", async () => {
+      process.env.LINE_CHANNEL_SECRET = TEST_LINE_SECRET;
+      process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
+
+      const res = await sendLineMessage(app, "!notes");
+      expect(res.status).toBe(200);
+
+      const fetchMock = vi.mocked(fetch);
+      const callBody = JSON.parse(fetchMock.mock.calls[0][1]!.body as string);
+      expect(callBody.messages[0].text).toContain("沒有筆記");
+    });
+  });
+
+  describe("!todos command", () => {
+    it("returns only todos with numbered format", async () => {
+      process.env.LINE_CHANNEL_SECRET = TEST_LINE_SECRET;
+      process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
+      seedItems();
+
+      const res = await sendLineMessage(app, "!todos");
+      expect(res.status).toBe(200);
+
+      const fetchMock = vi.mocked(fetch);
+      const callBody = JSON.parse(fetchMock.mock.calls[0][1]!.body as string);
+      const replyText: string = callBody.messages[0].text;
+      expect(replyText).toContain("待辦");
+      // seedItems has 4 todos: 買牛奶, 繳電費, 開會準備, 牛奶品牌比較
+      expect(replyText).toContain("買牛奶");
+      // Should NOT contain notes
+      expect(replyText).not.toContain("研究 Hono");
+      expect(replyText).not.toContain("讀書筆記");
+    });
+
+    it("returns empty message when no todos", async () => {
+      process.env.LINE_CHANNEL_SECRET = TEST_LINE_SECRET;
+      process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
+
+      const res = await sendLineMessage(app, "!todos");
+      expect(res.status).toBe(200);
+
+      const fetchMock = vi.mocked(fetch);
+      const callBody = JSON.parse(fetchMock.mock.calls[0][1]!.body as string);
+      expect(callBody.messages[0].text).toContain("沒有待辦");
+    });
+  });
+
   describe("help text", () => {
     it("includes all commands in help text", async () => {
       process.env.LINE_CHANNEL_SECRET = TEST_LINE_SECRET;
@@ -501,6 +568,8 @@ describe("POST /api/webhook/line", () => {
       expect(replyText).toContain("!find");
       expect(replyText).toContain("!stats");
       expect(replyText).toContain("!active");
+      expect(replyText).toContain("!notes");
+      expect(replyText).toContain("!todos");
       expect(replyText).toContain("!detail");
       expect(replyText).toContain("!due");
       expect(replyText).toContain("!tag");
