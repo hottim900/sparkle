@@ -106,17 +106,17 @@ export function parseCommand(text: string): LineCommand {
     if (lower === "!todos") return { type: "todos" };
 
     // !done <N>
-    if (lower.startsWith("!done")) {
-      const rest = trimmed.slice(5).trim();
-      if (!rest) return { type: "unknown" };
+    if (lower === "!done") return { type: "unknown" };
+    if (lower.startsWith("!done ")) {
+      const rest = trimmed.slice(6).trim();
       const num = parseInt(rest, 10);
       return !isNaN(num) && num > 0 ? { type: "done", index: num } : { type: "unknown" };
     }
 
     // !archive <N>
-    if (lower.startsWith("!archive")) {
-      const rest = trimmed.slice(8).trim();
-      if (!rest) return { type: "unknown" };
+    if (lower === "!archive") return { type: "unknown" };
+    if (lower.startsWith("!archive ")) {
+      const rest = trimmed.slice(9).trim();
       const num = parseInt(rest, 10);
       return !isNaN(num) && num > 0 ? { type: "archive", index: num } : { type: "unknown" };
     }

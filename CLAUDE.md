@@ -80,9 +80,11 @@ data/                   # SQLite database (gitignored)
 npm run dev          # Vite on :5173, proxies /api to :3000
 npm run dev:server   # Hono on :3000 with tsx watch
 
-# Tests
-npx vitest run       # 79 tests across 4 files
-npx vitest           # Watch mode
+# Tests (179 tests, 8 files — server only, no frontend tests)
+npx vitest run                # Run all tests
+npx vitest run --coverage     # With coverage (needs @vitest/coverage-v8)
+npx vitest                    # Watch mode
+# Coverage: server/lib ~97%, server/routes ~94%, frontend 0%
 
 # Build
 npm run build        # Production frontend → dist/

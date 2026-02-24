@@ -6,13 +6,21 @@ import { getStats, getFocusItems } from "../lib/stats.js";
 import { parseCommand } from "../lib/line.js";
 import { setSession, getItemId } from "../lib/line-session.js";
 import { parseDate } from "../lib/line-date.js";
-import { formatNumberedList, formatDetail, formatStats, replyWithQuickReply, replyMessage } from "../lib/line-format.js";
+import { formatNumberedList, formatDetail, formatStats, replyLine } from "../lib/line-format.js";
 
 export const webhookRouter = new Hono();
 
 function verifySignature(body: string, signature: string, secret: string): boolean {
   const hash = crypto.createHmac("SHA256", secret).update(body).digest("base64");
   return hash === signature;
+}
+
+function resolveSessionItem(userId: string, index: number) {
+  const itemId = getItemId(userId, index);
+  if (!itemId) return { error: `❌ 編號 ${index} 不存在，請重新查詢` } as const;
+  const item = getItem(db, itemId);
+  if (!item) return { error: "❌ 項目不存在" } as const;
+  return { itemId, item } as const;
 }
 
 webhookRouter.post("/line", async (c) => {
@@ -37,7 +45,7 @@ webhookRouter.post("/line", async (c) => {
   for (const event of events) {
     if (event.type !== "message" || event.message.type !== "text") {
       if (event.type === "message" && event.message.type !== "text" && event.replyToken) {
-        await replyMessage(channelToken, event.replyToken, "📎 目前僅支援文字訊息");
+        await replyLine(channelToken, event.replyToken, "📎 目前僅支援文字訊息");
       }
       continue;
     }
@@ -52,7 +60,7 @@ webhookRouter.post("/line", async (c) => {
 
     switch (cmd.type) {
       case "help": {
-        await replyMessage(channelToken, event.replyToken, HELP_TEXT);
+        await replyLine(channelToken, event.replyToken, HELP_TEXT);
         continue;
       }
 
@@ -167,34 +175,23 @@ webhookRouter.post("/line", async (c) => {
       }
 
       case "detail": {
-        const detailItemId = getItemId(userId, cmd.index);
-        if (!detailItemId) {
-          reply = `❌ 編號 ${cmd.index} 不存在，請重新查詢`;
-          break;
-        }
-        const detailItem = getItem(db, detailItemId);
-        if (!detailItem) {
-          reply = "❌ 項目不存在";
-          break;
-        }
-        reply = formatDetail(detailItem);
+        const resolved = resolveSessionItem(userId, cmd.index);
+        if ("error" in resolved) { reply = resolved.error; break; }
+        reply = formatDetail(resolved.item);
         break;
       }
 
       case "due": {
-        const dueItemId = getItemId(userId, cmd.index);
-        if (!dueItemId) {
-          reply = `❌ 編號 ${cmd.index} 不存在，請重新查詢`;
-          break;
-        }
+        const resolved = resolveSessionItem(userId, cmd.index);
+        if ("error" in resolved) { reply = resolved.error; break; }
         const dateParsed = parseDate(cmd.dateInput);
         if (!dateParsed.success) {
           reply = "❌ 無法辨識日期，請用 YYYY-MM-DD 或中文如『明天』『3天後』";
           break;
         }
         const dueDate = dateParsed.clear ? null : dateParsed.date;
-        updateItem(db, dueItemId, { due_date: dueDate });
-        const dueItem = getItem(db, dueItemId);
+        updateItem(db, resolved.itemId, { due_date: dueDate });
+        const dueItem = getItem(db, resolved.itemId);
         reply = dateParsed.clear
           ? `✅ 已清除「${dueItem!.title}」的到期日`
           : `✅ 已設定「${dueItem!.title}」到期日為 ${dueDate}`;
@@ -202,88 +199,48 @@ webhookRouter.post("/line", async (c) => {
       }
 
       case "tag": {
-        const tagItemId = getItemId(userId, cmd.index);
-        if (!tagItemId) {
-          reply = `❌ 編號 ${cmd.index} 不存在，請重新查詢`;
-          break;
-        }
-        const tagItem = getItem(db, tagItemId);
-        if (!tagItem) {
-          reply = "❌ 項目不存在";
-          break;
-        }
-        const existingTags: string[] = JSON.parse(tagItem.tags || "[]");
+        const resolved = resolveSessionItem(userId, cmd.index);
+        if ("error" in resolved) { reply = resolved.error; break; }
+        const existingTags: string[] = JSON.parse(resolved.item.tags || "[]");
         const newTags = [...new Set([...existingTags, ...cmd.tags])];
-        updateItem(db, tagItemId, { tags: newTags });
-        reply = `✅ 已為「${tagItem.title}」加上標籤：${cmd.tags.join("、")}`;
+        updateItem(db, resolved.itemId, { tags: newTags });
+        reply = `✅ 已為「${resolved.item.title}」加上標籤：${cmd.tags.join("、")}`;
         break;
       }
 
       case "done": {
-        const doneItemId = getItemId(userId, cmd.index);
-        if (!doneItemId) {
-          reply = `❌ 編號 ${cmd.index} 不存在，請重新查詢`;
-          break;
-        }
-        const doneItem = getItem(db, doneItemId);
-        if (!doneItem) {
-          reply = "❌ 項目不存在";
-          break;
-        }
-        updateItem(db, doneItemId, { status: "done" });
-        reply = `✅ 已將「${doneItem.title}」標記為已完成`;
+        const resolved = resolveSessionItem(userId, cmd.index);
+        if ("error" in resolved) { reply = resolved.error; break; }
+        updateItem(db, resolved.itemId, { status: "done" });
+        reply = `✅ 已將「${resolved.item.title}」標記為已完成`;
         break;
       }
 
       case "archive": {
-        const archiveItemId = getItemId(userId, cmd.index);
-        if (!archiveItemId) {
-          reply = `❌ 編號 ${cmd.index} 不存在，請重新查詢`;
-          break;
-        }
-        const archiveItem = getItem(db, archiveItemId);
-        if (!archiveItem) {
-          reply = "❌ 項目不存在";
-          break;
-        }
-        updateItem(db, archiveItemId, { status: "archived" });
-        reply = `✅ 已封存「${archiveItem.title}」`;
+        const resolved = resolveSessionItem(userId, cmd.index);
+        if ("error" in resolved) { reply = resolved.error; break; }
+        updateItem(db, resolved.itemId, { status: "archived" });
+        reply = `✅ 已封存「${resolved.item.title}」`;
         break;
       }
 
       case "priority": {
-        const priItemId = getItemId(userId, cmd.index);
-        if (!priItemId) {
-          reply = `❌ 編號 ${cmd.index} 不存在，請重新查詢`;
-          break;
-        }
-        const priItem = getItem(db, priItemId);
-        if (!priItem) {
-          reply = "❌ 項目不存在";
-          break;
-        }
-        updateItem(db, priItemId, { priority: cmd.priority });
+        const resolved = resolveSessionItem(userId, cmd.index);
+        if ("error" in resolved) { reply = resolved.error; break; }
+        updateItem(db, resolved.itemId, { priority: cmd.priority });
         reply = cmd.priority === null
-          ? `✅ 已清除「${priItem.title}」的優先度`
-          : `✅ 已將「${priItem.title}」優先度設為 ${cmd.priority}`;
+          ? `✅ 已清除「${resolved.item.title}」的優先度`
+          : `✅ 已將「${resolved.item.title}」優先度設為 ${cmd.priority}`;
         break;
       }
 
       case "untag": {
-        const untagItemId = getItemId(userId, cmd.index);
-        if (!untagItemId) {
-          reply = `❌ 編號 ${cmd.index} 不存在，請重新查詢`;
-          break;
-        }
-        const untagItem = getItem(db, untagItemId);
-        if (!untagItem) {
-          reply = "❌ 項目不存在";
-          break;
-        }
-        const currentTags: string[] = JSON.parse(untagItem.tags || "[]");
+        const resolved = resolveSessionItem(userId, cmd.index);
+        if ("error" in resolved) { reply = resolved.error; break; }
+        const currentTags: string[] = JSON.parse(resolved.item.tags || "[]");
         const remaining = currentTags.filter((t) => !cmd.tags.includes(t));
-        updateItem(db, untagItemId, { tags: remaining });
-        reply = `✅ 已從「${untagItem.title}」移除標籤：${cmd.tags.join("、")}`;
+        updateItem(db, resolved.itemId, { tags: remaining });
+        reply = `✅ 已從「${resolved.item.title}」移除標籤：${cmd.tags.join("、")}`;
         break;
       }
 
@@ -303,7 +260,7 @@ webhookRouter.post("/line", async (c) => {
           reply = `✅ 已存入收件匣（${typeLabel}${priorityLabel}）\n${item.title}`;
         } catch (err) {
           console.error("Failed to create item from LINE:", err);
-          await replyMessage(channelToken, event.replyToken, "❌ 儲存失敗，請稍後再試");
+          await replyLine(channelToken, event.replyToken, "❌ 儲存失敗，請稍後再試");
           continue;
         }
         break;
@@ -314,7 +271,7 @@ webhookRouter.post("/line", async (c) => {
         continue;
     }
 
-    await replyWithQuickReply(channelToken, event.replyToken, reply!);
+    await replyLine(channelToken, event.replyToken, reply!, true);
   }
 
   return c.json({ ok: true });
@@ -353,5 +310,3 @@ const HELP_TEXT = `📝 Sparkle 使用說明
 清除到期日：!due N 清除
 
 輸入 ? 顯示此說明`;
-
-
