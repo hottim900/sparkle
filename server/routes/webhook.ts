@@ -6,7 +6,7 @@ import { getStats, getFocusItems } from "../lib/stats.js";
 import { parseCommand } from "../lib/line.js";
 import { setSession, getItemId } from "../lib/line-session.js";
 import { parseDate } from "../lib/line-date.js";
-import { formatNumberedList, formatDetail, formatStats } from "../lib/line-format.js";
+import { formatNumberedList, formatDetail, formatStats, replyWithQuickReply, replyMessage } from "../lib/line-format.js";
 
 export const webhookRouter = new Hono();
 
@@ -282,59 +282,4 @@ const HELP_TEXT = `📝 Sparkle 使用說明
 
 輸入 ? 顯示此說明`;
 
-async function replyWithQuickReply(token: string, replyToken: string, text: string) {
-  try {
-    const res = await fetch("https://api.line.me/v2/bot/message/reply", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        replyToken,
-        messages: [{
-          type: "text",
-          text,
-          quickReply: {
-            items: [
-              { type: "action", action: { type: "message", label: "📥 收件匣", text: "!inbox" } },
-              { type: "action", action: { type: "message", label: "🔵 進行中", text: "!active" } },
-              { type: "action", action: { type: "message", label: "📅 今日", text: "!today" } },
-              { type: "action", action: { type: "message", label: "📊 統計", text: "!stats" } },
-              { type: "action", action: { type: "message", label: "❓ 說明", text: "?" } },
-            ],
-          },
-        }],
-      }),
-    });
-    if (!res.ok) {
-      const body = await res.text();
-      console.error("LINE reply API error:", res.status, body);
-    }
-  } catch (err) {
-    console.error("Failed to reply LINE message:", err);
-  }
-}
-
-async function replyMessage(token: string, replyToken: string, text: string) {
-  try {
-    const res = await fetch("https://api.line.me/v2/bot/message/reply", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        replyToken,
-        messages: [{ type: "text", text }],
-      }),
-    });
-    if (!res.ok) {
-      const body = await res.text();
-      console.error("LINE reply API error:", res.status, body);
-    }
-  } catch (err) {
-    console.error("Failed to reply LINE message:", err);
-  }
-}
 
