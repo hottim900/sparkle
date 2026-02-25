@@ -1,6 +1,7 @@
 # Sparkle — 更新 WSL Port Forwarding
 # 右鍵 → 以系統管理員身分執行
 
+# TODO: Replace with your WireGuard VPN IP address
 $VpnIp = "YOUR_VPN_IP"
 $Port = 3000
 

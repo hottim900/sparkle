@@ -4,7 +4,9 @@ After=network.target sparkle.service
 
 [Service]
 Type=simple
+# TODO: Change to your Linux username
 User=YOUR_USER
+# TODO: Change to your cloudflared path (run `which cloudflared` to find it)
 ExecStart=/home/YOUR_USER/.local/bin/cloudflared tunnel run sparkle
 Restart=always
 RestartSec=5

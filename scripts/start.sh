@@ -29,6 +29,7 @@ else
 fi
 
 # 2. 提示 port forwarding
+# TODO: Replace YOUR_VPN_IP with your WireGuard VPN IP address
 WSL_IP=$(hostname -I | awk '{print $1}')
 echo ""
 echo "[2/2] Port forwarding"
