@@ -20,18 +20,36 @@ export function isValidTypeStatus(type: string, status: string): boolean {
 }
 
 const TYPE_CONVERSION_MAP: Record<string, Record<string, string>> = {
-  // todo → note
   "todo→note": {
     active: "fleeting",
     done: "permanent",
     archived: "archived",
   },
-  // note → todo
   "note→todo": {
     fleeting: "active",
     developing: "active",
     permanent: "done",
     exported: "done",
+    archived: "archived",
+  },
+  "scratch→note": {
+    draft: "fleeting",
+    archived: "archived",
+  },
+  "scratch→todo": {
+    draft: "active",
+    archived: "archived",
+  },
+  "note→scratch": {
+    fleeting: "draft",
+    developing: "draft",
+    permanent: "archived",
+    exported: "archived",
+    archived: "archived",
+  },
+  "todo→scratch": {
+    active: "draft",
+    done: "archived",
     archived: "archived",
   },
 };
@@ -129,16 +147,16 @@ export function createItem(
   const values = {
     id,
     title: input.title,
-    type: type as "note" | "todo",
+    type: type as "note" | "todo" | "scratch",
     content: input.content ?? "",
     status: status as "fleeting",
-    priority: input.priority ?? null,
-    due: (type === "todo" ? (input.due ?? null) : null),
-    tags: JSON.stringify(input.tags ?? []),
+    priority: type === "scratch" ? null : (input.priority ?? null),
+    due: type === "todo" ? (input.due ?? null) : null,
+    tags: type === "scratch" ? "[]" : JSON.stringify(input.tags ?? []),
     origin: input.origin ?? "",
     source: input.source ?? null,
-    aliases: JSON.stringify(input.aliases ?? []),
-    linked_note_id: type === "note" ? null : (input.linked_note_id ?? null),
+    aliases: type === "scratch" ? "[]" : JSON.stringify(input.aliases ?? []),
+    linked_note_id: type === "todo" ? (input.linked_note_id ?? null) : null,
     created: now,
     modified: now,
   };
@@ -294,6 +312,25 @@ export function updateItem(db: DB, id: string, input: UpdateItemInput) {
     } else {
       // Already a note: ignore any due update attempt
       delete updates.due;
+    }
+  }
+
+  // Scratch doesn't support tags, priority, due, aliases, linked_note_id
+  if (effectiveType === "scratch") {
+    if (input.type !== undefined && input.type !== existing.type) {
+      // Converting to scratch: clear all unsupported fields
+      updates.tags = "[]";
+      updates.priority = null;
+      updates.due = null;
+      updates.aliases = "[]";
+      updates.linked_note_id = null;
+    } else {
+      // Already a scratch: ignore updates to unsupported fields
+      delete updates.tags;
+      delete updates.priority;
+      delete updates.due;
+      delete updates.aliases;
+      delete updates.linked_note_id;
     }
   }
 
