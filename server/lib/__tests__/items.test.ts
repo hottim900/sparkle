@@ -11,6 +11,8 @@ import {
   deleteItem,
   searchItems,
   getAllTags,
+  isValidTypeStatus,
+  getAutoMappedStatus,
 } from "../items.js";
 
 function createTestDb() {
@@ -304,6 +306,124 @@ describe("Data Access Layer", () => {
       createItem(db, { title: "No tags" });
       const tags = getAllTags(sqlite);
       expect(tags).toEqual([]);
+    });
+  });
+
+  describe("isValidTypeStatus", () => {
+    it("accepts fleeting/developing/permanent/exported/archived for notes", () => {
+      expect(isValidTypeStatus("note", "fleeting")).toBe(true);
+      expect(isValidTypeStatus("note", "developing")).toBe(true);
+      expect(isValidTypeStatus("note", "permanent")).toBe(true);
+      expect(isValidTypeStatus("note", "exported")).toBe(true);
+      expect(isValidTypeStatus("note", "archived")).toBe(true);
+    });
+
+    it("rejects active/done for notes", () => {
+      expect(isValidTypeStatus("note", "active")).toBe(false);
+      expect(isValidTypeStatus("note", "done")).toBe(false);
+    });
+
+    it("accepts active/done/archived for todos", () => {
+      expect(isValidTypeStatus("todo", "active")).toBe(true);
+      expect(isValidTypeStatus("todo", "done")).toBe(true);
+      expect(isValidTypeStatus("todo", "archived")).toBe(true);
+    });
+
+    it("rejects fleeting/developing/permanent/exported for todos", () => {
+      expect(isValidTypeStatus("todo", "fleeting")).toBe(false);
+      expect(isValidTypeStatus("todo", "developing")).toBe(false);
+      expect(isValidTypeStatus("todo", "permanent")).toBe(false);
+      expect(isValidTypeStatus("todo", "exported")).toBe(false);
+    });
+  });
+
+  describe("getAutoMappedStatus", () => {
+    it("returns null when types are the same", () => {
+      expect(getAutoMappedStatus("note", "note", "fleeting")).toBeNull();
+      expect(getAutoMappedStatus("todo", "todo", "active")).toBeNull();
+    });
+
+    it("maps todo(done) -> note to permanent", () => {
+      expect(getAutoMappedStatus("todo", "note", "done")).toBe("permanent");
+    });
+
+    it("maps note(developing) -> todo to active", () => {
+      expect(getAutoMappedStatus("note", "todo", "developing")).toBe("active");
+    });
+
+    it("maps note(permanent) -> todo to done", () => {
+      expect(getAutoMappedStatus("note", "todo", "permanent")).toBe("done");
+    });
+
+    it("maps note(exported) -> todo to done", () => {
+      expect(getAutoMappedStatus("note", "todo", "exported")).toBe("done");
+    });
+
+    it("maps archived -> any type to archived", () => {
+      expect(getAutoMappedStatus("note", "todo", "archived")).toBe("archived");
+      expect(getAutoMappedStatus("todo", "note", "archived")).toBe("archived");
+    });
+  });
+
+  describe("updateItem — type conversion", () => {
+    it("auto-maps todo(done) -> note to permanent", () => {
+      const item = createItem(db, { title: "Done todo", type: "todo", status: "done" });
+      const updated = updateItem(db, item.id, { type: "note" });
+      expect(updated!.type).toBe("note");
+      expect(updated!.status).toBe("permanent");
+    });
+
+    it("auto-maps note(developing) -> todo to active", () => {
+      const item = createItem(db, { title: "Dev note", type: "note", status: "developing" });
+      const updated = updateItem(db, item.id, { type: "todo" });
+      expect(updated!.type).toBe("todo");
+      expect(updated!.status).toBe("active");
+    });
+
+    it("auto-maps note(permanent) -> todo to done", () => {
+      const item = createItem(db, { title: "Perm note", type: "note", status: "permanent" });
+      const updated = updateItem(db, item.id, { type: "todo" });
+      expect(updated!.type).toBe("todo");
+      expect(updated!.status).toBe("done");
+    });
+
+    it("auto-maps note(exported) -> todo to done", () => {
+      const item = createItem(db, { title: "Exported note", type: "note", status: "exported" });
+      const updated = updateItem(db, item.id, { type: "todo" });
+      expect(updated!.type).toBe("todo");
+      expect(updated!.status).toBe("done");
+    });
+
+    it("preserves archived status across type conversion", () => {
+      const noteItem = createItem(db, { title: "Archived note", type: "note", status: "archived" });
+      const updated1 = updateItem(db, noteItem.id, { type: "todo" });
+      expect(updated1!.type).toBe("todo");
+      expect(updated1!.status).toBe("archived");
+
+      const todoItem = createItem(db, { title: "Archived todo", type: "todo", status: "archived" });
+      const updated2 = updateItem(db, todoItem.id, { type: "note" });
+      expect(updated2!.type).toBe("note");
+      expect(updated2!.status).toBe("archived");
+    });
+  });
+
+  describe("updateItem — exported auto-reversion edge cases", () => {
+    it("reverts exported to permanent when content changes", () => {
+      const item = createItem(db, { title: "Note", content: "original", type: "note", status: "exported" });
+      const updated = updateItem(db, item.id, { content: "changed content" });
+      expect(updated!.status).toBe("permanent");
+    });
+
+    it("does NOT revert exported when same title is set", () => {
+      const item = createItem(db, { title: "Note", type: "note", status: "exported" });
+      const updated = updateItem(db, item.id, { title: "Note" });
+      expect(updated!.status).toBe("exported");
+    });
+
+    it("does NOT revert exported when same content is set", () => {
+      const item = createItem(db, { title: "Note", content: "original", type: "note", status: "exported" });
+      const updated = updateItem(db, item.id, { content: "original" });
+      expect(updated!.status).toBe("exported");
     });
   });
 });
