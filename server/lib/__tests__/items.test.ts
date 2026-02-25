@@ -382,6 +382,13 @@ describe("Data Access Layer", () => {
       expect(isValidTypeStatus("todo", "permanent")).toBe(false);
       expect(isValidTypeStatus("todo", "exported")).toBe(false);
     });
+
+    it("validates scratch type statuses", () => {
+      expect(isValidTypeStatus("scratch", "draft")).toBe(true);
+      expect(isValidTypeStatus("scratch", "archived")).toBe(true);
+      expect(isValidTypeStatus("scratch", "fleeting")).toBe(false);
+      expect(isValidTypeStatus("scratch", "active")).toBe(false);
+    });
   });
 
   describe("getAutoMappedStatus", () => {

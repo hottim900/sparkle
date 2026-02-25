@@ -4,7 +4,7 @@ export const items = sqliteTable(
   "items",
   {
     id: text("id").primaryKey(),
-    type: text("type", { enum: ["note", "todo"] })
+    type: text("type", { enum: ["note", "todo", "scratch"] })
       .notNull()
       .default("note"),
     title: text("title").notNull(),
@@ -17,6 +17,7 @@ export const items = sqliteTable(
         "exported",
         "active",
         "done",
+        "draft",
         "archived",
       ],
     })

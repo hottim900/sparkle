@@ -7,12 +7,13 @@ export const statusEnum = z.enum([
   "exported",
   "active",
   "done",
+  "draft",
   "archived",
 ]);
 
 export const createItemSchema = z.object({
   title: z.string().min(1, "Title is required").max(500),
-  type: z.enum(["note", "todo"]).default("note"),
+  type: z.enum(["note", "todo", "scratch"]).default("note"),
   content: z.string().max(50000).default(""),
   status: statusEnum.optional(),
   priority: z.enum(["low", "medium", "high"]).nullable().default(null),
@@ -34,7 +35,7 @@ export const createItemSchema = z.object({
 
 export const updateItemSchema = z.object({
   title: z.string().min(1).max(500).optional(),
-  type: z.enum(["note", "todo"]).optional(),
+  type: z.enum(["note", "todo", "scratch"]).optional(),
   content: z.string().max(50000).optional(),
   status: statusEnum.optional(),
   priority: z.enum(["low", "medium", "high"]).nullable().optional(),
@@ -56,7 +57,7 @@ export const updateItemSchema = z.object({
 
 export const listItemsSchema = z.object({
   status: statusEnum.optional(),
-  type: z.enum(["note", "todo"]).optional(),
+  type: z.enum(["note", "todo", "scratch"]).optional(),
   tag: z.string().optional(),
   sort: z.enum(["created", "priority", "due", "modified"]).default("created"),
   order: z.enum(["asc", "desc"]).default("desc"),
