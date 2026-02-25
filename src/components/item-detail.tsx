@@ -50,7 +50,9 @@ import {
 interface ItemDetailProps {
   itemId: string;
   obsidianEnabled?: boolean;
+  onBack?: () => void;
   onClose?: () => void;
+  canGoBack?: boolean;
   onUpdated?: () => void;
   onDeleted?: () => void;
   onNavigate?: (itemId: string) => void;
@@ -78,7 +80,9 @@ const gtdTags = [
 export function ItemDetail({
   itemId,
   obsidianEnabled,
+  onBack,
   onClose,
+  canGoBack,
   onUpdated,
   onDeleted,
   onNavigate,
@@ -306,9 +310,16 @@ export function ItemDetail({
     <div className="h-full flex flex-col min-w-0">
       {/* Header */}
       <div className="flex items-center justify-between p-3 border-b">
-        <Button variant="ghost" size="icon" onClick={onClose}>
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
+        <div className="flex items-center gap-0.5">
+          <Button variant="ghost" size="icon" onClick={onBack ?? onClose} title={canGoBack ? "返回上一頁" : "關閉"}>
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          {canGoBack && (
+            <Button variant="ghost" size="icon" onClick={onClose} title="關閉詳情">
+              <X className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
         <div className="flex items-center gap-1">
           {saveStatus === "saving" && (
             <span className="text-xs text-muted-foreground flex items-center gap-1 animate-fade-in">
