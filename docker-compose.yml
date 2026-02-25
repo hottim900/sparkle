@@ -8,8 +8,16 @@ services:
       - PORT=3000
       - NODE_ENV=production
       - DATABASE_URL=/app/data/todo.db
+      # LINE Bot (optional)
+      # - LINE_CHANNEL_SECRET=${LINE_CHANNEL_SECRET}
+      # - LINE_CHANNEL_ACCESS_TOKEN=${LINE_CHANNEL_ACCESS_TOKEN}
+      # TLS (optional)
+      # - TLS_CERT=/app/certs/cert.pem
+      # - TLS_KEY=/app/certs/key.pem
     volumes:
       - app-data:/app/data
+      # TLS certificates (optional)
+      # - ./certs:/app/certs:ro
     restart: unless-stopped
 
 volumes:
