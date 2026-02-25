@@ -26,7 +26,7 @@ const gtdTags = [
 ];
 
 export function QuickCapture({ onCreated }: QuickCaptureProps) {
-  const { theme, setTheme } = useTheme();
+  const { resolvedTheme, setTheme } = useTheme();
   const [title, setTitle] = useState("");
   const [expanded, setExpanded] = useState(false);
   const [type, setType] = useState<ItemType>("note");
@@ -108,10 +108,10 @@ export function QuickCapture({ onCreated }: QuickCaptureProps) {
           type="button"
           variant="ghost"
           size="icon"
-          onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+          onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
           className="shrink-0 md:hidden"
         >
-          {theme === "dark" ? (
+          {resolvedTheme === "dark" ? (
             <Sun className="h-4 w-4" />
           ) : (
             <Moon className="h-4 w-4" />

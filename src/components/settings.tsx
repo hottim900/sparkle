@@ -38,7 +38,7 @@ export function Settings({ onSettingsChanged }: SettingsProps) {
   const [inboxFolder, setInboxFolder] = useState("0_Inbox");
   const [exportMode, setExportMode] = useState("overwrite");
 
-  const { theme, setTheme } = useTheme();
+  const { resolvedTheme, setTheme } = useTheme();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -255,14 +255,14 @@ export function Settings({ onSettingsChanged }: SettingsProps) {
             <Button
               variant="ghost"
               className="w-full justify-start gap-2 text-muted-foreground"
-              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+              onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
             >
-              {theme === "dark" ? (
+              {resolvedTheme === "dark" ? (
                 <Sun className="h-4 w-4" />
               ) : (
                 <Moon className="h-4 w-4" />
               )}
-              {theme === "dark" ? "淺色模式" : "深色模式"}
+              {resolvedTheme === "dark" ? "淺色模式" : "深色模式"}
             </Button>
 
             <Button
