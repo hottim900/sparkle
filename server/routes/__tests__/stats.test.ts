@@ -156,6 +156,7 @@ describe("GET /api/stats", () => {
       active_count: 0,
       done_this_week: 0,
       done_this_month: 0,
+      scratch_count: 0,
       created_this_week: 0,
       created_this_month: 0,
       overdue_count: 0,
@@ -330,6 +331,19 @@ describe("GET /api/stats", () => {
     expect(body.exported_this_month).toBeGreaterThanOrEqual(2);
   });
 
+  it("returns scratch_count", async () => {
+    insertItem({ id: "s1", title: "Scratch 1", type: "scratch", status: "draft" });
+    insertItem({ id: "s2", title: "Scratch 2", type: "scratch", status: "draft" });
+    insertItem({ id: "s3", title: "Scratch archived", type: "scratch", status: "archived" });
+
+    const res = await app.request("/api/stats", {
+      headers: authHeaders(),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.scratch_count).toBe(2);
+  });
+
   it("overdue excludes exported items", async () => {
     const pastDate = daysFromNow(-3);
     insertItem({
@@ -440,6 +454,31 @@ describe("GET /api/stats/focus", () => {
     const todoIdx = body.items.findIndex((i: { id: string }) => i.id === "todo-overdue");
     const noteIdx = body.items.findIndex((i: { id: string }) => i.id === "note-with-due");
     expect(noteIdx).toBeGreaterThan(todoIdx);
+  });
+
+  it("excludes scratch items from focus", async () => {
+    // Scratch items should never appear in focus
+    insertItem({
+      id: "scratch1",
+      title: "Scratch item",
+      type: "scratch",
+      status: "draft",
+    });
+    insertItem({
+      id: "fleeting1",
+      title: "Fleeting note",
+      type: "note",
+      status: "fleeting",
+    });
+
+    const res = await app.request("/api/stats/focus", {
+      headers: authHeaders(),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    const ids = body.items.map((i: { id: string }) => i.id);
+    expect(ids).not.toContain("scratch1");
+    expect(ids).toContain("fleeting1");
   });
 
   it("returns at most 5 items", async () => {

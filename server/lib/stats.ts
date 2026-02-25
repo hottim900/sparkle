@@ -50,6 +50,8 @@ export interface Stats {
   active_count: number;
   done_this_week: number;
   done_this_month: number;
+  // Scratch
+  scratch_count: number;
   // Shared
   created_this_week: number;
   created_this_month: number;
@@ -75,6 +77,7 @@ export function getStats(sqlite: Database.Database): Stats {
         COALESCE(SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END), 0) AS active_count,
         COALESCE(SUM(CASE WHEN status = 'done' AND modified >= ? THEN 1 ELSE 0 END), 0) AS done_this_week,
         COALESCE(SUM(CASE WHEN status = 'done' AND modified >= ? THEN 1 ELSE 0 END), 0) AS done_this_month,
+        COALESCE(SUM(CASE WHEN status = 'draft' AND type = 'scratch' THEN 1 ELSE 0 END), 0) AS scratch_count,
         COALESCE(SUM(CASE WHEN created >= ? THEN 1 ELSE 0 END), 0) AS created_this_week,
         COALESCE(SUM(CASE WHEN created >= ? THEN 1 ELSE 0 END), 0) AS created_this_month,
         COALESCE(SUM(CASE WHEN due < ? AND type = 'todo' AND status NOT IN ('done', 'exported', 'archived') THEN 1 ELSE 0 END), 0) AS overdue_count
@@ -130,6 +133,7 @@ export function getFocusItems(sqlite: Database.Database): FocusItem[] {
           END AS focus_sort
         FROM items
         WHERE status NOT IN ('done', 'exported', 'archived')
+          AND type != 'scratch'
       ) ranked
       WHERE focus_rank < 6
       ORDER BY focus_rank ASC, focus_sort ASC
