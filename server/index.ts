@@ -18,6 +18,11 @@ import { getObsidianSettings } from "./lib/settings.js";
 import { z, ZodError } from "zod";
 import { statusEnum } from "./schemas/items.js";
 
+if (!process.env.AUTH_TOKEN) {
+  console.error('ERROR: AUTH_TOKEN environment variable is not set. Exiting.');
+  process.exit(1);
+}
+
 const app = new Hono();
 
 app.use("*", logger());
