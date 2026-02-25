@@ -153,23 +153,26 @@ export function QuickCapture({ onCreated }: QuickCaptureProps) {
               <SelectContent>
                 <SelectItem value="note">筆記</SelectItem>
                 <SelectItem value="todo">待辦</SelectItem>
+                <SelectItem value="scratch">暫存</SelectItem>
               </SelectContent>
             </Select>
 
-            <Select
-              value={priority}
-              onValueChange={(v) => setPriority(v as ItemPriority | "none")}
-            >
-              <SelectTrigger className="w-24">
-                <SelectValue placeholder="優先度" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">無</SelectItem>
-                <SelectItem value="low">低</SelectItem>
-                <SelectItem value="medium">中</SelectItem>
-                <SelectItem value="high">高</SelectItem>
-              </SelectContent>
-            </Select>
+            {type !== "scratch" && (
+              <Select
+                value={priority}
+                onValueChange={(v) => setPriority(v as ItemPriority | "none")}
+              >
+                <SelectTrigger className="w-24">
+                  <SelectValue placeholder="優先度" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">無</SelectItem>
+                  <SelectItem value="low">低</SelectItem>
+                  <SelectItem value="medium">中</SelectItem>
+                  <SelectItem value="high">高</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
 
             <Input
               type="url"
@@ -198,12 +201,14 @@ export function QuickCapture({ onCreated }: QuickCaptureProps) {
             </div>
           )}
 
-          <TagInput
-            tags={selectedTags}
-            allTags={allTags}
-            onAdd={addTag}
-            onRemove={removeTag}
-          />
+          {type !== "scratch" && (
+            <TagInput
+              tags={selectedTags}
+              allTags={allTags}
+              onAdd={addTag}
+              onRemove={removeTag}
+            />
+          )}
         </>
       )}
     </div>

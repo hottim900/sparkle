@@ -48,6 +48,7 @@ import {
   Plus,
   Search,
   Unlink,
+  StickyNote,
 } from "lucide-react";
 
 interface ItemDetailProps {
@@ -71,6 +72,11 @@ const noteStatuses: { value: ItemStatus; label: string }[] = [
 const todoStatuses: { value: ItemStatus; label: string }[] = [
   { value: "active", label: "進行中" },
   { value: "done", label: "已完成" },
+  { value: "archived", label: "已封存" },
+];
+
+const scratchStatuses: { value: ItemStatus; label: string }[] = [
+  { value: "draft", label: "暫存" },
   { value: "archived", label: "已封存" },
 ];
 
@@ -378,7 +384,7 @@ export function ItemDetail({
     );
   }
 
-  const statusOptions = item.type === "note" ? noteStatuses : todoStatuses;
+  const statusOptions = item.type === "note" ? noteStatuses : item.type === "todo" ? todoStatuses : scratchStatuses;
   const showExportButton =
     obsidianEnabled && item.type === "note" && item.status === "permanent";
 
@@ -469,15 +475,19 @@ export function ItemDetail({
         className={`flex items-center gap-1.5 px-4 py-1.5 text-xs font-medium ${
           item.type === "note"
             ? "bg-purple-50 text-purple-700 dark:bg-purple-950 dark:text-purple-300"
-            : "bg-sky-50 text-sky-700 dark:bg-sky-950 dark:text-sky-300"
+            : item.type === "todo"
+            ? "bg-sky-50 text-sky-700 dark:bg-sky-950 dark:text-sky-300"
+            : "bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300"
         }`}
       >
         {item.type === "note" ? (
           <FileText className="h-3.5 w-3.5" />
-        ) : (
+        ) : item.type === "todo" ? (
           <ListTodo className="h-3.5 w-3.5" />
+        ) : (
+          <StickyNote className="h-3.5 w-3.5" />
         )}
-        {item.type === "note" ? "筆記" : "待辦"}
+        {item.type === "note" ? "筆記" : item.type === "todo" ? "待辦" : "暫存"}
       </div>
 
       {/* Content */}
@@ -515,6 +525,7 @@ export function ItemDetail({
             <SelectContent>
               <SelectItem value="note">筆記</SelectItem>
               <SelectItem value="todo">待辦</SelectItem>
+              <SelectItem value="scratch">暫存</SelectItem>
             </SelectContent>
           </Select>
 
@@ -537,27 +548,29 @@ export function ItemDetail({
             </SelectContent>
           </Select>
 
-          <Select
-            value={item.priority ?? "none"}
-            onValueChange={(v) => {
-              const val = v === "none" ? null : v;
-              setItem({
-                ...item,
-                priority: val as ParsedItem["priority"],
-              });
-              saveField("priority", val);
-            }}
-          >
-            <SelectTrigger className="w-24">
-              <SelectValue placeholder="優先度" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="none">無</SelectItem>
-              <SelectItem value="low">低</SelectItem>
-              <SelectItem value="medium">中</SelectItem>
-              <SelectItem value="high">高</SelectItem>
-            </SelectContent>
-          </Select>
+          {item.type !== "scratch" && (
+            <Select
+              value={item.priority ?? "none"}
+              onValueChange={(v) => {
+                const val = v === "none" ? null : v;
+                setItem({
+                  ...item,
+                  priority: val as ParsedItem["priority"],
+                });
+                saveField("priority", val);
+              }}
+            >
+              <SelectTrigger className="w-24">
+                <SelectValue placeholder="優先度" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">無</SelectItem>
+                <SelectItem value="low">低</SelectItem>
+                <SelectItem value="medium">中</SelectItem>
+                <SelectItem value="high">高</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
         </div>
 
         {/* Due date (todo only) */}
@@ -815,70 +828,74 @@ export function ItemDetail({
         )}
 
         {/* Tags */}
-        <div>
-          <label className="text-sm text-muted-foreground block mb-1">
-            標籤
-          </label>
-          {/* GTD quick-select buttons for todos */}
-          {item.type === "todo" && (
-            <div className="flex gap-1 mb-2">
-              {gtdTags.map((gtd) => {
-                const isActive = item.tags.includes(gtd.tag);
-                return (
-                  <Button
-                    key={gtd.tag}
-                    size="sm"
-                    variant={isActive ? "default" : "outline"}
-                    className="h-7 text-xs"
-                    onClick={() => {
-                      if (isActive) {
-                        removeTag(gtd.tag);
-                      } else {
-                        addTag(gtd.tag);
-                      }
-                    }}
-                  >
-                    {gtd.label}
-                  </Button>
-                );
-              })}
-            </div>
-          )}
-          <TagInput
-            tags={item.tags}
-            allTags={allTags}
-            onAdd={addTag}
-            onRemove={removeTag}
-          />
-        </div>
+        {item.type !== "scratch" && (
+          <div>
+            <label className="text-sm text-muted-foreground block mb-1">
+              標籤
+            </label>
+            {/* GTD quick-select buttons for todos */}
+            {item.type === "todo" && (
+              <div className="flex gap-1 mb-2">
+                {gtdTags.map((gtd) => {
+                  const isActive = item.tags.includes(gtd.tag);
+                  return (
+                    <Button
+                      key={gtd.tag}
+                      size="sm"
+                      variant={isActive ? "default" : "outline"}
+                      className="h-7 text-xs"
+                      onClick={() => {
+                        if (isActive) {
+                          removeTag(gtd.tag);
+                        } else {
+                          addTag(gtd.tag);
+                        }
+                      }}
+                    >
+                      {gtd.label}
+                    </Button>
+                  );
+                })}
+              </div>
+            )}
+            <TagInput
+              tags={item.tags}
+              allTags={allTags}
+              onAdd={addTag}
+              onRemove={removeTag}
+            />
+          </div>
+        )}
 
         {/* Aliases */}
-        <div>
-          <label className="text-sm text-muted-foreground block mb-1">
-            別名
-          </label>
-          <div className="flex flex-wrap gap-1 mb-2">
-            {item.aliases.map((alias) => (
-              <Badge key={alias} variant="secondary" className="gap-1">
-                {alias}
-                <button type="button" onClick={() => removeAlias(alias)}>
-                  <X className="h-3 w-3" />
-                </button>
-              </Badge>
-            ))}
+        {item.type !== "scratch" && (
+          <div>
+            <label className="text-sm text-muted-foreground block mb-1">
+              別名
+            </label>
+            <div className="flex flex-wrap gap-1 mb-2">
+              {item.aliases.map((alias) => (
+                <Badge key={alias} variant="secondary" className="gap-1">
+                  {alias}
+                  <button type="button" onClick={() => removeAlias(alias)}>
+                    <X className="h-3 w-3" />
+                  </button>
+                </Badge>
+              ))}
+            </div>
+            <Input
+              value={aliasInput}
+              onChange={(e) => setAliasInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  addAlias(aliasInput);
+                }
+              }}
+              placeholder="新增別名..."
+            />
           </div>
-          <Input
-            value={aliasInput}
-            onChange={(e) => setAliasInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                addAlias(aliasInput);
-              }
-            }}
-            placeholder="新增別名..."
-          />
-        </div>
+        )}
 
         {/* Content / Markdown */}
         <div>
