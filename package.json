@@ -1,7 +1,12 @@
 {
   "name": "sparkle",
   "version": "1.0.0",
-  "private": true,
+  "description": "Self-hosted PWA for personal idea capture + task management with Zettelkasten note maturity flow",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hottim900/sparkle.git"
+  },
   "type": "module",
   "scripts": {
     "dev": "vite",
