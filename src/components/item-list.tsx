@@ -132,9 +132,12 @@ export function ItemList({
   const limit = 50;
 
   const noteViews = ["notes", "fleeting", "developing", "permanent", "exported"];
+  const todoViews = ["todos", "active", "done"];
   const isNoteView = currentView ? noteViews.includes(currentView) : false;
+  const isTodoView = currentView ? todoViews.includes(currentView) : false;
   const sortOptions = isNoteView ? baseSortOptions : [...baseSortOptions, dueSortOption];
-  const safeSortIdx = sortIdx < sortOptions.length ? sortIdx : 0;
+  const defaultSortIdx = isTodoView ? sortOptions.length - 1 : 0; // todos default to due date
+  const safeSortIdx = sortIdx < sortOptions.length ? sortIdx : defaultSortIdx;
   const currentSort = sortOptions[safeSortIdx];
 
   // Determine effective status and type from view + sub-navigation
@@ -178,6 +181,11 @@ export function ItemList({
       setLoading(false);
     }
   }, [effectiveStatus, effectiveType, tag, offset, refreshKey, safeSortIdx, excludeStatus?.join()]);
+
+  // Reset sort to view-appropriate default when switching views
+  useEffect(() => {
+    setSortIdx(isTodoView ? sortOptions.length - 1 : 0);
+  }, [currentView]);
 
   useEffect(() => {
     setOffset(0);
