@@ -81,7 +81,7 @@ data/                   # SQLite database (gitignored)
 npm run dev          # Vite on :5173, proxies /api to :3000
 npm run dev:server   # Hono on :3000 with tsx watch
 
-# Tests (282 tests, 9 files — server only, no frontend tests)
+# Tests (301 tests, 9 files — server only, no frontend tests)
 npx vitest run                # Run all tests
 npx vitest run --coverage     # With coverage (needs @vitest/coverage-v8)
 npx vitest                    # Watch mode
@@ -180,7 +180,7 @@ netsh interface portproxy add v4tov4 listenaddress=YOUR_VPN_IP listenport=3000 c
   - 新增：`!todo`=待辦, `!high`=高優先, 直接輸入=閃念筆記
   - 查詢：`!fleeting`=閃念筆記, `!developing`=發展中, `!permanent`=永久筆記, `!active`=進行中待辦, `!notes`=所有筆記, `!todos`=所有待辦, `!today`=今日焦點, `!find <keyword>`=搜尋, `!list <tag>`=標籤篩選, `!stats`=統計
   - 筆記推進（需先查詢建立 session）：`!develop N`=閃念→發展中, `!mature N`=發展中→永久, `!export N`=匯出到 Obsidian
-  - 操作（需先查詢建立 session）：`!detail N`=詳情, `!due N <日期>`=設到期日, `!tag N <標籤...>`=加標籤, `!untag N <標籤...>`=移除標籤, `!done N`=待辦完成, `!archive N`=封存, `!priority N <high|medium|low|none>`=優先度
+  - 操作（需先查詢建立 session）：`!detail N`=詳情, `!due N <日期>`=設到期日(待辦only), `!track N [日期]`=從筆記建立追蹤待辦, `!tag N <標籤...>`=加標籤, `!untag N <標籤...>`=移除標籤, `!done N`=待辦完成, `!archive N`=封存, `!priority N <high|medium|low|none>`=優先度
   - `?`/`help`/`說明`=說明
   - `!inbox` 為 `!fleeting` 的向後相容別名
 - Session: 查詢結果以 [N] 編號，後續用編號操作，10 分鐘 TTL，純記憶體
@@ -204,22 +204,23 @@ Shared: `archived` (any type)
 ### Field Names (Obsidian-aligned)
 
 ```
-id, type, title, content, status, priority, due, tags, origin, source, aliases, created, modified
+id, type, title, content, status, priority, due, tags, origin, source, aliases, linked_note_id, created, modified
 ```
 
 - `origin`: capture channel (LINE, web, import)
 - `source`: reference URL (nullable)
 - `aliases`: alternative names for Obsidian linking (JSON array)
 - `due`: YYYY-MM-DD format, **todo-only** (notes ignore due; todo→note conversion clears due)
+- `linked_note_id`: todo→note reference (nullable, todo-only; cleared on todo→note conversion)
 - `created`/`modified`: ISO 8601 timestamps
 
 ### Type Conversion Auto-Mapping
 
-When type changes (note ↔ todo), status auto-maps server-side. Auto-mapping overrides explicit status. Due date is cleared on todo→note conversion.
+When type changes (note ↔ todo), status auto-maps server-side. Auto-mapping overrides explicit status. Due date and linked_note_id are cleared on todo→note conversion.
 
 ### DB Migration
 
-Schema version tracked in `schema_version` table (version 0→7). Each step is idempotent. Fresh install creates new schema directly at version 7.
+Schema version tracked in `schema_version` table (version 0→8). Each step is idempotent. Fresh install creates new schema directly at version 8.
 
 ## Conventions
 
