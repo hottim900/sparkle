@@ -1,10 +1,8 @@
-import { useEffect, useRef, useState } from "react";
-import { useTheme } from "next-themes";
-import { toast } from "sonner";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { SearchBar } from "./search-bar";
-import { getTags, exportData, importData } from "@/lib/api";
+import { getTags } from "@/lib/api";
 import { clearToken } from "@/lib/api";
 import type { ViewType, ParsedItem } from "@/lib/types";
 import {
@@ -18,10 +16,6 @@ import {
   LayoutDashboard,
   FileText,
   LogOut,
-  Sun,
-  Moon,
-  Download,
-  Upload,
   Settings,
 } from "lucide-react";
 
@@ -77,43 +71,6 @@ export function Sidebar({
   refreshKey,
 }: SidebarProps) {
   const [tags, setTags] = useState<string[]>([]);
-  const { theme, setTheme } = useTheme();
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  async function handleExport() {
-    try {
-      const data = await exportData();
-      const blob = new Blob([JSON.stringify(data, null, 2)], {
-        type: "application/json",
-      });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      const date = new Date().toISOString().slice(0, 10);
-      a.href = url;
-      a.download = `sparkle-backup-${date}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
-      toast.success(`已匯出 ${data.items.length} 筆資料`);
-    } catch {
-      toast.error("匯出失敗");
-    }
-  }
-
-  async function handleImport(file: File) {
-    try {
-      const text = await file.text();
-      const json = JSON.parse(text);
-      const items = json.items ?? json;
-      if (!Array.isArray(items)) {
-        toast.error("無效的匯入檔案格式");
-        return;
-      }
-      const result = await importData({ items });
-      toast.success(`已匯入 ${result.imported} 筆，更新 ${result.updated} 筆`);
-    } catch {
-      toast.error("匯入失敗，請確認檔案格式正確");
-    }
-  }
 
   useEffect(() => {
     getTags()
@@ -178,7 +135,7 @@ export function Sidebar({
         </div>
       )}
 
-      {/* Settings + Theme toggle + Export/Import + Logout */}
+      {/* Settings + Logout */}
       <div className="p-2 border-t space-y-1">
         <Button
           variant={currentView === "settings" ? "secondary" : "ghost"}
@@ -191,47 +148,6 @@ export function Sidebar({
           <Settings className="h-4 w-4" />
           設定
         </Button>
-        <Button
-          variant="ghost"
-          className="w-full justify-start gap-2 text-muted-foreground"
-          onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-        >
-          {theme === "dark" ? (
-            <Sun className="h-4 w-4" />
-          ) : (
-            <Moon className="h-4 w-4" />
-          )}
-          {theme === "dark" ? "淺色模式" : "深色模式"}
-        </Button>
-        <Button
-          variant="ghost"
-          className="w-full justify-start gap-2 text-muted-foreground"
-          onClick={handleExport}
-        >
-          <Download className="h-4 w-4" />
-          匯出資料
-        </Button>
-        <Button
-          variant="ghost"
-          className="w-full justify-start gap-2 text-muted-foreground"
-          onClick={() => fileInputRef.current?.click()}
-        >
-          <Upload className="h-4 w-4" />
-          匯入資料
-        </Button>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept=".json"
-          className="hidden"
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file) {
-              handleImport(file);
-              e.target.value = "";
-            }
-          }}
-        />
         <Button
           variant="ghost"
           className="w-full justify-start gap-2 text-muted-foreground"

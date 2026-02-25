@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useTheme } from "next-themes";
 import { toast } from "sonner";
-import { getSettings, updateSettings, exportData, importData, clearToken } from "@/lib/api";
+import { getSettings, updateSettings, exportData, importData } from "@/lib/api";
 import type { SettingsResponse } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,7 +20,6 @@ import {
   Moon,
   Download,
   Upload,
-  LogOut,
   ExternalLink,
 } from "lucide-react";
 
@@ -297,17 +296,6 @@ export function Settings({ onSettingsChanged }: SettingsProps) {
               }}
             />
 
-            <Button
-              variant="ghost"
-              className="w-full justify-start gap-2 text-muted-foreground"
-              onClick={() => {
-                clearToken();
-                window.location.reload();
-              }}
-            >
-              <LogOut className="h-4 w-4" />
-              登出
-            </Button>
           </div>
         </section>
       </div>
