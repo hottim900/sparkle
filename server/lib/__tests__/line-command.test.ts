@@ -211,6 +211,53 @@ describe("parseCommand", () => {
     });
   });
 
+  // Scratch commands
+  describe("scratch commands", () => {
+    it("parses !scratch", () => {
+      expect(parseCommand("!scratch")).toEqual({ type: "scratch" });
+    });
+    it("parses !s as scratch alias", () => {
+      expect(parseCommand("!s")).toEqual({ type: "scratch" });
+    });
+    it("parses !tmp with content", () => {
+      const result = parseCommand("!tmp some temporary note");
+      expect(result).toEqual({
+        type: "save",
+        parsed: expect.objectContaining({
+          title: "some temporary note",
+          type: "scratch",
+        }),
+      });
+    });
+    it("parses !tmp without content as unknown", () => {
+      expect(parseCommand("!tmp")).toEqual({ type: "unknown" });
+    });
+    it("parses !tmp with only spaces as unknown", () => {
+      expect(parseCommand("!tmp   ")).toEqual({ type: "unknown" });
+    });
+    it("parses !delete N", () => {
+      expect(parseCommand("!delete 3")).toEqual({ type: "delete", index: 3 });
+    });
+    it("parses !delete without number as unknown", () => {
+      expect(parseCommand("!delete")).toEqual({ type: "unknown" });
+    });
+    it("parses !delete with invalid number as unknown", () => {
+      expect(parseCommand("!delete abc")).toEqual({ type: "unknown" });
+      expect(parseCommand("!delete 0")).toEqual({ type: "unknown" });
+      expect(parseCommand("!delete -1")).toEqual({ type: "unknown" });
+    });
+    it("parses !upgrade N", () => {
+      expect(parseCommand("!upgrade 2")).toEqual({ type: "upgrade", index: 2 });
+    });
+    it("parses !upgrade without number as unknown", () => {
+      expect(parseCommand("!upgrade")).toEqual({ type: "unknown" });
+    });
+    it("parses !upgrade with invalid number as unknown", () => {
+      expect(parseCommand("!upgrade abc")).toEqual({ type: "unknown" });
+      expect(parseCommand("!upgrade 0")).toEqual({ type: "unknown" });
+    });
+  });
+
   // Zettelkasten commands
   describe("new Zettelkasten commands", () => {
     it("parses '!fleeting' as fleeting query", () => {

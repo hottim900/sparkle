@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import crypto from "node:crypto";
 import { db, sqlite } from "../db/index.js";
-import { createItem, getItem, listItems, searchItems, updateItem } from "../lib/items.js";
+import { createItem, deleteItem, getItem, listItems, searchItems, updateItem } from "../lib/items.js";
 import { getStats, getFocusItems } from "../lib/stats.js";
 import { exportToObsidian } from "../lib/export.js";
 import { getObsidianSettings } from "../lib/settings.js";
@@ -394,19 +394,54 @@ webhookRouter.post("/line", async (c) => {
         break;
       }
 
+      case "scratch": {
+        const { items: scratchItems, total } = listItems(db, {
+          type: "scratch",
+          status: "draft",
+          sort: "modified",
+          order: "desc",
+          limit: 5,
+        });
+        if (total === 0) {
+          reply = "📌 沒有暫存項目";
+        } else {
+          setSession(userId, scratchItems.map((r) => r.id));
+          reply = formatNumberedList("📌 暫存", scratchItems, total);
+        }
+        break;
+      }
+
+      case "delete": {
+        const resolved = resolveSessionItem(userId, cmd.index);
+        if ("error" in resolved) { reply = resolved.error; break; }
+        deleteItem(db, resolved.itemId);
+        reply = `🗑️ 已刪除「${resolved.item.title}」`;
+        break;
+      }
+
+      case "upgrade": {
+        const resolved = resolveSessionItem(userId, cmd.index);
+        if ("error" in resolved) { reply = resolved.error; break; }
+        if (resolved.item.type !== "scratch") {
+          reply = "❌ 此指令只適用於暫存項目";
+          break;
+        }
+        updateItem(db, resolved.itemId, { type: "note" });
+        reply = `✅ 已將「${resolved.item.title}」升級為閃念筆記`;
+        break;
+      }
+
       case "save": {
         if (!cmd.parsed.title) continue;
         try {
-          const status = cmd.parsed.type === "todo" ? "active" : "fleeting";
           const item = createItem(db, {
             title: cmd.parsed.title,
             content: cmd.parsed.content,
             type: cmd.parsed.type,
-            status,
             priority: cmd.parsed.priority,
             origin: cmd.parsed.source,
           });
-          const typeLabel = item.type === "todo" ? "待辦" : "閃念筆記";
+          const typeLabel = item.type === "todo" ? "待辦" : item.type === "scratch" ? "暫存" : "閃念筆記";
           const priorityLabel = cmd.parsed.priority === "high" ? " [高優先]" : "";
           reply = `✅ 已存入（${typeLabel}${priorityLabel}）\n${item.title}`;
         } catch (err) {
@@ -437,6 +472,13 @@ const HELP_TEXT = `📝 Sparkle 使用說明
 !todo !high 繳費 → 高優先待辦
 
 多行訊息：第一行為標題，其餘為內容
+
+【暫存】
+!tmp 暫存內容 → 快速建立暫存
+!scratch → 列出暫存項目
+!s → !scratch 簡寫
+!delete N → 刪除項目
+!upgrade N → 暫存升級為閃念筆記
 
 【查詢】
 !fleeting → 閃念筆記

@@ -41,6 +41,21 @@ describe("formatDetail", () => {
     expect(result).toContain("Some content here");
   });
 
+  it("shows scratch type as 暫存", () => {
+    const item = {
+      title: "temp note",
+      type: "scratch",
+      status: "draft",
+      priority: null,
+      due: null,
+      tags: "[]",
+      content: "some content",
+    };
+    const result = formatDetail(item);
+    expect(result).toContain("類型：暫存");
+    expect(result).toContain("狀態：暫存");
+  });
+
   it("truncates long content", () => {
     const item = {
       title: "T",
@@ -68,6 +83,7 @@ describe("formatStats", () => {
       active_count: 8,
       done_this_week: 3,
       done_this_month: 12,
+      scratch_count: 4,
       created_this_week: 6,
       created_this_month: 15,
       overdue_count: 2,
@@ -80,6 +96,7 @@ describe("formatStats", () => {
     expect(result).toContain("進行中: 8");
     expect(result).toContain("本週完成: 3");
     expect(result).toContain("本月完成: 12");
+    expect(result).toContain("暫存: 4");
     expect(result).toContain("逾期: 2");
   });
 });

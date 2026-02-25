@@ -1,7 +1,7 @@
 export interface ParsedLineMessage {
   title: string;
   content: string;
-  type: "note" | "todo";
+  type: "note" | "todo" | "scratch";
   priority: "high" | null;
   source: string;
 }
@@ -86,6 +86,9 @@ export type LineCommand =
   | { type: "priority"; index: number; priority: "high" | "medium" | "low" | null }
   | { type: "untag"; index: number; tags: string[] }
   | { type: "track"; index: number; dateInput?: string }
+  | { type: "scratch" }
+  | { type: "delete"; index: number }
+  | { type: "upgrade"; index: number }
   | { type: "unknown" };
 
 export function parseCommand(text: string): LineCommand {
@@ -228,6 +231,36 @@ export function parseCommand(text: string): LineCommand {
       return !isNaN(num) && num > 0
         ? { type: "track", index: num, dateInput: dateInput || undefined }
         : { type: "unknown" };
+    }
+
+    // !scratch / !s
+    if (lower === "!scratch" || lower === "!s") return { type: "scratch" };
+
+    // !tmp <content> — quick create scratch
+    if (lower.startsWith("!tmp ")) {
+      const content = trimmed.slice(5).trim();
+      if (!content) return { type: "unknown" };
+      return {
+        type: "save",
+        parsed: { title: content, content: "", type: "scratch" as const, priority: null, source: "LINE" },
+      };
+    }
+    if (lower === "!tmp") return { type: "unknown" };
+
+    // !delete <N>
+    if (lower === "!delete") return { type: "unknown" };
+    if (lower.startsWith("!delete ")) {
+      const rest = trimmed.slice(8).trim();
+      const num = parseInt(rest, 10);
+      return !isNaN(num) && num > 0 ? { type: "delete", index: num } : { type: "unknown" };
+    }
+
+    // !upgrade <N>
+    if (lower === "!upgrade") return { type: "unknown" };
+    if (lower.startsWith("!upgrade ")) {
+      const rest = trimmed.slice(9).trim();
+      const num = parseInt(rest, 10);
+      return !isNaN(num) && num > 0 ? { type: "upgrade", index: num } : { type: "unknown" };
     }
 
     // !todo / !high → save command (existing behavior)

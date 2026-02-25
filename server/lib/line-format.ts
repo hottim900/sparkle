@@ -14,6 +14,7 @@ export const STATUS_LABELS: Record<string, string> = {
   exported: "已匯出",
   active: "進行中",
   done: "已完成",
+  draft: "暫存",
   archived: "已封存",
 };
 
@@ -43,7 +44,7 @@ export function formatDetail(item: {
   source?: string | null;
 }): string {
   const lines = [`📋 ${item.title}`];
-  lines.push(`類型：${item.type === "todo" ? "待辦" : "筆記"}`);
+  lines.push(`類型：${item.type === "todo" ? "待辦" : item.type === "scratch" ? "暫存" : "筆記"}`);
   lines.push(`狀態：${STATUS_LABELS[item.status] ?? item.status}`);
   if (item.priority) lines.push(`優先：${item.priority}`);
   if (item.due) lines.push(`到期：${item.due}`);
@@ -73,6 +74,8 @@ export function formatStats(stats: Stats): string {
 本週匯出: ${stats.exported_this_week} | 本月匯出: ${stats.exported_this_month}
 ── 待辦 ──
 進行中: ${stats.active_count} | 本週完成: ${stats.done_this_week} | 本月完成: ${stats.done_this_month}
+── 暫存 ──
+暫存: ${stats.scratch_count}
 ── 整體 ──
 本週新增: ${stats.created_this_week} | 逾期: ${stats.overdue_count}`;
 }
@@ -80,8 +83,8 @@ export function formatStats(stats: Stats): string {
 const QUICK_REPLY_ITEMS = [
   { type: "action" as const, action: { type: "message" as const, label: "✨ 閃念", text: "!fleeting" } },
   { type: "action" as const, action: { type: "message" as const, label: "🔵 進行中", text: "!active" } },
+  { type: "action" as const, action: { type: "message" as const, label: "📌 暫存", text: "!scratch" } },
   { type: "action" as const, action: { type: "message" as const, label: "📅 今日", text: "!today" } },
-  { type: "action" as const, action: { type: "message" as const, label: "📊 統計", text: "!stats" } },
   { type: "action" as const, action: { type: "message" as const, label: "❓ 說明", text: "?" } },
 ];
 
