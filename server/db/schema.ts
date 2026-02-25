@@ -28,6 +28,7 @@ export const items = sqliteTable(
     origin: text("origin").default(""),
     source: text("source"),
     aliases: text("aliases").notNull().default("[]"),
+    linked_note_id: text("linked_note_id"),
     created: text("created").notNull(),
     modified: text("modified").notNull(),
   },

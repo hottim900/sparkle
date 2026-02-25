@@ -85,6 +85,7 @@ export type LineCommand =
   | { type: "archive"; index: number }
   | { type: "priority"; index: number; priority: "high" | "medium" | "low" | null }
   | { type: "untag"; index: number; tags: string[] }
+  | { type: "track"; index: number; dateInput?: string }
   | { type: "unknown" };
 
 export function parseCommand(text: string): LineCommand {
@@ -211,6 +212,22 @@ export function parseCommand(text: string): LineCommand {
       if (isNaN(num) || num <= 0) return { type: "unknown" };
       const tags = parts.slice(1);
       return { type: "tag", index: num, tags };
+    }
+
+    // !track <N> [dateInput]
+    if (lower === "!track") return { type: "unknown" };
+    if (lower.startsWith("!track ")) {
+      const rest = trimmed.slice(7).trim();
+      const spaceIdx = rest.indexOf(" ");
+      if (spaceIdx === -1) {
+        const num = parseInt(rest, 10);
+        return !isNaN(num) && num > 0 ? { type: "track", index: num } : { type: "unknown" };
+      }
+      const num = parseInt(rest.slice(0, spaceIdx), 10);
+      const dateInput = rest.slice(spaceIdx + 1).trim();
+      return !isNaN(num) && num > 0
+        ? { type: "track", index: num, dateInput: dateInput || undefined }
+        : { type: "unknown" };
     }
 
     // !todo / !high → save command (existing behavior)

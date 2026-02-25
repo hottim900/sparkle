@@ -28,6 +28,7 @@ function createTestDb() {
       origin TEXT DEFAULT '',
       source TEXT DEFAULT NULL,
       aliases TEXT NOT NULL DEFAULT '[]',
+      linked_note_id TEXT DEFAULT NULL,
       created TEXT NOT NULL,
       modified TEXT NOT NULL
     );
@@ -1277,6 +1278,94 @@ describe("POST /api/webhook/line", () => {
       const callBody = JSON.parse(fetchMock.mock.calls[0][1]!.body as string);
       const replyText: string = callBody.messages[0].text;
       expect(replyText).toContain("讀書筆記");
+    });
+  });
+
+  describe("!track command", () => {
+    it("creates linked todo from note", async () => {
+      process.env.LINE_CHANNEL_SECRET = TEST_LINE_SECRET;
+      process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
+      seedItems();
+
+      // First query notes to establish session (id-2 is note '研究 Hono')
+      await sendLineMessage(app, "!fleeting");
+
+      const fetchMock = vi.mocked(fetch);
+      fetchMock.mockClear();
+
+      // Track the first item in session (should be the note)
+      const res = await sendLineMessage(app, "!track 1");
+      expect(res.status).toBe(200);
+
+      const callBody = JSON.parse(fetchMock.mock.calls[0][1]!.body as string);
+      const replyText: string = callBody.messages[0].text;
+      expect(replyText).toContain("已建立追蹤待辦");
+      expect(replyText).toContain("處理：研究 Hono");
+
+      // Verify the linked todo was created in the database
+      const allItems = testDb.select().from(items).all();
+      const linkedTodo = allItems.find((i: Record<string, unknown>) => i.linked_note_id === "id-2");
+      expect(linkedTodo).toBeTruthy();
+      expect(linkedTodo!.type).toBe("todo");
+      expect(linkedTodo!.title).toBe("處理：研究 Hono");
+    });
+
+    it("creates linked todo with due date", async () => {
+      process.env.LINE_CHANNEL_SECRET = TEST_LINE_SECRET;
+      process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
+      seedItems();
+
+      // Query notes to establish session
+      await sendLineMessage(app, "!fleeting");
+
+      const fetchMock = vi.mocked(fetch);
+      fetchMock.mockClear();
+
+      const res = await sendLineMessage(app, "!track 1 2026-03-15");
+      expect(res.status).toBe(200);
+
+      const callBody = JSON.parse(fetchMock.mock.calls[0][1]!.body as string);
+      const replyText: string = callBody.messages[0].text;
+      expect(replyText).toContain("已建立追蹤待辦");
+      expect(replyText).toContain("2026-03-15");
+
+      // Verify the linked todo has due date
+      const allItems = testDb.select().from(items).all();
+      const linkedTodo = allItems.find((i: Record<string, unknown>) => i.linked_note_id === "id-2");
+      expect(linkedTodo).toBeTruthy();
+      expect(linkedTodo!.due).toBe("2026-03-15");
+    });
+
+    it("rejects !track on a todo item", async () => {
+      process.env.LINE_CHANNEL_SECRET = TEST_LINE_SECRET;
+      process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
+      seedItems();
+
+      // Query active todos to establish session (all are todos)
+      await sendLineMessage(app, "!active");
+
+      const fetchMock = vi.mocked(fetch);
+      fetchMock.mockClear();
+
+      const res = await sendLineMessage(app, "!track 1");
+      expect(res.status).toBe(200);
+
+      const callBody = JSON.parse(fetchMock.mock.calls[0][1]!.body as string);
+      const replyText: string = callBody.messages[0].text;
+      expect(replyText).toContain("此指令只適用於筆記");
+    });
+
+    it("returns error for !track without session", async () => {
+      process.env.LINE_CHANNEL_SECRET = TEST_LINE_SECRET;
+      process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
+
+      const res = await sendLineMessage(app, "!track 1");
+      expect(res.status).toBe(200);
+
+      const fetchMock = vi.mocked(fetch);
+      const callBody = JSON.parse(fetchMock.mock.calls[0][1]!.body as string);
+      const replyText: string = callBody.messages[0].text;
+      expect(replyText).toContain("不存在");
     });
   });
 });

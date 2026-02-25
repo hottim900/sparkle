@@ -355,6 +355,39 @@ webhookRouter.post("/line", async (c) => {
         break;
       }
 
+      case "track": {
+        const resolved = resolveSessionItem(userId, cmd.index);
+        if ("error" in resolved) { reply = resolved.error; break; }
+        if (resolved.item.type !== "note") {
+          reply = "❌ 此指令只適用於筆記";
+          break;
+        }
+        const noteTags: string[] = JSON.parse(resolved.item.tags || "[]");
+        const trackInput: Record<string, unknown> = {
+          title: `處理：${resolved.item.title}`,
+          type: "todo",
+          status: "active",
+          tags: noteTags,
+          linked_note_id: resolved.item.id,
+        };
+        if (cmd.dateInput) {
+          const dateParsed = parseDate(cmd.dateInput);
+          if (!dateParsed.success) {
+            reply = "❌ 無法辨識日期，請用 YYYY-MM-DD 或中文如『明天』『3天後』";
+            break;
+          }
+          if (!dateParsed.clear && dateParsed.date) {
+            trackInput.due = dateParsed.date;
+          }
+        }
+        const trackTodo = createItem(db, trackInput as Parameters<typeof createItem>[1]);
+        reply = `✅ 已建立追蹤待辦：${trackTodo.title}`;
+        if (trackTodo.due) {
+          reply += `\n📅 ${trackTodo.due}`;
+        }
+        break;
+      }
+
       case "save": {
         if (!cmd.parsed.title) continue;
         try {
@@ -424,6 +457,7 @@ const HELP_TEXT = `📝 Sparkle 使用說明
 !done N → 待辦標記為已完成
 !archive N → 封存
 !priority N high/medium/low/none → 設定優先度
+!track N [日期] → 從筆記建立追蹤待辦
 
 日期格式：明天、3天後、下週一、3/15、2026-03-15
 清除到期日：!due N 清除

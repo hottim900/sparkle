@@ -65,6 +65,7 @@ const importItemSchema = z.object({
   origin: z.string().default(""),
   source: z.string().nullable().default(null),
   aliases: z.string().default("[]"),
+  linked_note_id: z.string().nullable().default(null),
   created: z.string().min(1),
   modified: z.string().min(1),
 });
@@ -125,6 +126,7 @@ app.post("/api/import", async (c) => {
             origin: item.origin,
             source: item.source,
             aliases: item.aliases,
+            linked_note_id: item.linked_note_id,
             created: item.created,
             modified: item.modified,
           })

@@ -32,6 +32,7 @@ function createTestDb() {
       origin TEXT DEFAULT '',
       source TEXT DEFAULT NULL,
       aliases TEXT NOT NULL DEFAULT '[]',
+      linked_note_id TEXT DEFAULT NULL,
       created TEXT NOT NULL,
       modified TEXT NOT NULL
     );
@@ -417,6 +418,65 @@ describe("Data Access Layer", () => {
       const updated2 = updateItem(db, todoItem.id, { type: "note" });
       expect(updated2!.type).toBe("note");
       expect(updated2!.status).toBe("archived");
+    });
+  });
+
+  describe("linked_note_id", () => {
+    it("createItem with linked_note_id stores it on todo", () => {
+      const note = createItem(db, { title: "My note", type: "note" });
+      const todo = createItem(db, {
+        title: "Track note",
+        type: "todo",
+        linked_note_id: note.id,
+      });
+      expect(todo.linked_note_id).toBe(note.id);
+    });
+
+    it("createItem note ignores linked_note_id", () => {
+      const note1 = createItem(db, { title: "Note 1", type: "note" });
+      const note2 = createItem(db, {
+        title: "Note 2",
+        type: "note",
+        linked_note_id: note1.id,
+      });
+      expect(note2.linked_note_id).toBeNull();
+    });
+
+    it("updateItem can set linked_note_id on todo", () => {
+      const note = createItem(db, { title: "My note", type: "note" });
+      const todo = createItem(db, { title: "My todo", type: "todo" });
+      const updated = updateItem(db, todo.id, { linked_note_id: note.id });
+      expect(updated!.linked_note_id).toBe(note.id);
+    });
+
+    it("updateItem can clear linked_note_id on todo", () => {
+      const note = createItem(db, { title: "My note", type: "note" });
+      const todo = createItem(db, {
+        title: "My todo",
+        type: "todo",
+        linked_note_id: note.id,
+      });
+      const updated = updateItem(db, todo.id, { linked_note_id: null });
+      expect(updated!.linked_note_id).toBeNull();
+    });
+
+    it("updateItem ignores linked_note_id on note", () => {
+      const note1 = createItem(db, { title: "Note 1", type: "note" });
+      const note2 = createItem(db, { title: "Note 2", type: "note" });
+      const updated = updateItem(db, note2.id, { linked_note_id: note1.id });
+      expect(updated!.linked_note_id).toBeNull();
+    });
+
+    it("todo→note clears linked_note_id", () => {
+      const note = createItem(db, { title: "My note", type: "note" });
+      const todo = createItem(db, {
+        title: "Track note",
+        type: "todo",
+        linked_note_id: note.id,
+      });
+      const updated = updateItem(db, todo.id, { type: "note" });
+      expect(updated!.type).toBe("note");
+      expect(updated!.linked_note_id).toBeNull();
     });
   });
 
