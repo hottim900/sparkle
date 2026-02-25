@@ -3,6 +3,13 @@ import { listItems, batchAction } from "@/lib/api";
 import { parseItems, type ParsedItem, type ItemStatus, type ItemType, type ViewType } from "@/lib/types";
 import { ItemCard } from "./item-card";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { toast } from "sonner";
 import {
   Loader2,
@@ -337,18 +344,22 @@ export function ItemList({
         </div>
       ) : (
         <div className="flex items-center gap-2 px-3 py-2 border-b">
-          <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground" />
-          <select
-            className="text-sm bg-transparent text-muted-foreground outline-none cursor-pointer"
-            value={safeSortIdx}
-            onChange={(e) => setSortIdx(Number(e.target.value))}
+          <Select
+            value={String(safeSortIdx)}
+            onValueChange={(v) => setSortIdx(Number(v))}
           >
-            {sortOptions.map((opt, i) => (
-              <option key={i} value={i}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
+            <SelectTrigger className="h-7 w-auto gap-1.5 border-none shadow-none text-muted-foreground text-xs px-2 hover:text-foreground">
+              <ArrowUpDown className="h-3 w-3" />
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {sortOptions.map((opt, i) => (
+                <SelectItem key={i} value={String(i)} className="text-xs">
+                  {opt.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <div className="flex-1" />
           <Button
             variant="ghost"
