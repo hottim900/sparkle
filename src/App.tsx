@@ -30,6 +30,9 @@ function MainApp() {
   const [triageMode, setTriageMode] = useState(false);
   const [obsidianEnabled, setObsidianEnabled] = useState(false);
 
+  // Navigation stack for back button
+  const [navStack, setNavStack] = useState<{ view: ViewType; itemId: string | null }[]>([]);
+
   // Sub-navigation state for notes and todos views
   const [noteSubView, setNoteSubView] = useState<"fleeting" | "developing" | "permanent" | "exported">("fleeting");
   const [todoSubView, setTodoSubView] = useState<"active" | "done">("active");
@@ -58,15 +61,50 @@ function MainApp() {
     setSelectedItem(null);
     setSelectedTag(undefined);
     setTriageMode(false);
+    setNavStack([]);
   };
 
   const handleNavigate = useCallback(async (itemId: string) => {
     try {
+      // Push current state onto nav stack before navigating
+      setNavStack((prev) => [
+        ...prev,
+        { view: currentView, itemId: selectedItem?.id ?? null },
+      ]);
       const itemData = await getItem(itemId);
       setSelectedItem(parseItem(itemData));
     } catch {
       // item may have been deleted
     }
+  }, [currentView, selectedItem?.id]);
+
+  const handleBack = useCallback(() => {
+    if (navStack.length === 0) {
+      setSelectedItem(null);
+      return;
+    }
+    const prev = navStack[navStack.length - 1]!;
+    setNavStack((s) => s.slice(0, -1));
+    if (prev.itemId) {
+      // Navigate back to previous item
+      getItem(prev.itemId)
+        .then((data) => {
+          setCurrentView(prev.view);
+          setSelectedItem(parseItem(data));
+        })
+        .catch(() => {
+          setCurrentView(prev.view);
+          setSelectedItem(null);
+        });
+    } else {
+      setCurrentView(prev.view);
+      setSelectedItem(null);
+    }
+  }, [navStack]);
+
+  const handleClearDetail = useCallback(() => {
+    setSelectedItem(null);
+    setNavStack([]);
   }, []);
 
   const keyboardHandlers = useMemo(
@@ -84,7 +122,7 @@ function MainApp() {
         input?.focus();
       },
       onClose: () => {
-        setSelectedItem(null);
+        handleClearDetail();
       },
     }),
     []
@@ -143,8 +181,12 @@ function MainApp() {
           <Dashboard
             onViewChange={handleViewChange}
             onSelectItem={(item) => {
-              handleSelect(item);
-              handleViewChange("all");
+              setNavStack((prev) => [
+                ...prev,
+                { view: "dashboard", itemId: null },
+              ]);
+              setCurrentView("all");
+              setSelectedItem(item);
             }}
           />
         ) : currentView === "settings" ? (
@@ -217,10 +259,13 @@ function MainApp() {
                 <ItemDetail
                   itemId={selectedItem.id}
                   obsidianEnabled={obsidianEnabled}
-                  onClose={() => setSelectedItem(null)}
+                  onBack={handleBack}
+                  onClose={handleClearDetail}
+                  canGoBack={navStack.length > 0}
                   onUpdated={refresh}
                   onDeleted={() => {
                     setSelectedItem(null);
+                    setNavStack([]);
                     refresh();
                   }}
                   onNavigate={handleNavigate}
