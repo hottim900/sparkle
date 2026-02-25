@@ -13,3 +13,5 @@ certs/
 logs/
 *.log
 coverage/
+docs/plans/
+public/rootCA.pem
