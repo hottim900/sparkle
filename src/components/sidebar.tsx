@@ -17,6 +17,7 @@ import {
   FileText,
   LogOut,
   Settings,
+  StickyNote,
 } from "lucide-react";
 
 interface SidebarProps {
@@ -51,6 +52,12 @@ const navGroups: NavGroup[] = [
     items: [
       { id: "active", label: "進行中", icon: <PlayCircle className="h-4 w-4" /> },
       { id: "done", label: "已完成", icon: <CheckCircle className="h-4 w-4" /> },
+    ],
+  },
+  {
+    label: "暫存",
+    items: [
+      { id: "draft", label: "暫存區", icon: <StickyNote className="h-4 w-4" /> },
     ],
   },
   {

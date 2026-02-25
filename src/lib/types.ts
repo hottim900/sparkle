@@ -1,9 +1,9 @@
 export interface Item {
   id: string;
-  type: "note" | "todo";
+  type: "note" | "todo" | "scratch";
   title: string;
   content: string;
-  status: "fleeting" | "developing" | "permanent" | "exported" | "active" | "done" | "archived";
+  status: "fleeting" | "developing" | "permanent" | "exported" | "active" | "done" | "draft" | "archived";
   priority: "low" | "medium" | "high" | null;
   due: string | null;
   tags: string; // JSON array string from server
@@ -56,6 +56,8 @@ export interface StatsResponse {
   active_count: number;
   done_this_week: number;
   done_this_month: number;
+  // Scratch
+  scratch_count: number;
   // Shared
   created_this_week: number;
   created_this_month: number;
@@ -106,10 +108,12 @@ export type ViewType =
   | "exported"
   | "active"
   | "done"
+  | "draft"
   | "all"
   | "archived"
   | "search"
   | "dashboard"
   | "notes"
   | "todos"
+  | "scratch"
   | "settings";
