@@ -48,20 +48,21 @@ Returns: Full item with title, content, status, tags, aliases, linked items, and
 
 Note statuses: fleeting → developing → permanent → exported → archived
 Todo statuses: active → done → archived
+Scratch statuses: draft → archived
 
 Args:
   - status (string, optional): Filter by status
   - tag (string, optional): Filter by tag name
-  - type (string, optional): "note" or "todo", default "note"
+  - type (string, optional): "note", "todo", or "scratch", default "note"
   - sort (string, optional): "created", "modified", "priority", or "due" (default: "created")
   - limit (number, optional): Max results 1-100, default 50
   - offset (number, optional): Pagination offset, default 0
 
 Returns: List of items with total count and pagination info.`,
       inputSchema: {
-        status: z.enum(["fleeting", "developing", "permanent", "exported", "active", "done", "archived"]).optional().describe("Filter by status"),
+        status: z.enum(["fleeting", "developing", "permanent", "exported", "active", "done", "draft", "archived"]).optional().describe("Filter by status"),
         tag: z.string().optional().describe("Filter by tag name"),
-        type: z.enum(["note", "todo"]).default("note").describe("Item type"),
+        type: z.enum(["note", "todo", "scratch"]).default("note").describe("Item type"),
         sort: z.enum(["created", "modified", "priority", "due"]).default("created").describe("Sort field"),
         limit: z.number().int().min(1).max(100).default(50).describe("Max results"),
         offset: z.number().int().min(0).default(0).describe("Pagination offset"),
