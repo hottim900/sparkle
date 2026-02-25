@@ -10,10 +10,12 @@ type DB = BetterSQLite3Database<typeof schema>;
 
 const NOTE_STATUSES = ["fleeting", "developing", "permanent", "exported", "archived"] as const;
 const TODO_STATUSES = ["active", "done", "archived"] as const;
+const SCRATCH_STATUSES = ["draft", "archived"] as const;
 
 export function isValidTypeStatus(type: string, status: string): boolean {
   if (type === "note") return (NOTE_STATUSES as readonly string[]).includes(status);
   if (type === "todo") return (TODO_STATUSES as readonly string[]).includes(status);
+  if (type === "scratch") return (SCRATCH_STATUSES as readonly string[]).includes(status);
   return false;
 }
 
@@ -45,7 +47,9 @@ export function getAutoMappedStatus(
 }
 
 function defaultStatusForType(type: string): string {
-  return type === "todo" ? "active" : "fleeting";
+  if (type === "todo") return "active";
+  if (type === "scratch") return "draft";
+  return "fleeting";
 }
 
 export type ItemWithLinkedInfo = typeof items.$inferSelect & {
