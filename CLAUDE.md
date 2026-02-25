@@ -215,13 +215,22 @@ netsh interface portproxy add v4tov4 listenaddress=YOUR_VPN_IP listenport=3000 c
 
 ### MCP Server (Claude Code Integration)
 
-- MCP server in `mcp-server/` enables Claude Code to read/write Sparkle notes
-- Config: `.mcp.json` at project root (Claude Code auto-discovers)
+- MCP server in `mcp-server/` enables Claude Code to read/write Sparkle notes via REST API
+- Config: user-scoped in `~/.claude.json`（全域可用，不限專案目錄）
 - Transport: stdio (subprocess of Claude Code)
 - 9 tools: sparkle_search, sparkle_get_note, sparkle_list_notes, sparkle_create_note, sparkle_update_note, sparkle_advance_note, sparkle_export_to_obsidian, sparkle_get_stats, sparkle_list_tags
 - Build: `cd mcp-server && npm install && npm run build`
 - Dev: `cd mcp-server && npm run dev`
 - Test: `cd mcp-server && npx @modelcontextprotocol/inspector node dist/index.js`
+- 註冊指令（已完成，記錄備查）：
+  ```bash
+  claude mcp add sparkle --transport stdio --scope user \
+    --env SPARKLE_AUTH_TOKEN=<token> \
+    --env SPARKLE_API_URL=https://localhost:3000 \
+    --env NODE_TLS_REJECT_UNAUTHORIZED=0 \
+    -- /home/YOUR_USER/.nvm/versions/node/v22.22.0/bin/node /home/YOUR_USER/sparkle/mcp-server/dist/index.js
+  ```
+- Note: 必須用 node 絕對路徑，因為 nvm 只在 interactive shell 載入
 
 ## Data Model
 
