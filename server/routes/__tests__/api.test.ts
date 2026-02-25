@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, beforeAll, vi } from "vitest";
+import { describe, it, expect, beforeEach, beforeAll, afterEach, vi } from "vitest";
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import * as schema from "../../db/schema.js";
@@ -93,6 +93,12 @@ function createApp() {
     return c.json({ tags });
   });
 
+  app.get("/api/config", (c) => {
+    return c.json({
+      obsidian_export_enabled: !!process.env.OBSIDIAN_VAULT_PATH,
+    });
+  });
+
   // Export all items
   app.get("/api/export", (c) => {
     const allItems = testDb.select().from(items).all();
@@ -104,9 +110,32 @@ function createApp() {
   });
 
   // Import items (upsert)
+  const OLD_FIELD_NAMES = ["due_date", "created_at", "updated_at"];
+
   app.post("/api/import", async (c) => {
     try {
       const body = await c.req.json();
+
+      // Check for old format fields
+      if (body.items && Array.isArray(body.items) && body.items.length > 0) {
+        const sample = body.items[0];
+        for (const oldField of OLD_FIELD_NAMES) {
+          if (oldField in sample) {
+            return c.json(
+              { error: "Unrecognized field names — please re-export from current version" },
+              400,
+            );
+          }
+        }
+        // Also check for old status values
+        if (sample.status === "inbox") {
+          return c.json(
+            { error: "Unrecognized field names — please re-export from current version" },
+            400,
+          );
+        }
+      }
+
       const { items: importItems } = importSchema.parse(body);
 
       let imported = 0;
@@ -276,6 +305,30 @@ describe("Items CRUD", () => {
       });
       expect(res.status).toBe(400);
     });
+
+    describe("type-status validation", () => {
+      it("returns 400 creating todo with status=fleeting", async () => {
+        const res = await app.request("/api/items", {
+          method: "POST",
+          headers: jsonHeaders(),
+          body: JSON.stringify({ title: "Bad todo", type: "todo", status: "fleeting" }),
+        });
+        expect(res.status).toBe(400);
+        const body = await res.json();
+        expect(body.error).toMatch(/Invalid status/i);
+      });
+
+      it("returns 400 creating note with status=active", async () => {
+        const res = await app.request("/api/items", {
+          method: "POST",
+          headers: jsonHeaders(),
+          body: JSON.stringify({ title: "Bad note", type: "note", status: "active" }),
+        });
+        expect(res.status).toBe(400);
+        const body = await res.json();
+        expect(body.error).toMatch(/Invalid status/i);
+      });
+    });
   });
 
   describe("GET /api/items", () => {
@@ -402,6 +455,66 @@ describe("Items CRUD", () => {
         body: JSON.stringify({ title: "Nope" }),
       });
       expect(res.status).toBe(404);
+    });
+
+    describe("type-status validation", () => {
+      it("returns 400 updating note to status=active", async () => {
+        const createRes = await app.request("/api/items", {
+          method: "POST",
+          headers: jsonHeaders(),
+          body: JSON.stringify({ title: "A note" }),
+        });
+        const created = await createRes.json();
+
+        const res = await app.request(`/api/items/${created.id}`, {
+          method: "PATCH",
+          headers: jsonHeaders(),
+          body: JSON.stringify({ status: "active" }),
+        });
+        expect(res.status).toBe(400);
+        const body = await res.json();
+        expect(body.error).toMatch(/Invalid status/i);
+      });
+
+      it("returns 400 updating todo to status=fleeting", async () => {
+        const createRes = await app.request("/api/items", {
+          method: "POST",
+          headers: jsonHeaders(),
+          body: JSON.stringify({ title: "A todo", type: "todo" }),
+        });
+        const created = await createRes.json();
+
+        const res = await app.request(`/api/items/${created.id}`, {
+          method: "PATCH",
+          headers: jsonHeaders(),
+          body: JSON.stringify({ status: "fleeting" }),
+        });
+        expect(res.status).toBe(400);
+        const body = await res.json();
+        expect(body.error).toMatch(/Invalid status/i);
+      });
+    });
+
+    describe("auto-mapping override", () => {
+      it("type conversion auto-mapping overrides explicit status", async () => {
+        const createRes = await app.request("/api/items", {
+          method: "POST",
+          headers: jsonHeaders(),
+          body: JSON.stringify({ title: "Fleeting note" }),
+        });
+        const created = await createRes.json();
+        expect(created.status).toBe("fleeting");
+
+        const res = await app.request(`/api/items/${created.id}`, {
+          method: "PATCH",
+          headers: jsonHeaders(),
+          body: JSON.stringify({ type: "todo", status: "done" }),
+        });
+        expect(res.status).toBe(200);
+        const updated = await res.json();
+        expect(updated.type).toBe("todo");
+        expect(updated.status).toBe("active");
+      });
     });
   });
 
@@ -646,6 +759,176 @@ describe("POST /api/items/batch", () => {
     });
     expect(res.status).toBe(400);
   });
+
+  describe("batch develop", () => {
+    it("transitions fleeting notes to developing", async () => {
+      const ids: string[] = [];
+      for (let i = 0; i < 2; i++) {
+        const res = await app.request("/api/items", {
+          method: "POST",
+          headers: jsonHeaders(),
+          body: JSON.stringify({ title: `Fleeting note ${i}` }),
+        });
+        const item = await res.json();
+        ids.push(item.id);
+      }
+
+      const res = await app.request("/api/items/batch", {
+        method: "POST",
+        headers: jsonHeaders(),
+        body: JSON.stringify({ ids, action: "develop" }),
+      });
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.affected).toBe(2);
+      expect(body.skipped).toBe(0);
+
+      for (const id of ids) {
+        const getRes = await app.request(`/api/items/${id}`, {
+          headers: authHeaders(),
+        });
+        const item = await getRes.json();
+        expect(item.status).toBe("developing");
+      }
+    });
+
+    it("skips todos and non-fleeting notes", async () => {
+      const ids: string[] = [];
+      // Create a todo
+      const todoRes = await app.request("/api/items", {
+        method: "POST",
+        headers: jsonHeaders(),
+        body: JSON.stringify({ title: "A todo", type: "todo" }),
+      });
+      ids.push((await todoRes.json()).id);
+      // Create a developing note
+      const noteRes = await app.request("/api/items", {
+        method: "POST",
+        headers: jsonHeaders(),
+        body: JSON.stringify({ title: "Developing note", status: "developing" }),
+      });
+      ids.push((await noteRes.json()).id);
+
+      const res = await app.request("/api/items/batch", {
+        method: "POST",
+        headers: jsonHeaders(),
+        body: JSON.stringify({ ids, action: "develop" }),
+      });
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.affected).toBe(0);
+      expect(body.skipped).toBe(2);
+    });
+  });
+
+  describe("batch mature", () => {
+    it("transitions developing notes to permanent", async () => {
+      const ids: string[] = [];
+      for (let i = 0; i < 2; i++) {
+        const res = await app.request("/api/items", {
+          method: "POST",
+          headers: jsonHeaders(),
+          body: JSON.stringify({ title: `Dev note ${i}`, status: "developing" }),
+        });
+        const item = await res.json();
+        ids.push(item.id);
+      }
+
+      const res = await app.request("/api/items/batch", {
+        method: "POST",
+        headers: jsonHeaders(),
+        body: JSON.stringify({ ids, action: "mature" }),
+      });
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.affected).toBe(2);
+      expect(body.skipped).toBe(0);
+
+      for (const id of ids) {
+        const getRes = await app.request(`/api/items/${id}`, {
+          headers: authHeaders(),
+        });
+        const item = await getRes.json();
+        expect(item.status).toBe("permanent");
+      }
+    });
+
+    it("skips non-developing notes", async () => {
+      const ids: string[] = [];
+      // Create a fleeting note
+      const fleetingRes = await app.request("/api/items", {
+        method: "POST",
+        headers: jsonHeaders(),
+        body: JSON.stringify({ title: "Fleeting note" }),
+      });
+      ids.push((await fleetingRes.json()).id);
+      // Create a permanent note
+      const permRes = await app.request("/api/items", {
+        method: "POST",
+        headers: jsonHeaders(),
+        body: JSON.stringify({ title: "Permanent note", status: "permanent" }),
+      });
+      ids.push((await permRes.json()).id);
+
+      const res = await app.request("/api/items/batch", {
+        method: "POST",
+        headers: jsonHeaders(),
+        body: JSON.stringify({ ids, action: "mature" }),
+      });
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.affected).toBe(0);
+      expect(body.skipped).toBe(2);
+    });
+  });
+
+  describe("batch done type filtering", () => {
+    it("skips notes (only applies to todos)", async () => {
+      const ids: string[] = [];
+      for (let i = 0; i < 2; i++) {
+        const res = await app.request("/api/items", {
+          method: "POST",
+          headers: jsonHeaders(),
+          body: JSON.stringify({ title: `Note ${i}` }),
+        });
+        ids.push((await res.json()).id);
+      }
+
+      const res = await app.request("/api/items/batch", {
+        method: "POST",
+        headers: jsonHeaders(),
+        body: JSON.stringify({ ids, action: "done" }),
+      });
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.affected).toBe(0);
+      expect(body.skipped).toBe(2);
+    });
+  });
+
+  describe("batch active type filtering", () => {
+    it("skips notes (only applies to todos)", async () => {
+      const ids: string[] = [];
+      for (let i = 0; i < 2; i++) {
+        const res = await app.request("/api/items", {
+          method: "POST",
+          headers: jsonHeaders(),
+          body: JSON.stringify({ title: `Note ${i}`, status: "archived" }),
+        });
+        ids.push((await res.json()).id);
+      }
+
+      const res = await app.request("/api/items/batch", {
+        method: "POST",
+        headers: jsonHeaders(),
+        body: JSON.stringify({ ids, action: "active" }),
+      });
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.affected).toBe(0);
+      expect(body.skipped).toBe(2);
+    });
+  });
 });
 
 // ============================================================
@@ -835,5 +1118,234 @@ describe("POST /api/import", () => {
       body: JSON.stringify({ items: [{ invalid: "data" }] }),
     });
     expect(res.status).toBe(400);
+  });
+});
+
+// ============================================================
+// Export to Obsidian (POST /api/items/:id/export)
+// ============================================================
+describe("POST /api/items/:id/export", () => {
+  let tempDir: string;
+
+  beforeEach(async () => {
+    const os = await import("node:os");
+    const fs = await import("node:fs");
+    tempDir = fs.mkdtempSync(os.tmpdir() + "/sparkle-api-export-test-");
+  });
+
+  afterEach(async () => {
+    const fs = await import("node:fs");
+    if (tempDir) {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+    delete process.env.OBSIDIAN_VAULT_PATH;
+    delete process.env.OBSIDIAN_INBOX_FOLDER;
+  });
+
+  it("returns 404 for nonexistent item", async () => {
+    const res = await app.request("/api/items/nonexistent-id/export", {
+      method: "POST",
+      headers: authHeaders(),
+    });
+    expect(res.status).toBe(404);
+    const body = await res.json();
+    expect(body.error).toMatch(/not found/i);
+  });
+
+  it("returns 400 for todo items", async () => {
+    const createRes = await app.request("/api/items", {
+      method: "POST",
+      headers: jsonHeaders(),
+      body: JSON.stringify({ title: "A todo", type: "todo", status: "active" }),
+    });
+    const created = await createRes.json();
+
+    const res = await app.request(`/api/items/${created.id}/export`, {
+      method: "POST",
+      headers: authHeaders(),
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toMatch(/only notes/i);
+  });
+
+  it("returns 400 for non-permanent notes", async () => {
+    const createRes = await app.request("/api/items", {
+      method: "POST",
+      headers: jsonHeaders(),
+      body: JSON.stringify({ title: "Fleeting note", type: "note", status: "fleeting" }),
+    });
+    const created = await createRes.json();
+
+    const res = await app.request(`/api/items/${created.id}/export`, {
+      method: "POST",
+      headers: authHeaders(),
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toMatch(/only permanent/i);
+  });
+
+  it("returns 500 when OBSIDIAN_VAULT_PATH not set", async () => {
+    delete process.env.OBSIDIAN_VAULT_PATH;
+
+    const createRes = await app.request("/api/items", {
+      method: "POST",
+      headers: jsonHeaders(),
+      body: JSON.stringify({ title: "Permanent note", type: "note", status: "permanent" }),
+    });
+    const created = await createRes.json();
+
+    const res = await app.request(`/api/items/${created.id}/export`, {
+      method: "POST",
+      headers: authHeaders(),
+    });
+    expect(res.status).toBe(500);
+    const body = await res.json();
+    expect(body.error).toMatch(/OBSIDIAN_VAULT_PATH/i);
+  });
+
+  it("exports permanent note and updates status to exported", async () => {
+    process.env.OBSIDIAN_VAULT_PATH = tempDir;
+    process.env.OBSIDIAN_INBOX_FOLDER = "0_Inbox";
+
+    const createRes = await app.request("/api/items", {
+      method: "POST",
+      headers: jsonHeaders(),
+      body: JSON.stringify({
+        title: "Export Me",
+        type: "note",
+        status: "permanent",
+        content: "Important content",
+      }),
+    });
+    const created = await createRes.json();
+
+    const res = await app.request(`/api/items/${created.id}/export`, {
+      method: "POST",
+      headers: authHeaders(),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.path).toBe("0_Inbox/Export Me.md");
+
+    // Verify file was written
+    const fs = await import("node:fs");
+    const filePath = `${tempDir}/0_Inbox/Export Me.md`;
+    const content = fs.readFileSync(filePath, "utf-8");
+    expect(content).toContain("# Export Me");
+    expect(content).toContain("Important content");
+
+    // Verify status was updated to exported
+    const getRes = await app.request(`/api/items/${created.id}`, {
+      headers: authHeaders(),
+    });
+    const updatedItem = await getRes.json();
+    expect(updatedItem.status).toBe("exported");
+  });
+});
+
+// ============================================================
+// Config Tests
+// ============================================================
+describe("GET /api/config", () => {
+  it("returns 401 without auth", async () => {
+    const res = await app.request("/api/config");
+    expect(res.status).toBe(401);
+  });
+
+  it("returns obsidian_export_enabled=false when OBSIDIAN_VAULT_PATH not set", async () => {
+    delete process.env.OBSIDIAN_VAULT_PATH;
+    const res = await app.request("/api/config", {
+      headers: authHeaders(),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.obsidian_export_enabled).toBe(false);
+  });
+
+  it("returns obsidian_export_enabled=true when OBSIDIAN_VAULT_PATH is set", async () => {
+    process.env.OBSIDIAN_VAULT_PATH = "/tmp/test-vault";
+    try {
+      const res = await app.request("/api/config", {
+        headers: authHeaders(),
+      });
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.obsidian_export_enabled).toBe(true);
+    } finally {
+      delete process.env.OBSIDIAN_VAULT_PATH;
+    }
+  });
+});
+
+// ============================================================
+// Import Old Format Rejection Tests
+// ============================================================
+describe("POST /api/import — old format rejection", () => {
+  it("rejects import with old field name due_date", async () => {
+    const now = new Date().toISOString();
+    const res = await app.request("/api/import", {
+      method: "POST",
+      headers: jsonHeaders(),
+      body: JSON.stringify({
+        items: [
+          {
+            id: "old-1",
+            title: "Old format item",
+            due_date: "2026-03-01",
+            created: now,
+            modified: now,
+          },
+        ],
+      }),
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toMatch(/Unrecognized field names/);
+  });
+
+  it("rejects import with old field name created_at", async () => {
+    const now = new Date().toISOString();
+    const res = await app.request("/api/import", {
+      method: "POST",
+      headers: jsonHeaders(),
+      body: JSON.stringify({
+        items: [
+          {
+            id: "old-2",
+            title: "Old format item",
+            created_at: now,
+            created: now,
+            modified: now,
+          },
+        ],
+      }),
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toMatch(/Unrecognized field names/);
+  });
+
+  it("rejects import with old status 'inbox'", async () => {
+    const now = new Date().toISOString();
+    const res = await app.request("/api/import", {
+      method: "POST",
+      headers: jsonHeaders(),
+      body: JSON.stringify({
+        items: [
+          {
+            id: "old-3",
+            title: "Old format item",
+            status: "inbox",
+            created: now,
+            modified: now,
+          },
+        ],
+      }),
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toMatch(/Unrecognized field names/);
   });
 });

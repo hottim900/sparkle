@@ -183,4 +183,43 @@ describe("parseCommand", () => {
       expect(parseCommand("!untag 1")).toEqual({ type: "unknown" });
     });
   });
+
+  // Zettelkasten commands
+  describe("new Zettelkasten commands", () => {
+    it("parses '!fleeting' as fleeting query", () => {
+      expect(parseCommand("!fleeting")).toEqual({ type: "fleeting" });
+    });
+
+    it("parses '!developing' as developing query", () => {
+      expect(parseCommand("!developing")).toEqual({ type: "developing" });
+    });
+
+    it("parses '!permanent' as permanent query", () => {
+      expect(parseCommand("!permanent")).toEqual({ type: "permanent" });
+    });
+
+    it("parses '!develop 1' as develop command", () => {
+      expect(parseCommand("!develop 1")).toEqual({ type: "develop", index: 1 });
+    });
+
+    it("parses '!mature 2' as mature command", () => {
+      expect(parseCommand("!mature 2")).toEqual({ type: "mature", index: 2 });
+    });
+
+    it("parses '!export 3' as export command", () => {
+      expect(parseCommand("!export 3")).toEqual({ type: "export", index: 3 });
+    });
+
+    it("rejects '!develop' without number as unknown", () => {
+      expect(parseCommand("!develop")).toEqual({ type: "unknown" });
+    });
+
+    it("rejects '!mature' without number as unknown", () => {
+      expect(parseCommand("!mature")).toEqual({ type: "unknown" });
+    });
+
+    it("rejects '!export' without number as unknown", () => {
+      expect(parseCommand("!export")).toEqual({ type: "unknown" });
+    });
+  });
 });

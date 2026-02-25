@@ -276,6 +276,65 @@ describe("GET /api/stats", () => {
     expect(body.done_this_week).toBeGreaterThanOrEqual(1);
     expect(body.done_this_month).toBeGreaterThanOrEqual(1);
   });
+
+  it("counts developing notes correctly", async () => {
+    insertItem({ id: "dev1", title: "Developing 1", type: "note", status: "developing" });
+    insertItem({ id: "dev2", title: "Developing 2", type: "note", status: "developing" });
+    insertItem({ id: "fl1", title: "Fleeting 1", type: "note", status: "fleeting" });
+
+    const res = await app.request("/api/stats", {
+      headers: authHeaders(),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.developing_count).toBe(2);
+  });
+
+  it("counts exported items this week and month", async () => {
+    const today = new Date().toISOString();
+    insertItem({
+      id: "exp1",
+      title: "Exported 1",
+      type: "note",
+      status: "exported",
+      created: today,
+      modified: today,
+    });
+    insertItem({
+      id: "exp2",
+      title: "Exported 2",
+      type: "note",
+      status: "exported",
+      created: today,
+      modified: today,
+    });
+
+    const res = await app.request("/api/stats", {
+      headers: authHeaders(),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.exported_this_week).toBeGreaterThanOrEqual(2);
+    expect(body.exported_this_month).toBeGreaterThanOrEqual(2);
+  });
+
+  it("overdue excludes exported items", async () => {
+    const pastDate = daysFromNow(-3);
+    insertItem({
+      id: "exp-overdue",
+      title: "Exported with past due",
+      type: "note",
+      status: "exported",
+      due: pastDate,
+    });
+
+    const res = await app.request("/api/stats", {
+      headers: authHeaders(),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.overdue_count).toBe(0);
+  });
 });
 
 // ============================================================

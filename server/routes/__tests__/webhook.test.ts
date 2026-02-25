@@ -1036,4 +1036,229 @@ describe("POST /api/webhook/line", () => {
     const json = await res.json();
     expect(json.ok).toBe(true);
   });
+
+  // ============================================================
+  // Zettelkasten command tests
+  // ============================================================
+
+  describe("!develop command", () => {
+    it("promotes fleeting note to developing", async () => {
+      process.env.LINE_CHANNEL_SECRET = TEST_LINE_SECRET;
+      process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
+      seedItems();
+
+      // Establish session with fleeting notes (id-2 is fleeting)
+      await sendLineMessage(app, "!fleeting");
+      vi.mocked(fetch).mockClear();
+
+      // Develop first item
+      const res = await sendLineMessage(app, "!develop 1");
+      expect(res.status).toBe(200);
+
+      const fetchMock = vi.mocked(fetch);
+      const callBody = JSON.parse(fetchMock.mock.calls[0][1]!.body as string);
+      const replyText: string = callBody.messages[0].text;
+      expect(replyText).toContain("發展中");
+
+      // Verify DB
+      const item = testSqlite.prepare("SELECT status FROM items WHERE id = ?").get("id-2") as any;
+      expect(item.status).toBe("developing");
+    });
+
+    it("rejects todo items", async () => {
+      process.env.LINE_CHANNEL_SECRET = TEST_LINE_SECRET;
+      process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
+      seedItems();
+
+      // Establish session with active todos
+      await sendLineMessage(app, "!active");
+      vi.mocked(fetch).mockClear();
+
+      const res = await sendLineMessage(app, "!develop 1");
+      expect(res.status).toBe(200);
+
+      const fetchMock = vi.mocked(fetch);
+      const callBody = JSON.parse(fetchMock.mock.calls[0][1]!.body as string);
+      expect(callBody.messages[0].text).toContain("此指令只適用於筆記");
+    });
+
+    it("rejects non-fleeting notes", async () => {
+      process.env.LINE_CHANNEL_SECRET = TEST_LINE_SECRET;
+      process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
+      seedItems();
+
+      // Establish session with permanent notes (id-6 is permanent)
+      await sendLineMessage(app, "!permanent");
+      vi.mocked(fetch).mockClear();
+
+      const res = await sendLineMessage(app, "!develop 1");
+      expect(res.status).toBe(200);
+
+      const fetchMock = vi.mocked(fetch);
+      const callBody = JSON.parse(fetchMock.mock.calls[0][1]!.body as string);
+      expect(callBody.messages[0].text).toContain("無法執行此操作");
+    });
+  });
+
+  describe("!mature command", () => {
+    it("promotes developing note to permanent", async () => {
+      process.env.LINE_CHANNEL_SECRET = TEST_LINE_SECRET;
+      process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
+      seedItems();
+
+      // Update id-2 to developing directly
+      testSqlite.exec("UPDATE items SET status='developing' WHERE id='id-2'");
+
+      // Establish session with developing notes
+      await sendLineMessage(app, "!developing");
+      vi.mocked(fetch).mockClear();
+
+      const res = await sendLineMessage(app, "!mature 1");
+      expect(res.status).toBe(200);
+
+      const fetchMock = vi.mocked(fetch);
+      const callBody = JSON.parse(fetchMock.mock.calls[0][1]!.body as string);
+      const replyText: string = callBody.messages[0].text;
+      expect(replyText).toContain("永久筆記");
+
+      // Verify DB
+      const item = testSqlite.prepare("SELECT status FROM items WHERE id = ?").get("id-2") as any;
+      expect(item.status).toBe("permanent");
+    });
+
+    it("rejects todo items", async () => {
+      process.env.LINE_CHANNEL_SECRET = TEST_LINE_SECRET;
+      process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
+      seedItems();
+
+      await sendLineMessage(app, "!active");
+      vi.mocked(fetch).mockClear();
+
+      const res = await sendLineMessage(app, "!mature 1");
+      expect(res.status).toBe(200);
+
+      const fetchMock = vi.mocked(fetch);
+      const callBody = JSON.parse(fetchMock.mock.calls[0][1]!.body as string);
+      expect(callBody.messages[0].text).toContain("此指令只適用於筆記");
+    });
+  });
+
+  describe("!export command", () => {
+    it("rejects when OBSIDIAN_VAULT_PATH not configured", async () => {
+      process.env.LINE_CHANNEL_SECRET = TEST_LINE_SECRET;
+      process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
+      delete process.env.OBSIDIAN_VAULT_PATH;
+      seedItems();
+
+      // id-6 is permanent
+      await sendLineMessage(app, "!permanent");
+      vi.mocked(fetch).mockClear();
+
+      const res = await sendLineMessage(app, "!export 1");
+      expect(res.status).toBe(200);
+
+      const fetchMock = vi.mocked(fetch);
+      const callBody = JSON.parse(fetchMock.mock.calls[0][1]!.body as string);
+      expect(callBody.messages[0].text).toContain("Obsidian 匯出未設定");
+    });
+
+    it("rejects non-permanent notes", async () => {
+      process.env.LINE_CHANNEL_SECRET = TEST_LINE_SECRET;
+      process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
+      seedItems();
+
+      // id-2 is fleeting
+      await sendLineMessage(app, "!fleeting");
+      vi.mocked(fetch).mockClear();
+
+      const res = await sendLineMessage(app, "!export 1");
+      expect(res.status).toBe(200);
+
+      const fetchMock = vi.mocked(fetch);
+      const callBody = JSON.parse(fetchMock.mock.calls[0][1]!.body as string);
+      expect(callBody.messages[0].text).toContain("只有永久筆記可以匯出");
+    });
+
+    it("exports permanent note to Obsidian vault", async () => {
+      process.env.LINE_CHANNEL_SECRET = TEST_LINE_SECRET;
+      process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
+      seedItems();
+
+      // Set up temp dir for Obsidian vault
+      const os = await import("node:os");
+      const fs = await import("node:fs");
+      const path = await import("node:path");
+      const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "sparkle-test-"));
+      process.env.OBSIDIAN_VAULT_PATH = tmpDir;
+
+      try {
+        // id-6 is permanent
+        await sendLineMessage(app, "!permanent");
+        vi.mocked(fetch).mockClear();
+
+        const res = await sendLineMessage(app, "!export 1");
+        expect(res.status).toBe(200);
+
+        const fetchMock = vi.mocked(fetch);
+        const callBody = JSON.parse(fetchMock.mock.calls[0][1]!.body as string);
+        expect(callBody.messages[0].text).toContain("已匯出到 Obsidian");
+      } finally {
+        // Cleanup
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+        delete process.env.OBSIDIAN_VAULT_PATH;
+      }
+    });
+  });
+
+  describe("!done on note (rejection)", () => {
+    it("rejects !done on a note with guidance message", async () => {
+      process.env.LINE_CHANNEL_SECRET = TEST_LINE_SECRET;
+      process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
+      seedItems();
+
+      // id-2 is a fleeting note
+      await sendLineMessage(app, "!fleeting");
+      vi.mocked(fetch).mockClear();
+
+      const res = await sendLineMessage(app, "!done 1");
+      expect(res.status).toBe(200);
+
+      const fetchMock = vi.mocked(fetch);
+      const callBody = JSON.parse(fetchMock.mock.calls[0][1]!.body as string);
+      expect(callBody.messages[0].text).toContain("筆記請用 !develop 或 !mature");
+    });
+  });
+
+  describe("!developing query", () => {
+    it("returns empty message when no developing notes", async () => {
+      process.env.LINE_CHANNEL_SECRET = TEST_LINE_SECRET;
+      process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
+      seedItems();
+
+      // No developing items in seed data
+      const res = await sendLineMessage(app, "!developing");
+      expect(res.status).toBe(200);
+
+      const fetchMock = vi.mocked(fetch);
+      const callBody = JSON.parse(fetchMock.mock.calls[0][1]!.body as string);
+      expect(callBody.messages[0].text).toContain("沒有發展中的筆記");
+    });
+  });
+
+  describe("!permanent query", () => {
+    it("returns permanent notes", async () => {
+      process.env.LINE_CHANNEL_SECRET = TEST_LINE_SECRET;
+      process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
+      seedItems();
+
+      // id-6 is permanent
+      const res = await sendLineMessage(app, "!permanent");
+      expect(res.status).toBe(200);
+
+      const fetchMock = vi.mocked(fetch);
+      const callBody = JSON.parse(fetchMock.mock.calls[0][1]!.body as string);
+      const replyText: string = callBody.messages[0].text;
+      expect(replyText).toContain("讀書筆記");
+    });
+  });
 });
