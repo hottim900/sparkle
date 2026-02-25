@@ -1,4 +1,4 @@
-import { eq, desc, asc, sql, and } from "drizzle-orm";
+import { eq, desc, asc, sql, and, notInArray } from "drizzle-orm";
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import type Database from "better-sqlite3";
 import { v4 as uuidv4 } from "uuid";
@@ -8,25 +8,69 @@ import type * as schema from "../db/schema.js";
 
 type DB = BetterSQLite3Database<typeof schema>;
 
+const NOTE_STATUSES = ["fleeting", "developing", "permanent", "exported", "archived"] as const;
+const TODO_STATUSES = ["active", "done", "archived"] as const;
+
+export function isValidTypeStatus(type: string, status: string): boolean {
+  if (type === "note") return (NOTE_STATUSES as readonly string[]).includes(status);
+  if (type === "todo") return (TODO_STATUSES as readonly string[]).includes(status);
+  return false;
+}
+
+const TYPE_CONVERSION_MAP: Record<string, Record<string, string>> = {
+  // todo → note
+  "todo→note": {
+    active: "fleeting",
+    done: "permanent",
+    archived: "archived",
+  },
+  // note → todo
+  "note→todo": {
+    fleeting: "active",
+    developing: "active",
+    permanent: "done",
+    exported: "done",
+    archived: "archived",
+  },
+};
+
+export function getAutoMappedStatus(
+  fromType: string,
+  toType: string,
+  currentStatus: string,
+): string | null {
+  if (fromType === toType) return null;
+  const key = `${fromType}→${toType}`;
+  return TYPE_CONVERSION_MAP[key]?.[currentStatus] ?? null;
+}
+
+function defaultStatusForType(type: string): string {
+  return type === "todo" ? "active" : "fleeting";
+}
+
 export function createItem(
   db: DB,
   input: Partial<CreateItemInput> & { title: string },
 ) {
   const now = new Date().toISOString();
   const id = uuidv4();
+  const type = input.type ?? "note";
+  const status = input.status ?? defaultStatusForType(type);
 
   const values = {
     id,
     title: input.title,
-    type: input.type ?? ("note" as const),
+    type: type as "note" | "todo",
     content: input.content ?? "",
-    status: input.status ?? ("inbox" as const),
+    status: status as "fleeting",
     priority: input.priority ?? null,
-    due_date: input.due_date ?? null,
+    due: input.due ?? null,
     tags: JSON.stringify(input.tags ?? []),
-    source: input.source ?? "",
-    created_at: now,
-    updated_at: now,
+    origin: input.origin ?? "",
+    source: input.source ?? null,
+    aliases: JSON.stringify(input.aliases ?? []),
+    created: now,
+    modified: now,
   };
 
   db.insert(items).values(values).run();
@@ -41,9 +85,10 @@ export function listItems(
   db: DB,
   filters?: {
     status?: string;
+    excludeStatus?: string[];
     type?: string;
     tag?: string;
-    sort?: "created_at" | "priority" | "due_date";
+    sort?: "created" | "priority" | "due";
     order?: "asc" | "desc";
     limit?: number;
     offset?: number;
@@ -52,7 +97,12 @@ export function listItems(
   const conditions = [];
 
   if (filters?.status) {
-    conditions.push(eq(items.status, filters.status as "inbox"));
+    conditions.push(eq(items.status, filters.status as "fleeting"));
+  }
+  if (filters?.excludeStatus && filters.excludeStatus.length > 0) {
+    conditions.push(
+      notInArray(items.status, filters.excludeStatus as ["fleeting"]),
+    );
   }
   if (filters?.type) {
     conditions.push(eq(items.type, filters.type as "note"));
@@ -65,12 +115,12 @@ export function listItems(
 
   const limit = filters?.limit ?? 50;
   const offset = filters?.offset ?? 0;
-  const sortField = filters?.sort ?? "created_at";
+  const sortField = filters?.sort ?? "created";
   const sortOrder = filters?.order ?? "desc";
 
   const sortColumn = sortField === "priority" ? items.priority
-    : sortField === "due_date" ? items.due_date
-    : items.created_at;
+    : sortField === "due" ? items.due
+    : items.created;
   const orderFn = sortOrder === "asc" ? asc : desc;
 
   if (filters?.tag) {
@@ -120,16 +170,36 @@ export function updateItem(db: DB, id: string, input: UpdateItemInput) {
   if (!existing) return null;
 
   const now = new Date().toISOString();
-  const updates: Record<string, unknown> = { updated_at: now };
+  const updates: Record<string, unknown> = { modified: now };
 
   if (input.title !== undefined) updates.title = input.title;
   if (input.type !== undefined) updates.type = input.type;
   if (input.content !== undefined) updates.content = input.content;
   if (input.status !== undefined) updates.status = input.status;
   if (input.priority !== undefined) updates.priority = input.priority;
-  if (input.due_date !== undefined) updates.due_date = input.due_date;
+  if (input.due !== undefined) updates.due = input.due;
   if (input.tags !== undefined) updates.tags = JSON.stringify(input.tags);
   if (input.source !== undefined) updates.source = input.source;
+  if (input.aliases !== undefined) updates.aliases = JSON.stringify(input.aliases);
+
+  // Type conversion auto-mapping (Section 9)
+  if (input.type !== undefined && input.type !== existing.type) {
+    const mappedStatus = getAutoMappedStatus(existing.type, input.type, existing.status);
+    if (mappedStatus) {
+      updates.status = mappedStatus;
+    }
+  }
+
+  // Exported note auto-reversion (Section 3)
+  const effectiveType = (updates.type as string) ?? existing.type;
+  const effectiveStatus = (updates.status as string) ?? existing.status;
+  if (effectiveType === "note" && effectiveStatus === "exported") {
+    const titleChanged = input.title !== undefined && input.title !== existing.title;
+    const contentChanged = input.content !== undefined && input.content !== existing.content;
+    if (titleChanged || contentChanged) {
+      updates.status = "permanent";
+    }
+  }
 
   db.update(items)
     .set(updates)
@@ -155,7 +225,7 @@ export function searchItems(
     const stmt = sqlite.prepare(`
       SELECT * FROM items
       WHERE title LIKE ? OR content LIKE ?
-      ORDER BY created_at DESC
+      ORDER BY created DESC
       LIMIT ?
     `);
     return stmt.all(pattern, pattern, limit) as (typeof items.$inferSelect)[];

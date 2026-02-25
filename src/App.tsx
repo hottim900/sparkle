@@ -1,10 +1,10 @@
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
 import { AuthGate } from "@/components/auth-gate";
 import { Toaster } from "@/components/ui/sonner";
 import { QuickCapture } from "@/components/quick-capture";
 import { ItemList } from "@/components/item-list";
 import { ItemDetail } from "@/components/item-detail";
-import { InboxTriage } from "@/components/inbox-triage";
+import { FleetingTriage } from "@/components/fleeting-triage";
 import { Dashboard } from "@/components/dashboard";
 import { SearchBar } from "@/components/search-bar";
 import { Sidebar } from "@/components/sidebar";
@@ -12,16 +12,33 @@ import { BottomNav } from "@/components/bottom-nav";
 import { OfflineIndicator } from "@/components/offline-indicator";
 import { InstallPrompt } from "@/components/install-prompt";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
+import { getConfig } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { List, ListTodo } from "lucide-react";
 import type { ViewType, ParsedItem, ItemStatus, ItemType } from "@/lib/types";
 
+const isMobile = () => window.innerWidth < 768;
+
 function MainApp() {
-  const [currentView, setCurrentView] = useState<ViewType>("inbox");
+  const [currentView, setCurrentView] = useState<ViewType>(
+    isMobile() ? "notes" : "dashboard"
+  );
   const [selectedItem, setSelectedItem] = useState<ParsedItem | null>(null);
   const [selectedTag, setSelectedTag] = useState<string | undefined>();
   const [refreshKey, setRefreshKey] = useState(0);
-  const [inboxMode, setInboxMode] = useState<"list" | "triage">("list");
+  const [triageMode, setTriageMode] = useState(false);
+  const [obsidianEnabled, setObsidianEnabled] = useState(false);
+
+  // Sub-navigation state for notes and todos views
+  const [noteSubView, setNoteSubView] = useState<"fleeting" | "developing" | "permanent" | "exported">("fleeting");
+  const [todoSubView, setTodoSubView] = useState<"active" | "done">("active");
+
+  // Load config on mount
+  useEffect(() => {
+    getConfig()
+      .then((config) => setObsidianEnabled(config.obsidian_export_enabled))
+      .catch(() => {});
+  }, []);
 
   const refresh = useCallback(() => {
     setRefreshKey((k) => k + 1);
@@ -35,9 +52,7 @@ function MainApp() {
     setCurrentView(view);
     setSelectedItem(null);
     setSelectedTag(undefined);
-    if (view !== "inbox") {
-      setInboxMode("list");
-    }
+    setTriageMode(false);
   };
 
   const keyboardHandlers = useMemo(
@@ -63,19 +78,32 @@ function MainApp() {
 
   useKeyboardShortcuts(keyboardHandlers);
 
-  // Map view to status filter
-  const statusFilter: ItemStatus | undefined =
-    currentView === "all" || currentView === "search" || currentView === "notes" || currentView === "todos" || currentView === "dashboard"
-      ? undefined
-      : (currentView as ItemStatus);
+  // Map view to status filter (for direct status views)
+  const statusFilter: ItemStatus | undefined = (() => {
+    const directStatusViews: ViewType[] = [
+      "fleeting", "developing", "permanent", "exported",
+      "active", "done", "archived",
+    ];
+    if (directStatusViews.includes(currentView)) {
+      return currentView as ItemStatus;
+    }
+    return undefined;
+  })();
 
   // Map view to type filter
-  const typeFilter: ItemType | undefined =
-    currentView === "notes" ? "note"
-      : currentView === "todos" ? "todo"
-      : undefined;
+  const typeFilter: ItemType | undefined = (() => {
+    if (currentView === "notes") return "note";
+    if (currentView === "todos") return "todo";
+    if (["fleeting", "developing", "permanent", "exported"].includes(currentView)) return "note";
+    if (["active", "done"].includes(currentView)) return "todo";
+    return undefined;
+  })();
 
-  const isInboxTriage = currentView === "inbox" && inboxMode === "triage";
+  // Show triage toggle when viewing fleeting notes
+  const isFleetingView =
+    (currentView === "fleeting") ||
+    (currentView === "notes" && noteSubView === "fleeting");
+  const isTriageActive = isFleetingView && triageMode;
 
   return (
     <div className="h-screen flex flex-col md:flex-row overflow-hidden">
@@ -114,31 +142,31 @@ function MainApp() {
             >
               <QuickCapture onCreated={refresh} />
 
-              {/* Inbox mode toggle */}
-              {currentView === "inbox" && (
+              {/* Triage toggle for fleeting view */}
+              {isFleetingView && (
                 <div className="flex border-b">
                   <Button
                     variant="ghost"
-                    className={`flex-1 rounded-none gap-1.5 ${inboxMode === "list" ? "border-b-2 border-primary text-primary" : "text-muted-foreground"}`}
-                    onClick={() => setInboxMode("list")}
+                    className={`flex-1 rounded-none gap-1.5 ${!triageMode ? "border-b-2 border-primary text-primary" : "text-muted-foreground"}`}
+                    onClick={() => setTriageMode(false)}
                   >
                     <List className="h-4 w-4" />
                     列表
                   </Button>
                   <Button
                     variant="ghost"
-                    className={`flex-1 rounded-none gap-1.5 ${inboxMode === "triage" ? "border-b-2 border-primary text-primary" : "text-muted-foreground"}`}
-                    onClick={() => setInboxMode("triage")}
+                    className={`flex-1 rounded-none gap-1.5 ${triageMode ? "border-b-2 border-primary text-primary" : "text-muted-foreground"}`}
+                    onClick={() => setTriageMode(true)}
                   >
                     <ListTodo className="h-4 w-4" />
-                    分類
+                    整理
                   </Button>
                 </div>
               )}
 
-              {isInboxTriage ? (
+              {isTriageActive ? (
                 <div className="flex-1 overflow-y-auto">
-                  <InboxTriage onDone={() => setInboxMode("list")} />
+                  <FleetingTriage onDone={() => setTriageMode(false)} />
                 </div>
               ) : currentView === "search" ? (
                 <div className="flex-1 overflow-y-auto p-3 md:hidden">
@@ -153,6 +181,11 @@ function MainApp() {
                     selectedId={selectedItem?.id}
                     onSelect={handleSelect}
                     refreshKey={refreshKey}
+                    currentView={currentView}
+                    noteSubView={noteSubView}
+                    todoSubView={todoSubView}
+                    onNoteSubViewChange={setNoteSubView}
+                    onTodoSubViewChange={setTodoSubView}
                   />
                 </div>
               )}
@@ -163,6 +196,7 @@ function MainApp() {
               <div className="fixed inset-0 z-50 bg-background md:static md:z-auto md:flex-1 md:border-l">
                 <ItemDetail
                   itemId={selectedItem.id}
+                  obsidianEnabled={obsidianEnabled}
                   onClose={() => setSelectedItem(null)}
                   onUpdated={refresh}
                   onDeleted={() => {
@@ -174,7 +208,7 @@ function MainApp() {
             )}
 
             {/* Empty state for desktop when no item selected */}
-            {!selectedItem && !isInboxTriage && currentView !== "search" && (
+            {!selectedItem && !isTriageActive && currentView !== "search" && (
               <div className="hidden md:flex flex-1 items-center justify-center text-muted-foreground">
                 <p>選擇一個項目以查看詳情</p>
               </div>

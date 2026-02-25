@@ -10,21 +10,31 @@ export const items = sqliteTable(
     title: text("title").notNull(),
     content: text("content").default(""),
     status: text("status", {
-      enum: ["inbox", "active", "done", "archived"],
+      enum: [
+        "fleeting",
+        "developing",
+        "permanent",
+        "exported",
+        "active",
+        "done",
+        "archived",
+      ],
     })
       .notNull()
-      .default("inbox"),
+      .default("fleeting"),
     priority: text("priority", { enum: ["low", "medium", "high"] }),
-    due_date: text("due_date"),
+    due: text("due"),
     tags: text("tags").notNull().default("[]"),
-    source: text("source").default(""),
-    created_at: text("created_at").notNull(),
-    updated_at: text("updated_at").notNull(),
+    origin: text("origin").default(""),
+    source: text("source"),
+    aliases: text("aliases").notNull().default("[]"),
+    created: text("created").notNull(),
+    modified: text("modified").notNull(),
   },
   (table) => [
     index("idx_items_status").on(table.status),
     index("idx_items_type").on(table.type),
-    index("idx_items_created_at").on(table.created_at),
+    index("idx_items_created").on(table.created),
   ],
 );
 

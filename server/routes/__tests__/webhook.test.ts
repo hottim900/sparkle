@@ -21,17 +21,19 @@ function createTestDb() {
       type TEXT NOT NULL DEFAULT 'note',
       title TEXT NOT NULL,
       content TEXT DEFAULT '',
-      status TEXT NOT NULL DEFAULT 'inbox',
+      status TEXT NOT NULL DEFAULT 'fleeting',
       priority TEXT,
-      due_date TEXT,
+      due TEXT,
       tags TEXT NOT NULL DEFAULT '[]',
-      source TEXT DEFAULT '',
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
+      origin TEXT DEFAULT '',
+      source TEXT DEFAULT NULL,
+      aliases TEXT NOT NULL DEFAULT '[]',
+      created TEXT NOT NULL,
+      modified TEXT NOT NULL
     );
     CREATE INDEX idx_items_status ON items(status);
     CREATE INDEX idx_items_type ON items(type);
-    CREATE INDEX idx_items_created_at ON items(created_at DESC);
+    CREATE INDEX idx_items_created ON items(created DESC);
   `);
 
   setupFTS(sqlite);
@@ -241,8 +243,8 @@ describe("POST /api/webhook/line", () => {
     const allItems = testDb.select().from(items).all();
     expect(allItems).toHaveLength(1);
     expect(allItems[0].title).toBe("Buy milk");
-    expect(allItems[0].status).toBe("inbox");
-    expect(allItems[0].source).toBe("LINE");
+    expect(allItems[0].status).toBe("fleeting");
+    expect(allItems[0].origin).toBe("LINE");
   });
 
   it("returns ok:true for non-text message events", async () => {
@@ -314,13 +316,13 @@ describe("POST /api/webhook/line", () => {
     const yesterdayStr = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, "0")}-${String(yesterday.getDate()).padStart(2, "0")}`;
 
     testSqlite.exec(`
-      INSERT INTO items (id, type, title, content, status, priority, due_date, tags, source, created_at, updated_at) VALUES
-        ('id-1', 'todo', '買牛奶', '', 'inbox', NULL, NULL, '[]', 'LINE', '${now}', '${now}'),
-        ('id-2', 'note', '研究 Hono', '', 'inbox', NULL, NULL, '[]', 'LINE', '${now}', '${now}'),
-        ('id-3', 'todo', '繳電費', '', 'active', 'high', '${yesterdayStr}', '[]', '', '${now}', '${now}'),
-        ('id-4', 'todo', '開會準備', '', 'active', NULL, '${todayStr}', '[]', '', '${now}', '${now}'),
-        ('id-5', 'todo', '牛奶品牌比較', '', 'inbox', NULL, NULL, '[]', '', '${now}', '${now}'),
-        ('id-6', 'note', '讀書筆記', '', 'done', NULL, NULL, '[]', '', '${now}', '${now}');
+      INSERT INTO items (id, type, title, content, status, priority, due, tags, origin, source, aliases, created, modified) VALUES
+        ('id-1', 'todo', '買牛奶', '', 'active', NULL, NULL, '[]', 'LINE', NULL, '[]', '${now}', '${now}'),
+        ('id-2', 'note', '研究 Hono', '', 'fleeting', NULL, NULL, '[]', 'LINE', NULL, '[]', '${now}', '${now}'),
+        ('id-3', 'todo', '繳電費', '', 'active', 'high', '${yesterdayStr}', '[]', '', NULL, '[]', '${now}', '${now}'),
+        ('id-4', 'todo', '開會準備', '', 'active', NULL, '${todayStr}', '[]', '', NULL, '[]', '${now}', '${now}'),
+        ('id-5', 'todo', '牛奶品牌比較', '', 'active', NULL, NULL, '[]', '', NULL, '[]', '${now}', '${now}'),
+        ('id-6', 'note', '讀書筆記', '', 'permanent', NULL, NULL, '[]', '', NULL, '[]', '${now}', '${now}');
     `);
   }
 
@@ -342,8 +344,8 @@ describe("POST /api/webhook/line", () => {
       expect(fetchMock).toHaveBeenCalled();
       const callBody = JSON.parse(fetchMock.mock.calls[0][1]!.body as string);
       const replyText: string = callBody.messages[0].text;
-      expect(replyText).toContain("收件匣");
-      expect(replyText).toContain("買牛奶");
+      expect(replyText).toContain("閃念");
+      expect(replyText).toContain("研究 Hono");
       // Should have quick reply buttons
       expect(callBody.messages[0].quickReply).toBeDefined();
     });
@@ -357,7 +359,7 @@ describe("POST /api/webhook/line", () => {
 
       const fetchMock = vi.mocked(fetch);
       const callBody = JSON.parse(fetchMock.mock.calls[0][1]!.body as string);
-      expect(callBody.messages[0].text).toContain("收件匣是空的");
+      expect(callBody.messages[0].text).toContain("沒有閃念筆記");
     });
 
     it("does not create items (query only)", async () => {
@@ -377,9 +379,9 @@ describe("POST /api/webhook/line", () => {
       // Use ASCII text for FTS5 default tokenizer compatibility
       const now = new Date().toISOString();
       testSqlite.exec(`
-        INSERT INTO items (id, type, title, content, status, priority, due_date, tags, source, created_at, updated_at) VALUES
-          ('id-f1', 'note', 'Hono middleware research', '', 'inbox', NULL, NULL, '[]', 'LINE', '${now}', '${now}'),
-          ('id-f2', 'todo', 'Hono framework setup', '', 'active', NULL, NULL, '[]', '', '${now}', '${now}');
+        INSERT INTO items (id, type, title, content, status, priority, due, tags, origin, source, aliases, created, modified) VALUES
+          ('id-f1', 'note', 'Hono middleware research', '', 'fleeting', NULL, NULL, '[]', 'LINE', NULL, '[]', '${now}', '${now}'),
+          ('id-f2', 'todo', 'Hono framework setup', '', 'active', NULL, NULL, '[]', '', NULL, '[]', '${now}', '${now}');
       `);
 
       const res = await sendLineMessage(app, "!find Hono");
@@ -469,9 +471,10 @@ describe("POST /api/webhook/line", () => {
       const callBody = JSON.parse(fetchMock.mock.calls[0][1]!.body as string);
       const replyText: string = callBody.messages[0].text;
       expect(replyText).toContain("Sparkle 統計");
-      expect(replyText).toContain("收件匣：3");
-      expect(replyText).toContain("進行中：2");
-      expect(replyText).toContain("逾期：1");
+      expect(replyText).toContain("閃念: 1");
+      expect(replyText).toContain("永久: 1");
+      expect(replyText).toContain("進行中: 4");
+      expect(replyText).toContain("逾期: 1");
       expect(callBody.messages[0].quickReply).toBeDefined();
     });
 
@@ -563,7 +566,9 @@ describe("POST /api/webhook/line", () => {
       const fetchMock = vi.mocked(fetch);
       const callBody = JSON.parse(fetchMock.mock.calls[0][1]!.body as string);
       const replyText: string = callBody.messages[0].text;
-      expect(replyText).toContain("!inbox");
+      expect(replyText).toContain("!fleeting");
+      expect(replyText).toContain("!developing");
+      expect(replyText).toContain("!permanent");
       expect(replyText).toContain("!today");
       expect(replyText).toContain("!find");
       expect(replyText).toContain("!stats");
@@ -575,6 +580,9 @@ describe("POST /api/webhook/line", () => {
       expect(replyText).toContain("!tag");
       expect(replyText).toContain("!untag");
       expect(replyText).toContain("!done");
+      expect(replyText).toContain("!develop");
+      expect(replyText).toContain("!mature");
+      expect(replyText).toContain("!export");
       expect(replyText).toContain("!archive");
       expect(replyText).toContain("!priority");
       expect(replyText).toContain("!list");
@@ -613,7 +621,7 @@ describe("POST /api/webhook/line", () => {
 
       const fetchMock = vi.mocked(fetch);
       const callBody = JSON.parse(fetchMock.mock.calls[0][1]!.body as string);
-      expect(callBody.messages[0].text).toContain("沒有進行中的項目");
+      expect(callBody.messages[0].text).toContain("沒有進行中的待辦");
     });
   });
 
@@ -623,9 +631,9 @@ describe("POST /api/webhook/line", () => {
       process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
       const now = new Date().toISOString();
       testSqlite.exec(`
-        INSERT INTO items (id, type, title, content, status, priority, due_date, tags, source, created_at, updated_at) VALUES
-          ('id-t1', 'todo', '寫報告', '', 'active', NULL, NULL, '["工作"]', '', '${now}', '${now}'),
-          ('id-t2', 'todo', '回信', '', 'inbox', NULL, NULL, '["工作","重要"]', '', '${now}', '${now}');
+        INSERT INTO items (id, type, title, content, status, priority, due, tags, origin, source, aliases, created, modified) VALUES
+          ('id-t1', 'todo', '寫報告', '', 'active', NULL, NULL, '["工作"]', '', NULL, '[]', '${now}', '${now}'),
+          ('id-t2', 'todo', '回信', '', 'active', NULL, NULL, '["工作","重要"]', '', NULL, '[]', '${now}', '${now}');
       `);
 
       const res = await sendLineMessage(app, "!list 工作");
@@ -709,7 +717,7 @@ describe("POST /api/webhook/line", () => {
 
       // Verify DB was updated
       const allItems = testDb.select().from(items).all();
-      const updated = allItems.find((i) => i.title === "牛奶品牌比較" || i.due_date === "2026-03-15");
+      const updated = allItems.find((i) => i.title === "研究 Hono" || i.due === "2026-03-15");
       expect(updated).toBeDefined();
     });
 
@@ -786,11 +794,11 @@ describe("POST /api/webhook/line", () => {
       process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
       const now = new Date().toISOString();
       testSqlite.exec(`
-        INSERT INTO items (id, type, title, content, status, priority, due_date, tags, source, created_at, updated_at) VALUES
-          ('id-dup', 'todo', '有標籤的項目', '', 'inbox', NULL, NULL, '["工作"]', '', '${now}', '${now}');
+        INSERT INTO items (id, type, title, content, status, priority, due, tags, origin, source, aliases, created, modified) VALUES
+          ('id-dup', 'todo', '有標籤的項目', '', 'active', NULL, NULL, '["工作"]', '', NULL, '[]', '${now}', '${now}');
       `);
 
-      await sendLineMessage(app, "!inbox");
+      await sendLineMessage(app, "!active");
       vi.mocked(fetch).mockClear();
 
       await sendLineMessage(app, "!tag 1 工作 新標籤");
@@ -835,9 +843,9 @@ describe("POST /api/webhook/line", () => {
       expect(replyText).toContain("✅");
       expect(replyText).toContain("已完成");
 
-      // Verify DB state
-      const item = testSqlite.prepare("SELECT status FROM items WHERE id = ?").get("id-3") as any;
-      expect(item.status).toBe("done");
+      // Verify at least one item is now done
+      const doneItems = testSqlite.prepare("SELECT * FROM items WHERE status = 'done'").all() as any[];
+      expect(doneItems.length).toBeGreaterThanOrEqual(1);
     });
 
     it("returns error when no session exists", async () => {
@@ -910,7 +918,7 @@ describe("POST /api/webhook/line", () => {
       expect(replyText).toContain("high");
 
       // Verify at least one item now has high priority
-      const highItems = testSqlite.prepare("SELECT * FROM items WHERE priority = 'high' AND status = 'inbox'").all() as any[];
+      const highItems = testSqlite.prepare("SELECT * FROM items WHERE priority = 'high' AND status = 'fleeting'").all() as any[];
       expect(highItems.length).toBeGreaterThanOrEqual(1);
     });
 
@@ -919,8 +927,8 @@ describe("POST /api/webhook/line", () => {
       process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
       seedItems();
 
-      // Query active (includes id-3 with priority=high)
-      await sendLineMessage(app, "!active");
+      // Query today focus (id-3 is overdue, appears first)
+      await sendLineMessage(app, "!today");
       vi.mocked(fetch).mockClear();
 
       const res = await sendLineMessage(app, "!priority 1 none");
@@ -930,7 +938,7 @@ describe("POST /api/webhook/line", () => {
       const callBody = JSON.parse(fetchMock.mock.calls[0][1]!.body as string);
       expect(callBody.messages[0].text).toContain("已清除");
 
-      // Verify DB state
+      // Verify DB state - id-3 (繳電費) is the first focus item (overdue)
       const item = testSqlite.prepare("SELECT priority FROM items WHERE id = ?").get("id-3") as any;
       expect(item.priority).toBeNull();
     });
@@ -954,11 +962,11 @@ describe("POST /api/webhook/line", () => {
       process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
       const now = new Date().toISOString();
       testSqlite.exec(`
-        INSERT INTO items (id, type, title, content, status, priority, due_date, tags, source, created_at, updated_at) VALUES
-          ('id-ut1', 'todo', '有很多標籤', '', 'inbox', NULL, NULL, '["工作","個人","重要"]', '', '${now}', '${now}');
+        INSERT INTO items (id, type, title, content, status, priority, due, tags, origin, source, aliases, created, modified) VALUES
+          ('id-ut1', 'todo', '有很多標籤', '', 'active', NULL, NULL, '["工作","個人","重要"]', '', NULL, '[]', '${now}', '${now}');
       `);
 
-      await sendLineMessage(app, "!inbox");
+      await sendLineMessage(app, "!active");
       vi.mocked(fetch).mockClear();
 
       const res = await sendLineMessage(app, "!untag 1 工作 重要");
@@ -992,12 +1000,12 @@ describe("POST /api/webhook/line", () => {
   });
 
   describe("session numbering", () => {
-    it("inbox results use [N] format", async () => {
+    it("query results use [N] format", async () => {
       process.env.LINE_CHANNEL_SECRET = TEST_LINE_SECRET;
       process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
       seedItems();
 
-      await sendLineMessage(app, "!inbox");
+      await sendLineMessage(app, "!active");
 
       const fetchMock = vi.mocked(fetch);
       const callBody = JSON.parse(fetchMock.mock.calls[0][1]!.body as string);

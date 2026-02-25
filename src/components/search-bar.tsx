@@ -1,20 +1,61 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { searchItemsApi } from "@/lib/api";
-import { parseItems, type ParsedItem } from "@/lib/types";
+import { parseItems, type ParsedItem, type ItemStatus } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Search, Loader2 } from "lucide-react";
+import {
+  Search,
+  Loader2,
+  Sparkles,
+  Pencil,
+  Gem,
+  ExternalLink,
+  PlayCircle,
+  Check,
+  Archive,
+} from "lucide-react";
 
 interface SearchBarProps {
   onSelect?: (item: ParsedItem) => void;
 }
 
-const STATUS_LABEL: Record<string, string> = {
-  inbox: "收件匣",
-  active: "進行中",
-  done: "已完成",
-  archived: "已封存",
+const STATUS_CONFIG: Record<ItemStatus, { label: string; color: string; icon: React.ReactNode }> = {
+  fleeting: {
+    label: "閃念",
+    color: "text-amber-600 dark:text-amber-400",
+    icon: <Sparkles className="h-3 w-3" />,
+  },
+  developing: {
+    label: "發展中",
+    color: "text-blue-600 dark:text-blue-400",
+    icon: <Pencil className="h-3 w-3" />,
+  },
+  permanent: {
+    label: "永久筆記",
+    color: "text-green-600 dark:text-green-400",
+    icon: <Gem className="h-3 w-3" />,
+  },
+  exported: {
+    label: "已匯出",
+    color: "text-purple-600 dark:text-purple-400",
+    icon: <ExternalLink className="h-3 w-3" />,
+  },
+  active: {
+    label: "進行中",
+    color: "text-sky-600 dark:text-sky-400",
+    icon: <PlayCircle className="h-3 w-3" />,
+  },
+  done: {
+    label: "已完成",
+    color: "text-muted-foreground",
+    icon: <Check className="h-3 w-3" />,
+  },
+  archived: {
+    label: "已封存",
+    color: "text-muted-foreground opacity-50",
+    icon: <Archive className="h-3 w-3" />,
+  },
 };
 
 function highlightText(text: string, query: string) {
@@ -38,19 +79,15 @@ function escapeRegex(str: string) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function StatusBadge({ status }: { status: string }) {
-  switch (status) {
-    case "inbox":
-      return <Badge variant="outline" className="text-xs shrink-0">{STATUS_LABEL.inbox}</Badge>;
-    case "active":
-      return <Badge variant="default" className="text-xs shrink-0">{STATUS_LABEL.active}</Badge>;
-    case "done":
-      return <Badge variant="secondary" className="text-xs shrink-0 line-through">{STATUS_LABEL.done}</Badge>;
-    case "archived":
-      return <Badge variant="secondary" className="text-xs shrink-0 opacity-50">{STATUS_LABEL.archived}</Badge>;
-    default:
-      return null;
-  }
+function StatusBadge({ status }: { status: ItemStatus }) {
+  const config = STATUS_CONFIG[status];
+  if (!config) return null;
+  return (
+    <Badge variant="outline" className={`text-xs shrink-0 gap-0.5 ${config.color}`}>
+      {config.icon}
+      {config.label}
+    </Badge>
+  );
 }
 
 export function SearchBar({ onSelect }: SearchBarProps) {
@@ -173,14 +210,14 @@ export function SearchBar({ onSelect }: SearchBarProps) {
                       {tag}
                     </Badge>
                   ))}
-                  {item.due_date && (
+                  {item.due && (
                     <span className="text-xs text-muted-foreground">
-                      {item.due_date}
+                      {item.due}
                     </span>
                   )}
-                  {item.source && (
+                  {item.origin && (
                     <span className="text-[10px] text-muted-foreground/70">
-                      來源：{item.source}
+                      來源：{item.origin}
                     </span>
                   )}
                 </div>

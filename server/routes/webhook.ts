@@ -3,10 +3,11 @@ import crypto from "node:crypto";
 import { db, sqlite } from "../db/index.js";
 import { createItem, getItem, listItems, searchItems, updateItem } from "../lib/items.js";
 import { getStats, getFocusItems } from "../lib/stats.js";
+import { exportToObsidian } from "../lib/export.js";
 import { parseCommand } from "../lib/line.js";
 import { setSession, getItemId } from "../lib/line-session.js";
 import { parseDate } from "../lib/line-date.js";
-import { formatNumberedList, formatDetail, formatStats, replyLine } from "../lib/line-format.js";
+import { formatNumberedList, formatDetail, formatStats, replyLine, STATUS_LABELS } from "../lib/line-format.js";
 
 export const webhookRouter = new Hono();
 
@@ -79,18 +80,18 @@ webhookRouter.post("/line", async (c) => {
         break;
       }
 
-      case "inbox": {
-        const { items: inboxItems, total } = listItems(db, {
-          status: "inbox",
-          sort: "created_at",
+      case "fleeting": {
+        const { items: fleetingItems, total } = listItems(db, {
+          status: "fleeting",
+          sort: "created",
           order: "desc",
           limit: 5,
         });
         if (total === 0) {
-          reply = "📥 收件匣是空的！";
+          reply = "✨ 沒有閃念筆記";
         } else {
-          setSession(userId, inboxItems.map((r) => r.id));
-          reply = formatNumberedList("📥 收件匣", inboxItems, total);
+          setSession(userId, fleetingItems.map((r) => r.id));
+          reply = formatNumberedList("✨ 閃念筆記", fleetingItems, total);
         }
         break;
       }
@@ -115,12 +116,13 @@ webhookRouter.post("/line", async (c) => {
       case "active": {
         const { items: activeItems, total } = listItems(db, {
           status: "active",
-          sort: "due_date",
+          type: "todo",
+          sort: "due",
           order: "asc",
           limit: 5,
         });
         if (total === 0) {
-          reply = "🔵 沒有進行中的項目";
+          reply = "🔵 沒有進行中的待辦";
         } else {
           setSession(userId, activeItems.map((r) => r.id));
           reply = formatNumberedList("🔵 進行中", activeItems, total);
@@ -128,10 +130,43 @@ webhookRouter.post("/line", async (c) => {
         break;
       }
 
+      case "developing": {
+        const { items: devItems, total } = listItems(db, {
+          status: "developing",
+          sort: "created",
+          order: "desc",
+          limit: 5,
+        });
+        if (total === 0) {
+          reply = "📝 沒有發展中的筆記";
+        } else {
+          setSession(userId, devItems.map((r) => r.id));
+          reply = formatNumberedList("📝 發展中", devItems, total);
+        }
+        break;
+      }
+
+      case "permanent": {
+        const { items: permItems, total } = listItems(db, {
+          status: "permanent",
+          sort: "created",
+          order: "desc",
+          limit: 5,
+        });
+        if (total === 0) {
+          reply = "💎 沒有永久筆記";
+        } else {
+          setSession(userId, permItems.map((r) => r.id));
+          reply = formatNumberedList("💎 永久筆記", permItems, total);
+        }
+        break;
+      }
+
       case "notes": {
         const { items: noteItems, total } = listItems(db, {
           type: "note",
-          sort: "created_at",
+          excludeStatus: ["archived"],
+          sort: "created",
           order: "desc",
           limit: 5,
         });
@@ -147,7 +182,8 @@ webhookRouter.post("/line", async (c) => {
       case "todos": {
         const { items: todoItems, total } = listItems(db, {
           type: "todo",
-          sort: "created_at",
+          excludeStatus: ["archived"],
+          sort: "created",
           order: "desc",
           limit: 5,
         });
@@ -190,7 +226,7 @@ webhookRouter.post("/line", async (c) => {
           break;
         }
         const dueDate = dateParsed.clear ? null : dateParsed.date;
-        updateItem(db, resolved.itemId, { due_date: dueDate });
+        updateItem(db, resolved.itemId, { due: dueDate });
         const dueItem = getItem(db, resolved.itemId);
         reply = dateParsed.clear
           ? `✅ 已清除「${dueItem!.title}」的到期日`
@@ -211,8 +247,79 @@ webhookRouter.post("/line", async (c) => {
       case "done": {
         const resolved = resolveSessionItem(userId, cmd.index);
         if ("error" in resolved) { reply = resolved.error; break; }
+        if (resolved.item.type === "note") {
+          reply = "❌ 筆記請用 !develop 或 !mature";
+          break;
+        }
         updateItem(db, resolved.itemId, { status: "done" });
         reply = `✅ 已將「${resolved.item.title}」標記為已完成`;
+        break;
+      }
+
+      case "develop": {
+        const resolved = resolveSessionItem(userId, cmd.index);
+        if ("error" in resolved) { reply = resolved.error; break; }
+        if (resolved.item.type !== "note") {
+          reply = "❌ 此指令只適用於筆記";
+          break;
+        }
+        if (resolved.item.status === "developing") {
+          reply = `「${resolved.item.title}」已經是發展中狀態`;
+          break;
+        }
+        if (resolved.item.status !== "fleeting") {
+          reply = `❌ 目前狀態為「${STATUS_LABELS[resolved.item.status] ?? resolved.item.status}」，無法執行此操作`;
+          break;
+        }
+        updateItem(db, resolved.itemId, { status: "developing" });
+        reply = `✅ 已將「${resolved.item.title}」推進為發展中`;
+        break;
+      }
+
+      case "mature": {
+        const resolved = resolveSessionItem(userId, cmd.index);
+        if ("error" in resolved) { reply = resolved.error; break; }
+        if (resolved.item.type !== "note") {
+          reply = "❌ 此指令只適用於筆記";
+          break;
+        }
+        if (resolved.item.status === "permanent") {
+          reply = `「${resolved.item.title}」已經是永久筆記`;
+          break;
+        }
+        if (resolved.item.status !== "developing") {
+          reply = `❌ 目前狀態為「${STATUS_LABELS[resolved.item.status] ?? resolved.item.status}」，無法執行此操作`;
+          break;
+        }
+        updateItem(db, resolved.itemId, { status: "permanent" });
+        reply = `✅ 已將「${resolved.item.title}」提升為永久筆記`;
+        break;
+      }
+
+      case "export": {
+        const resolved = resolveSessionItem(userId, cmd.index);
+        if ("error" in resolved) { reply = resolved.error; break; }
+        if (resolved.item.type !== "note") {
+          reply = "❌ 此指令只適用於筆記";
+          break;
+        }
+        if (resolved.item.status !== "permanent") {
+          const label = STATUS_LABELS[resolved.item.status] ?? resolved.item.status;
+          reply = `❌ 只有永久筆記可以匯出，目前狀態：${label}`;
+          break;
+        }
+        if (!process.env.OBSIDIAN_VAULT_PATH) {
+          reply = "❌ Obsidian 匯出未設定，請聯繫管理員";
+          break;
+        }
+        try {
+          const result = exportToObsidian(resolved.item);
+          updateItem(db, resolved.itemId, { status: "exported" });
+          reply = `✅ 已匯出到 Obsidian: ${result.path}`;
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          reply = `❌ 匯出失敗：${msg}`;
+        }
         break;
       }
 
@@ -247,17 +354,18 @@ webhookRouter.post("/line", async (c) => {
       case "save": {
         if (!cmd.parsed.title) continue;
         try {
+          const status = cmd.parsed.type === "todo" ? "active" : "fleeting";
           const item = createItem(db, {
             title: cmd.parsed.title,
             content: cmd.parsed.content,
             type: cmd.parsed.type,
-            status: "inbox",
+            status,
             priority: cmd.parsed.priority,
-            source: cmd.parsed.source,
+            origin: cmd.parsed.source,
           });
-          const typeLabel = item.type === "todo" ? "待辦" : "筆記";
+          const typeLabel = item.type === "todo" ? "待辦" : "閃念筆記";
           const priorityLabel = cmd.parsed.priority === "high" ? " [高優先]" : "";
-          reply = `✅ 已存入收件匣（${typeLabel}${priorityLabel}）\n${item.title}`;
+          reply = `✅ 已存入（${typeLabel}${priorityLabel}）\n${item.title}`;
         } catch (err) {
           console.error("Failed to create item from LINE:", err);
           await replyLine(channelToken, event.replyToken, "❌ 儲存失敗，請稍後再試");
@@ -280,7 +388,7 @@ webhookRouter.post("/line", async (c) => {
 const HELP_TEXT = `📝 Sparkle 使用說明
 
 【新增】
-直接輸入文字 → 存為筆記
+直接輸入文字 → 存為閃念筆記
 !todo 買牛奶 → 存為待辦
 !high 緊急事項 → 高優先筆記
 !todo !high 繳費 → 高優先待辦
@@ -288,8 +396,10 @@ const HELP_TEXT = `📝 Sparkle 使用說明
 多行訊息：第一行為標題，其餘為內容
 
 【查詢】
-!inbox → 查看收件匣
-!active → 進行中項目
+!fleeting → 閃念筆記
+!developing → 發展中筆記
+!permanent → 永久筆記
+!active → 進行中待辦
 !notes → 所有筆記
 !todos → 所有待辦
 !today → 今日焦點
@@ -297,12 +407,17 @@ const HELP_TEXT = `📝 Sparkle 使用說明
 !list 標籤 → 按標籤篩選
 !stats → 統計摘要
 
+【筆記推進】查詢後用編號操作
+!develop N → 閃念 → 發展中
+!mature N → 發展中 → 永久筆記
+!export N → 永久筆記 → 匯出到 Obsidian
+
 【操作】查詢後用編號操作
 !detail N → 查看第 N 筆詳情
 !due N 日期 → 設定到期日
 !tag N 標籤 → 加標籤
 !untag N 標籤 → 移除標籤
-!done N → 標記為已完成
+!done N → 待辦標記為已完成
 !archive N → 封存
 !priority N high/medium/low/none → 設定優先度
 

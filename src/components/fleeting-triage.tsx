@@ -6,10 +6,11 @@ import { Badge } from "@/components/ui/badge";
 import { TagInput } from "@/components/tag-input";
 import { toast } from "sonner";
 import {
-  CheckCircle,
+  Pencil,
+  PlayCircle,
   Archive,
   SkipForward,
-  Inbox,
+  Sparkles,
   Loader2,
   FileText,
   ListTodo,
@@ -17,14 +18,14 @@ import {
   Calendar,
 } from "lucide-react";
 
-interface InboxTriageProps {
+interface FleetingTriageProps {
   onDone?: () => void;
 }
 
 interface PendingChanges {
   type?: "note" | "todo";
   tags?: string[];
-  due_date?: string | null;
+  due?: string | null;
 }
 
 function toDateStr(date: Date): string {
@@ -52,7 +53,7 @@ function getNextMondayStr(): string {
   return toDateStr(d);
 }
 
-export function InboxTriage({ onDone }: InboxTriageProps) {
+export function FleetingTriage({ onDone }: FleetingTriageProps) {
   const [items, setItems] = useState<ParsedItem[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -60,10 +61,10 @@ export function InboxTriage({ onDone }: InboxTriageProps) {
   const [showDateInput, setShowDateInput] = useState(false);
   const [allTags, setAllTags] = useState<string[]>([]);
 
-  const fetchInbox = useCallback(async () => {
+  const fetchFleeting = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await listItems({ status: "inbox", limit: 100 });
+      const res = await listItems({ status: "fleeting", limit: 100 });
       setItems(parseItems(res.items));
       setCurrentIndex(0);
     } catch (err) {
@@ -74,9 +75,9 @@ export function InboxTriage({ onDone }: InboxTriageProps) {
   }, []);
 
   useEffect(() => {
-    fetchInbox();
+    fetchFleeting();
     getTags().then((res) => setAllTags(res.tags)).catch(() => {});
-  }, [fetchInbox]);
+  }, [fetchFleeting]);
 
   const current = items[currentIndex];
   const remaining = items.length - currentIndex;
@@ -84,28 +85,47 @@ export function InboxTriage({ onDone }: InboxTriageProps) {
   // Resolved values: pending overrides current
   const resolvedType = pending.type ?? current?.type ?? "note";
   const resolvedTags = pending.tags ?? current?.tags ?? [];
-  const resolvedDueDate = pending.due_date !== undefined ? pending.due_date : (current?.due_date ?? null);
+  const resolvedDue = pending.due !== undefined ? pending.due : (current?.due ?? null);
 
   const resetAndNext = () => {
     setPending({});
     setShowDateInput(false);
     if (currentIndex + 1 >= items.length) {
-      toast.success("收件匣已清空！");
+      toast.success("閃念筆記已處理完畢！");
       onDone?.();
     } else {
       setCurrentIndex((i) => i + 1);
     }
   };
 
-  const handleAction = async (action: "active" | "archived") => {
+  // Primary action: note→developing, todo→active
+  const handlePrimaryAction = async () => {
     if (!current) return;
     try {
-      const updates: Record<string, unknown> = { status: action };
+      const updates: Record<string, unknown> = {};
+      const targetType = pending.type ?? current.type;
+      // note → developing, todo → active
+      updates.status = targetType === "note" ? "developing" : "active";
       if (pending.type !== undefined) updates.type = pending.type;
       if (pending.tags !== undefined) updates.tags = pending.tags;
-      if (pending.due_date !== undefined) updates.due_date = pending.due_date;
+      if (pending.due !== undefined) updates.due = pending.due;
       await updateItem(current.id, updates);
-      toast.success(action === "active" ? "已設為進行中" : "已封存");
+      toast.success(targetType === "note" ? "已設為發展中" : "已設為進行中");
+      resetAndNext();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "操作失敗");
+    }
+  };
+
+  const handleArchive = async () => {
+    if (!current) return;
+    try {
+      const updates: Record<string, unknown> = { status: "archived" };
+      if (pending.type !== undefined) updates.type = pending.type;
+      if (pending.tags !== undefined) updates.tags = pending.tags;
+      if (pending.due !== undefined) updates.due = pending.due;
+      await updateItem(current.id, updates);
+      toast.success("已封存");
       resetAndNext();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "操作失敗");
@@ -133,7 +153,7 @@ export function InboxTriage({ onDone }: InboxTriageProps) {
   };
 
   const setDueDate = (date: string | null) => {
-    setPending((p) => ({ ...p, due_date: date }));
+    setPending((p) => ({ ...p, due: date }));
     setShowDateInput(false);
   };
 
@@ -148,8 +168,8 @@ export function InboxTriage({ onDone }: InboxTriageProps) {
   if (!current || remaining <= 0) {
     return (
       <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-        <Inbox className="h-10 w-10 mb-2" />
-        <p className="text-sm">收件匣已清空</p>
+        <Sparkles className="h-10 w-10 mb-2" />
+        <p className="text-sm">閃念筆記已處理完畢</p>
         <Button variant="outline" className="mt-4" onClick={onDone}>
           返回
         </Button>
@@ -177,8 +197,8 @@ export function InboxTriage({ onDone }: InboxTriageProps) {
           </p>
         )}
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          {current.source && <span>來源: {current.source}</span>}
-          <span>{new Date(current.created_at).toLocaleString("zh-TW")}</span>
+          {current.origin && <span>來源: {current.origin}</span>}
+          <span>{new Date(current.created).toLocaleString("zh-TW")}</span>
         </div>
       </div>
 
@@ -226,10 +246,10 @@ export function InboxTriage({ onDone }: InboxTriageProps) {
         {/* Due date */}
         <div className="flex items-center gap-2">
           <span className="text-sm text-muted-foreground w-10">到期</span>
-          {resolvedDueDate ? (
+          {resolvedDue ? (
             <Badge variant="outline" className="gap-1">
               <Calendar className="h-3 w-3" />
-              {resolvedDueDate}
+              {resolvedDue}
               <button onClick={() => setDueDate(null)} className="ml-0.5 hover:text-destructive">
                 <X className="h-3 w-3" />
               </button>
@@ -267,13 +287,22 @@ export function InboxTriage({ onDone }: InboxTriageProps) {
 
       {/* Actions */}
       <div className="flex gap-2 justify-center">
-        <Button onClick={() => handleAction("active")} className="gap-1">
-          <CheckCircle className="h-4 w-4" />
-          進行中
+        <Button onClick={handlePrimaryAction} className="gap-1">
+          {resolvedType === "note" ? (
+            <>
+              <Pencil className="h-4 w-4" />
+              發展
+            </>
+          ) : (
+            <>
+              <PlayCircle className="h-4 w-4" />
+              進行
+            </>
+          )}
         </Button>
         <Button
           variant="outline"
-          onClick={() => handleAction("archived")}
+          onClick={handleArchive}
           className="gap-1"
         >
           <Archive className="h-4 w-4" />

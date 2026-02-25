@@ -7,6 +7,7 @@ import type {
   ImportResponse,
   StatsResponse,
   FocusResponse,
+  ConfigResponse,
 } from "./types";
 
 const API_BASE = "/api";
@@ -83,8 +84,12 @@ export async function listItems(params?: {
   order?: string;
   limit?: number;
   offset?: number;
+  excludeStatus?: string[];
 }): Promise<ListItemsResponse> {
-  const validStatuses = new Set(["inbox", "active", "done", "archived"]);
+  const validStatuses = new Set([
+    "fleeting", "developing", "permanent", "exported",
+    "active", "done", "archived",
+  ]);
   const search = new URLSearchParams();
   if (params?.status && validStatuses.has(params.status)) search.set("status", params.status);
   if (params?.type) search.set("type", params.type);
@@ -93,6 +98,11 @@ export async function listItems(params?: {
   if (params?.order) search.set("order", params.order);
   if (params?.limit) search.set("limit", String(params.limit));
   if (params?.offset) search.set("offset", String(params.offset));
+  if (params?.excludeStatus) {
+    for (const s of params.excludeStatus) {
+      search.append("excludeStatus", s);
+    }
+  }
 
   const qs = search.toString();
   return request<ListItemsResponse>(`/items${qs ? `?${qs}` : ""}`);
@@ -104,9 +114,9 @@ export async function createItem(input: {
   content?: string;
   status?: string;
   priority?: string | null;
-  due_date?: string | null;
+  due?: string | null;
   tags?: string[];
-  source?: string;
+  source?: string | null;
 }): Promise<Item> {
   return request<Item>("/items", {
     method: "POST",
@@ -126,9 +136,10 @@ export async function updateItem(
     content?: string;
     status?: string;
     priority?: string | null;
-    due_date?: string | null;
+    due?: string | null;
     tags?: string[];
-    source?: string;
+    source?: string | null;
+    aliases?: string[];
   },
 ): Promise<Item> {
   return request<Item>(`/items/${id}`, {
@@ -145,10 +156,17 @@ export async function deleteItem(id: string): Promise<void> {
 export async function batchAction(
   ids: string[],
   action: string,
-): Promise<{ affected: number }> {
-  return request<{ affected: number }>("/items/batch", {
+): Promise<{ affected: number; skipped: number; errors?: { id: string; error: string }[] }> {
+  return request<{ affected: number; skipped: number; errors?: { id: string; error: string }[] }>("/items/batch", {
     method: "POST",
     body: JSON.stringify({ ids, action }),
+  });
+}
+
+// Export to Obsidian API
+export async function exportItem(id: string): Promise<{ path: string }> {
+  return request<{ path: string }>(`/items/${id}/export`, {
+    method: "POST",
   });
 }
 
@@ -188,6 +206,11 @@ export async function getStats(): Promise<StatsResponse> {
 
 export async function getFocus(): Promise<FocusResponse> {
   return request<FocusResponse>("/stats/focus");
+}
+
+// Config API
+export async function getConfig(): Promise<ConfigResponse> {
+  return request<ConfigResponse>("/config");
 }
 
 export { ApiClientError };

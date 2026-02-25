@@ -19,17 +19,19 @@ function createTestDb() {
       type TEXT NOT NULL DEFAULT 'note',
       title TEXT NOT NULL,
       content TEXT DEFAULT '',
-      status TEXT NOT NULL DEFAULT 'inbox',
+      status TEXT NOT NULL DEFAULT 'fleeting',
       priority TEXT,
-      due_date TEXT,
+      due TEXT,
       tags TEXT NOT NULL DEFAULT '[]',
-      source TEXT DEFAULT '',
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
+      origin TEXT DEFAULT '',
+      source TEXT DEFAULT NULL,
+      aliases TEXT NOT NULL DEFAULT '[]',
+      created TEXT NOT NULL,
+      modified TEXT NOT NULL
     );
     CREATE INDEX idx_items_status ON items(status);
     CREATE INDEX idx_items_type ON items(type);
-    CREATE INDEX idx_items_created_at ON items(created_at DESC);
+    CREATE INDEX idx_items_created ON items(created DESC);
   `);
 
   setupFTS(sqlite);
@@ -57,6 +59,7 @@ import { getAllTags } from "../../lib/items.js";
 import { items } from "../../db/schema.js";
 import { eq } from "drizzle-orm";
 import { z, ZodError } from "zod";
+import { statusEnum } from "../../schemas/items.js";
 
 const TEST_TOKEN = "test-secret-token-12345";
 
@@ -65,13 +68,15 @@ const importItemSchema = z.object({
   type: z.enum(["note", "todo"]).default("note"),
   title: z.string().min(1).max(500),
   content: z.string().default(""),
-  status: z.enum(["inbox", "active", "done", "archived"]).default("inbox"),
+  status: statusEnum.default("fleeting"),
   priority: z.enum(["low", "medium", "high"]).nullable().default(null),
-  due_date: z.string().nullable().default(null),
+  due: z.string().nullable().default(null),
   tags: z.string().default("[]"),
-  source: z.string().default(""),
-  created_at: z.string().min(1),
-  updated_at: z.string().min(1),
+  origin: z.string().default(""),
+  source: z.string().nullable().default(null),
+  aliases: z.string().default("[]"),
+  created: z.string().min(1),
+  modified: z.string().min(1),
 });
 
 const importSchema = z.object({
@@ -92,7 +97,7 @@ function createApp() {
   app.get("/api/export", (c) => {
     const allItems = testDb.select().from(items).all();
     return c.json({
-      version: 1,
+      version: 2,
       exported_at: new Date().toISOString(),
       items: allItems,
     });
@@ -123,11 +128,13 @@ function createApp() {
               content: item.content,
               status: item.status,
               priority: item.priority,
-              due_date: item.due_date,
+              due: item.due,
               tags: item.tags,
+              origin: item.origin,
               source: item.source,
-              created_at: item.created_at,
-              updated_at: item.updated_at,
+              aliases: item.aliases,
+              created: item.created,
+              modified: item.modified,
             })
             .where(eq(items.id, item.id))
             .run();
@@ -233,7 +240,7 @@ describe("Items CRUD", () => {
       const item = await res.json();
       expect(item.title).toBe("Buy groceries");
       expect(item.id).toBeTruthy();
-      expect(item.status).toBe("inbox");
+      expect(item.status).toBe("fleeting");
       expect(item.type).toBe("note");
     });
 
@@ -247,9 +254,9 @@ describe("Items CRUD", () => {
           content: "Q4 report for the team",
           status: "active",
           priority: "high",
-          due_date: "2026-03-01",
+          due: "2026-03-01",
           tags: ["work", "urgent"],
-          source: "email",
+          origin: "email",
         }),
       });
       expect(res.status).toBe(201);
@@ -257,7 +264,7 @@ describe("Items CRUD", () => {
       expect(item.type).toBe("todo");
       expect(item.status).toBe("active");
       expect(item.priority).toBe("high");
-      expect(item.due_date).toBe("2026-03-01");
+      expect(item.due).toBe("2026-03-01");
       expect(JSON.parse(item.tags)).toEqual(["work", "urgent"]);
     });
 
@@ -298,21 +305,21 @@ describe("Items CRUD", () => {
       await app.request("/api/items", {
         method: "POST",
         headers: jsonHeaders(),
-        body: JSON.stringify({ title: "Inbox item" }),
+        body: JSON.stringify({ title: "Fleeting item" }),
       });
       await app.request("/api/items", {
         method: "POST",
         headers: jsonHeaders(),
-        body: JSON.stringify({ title: "Active item", status: "active" }),
+        body: JSON.stringify({ title: "Active item", type: "todo", status: "active" }),
       });
 
-      const res = await app.request("/api/items?status=inbox", {
+      const res = await app.request("/api/items?status=fleeting", {
         headers: authHeaders(),
       });
       expect(res.status).toBe(200);
       const body = await res.json();
       expect(body.items).toHaveLength(1);
-      expect(body.items[0].title).toBe("Inbox item");
+      expect(body.items[0].title).toBe("Fleeting item");
     });
 
     it("sorts items by priority descending", async () => {
@@ -380,12 +387,12 @@ describe("Items CRUD", () => {
       const res = await app.request(`/api/items/${created.id}`, {
         method: "PATCH",
         headers: jsonHeaders(),
-        body: JSON.stringify({ title: "Updated", status: "active" }),
+        body: JSON.stringify({ title: "Updated", status: "developing" }),
       });
       expect(res.status).toBe(200);
       const updated = await res.json();
       expect(updated.title).toBe("Updated");
-      expect(updated.status).toBe("active");
+      expect(updated.status).toBe("developing");
     });
 
     it("returns 404 for nonexistent id", async () => {
@@ -534,7 +541,7 @@ describe("POST /api/items/batch", () => {
       const res = await app.request("/api/items", {
         method: "POST",
         headers: jsonHeaders(),
-        body: JSON.stringify({ title: `Done item ${i}` }),
+        body: JSON.stringify({ title: `Done item ${i}`, type: "todo" }),
       });
       const item = await res.json();
       ids.push(item.id);
@@ -559,13 +566,13 @@ describe("POST /api/items/batch", () => {
   });
 
   it("batch active updates status to active", async () => {
-    // Create items with archived status
+    // Create items with archived status (must be todo type for active action)
     const ids: string[] = [];
     for (let i = 0; i < 2; i++) {
       const res = await app.request("/api/items", {
         method: "POST",
         headers: jsonHeaders(),
-        body: JSON.stringify({ title: `Active item ${i}`, status: "archived" }),
+        body: JSON.stringify({ title: `Active item ${i}`, type: "todo", status: "archived" }),
       });
       const item = await res.json();
       ids.push(item.id);
@@ -656,7 +663,7 @@ describe("GET /api/export", () => {
     });
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.version).toBe(1);
+    expect(body.version).toBe(2);
     expect(body.exported_at).toBeTruthy();
     expect(body.items).toEqual([]);
   });
@@ -678,7 +685,7 @@ describe("GET /api/export", () => {
     });
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.version).toBe(1);
+    expect(body.version).toBe(2);
     expect(body.exported_at).toBeTruthy();
     expect(body.items).toHaveLength(2);
     const titles = body.items.map((i: { title: string }) => i.title).sort();
@@ -711,13 +718,15 @@ describe("POST /api/import", () => {
             title: "Imported item 1",
             type: "note",
             content: "",
-            status: "inbox",
+            status: "fleeting",
             priority: null,
-            due_date: null,
+            due: null,
             tags: "[]",
-            source: "",
-            created_at: now,
-            updated_at: now,
+            origin: "",
+            source: null,
+            aliases: "[]",
+            created: now,
+            modified: now,
           },
           {
             id: "550e8400-e29b-41d4-a716-446655440002",
@@ -726,11 +735,13 @@ describe("POST /api/import", () => {
             content: "Some content",
             status: "active",
             priority: "high",
-            due_date: null,
+            due: null,
             tags: '["work"]',
-            source: "",
-            created_at: now,
-            updated_at: now,
+            origin: "",
+            source: null,
+            aliases: "[]",
+            created: now,
+            modified: now,
           },
         ],
       }),
@@ -763,13 +774,15 @@ describe("POST /api/import", () => {
             title: "Original title",
             type: "note",
             content: "",
-            status: "inbox",
+            status: "fleeting",
             priority: null,
-            due_date: null,
+            due: null,
             tags: "[]",
-            source: "",
-            created_at: now,
-            updated_at: now,
+            origin: "",
+            source: null,
+            aliases: "[]",
+            created: now,
+            modified: now,
           },
         ],
       }),
@@ -789,11 +802,13 @@ describe("POST /api/import", () => {
             content: "Updated content",
             status: "active",
             priority: "high",
-            due_date: null,
+            due: null,
             tags: '["updated"]',
-            source: "",
-            created_at: now,
-            updated_at: laterNow,
+            origin: "",
+            source: null,
+            aliases: "[]",
+            created: now,
+            modified: laterNow,
           },
         ],
       }),

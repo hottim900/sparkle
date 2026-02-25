@@ -4,6 +4,7 @@ import remarkGfm from "remark-gfm";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -25,21 +26,52 @@ import {
   deleteItem,
   getItem,
   getTags,
+  exportItem,
 } from "@/lib/api";
-import { parseItem, type ParsedItem } from "@/lib/types";
+import { parseItem, type ParsedItem, type ItemStatus } from "@/lib/types";
 import { TagInput } from "@/components/tag-input";
 import { toast } from "sonner";
-import { Trash2, ArrowLeft, Eye, Pencil, Loader2, Check } from "lucide-react";
+import {
+  Trash2,
+  ArrowLeft,
+  Eye,
+  Pencil,
+  Loader2,
+  Check,
+  ExternalLink,
+  X,
+} from "lucide-react";
 
 interface ItemDetailProps {
   itemId: string;
+  obsidianEnabled?: boolean;
   onClose?: () => void;
   onUpdated?: () => void;
   onDeleted?: () => void;
 }
 
+const noteStatuses: { value: ItemStatus; label: string }[] = [
+  { value: "fleeting", label: "閃念" },
+  { value: "developing", label: "發展中" },
+  { value: "permanent", label: "永久筆記" },
+  { value: "archived", label: "已封存" },
+];
+
+const todoStatuses: { value: ItemStatus; label: string }[] = [
+  { value: "active", label: "進行中" },
+  { value: "done", label: "已完成" },
+  { value: "archived", label: "已封存" },
+];
+
+const gtdTags = [
+  { tag: "next-action", label: "下一步" },
+  { tag: "waiting-on", label: "等待中" },
+  { tag: "someday", label: "有一天" },
+];
+
 export function ItemDetail({
   itemId,
+  obsidianEnabled,
   onClose,
   onUpdated,
   onDeleted,
@@ -48,8 +80,10 @@ export function ItemDetail({
   const [allTags, setAllTags] = useState<string[]>([]);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
   const [previewMode, setPreviewMode] = useState(false);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
+  const [aliasInput, setAliasInput] = useState("");
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const savedTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
@@ -112,6 +146,23 @@ export function ItemDetail({
     }
   };
 
+  const handleExport = async () => {
+    if (!item) return;
+    setExporting(true);
+    try {
+      const result = await exportItem(item.id);
+      toast.success(`已匯出到 Obsidian: ${result.path}`);
+      // Refresh item to get updated status
+      const updated = await getItem(item.id);
+      setItem(parseItem(updated));
+      onUpdated?.();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "匯出失敗");
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const addTag = (tag: string) => {
     if (!item) return;
     const newTags = [...item.tags, tag];
@@ -124,6 +175,23 @@ export function ItemDetail({
     const newTags = item.tags.filter((t) => t !== tag);
     setItem({ ...item, tags: newTags });
     saveField("tags", newTags);
+  };
+
+  const addAlias = (alias: string) => {
+    if (!item) return;
+    const trimmed = alias.trim();
+    if (!trimmed || item.aliases.includes(trimmed)) return;
+    const newAliases = [...item.aliases, trimmed];
+    setItem({ ...item, aliases: newAliases });
+    saveField("aliases", newAliases);
+    setAliasInput("");
+  };
+
+  const removeAlias = (alias: string) => {
+    if (!item) return;
+    const newAliases = item.aliases.filter((a) => a !== alias);
+    setItem({ ...item, aliases: newAliases });
+    saveField("aliases", newAliases);
   };
 
   if (loading) {
@@ -141,6 +209,10 @@ export function ItemDetail({
       </div>
     );
   }
+
+  const statusOptions = item.type === "note" ? noteStatuses : todoStatuses;
+  const showExportButton =
+    obsidianEnabled && item.type === "note" && item.status === "permanent";
 
   return (
     <div className="h-full flex flex-col">
@@ -163,29 +235,47 @@ export function ItemDetail({
             </span>
           )}
         </div>
-        <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-          <DialogTrigger asChild>
-            <Button variant="ghost" size="icon">
-              <Trash2 className="h-4 w-4 text-destructive" />
+        <div className="flex items-center gap-1">
+          {showExportButton && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1 text-xs"
+              onClick={handleExport}
+              disabled={exporting}
+            >
+              {exporting ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <ExternalLink className="h-3 w-3" />
+              )}
+              匯出到 Obsidian
             </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>確認刪除</DialogTitle>
-              <DialogDescription>
-                確定要刪除「{item.title}」嗎？此操作無法復原。
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setDeleteOpen(false)}>
-                取消
+          )}
+          <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+            <DialogTrigger asChild>
+              <Button variant="ghost" size="icon">
+                <Trash2 className="h-4 w-4 text-destructive" />
               </Button>
-              <Button variant="destructive" onClick={handleDelete}>
-                刪除
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>確認刪除</DialogTitle>
+                <DialogDescription>
+                  確定要刪除「{item.title}」嗎？此操作無法復原。
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setDeleteOpen(false)}>
+                  取消
+                </Button>
+                <Button variant="destructive" onClick={handleDelete}>
+                  刪除
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       {/* Content */}
@@ -212,6 +302,7 @@ export function ItemDetail({
           <Select
             value={item.type}
             onValueChange={(v) => {
+              // Type conversion — server handles status auto-mapping
               setItem({ ...item, type: v as ParsedItem["type"] });
               saveField("type", v);
             }}
@@ -232,14 +323,15 @@ export function ItemDetail({
               saveField("status", v);
             }}
           >
-            <SelectTrigger className="w-24">
+            <SelectTrigger className="w-28">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="inbox">收件匣</SelectItem>
-              <SelectItem value="active">進行中</SelectItem>
-              <SelectItem value="done">完成</SelectItem>
-              <SelectItem value="archived">封存</SelectItem>
+              {statusOptions.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>
+                  {opt.label}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
 
@@ -273,25 +365,27 @@ export function ItemDetail({
           </label>
           <Input
             type="date"
-            value={item.due_date ?? ""}
+            value={item.due ?? ""}
             onChange={(e) => {
               const val = e.target.value || null;
-              setItem({ ...item, due_date: val });
-              saveField("due_date", val);
+              setItem({ ...item, due: val });
+              saveField("due", val);
             }}
           />
         </div>
 
-        {/* Source */}
+        {/* Source URL */}
         <div>
           <label className="text-sm text-muted-foreground block mb-1">
-            來源
+            參考連結
           </label>
           <Input
-            value={item.source}
+            type="url"
+            value={item.source ?? ""}
             onChange={(e) => {
-              setItem({ ...item, source: e.target.value });
-              debouncedSave("source", e.target.value);
+              const val = e.target.value || null;
+              setItem({ ...item, source: val });
+              debouncedSave("source", val);
             }}
             onBlur={() => {
               if (saveTimeoutRef.current) {
@@ -299,20 +393,83 @@ export function ItemDetail({
                 saveField("source", item.source);
               }
             }}
-            placeholder="例如：from Discord"
+            placeholder="https://..."
           />
         </div>
+
+        {/* Origin (read-only) */}
+        {item.origin && (
+          <div>
+            <label className="text-sm text-muted-foreground block mb-1">
+              捕捉來源
+            </label>
+            <p className="text-sm px-3 py-2 bg-muted rounded-md">{item.origin}</p>
+          </div>
+        )}
 
         {/* Tags */}
         <div>
           <label className="text-sm text-muted-foreground block mb-1">
             標籤
           </label>
+          {/* GTD quick-select buttons for todos */}
+          {item.type === "todo" && (
+            <div className="flex gap-1 mb-2">
+              {gtdTags.map((gtd) => {
+                const isActive = item.tags.includes(gtd.tag);
+                return (
+                  <Button
+                    key={gtd.tag}
+                    size="sm"
+                    variant={isActive ? "default" : "outline"}
+                    className="h-7 text-xs"
+                    onClick={() => {
+                      if (isActive) {
+                        removeTag(gtd.tag);
+                      } else {
+                        addTag(gtd.tag);
+                      }
+                    }}
+                  >
+                    {gtd.label}
+                  </Button>
+                );
+              })}
+            </div>
+          )}
           <TagInput
             tags={item.tags}
             allTags={allTags}
             onAdd={addTag}
             onRemove={removeTag}
+          />
+        </div>
+
+        {/* Aliases */}
+        <div>
+          <label className="text-sm text-muted-foreground block mb-1">
+            別名
+          </label>
+          <div className="flex flex-wrap gap-1 mb-2">
+            {item.aliases.map((alias) => (
+              <Badge key={alias} variant="secondary" className="gap-1">
+                {alias}
+                <button type="button" onClick={() => removeAlias(alias)}>
+                  <X className="h-3 w-3" />
+                </button>
+              </Badge>
+            ))}
+          </div>
+          <Input
+            value={aliasInput}
+            onChange={(e) => setAliasInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                addAlias(aliasInput);
+              }
+            }}
+            placeholder="新增別名..."
           />
         </div>
 
@@ -414,8 +571,8 @@ export function ItemDetail({
 
         {/* Metadata */}
         <div className="text-xs text-muted-foreground space-y-1">
-          <p>建立: {new Date(item.created_at).toLocaleString("zh-TW")}</p>
-          <p>更新: {new Date(item.updated_at).toLocaleString("zh-TW")}</p>
+          <p>建立: {new Date(item.created).toLocaleString("zh-TW")}</p>
+          <p>更新: {new Date(item.modified).toLocaleString("zh-TW")}</p>
         </div>
       </div>
     </div>

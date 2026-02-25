@@ -66,10 +66,12 @@ export type LineCommand =
   | { type: "save"; parsed: ParsedLineMessage }
   | { type: "help" }
   | { type: "find"; keyword: string }
-  | { type: "inbox" }
+  | { type: "fleeting" }
   | { type: "today" }
   | { type: "stats" }
   | { type: "active" }
+  | { type: "developing" }
+  | { type: "permanent" }
   | { type: "notes" }
   | { type: "todos" }
   | { type: "list"; tag: string }
@@ -77,6 +79,9 @@ export type LineCommand =
   | { type: "due"; index: number; dateInput: string }
   | { type: "tag"; index: number; tags: string[] }
   | { type: "done"; index: number }
+  | { type: "develop"; index: number }
+  | { type: "mature"; index: number }
+  | { type: "export"; index: number }
   | { type: "archive"; index: number }
   | { type: "priority"; index: number; priority: "high" | "medium" | "low" | null }
   | { type: "untag"; index: number; tags: string[] }
@@ -98,10 +103,12 @@ export function parseCommand(text: string): LineCommand {
       const keyword = trimmed.slice(6).trim();
       return keyword ? { type: "find", keyword } : { type: "unknown" };
     }
-    if (lower === "!inbox") return { type: "inbox" };
+    if (lower === "!inbox" || lower === "!fleeting") return { type: "fleeting" };
     if (lower === "!today") return { type: "today" };
     if (lower === "!stats") return { type: "stats" };
     if (lower === "!active") return { type: "active" };
+    if (lower === "!developing") return { type: "developing" };
+    if (lower === "!permanent") return { type: "permanent" };
     if (lower === "!notes") return { type: "notes" };
     if (lower === "!todos") return { type: "todos" };
 
@@ -111,6 +118,30 @@ export function parseCommand(text: string): LineCommand {
       const rest = trimmed.slice(6).trim();
       const num = parseInt(rest, 10);
       return !isNaN(num) && num > 0 ? { type: "done", index: num } : { type: "unknown" };
+    }
+
+    // !develop <N>
+    if (lower === "!develop") return { type: "unknown" };
+    if (lower.startsWith("!develop ")) {
+      const rest = trimmed.slice(9).trim();
+      const num = parseInt(rest, 10);
+      return !isNaN(num) && num > 0 ? { type: "develop", index: num } : { type: "unknown" };
+    }
+
+    // !mature <N>
+    if (lower === "!mature") return { type: "unknown" };
+    if (lower.startsWith("!mature ")) {
+      const rest = trimmed.slice(8).trim();
+      const num = parseInt(rest, 10);
+      return !isNaN(num) && num > 0 ? { type: "mature", index: num } : { type: "unknown" };
+    }
+
+    // !export <N>
+    if (lower === "!export") return { type: "unknown" };
+    if (lower.startsWith("!export ")) {
+      const rest = trimmed.slice(8).trim();
+      const num = parseInt(rest, 10);
+      return !isNaN(num) && num > 0 ? { type: "export", index: num } : { type: "unknown" };
     }
 
     // !archive <N>

@@ -23,17 +23,19 @@ function createTestDb() {
       type TEXT NOT NULL DEFAULT 'note',
       title TEXT NOT NULL,
       content TEXT DEFAULT '',
-      status TEXT NOT NULL DEFAULT 'inbox',
+      status TEXT NOT NULL DEFAULT 'fleeting',
       priority TEXT,
-      due_date TEXT,
+      due TEXT,
       tags TEXT NOT NULL DEFAULT '[]',
-      source TEXT DEFAULT '',
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
+      origin TEXT DEFAULT '',
+      source TEXT DEFAULT NULL,
+      aliases TEXT NOT NULL DEFAULT '[]',
+      created TEXT NOT NULL,
+      modified TEXT NOT NULL
     );
     CREATE INDEX idx_items_status ON items(status);
     CREATE INDEX idx_items_type ON items(type);
-    CREATE INDEX idx_items_created_at ON items(created_at DESC);
+    CREATE INDEX idx_items_created ON items(created DESC);
   `);
 
   setupFTS(sqlite);
@@ -57,14 +59,20 @@ describe("Data Access Layer", () => {
   });
 
   describe("createItem", () => {
-    it("creates an item with defaults", () => {
+    it("creates a note with defaults (status=fleeting)", () => {
       const item = createItem(db, { title: "Test note" });
       expect(item.title).toBe("Test note");
       expect(item.type).toBe("note");
-      expect(item.status).toBe("inbox");
+      expect(item.status).toBe("fleeting");
       expect(item.id).toBeTruthy();
-      expect(item.created_at).toBeTruthy();
-      expect(item.updated_at).toBeTruthy();
+      expect(item.created).toBeTruthy();
+      expect(item.modified).toBeTruthy();
+    });
+
+    it("creates a todo with default status=active", () => {
+      const item = createItem(db, { title: "Test todo", type: "todo" });
+      expect(item.type).toBe("todo");
+      expect(item.status).toBe("active");
     });
 
     it("creates an item with all fields", () => {
@@ -74,16 +82,20 @@ describe("Data Access Layer", () => {
         content: "Milk, eggs, bread",
         status: "active",
         priority: "high",
-        due_date: "2026-03-01",
+        due: "2026-03-01",
         tags: ["shopping", "errands"],
-        source: "from Discord",
+        origin: "web",
+        source: "https://example.com",
+        aliases: ["grocery-run"],
       });
       expect(item.type).toBe("todo");
       expect(item.status).toBe("active");
       expect(item.priority).toBe("high");
-      expect(item.due_date).toBe("2026-03-01");
+      expect(item.due).toBe("2026-03-01");
       expect(JSON.parse(item.tags)).toEqual(["shopping", "errands"]);
-      expect(item.source).toBe("from Discord");
+      expect(item.origin).toBe("web");
+      expect(item.source).toBe("https://example.com");
+      expect(JSON.parse(item.aliases)).toEqual(["grocery-run"]);
     });
   });
 
@@ -112,11 +124,20 @@ describe("Data Access Layer", () => {
     });
 
     it("filters by status", () => {
-      createItem(db, { title: "Inbox item" });
-      createItem(db, { title: "Active item", status: "active" });
-      const result = listItems(db, { status: "active" });
+      createItem(db, { title: "Fleeting item" });
+      createItem(db, { title: "Developing item", status: "developing" });
+      const result = listItems(db, { status: "developing" });
       expect(result.items).toHaveLength(1);
-      expect(result.items[0]!.title).toBe("Active item");
+      expect(result.items[0]!.title).toBe("Developing item");
+    });
+
+    it("filters by excludeStatus", () => {
+      createItem(db, { title: "Fleeting" });
+      createItem(db, { title: "Developing", status: "developing" });
+      createItem(db, { title: "Archived", status: "archived" });
+      const result = listItems(db, { excludeStatus: ["archived"] });
+      expect(result.items).toHaveLength(2);
+      expect(result.items.map((i: { title: string }) => i.title).sort()).toEqual(["Developing", "Fleeting"]);
     });
 
     it("filters by type", () => {
@@ -156,7 +177,7 @@ describe("Data Access Layer", () => {
         ["Third", "2026-01-03T00:00:00.000Z"],
       ] as const) {
         sqlite.prepare(
-          "INSERT INTO items (id, title, type, status, tags, created_at, updated_at) VALUES (?, ?, 'note', 'inbox', '[]', ?, ?)",
+          "INSERT INTO items (id, title, type, status, tags, origin, aliases, created, modified) VALUES (?, ?, 'note', 'fleeting', '[]', '', '[]', ?, ?)",
         ).run(uuidv4(), title, ts, ts);
       }
       const result = listItems(db);
@@ -167,22 +188,22 @@ describe("Data Access Layer", () => {
 
   describe("updateItem", () => {
     it("updates specified fields", () => {
-      const item = createItem(db, { title: "Original" });
+      const item = createItem(db, { title: "Original", type: "todo" });
       const updated = updateItem(db, item.id, {
         title: "Updated",
-        status: "active",
+        status: "done",
       });
       expect(updated).toBeTruthy();
       expect(updated!.title).toBe("Updated");
-      expect(updated!.status).toBe("active");
+      expect(updated!.status).toBe("done");
     });
 
-    it("updates updated_at timestamp", async () => {
+    it("updates modified timestamp", async () => {
       const item = createItem(db, { title: "Test" });
       // Wait 5ms to ensure different timestamp
       await new Promise((r) => setTimeout(r, 5));
       const updated = updateItem(db, item.id, { title: "Changed" });
-      expect(updated!.updated_at).not.toBe(item.updated_at);
+      expect(updated!.modified).not.toBe(item.modified);
     });
 
     it("returns null for non-existent id", () => {
@@ -194,6 +215,32 @@ describe("Data Access Layer", () => {
       const item = createItem(db, { title: "Tag test" });
       const updated = updateItem(db, item.id, { tags: ["new-tag"] });
       expect(JSON.parse(updated!.tags)).toEqual(["new-tag"]);
+    });
+
+    it("auto-maps status on type conversion (note→todo)", () => {
+      const item = createItem(db, { title: "Note", type: "note" }); // fleeting
+      const updated = updateItem(db, item.id, { type: "todo" });
+      expect(updated!.type).toBe("todo");
+      expect(updated!.status).toBe("active"); // fleeting → active
+    });
+
+    it("auto-maps status on type conversion (todo→note)", () => {
+      const item = createItem(db, { title: "Todo", type: "todo" }); // active
+      const updated = updateItem(db, item.id, { type: "note" });
+      expect(updated!.type).toBe("note");
+      expect(updated!.status).toBe("fleeting"); // active → fleeting
+    });
+
+    it("reverts exported note to permanent when title changes", () => {
+      const item = createItem(db, { title: "Note", type: "note", status: "exported" });
+      const updated = updateItem(db, item.id, { title: "Changed title" });
+      expect(updated!.status).toBe("permanent");
+    });
+
+    it("does NOT revert exported note when non-content fields change", () => {
+      const item = createItem(db, { title: "Note", type: "note", status: "exported" });
+      const updated = updateItem(db, item.id, { tags: ["new-tag"] });
+      expect(updated!.status).toBe("exported");
     });
   });
 
