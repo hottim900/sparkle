@@ -35,6 +35,16 @@ function createTestDb() {
     CREATE INDEX idx_items_status ON items(status);
     CREATE INDEX idx_items_type ON items(type);
     CREATE INDEX idx_items_created ON items(created DESC);
+
+    CREATE TABLE settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
+    INSERT INTO settings (key, value) VALUES
+      ('obsidian_enabled', 'false'),
+      ('obsidian_vault_path', ''),
+      ('obsidian_inbox_folder', '0_Inbox'),
+      ('obsidian_export_mode', 'overwrite');
   `);
 
   setupFTS(sqlite);
@@ -58,6 +68,7 @@ import { Hono } from "hono";
 import { authMiddleware } from "../../middleware/auth.js";
 import { webhookRouter } from "../webhook.js";
 import { items } from "../../db/schema.js";
+import { updateSettings } from "../../lib/settings.js";
 
 // ============================================================
 // parseLineMessage unit tests (preserved from C2)
@@ -1163,10 +1174,10 @@ describe("POST /api/webhook/line", () => {
   });
 
   describe("!export command", () => {
-    it("rejects when OBSIDIAN_VAULT_PATH not configured", async () => {
+    it("rejects when Obsidian export not configured", async () => {
       process.env.LINE_CHANNEL_SECRET = TEST_LINE_SECRET;
       process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
-      delete process.env.OBSIDIAN_VAULT_PATH;
+      // Default settings: obsidian_enabled=false
       seedItems();
 
       // id-6 is permanent
@@ -1208,7 +1219,12 @@ describe("POST /api/webhook/line", () => {
       const fs = await import("node:fs");
       const path = await import("node:path");
       const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "sparkle-test-"));
-      process.env.OBSIDIAN_VAULT_PATH = tmpDir;
+
+      // Enable obsidian export via DB settings
+      updateSettings(testSqlite, {
+        obsidian_enabled: "true",
+        obsidian_vault_path: tmpDir,
+      });
 
       try {
         // id-6 is permanent
@@ -1224,7 +1240,6 @@ describe("POST /api/webhook/line", () => {
       } finally {
         // Cleanup
         fs.rmSync(tmpDir, { recursive: true, force: true });
-        delete process.env.OBSIDIAN_VAULT_PATH;
       }
     });
   });

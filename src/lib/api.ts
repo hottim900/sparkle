@@ -8,6 +8,7 @@ import type {
   StatsResponse,
   FocusResponse,
   ConfigResponse,
+  SettingsResponse,
 } from "./types";
 
 const API_BASE = "/api";
@@ -217,6 +218,20 @@ export async function getFocus(): Promise<FocusResponse> {
 // Config API
 export async function getConfig(): Promise<ConfigResponse> {
   return request<ConfigResponse>("/config");
+}
+
+// Settings API
+export async function getSettings(): Promise<SettingsResponse> {
+  return request<SettingsResponse>("/settings");
+}
+
+export async function updateSettings(
+  data: Partial<SettingsResponse>,
+): Promise<SettingsResponse> {
+  return request<SettingsResponse>("/settings", {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
 }
 
 export { ApiClientError };

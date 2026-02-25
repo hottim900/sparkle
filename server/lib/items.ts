@@ -1,4 +1,4 @@
-import { eq, desc, asc, sql, and, notInArray } from "drizzle-orm";
+import { eq, desc, asc, sql, and, notInArray, inArray } from "drizzle-orm";
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import type Database from "better-sqlite3";
 import { v4 as uuidv4 } from "uuid";
@@ -48,6 +48,39 @@ function defaultStatusForType(type: string): string {
   return type === "todo" ? "active" : "fleeting";
 }
 
+export type ItemWithLinkedTitle = typeof items.$inferSelect & {
+  linked_note_title: string | null;
+};
+
+function resolveLinkedNoteTitles(
+  db: DB,
+  rows: (typeof items.$inferSelect)[],
+): ItemWithLinkedTitle[] {
+  const linkedIds = rows
+    .map((r) => r.linked_note_id)
+    .filter((id): id is string => id != null);
+
+  const titleMap = new Map<string, string>();
+  if (linkedIds.length > 0) {
+    const uniqueIds = [...new Set(linkedIds)];
+    const linkedItems = db
+      .select({ id: items.id, title: items.title })
+      .from(items)
+      .where(inArray(items.id, uniqueIds))
+      .all();
+    for (const li of linkedItems) {
+      titleMap.set(li.id, li.title);
+    }
+  }
+
+  return rows.map((row) => ({
+    ...row,
+    linked_note_title: row.linked_note_id
+      ? (titleMap.get(row.linked_note_id) ?? null)
+      : null,
+  }));
+}
+
 export function createItem(
   db: DB,
   input: Partial<CreateItemInput> & { title: string },
@@ -78,8 +111,10 @@ export function createItem(
   return db.select().from(items).where(eq(items.id, id)).get()!;
 }
 
-export function getItem(db: DB, id: string) {
-  return db.select().from(items).where(eq(items.id, id)).get() ?? null;
+export function getItem(db: DB, id: string): ItemWithLinkedTitle | null {
+  const row = db.select().from(items).where(eq(items.id, id)).get() ?? null;
+  if (!row) return null;
+  return resolveLinkedNoteTitles(db, [row])[0]!;
 }
 
 export function listItems(
@@ -89,7 +124,7 @@ export function listItems(
     excludeStatus?: string[];
     type?: string;
     tag?: string;
-    sort?: "created" | "priority" | "due";
+    sort?: "created" | "priority" | "due" | "modified";
     order?: "asc" | "desc";
     limit?: number;
     offset?: number;
@@ -121,6 +156,7 @@ export function listItems(
 
   const sortColumn = sortField === "priority" ? items.priority
     : sortField === "due" ? items.due
+    : sortField === "modified" ? items.modified
     : items.created;
   const orderFn = sortOrder === "asc" ? asc : desc;
 
@@ -142,7 +178,7 @@ export function listItems(
       sql`SELECT DISTINCT items.* FROM items, json_each(items.tags) ${whereClause} ${orderSql} LIMIT ${limit} OFFSET ${offset}`,
     );
 
-    return { items: rows, total };
+    return { items: resolveLinkedNoteTitles(db, rows), total };
   }
 
   const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
@@ -163,7 +199,7 @@ export function listItems(
     .offset(offset)
     .all();
 
-  return { items: rows, total };
+  return { items: resolveLinkedNoteTitles(db, rows), total };
 }
 
 export function updateItem(db: DB, id: string, input: UpdateItemInput) {

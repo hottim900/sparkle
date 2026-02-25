@@ -6,6 +6,7 @@ import { ItemList } from "@/components/item-list";
 import { ItemDetail } from "@/components/item-detail";
 import { FleetingTriage } from "@/components/fleeting-triage";
 import { Dashboard } from "@/components/dashboard";
+import { Settings } from "@/components/settings";
 import { SearchBar } from "@/components/search-bar";
 import { Sidebar } from "@/components/sidebar";
 import { BottomNav } from "@/components/bottom-nav";
@@ -34,11 +35,15 @@ function MainApp() {
   const [todoSubView, setTodoSubView] = useState<"active" | "done">("active");
 
   // Load config on mount
-  useEffect(() => {
+  const refreshConfig = useCallback(() => {
     getConfig()
       .then((config) => setObsidianEnabled(config.obsidian_export_enabled))
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    refreshConfig();
+  }, [refreshConfig]);
 
   const refresh = useCallback(() => {
     setRefreshKey((k) => k + 1);
@@ -141,6 +146,9 @@ function MainApp() {
               handleViewChange("all");
             }}
           />
+        ) : currentView === "settings" ? (
+          /* Settings takes full width */
+          <Settings onSettingsChanged={refreshConfig} />
         ) : (
           <>
             {/* List panel */}
@@ -189,12 +197,14 @@ function MainApp() {
                     tag={selectedTag}
                     selectedId={selectedItem?.id}
                     onSelect={handleSelect}
+                    onNavigate={handleNavigate}
                     refreshKey={refreshKey}
                     currentView={currentView}
                     noteSubView={noteSubView}
                     todoSubView={todoSubView}
                     onNoteSubViewChange={setNoteSubView}
                     onTodoSubViewChange={setTodoSubView}
+                    obsidianEnabled={obsidianEnabled}
                   />
                 </div>
               )}
