@@ -142,6 +142,7 @@ export async function updateItem(
     tags?: string[];
     source?: string | null;
     aliases?: string[];
+    linked_note_id?: string | null;
   },
 ): Promise<Item> {
   return request<Item>(`/items/${id}`, {

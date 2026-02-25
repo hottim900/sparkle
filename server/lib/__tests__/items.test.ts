@@ -566,6 +566,48 @@ describe("Data Access Layer", () => {
     });
   });
 
+  describe("linked_todo_count resolution", () => {
+    it("getItem returns linked_todo_count for note with linked todos", () => {
+      const note = createItem(db, { title: "My note", type: "note" });
+      createItem(db, { title: "Todo 1", type: "todo", linked_note_id: note.id });
+      createItem(db, { title: "Todo 2", type: "todo", linked_note_id: note.id });
+      const fetched = getItem(db, note.id);
+      expect(fetched!.linked_todo_count).toBe(2);
+    });
+
+    it("getItem returns 0 linked_todo_count when no linked todos", () => {
+      const note = createItem(db, { title: "Lonely note", type: "note" });
+      const fetched = getItem(db, note.id);
+      expect(fetched!.linked_todo_count).toBe(0);
+    });
+
+    it("linked_todo_count excludes archived todos", () => {
+      const note = createItem(db, { title: "My note", type: "note" });
+      createItem(db, { title: "Active todo", type: "todo", linked_note_id: note.id });
+      createItem(db, { title: "Archived todo", type: "todo", status: "archived", linked_note_id: note.id });
+      const fetched = getItem(db, note.id);
+      expect(fetched!.linked_todo_count).toBe(1);
+    });
+
+    it("linked_todo_count is 0 for todo items", () => {
+      const todo = createItem(db, { title: "A todo", type: "todo" });
+      const fetched = getItem(db, todo.id);
+      expect(fetched!.linked_todo_count).toBe(0);
+    });
+
+    it("listItems returns linked_todo_count for notes", () => {
+      const note1 = createItem(db, { title: "Note with todos", type: "note" });
+      createItem(db, { title: "Note without todos", type: "note" });
+      createItem(db, { title: "Todo 1", type: "todo", linked_note_id: note1.id });
+      createItem(db, { title: "Todo 2", type: "todo", linked_note_id: note1.id });
+      const result = listItems(db, { type: "note" });
+      const withTodos = result.items.find((i) => i.title === "Note with todos");
+      const withoutTodos = result.items.find((i) => i.title === "Note without todos");
+      expect(withTodos!.linked_todo_count).toBe(2);
+      expect(withoutTodos!.linked_todo_count).toBe(0);
+    });
+  });
+
   describe("updateItem — exported auto-reversion edge cases", () => {
     it("reverts exported to permanent when content changes", () => {
       const item = createItem(db, { title: "Note", content: "original", type: "note", status: "exported" });

@@ -12,6 +12,7 @@ export interface Item {
   aliases: string; // JSON array string
   linked_note_id: string | null;
   linked_note_title: string | null;
+  linked_todo_count: number;
   created: string;
   modified: string;
 }

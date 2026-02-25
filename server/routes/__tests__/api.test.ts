@@ -482,6 +482,51 @@ describe("Items CRUD", () => {
       expect(linked.linked_note_title).toBe("My Reference Note");
       expect(plain.linked_note_title).toBeNull();
     });
+
+    it("returns linked_todo_count in list response for notes", async () => {
+      const noteRes = await app.request("/api/items", {
+        method: "POST",
+        headers: jsonHeaders(),
+        body: JSON.stringify({ title: "Note With Todos", type: "note" }),
+      });
+      const note = await noteRes.json();
+
+      await app.request("/api/items", {
+        method: "POST",
+        headers: jsonHeaders(),
+        body: JSON.stringify({ title: "Note Without Todos", type: "note" }),
+      });
+
+      await app.request("/api/items", {
+        method: "POST",
+        headers: jsonHeaders(),
+        body: JSON.stringify({
+          title: "Linked Todo 1",
+          type: "todo",
+          linked_note_id: note.id,
+        }),
+      });
+
+      await app.request("/api/items", {
+        method: "POST",
+        headers: jsonHeaders(),
+        body: JSON.stringify({
+          title: "Linked Todo 2",
+          type: "todo",
+          linked_note_id: note.id,
+        }),
+      });
+
+      const res = await app.request("/api/items?type=note", {
+        headers: authHeaders(),
+      });
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      const withTodos = body.items.find((i: { title: string }) => i.title === "Note With Todos");
+      const withoutTodos = body.items.find((i: { title: string }) => i.title === "Note Without Todos");
+      expect(withTodos.linked_todo_count).toBe(2);
+      expect(withoutTodos.linked_todo_count).toBe(0);
+    });
   });
 
   describe("GET /api/items/:id", () => {
@@ -500,6 +545,32 @@ describe("Items CRUD", () => {
       const item = await res.json();
       expect(item.title).toBe("Find me");
       expect(item.id).toBe(created.id);
+    });
+
+    it("returns linked_todo_count for a single note", async () => {
+      const noteRes = await app.request("/api/items", {
+        method: "POST",
+        headers: jsonHeaders(),
+        body: JSON.stringify({ title: "My Note", type: "note" }),
+      });
+      const note = await noteRes.json();
+
+      await app.request("/api/items", {
+        method: "POST",
+        headers: jsonHeaders(),
+        body: JSON.stringify({
+          title: "Linked Todo",
+          type: "todo",
+          linked_note_id: note.id,
+        }),
+      });
+
+      const res = await app.request(`/api/items/${note.id}`, {
+        headers: authHeaders(),
+      });
+      expect(res.status).toBe(200);
+      const item = await res.json();
+      expect(item.linked_todo_count).toBe(1);
     });
 
     it("returns 404 for nonexistent id", async () => {
