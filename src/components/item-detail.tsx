@@ -585,14 +585,14 @@ export function ItemDetail({
               關聯筆記
             </label>
             {item.linked_note_id && linkedNoteTitle ? (
-              <div className="flex items-center gap-2">
+              <div className="space-y-1">
                 <button
                   type="button"
-                  className="flex items-center gap-1.5 text-sm text-primary hover:underline"
+                  className="w-full text-left p-2 rounded-md border hover:bg-accent transition-colors flex items-center gap-2"
                   onClick={() => onNavigate?.(item.linked_note_id!)}
                 >
-                  <FileText className="h-3.5 w-3.5" />
-                  {linkedNoteTitle}
+                  <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                  <span className="text-sm truncate flex-1">{linkedNoteTitle}</span>
                 </button>
                 <Button
                   variant="ghost"
