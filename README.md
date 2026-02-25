@@ -59,9 +59,9 @@ For production deployment with HTTPS, systemd services, and optional integration
 
 ## Optional Integrations
 
-- **LINE Bot** -- Capture ideas and manage tasks from LINE chat. See [Self-Hosting Guide: LINE Bot Setup](docs/self-hosting.md#line-bot-setup).
+- **LINE Bot** -- Capture ideas and manage tasks from LINE chat. See [Self-Hosting Guide: LINE Bot Setup](docs/self-hosting.md#line-bot-setup-optional).
 - **Obsidian Export** -- Export permanent notes to your Obsidian vault. Configure via the Settings page in the web UI.
-- **MCP Server for Claude Code** -- Enable Claude Code to read and write Sparkle notes via the Model Context Protocol. See [Self-Hosting Guide: MCP Server](docs/self-hosting.md#mcp-server-for-claude-code).
+- **MCP Server for Claude Code** -- Enable Claude Code to read and write Sparkle notes via the Model Context Protocol. See [Self-Hosting Guide: MCP Server](docs/self-hosting.md#mcp-server-for-claude-code-optional).
 
 ## Contributing
 
