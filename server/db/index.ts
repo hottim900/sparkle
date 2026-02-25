@@ -7,7 +7,7 @@ import { setupFTS } from "./fts.js";
 
 const DB_PATH = process.env.DATABASE_URL || "./data/todo.db";
 
-const TARGET_VERSION = 9;
+const TARGET_VERSION = 10;
 
 function getSchemaVersion(sqlite: Database.Database): number {
   // Check if schema_version table exists
@@ -164,6 +164,11 @@ function runMigrations(sqlite: Database.Database) {
         ('obsidian_export_mode', 'overwrite');
     `);
     setSchemaVersion(sqlite, 9);
+  }
+
+  // Step 9→10: Add scratch type support (no schema change needed for SQLite text columns)
+  if (version < 10) {
+    setSchemaVersion(sqlite, 10);
   }
 }
 
