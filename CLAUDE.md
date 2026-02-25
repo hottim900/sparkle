@@ -81,7 +81,7 @@ data/                   # SQLite database (gitignored)
 npm run dev          # Vite on :5173, proxies /api to :3000
 npm run dev:server   # Hono on :3000 with tsx watch
 
-# Tests (276 tests, 9 files — server only, no frontend tests)
+# Tests (282 tests, 9 files — server only, no frontend tests)
 npx vitest run                # Run all tests
 npx vitest run --coverage     # With coverage (needs @vitest/coverage-v8)
 npx vitest                    # Watch mode
@@ -210,12 +210,12 @@ id, type, title, content, status, priority, due, tags, origin, source, aliases, 
 - `origin`: capture channel (LINE, web, import)
 - `source`: reference URL (nullable)
 - `aliases`: alternative names for Obsidian linking (JSON array)
-- `due`: YYYY-MM-DD format
+- `due`: YYYY-MM-DD format, **todo-only** (notes ignore due; todo→note conversion clears due)
 - `created`/`modified`: ISO 8601 timestamps
 
 ### Type Conversion Auto-Mapping
 
-When type changes (note ↔ todo), status auto-maps server-side. Auto-mapping overrides explicit status.
+When type changes (note ↔ todo), status auto-maps server-side. Auto-mapping overrides explicit status. Due date is cleared on todo→note conversion.
 
 ### DB Migration
 
