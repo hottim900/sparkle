@@ -231,3 +231,13 @@ Schema version tracked in `schema_version` table (version 0→7). Each step is i
 - Database: SQLite WAL mode, FTS5 trigram tokenizer for search (supports Chinese)
 - Tests: Vitest, in-memory SQLite, mock db module with vi.mock
 - Obsidian export: .md with YAML frontmatter, local time (no TZ suffix), written to vault path
+
+## CLAUDE.md Maintenance
+
+When making changes that affect this file's content (new features, field changes, status changes, new commands, test count changes, structural changes), **update CLAUDE.md in the same commit or a follow-up commit**. Do not wait for user to ask. Specifically update:
+- Test count in Development section when tests are added/removed
+- Project Structure when files are added/removed/renamed
+- Data Model when schema, fields, or status system changes
+- LINE Bot commands when commands are added/changed
+- Environment Variables when new env vars are introduced
+- Conventions when new patterns are established
