@@ -9,32 +9,60 @@ SERVICE_DIR="$SCRIPT_DIR/systemd"
 
 echo "📦 安裝 Sparkle systemd services..."
 
-# 複製 service 檔案
-cp "$SERVICE_DIR/sparkle.service" /etc/systemd/system/
-cp "$SERVICE_DIR/sparkle-tunnel.service" /etc/systemd/system/
+# Determine the Linux username for the service
+SPARKLE_USER="${SUDO_USER:-$USER}"
+read -p "Linux username for Sparkle [$SPARKLE_USER]: " input
+SPARKLE_USER="${input:-$SPARKLE_USER}"
+
+echo "ℹ️  使用者: $SPARKLE_USER"
+
+# Substitute YOUR_USER and install sparkle.service
+sed "s|YOUR_USER|$SPARKLE_USER|g" "$SERVICE_DIR/sparkle.service" > /etc/systemd/system/sparkle.service
+echo "✅ 已安裝 sparkle.service"
+
+# Only install tunnel service if cloudflared is available
+if command -v cloudflared &>/dev/null; then
+  sed "s|YOUR_USER|$SPARKLE_USER|g" "$SERVICE_DIR/sparkle-tunnel.service" > /etc/systemd/system/sparkle-tunnel.service
+  echo "✅ 已安裝 sparkle-tunnel.service"
+  INSTALL_TUNNEL=true
+else
+  echo "⏭️  cloudflared not found — skipping tunnel service"
+  INSTALL_TUNNEL=false
+fi
 
 # 重新載入 systemd
 systemctl daemon-reload
 
 # 啟用開機自動啟動
 systemctl enable sparkle.service
-systemctl enable sparkle-tunnel.service
+if [ "$INSTALL_TUNNEL" = true ]; then
+  systemctl enable sparkle-tunnel.service
+fi
 
 # 立即啟動
 systemctl start sparkle.service
-systemctl start sparkle-tunnel.service
+if [ "$INSTALL_TUNNEL" = true ]; then
+  systemctl start sparkle-tunnel.service
+fi
 
 echo ""
 echo "✅ 安裝完成！服務狀態："
 echo ""
 systemctl status sparkle.service --no-pager -l | head -5
-echo ""
-systemctl status sparkle-tunnel.service --no-pager -l | head -5
+
+if [ "$INSTALL_TUNNEL" = true ]; then
+  echo ""
+  systemctl status sparkle-tunnel.service --no-pager -l | head -5
+fi
+
 echo ""
 echo "常用指令："
 echo "  查看狀態:  sudo systemctl status sparkle"
 echo "  查看 log:  journalctl -u sparkle -f"
-echo "  重啟:      sudo systemctl restart sparkle sparkle-tunnel"
+echo "  重啟:      sudo systemctl restart sparkle"
+if [ "$INSTALL_TUNNEL" = true ]; then
+  echo "  重啟全部:  sudo systemctl restart sparkle sparkle-tunnel"
+fi
 echo ""
 echo "⚠️  Port forwarding 需要在 Windows 端手動執行："
 echo "  右鍵以管理員身分執行 scripts/update-portproxy.ps1"
