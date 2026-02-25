@@ -24,19 +24,21 @@ server/
     items.ts            # CRUD + batch operations + POST /:id/export
     search.ts           # FTS5 full-text search
     stats.ts            # GET /api/stats, GET /api/stats/focus
+    settings.ts         # GET/PUT /api/settings (Obsidian config)
     webhook.ts          # LINE Bot webhook (POST /api/webhook/line)
   lib/
     items.ts            # DB query functions (Drizzle + raw SQLite), type-status validation, auto-mapping
     stats.ts            # Stats (Zettelkasten + GTD) + focus query functions
     export.ts           # Obsidian .md export (frontmatter, sanitize filename, write to vault)
+    settings.ts         # Settings CRUD (getSetting, getSettings, getObsidianSettings, updateSettings)
     line.ts             # LINE message/command parser
     line-format.ts      # LINE reply formatting (numbered list, detail, stats)
     line-session.ts     # LINE Bot session (numbered item mapping, in-memory)
     line-date.ts        # Natural language date parser (chrono-node zh.hant)
   schemas/items.ts      # Zod validation schemas (statusEnum, excludeStatus, batch actions)
   db/
-    index.ts            # DB connection + schema migration (version 0→7)
-    schema.ts           # Drizzle table schema
+    index.ts            # DB connection + schema migration (version 0→9)
+    schema.ts           # Drizzle table schema (items + settings)
     fts.ts              # FTS5 virtual table + sync triggers
 
 src/
@@ -49,8 +51,9 @@ src/
     item-detail.tsx      # Editor + markdown preview + export button + aliases
     item-card.tsx        # List item display with status icons and colors
     search-bar.tsx       # FTS search with keyword highlighting
-    sidebar.tsx          # Desktop nav (筆記/待辦/共用 sections)
-    bottom-nav.tsx       # Mobile nav (Notes, Todos, Dashboard, Search, More)
+    settings.tsx         # Settings page (Obsidian config + general tools)
+    sidebar.tsx          # Desktop nav (筆記/待辦/共用 sections + settings)
+    bottom-nav.tsx       # Mobile nav (Notes, Todos, Dashboard, Search, More + settings)
     fleeting-triage.tsx  # Fleeting note triage mode (發展/進行/封存/保留)
     offline-indicator.tsx
     install-prompt.tsx   # PWA install banner
@@ -81,7 +84,13 @@ data/                   # SQLite database (gitignored)
 npm run dev          # Vite on :5173, proxies /api to :3000
 npm run dev:server   # Hono on :3000 with tsx watch
 
-# Tests (301 tests, 9 files — server only, no frontend tests)
+# IMPORTANT: Tests require node v22 (better-sqlite3 native module is incompatible with v24)
+# If using nvm:
+nvm use 22
+# Or set PATH directly:
+export PATH="/home/YOUR_USER/.nvm/versions/node/v22.22.0/bin:/usr/bin:/bin:$PATH"
+
+# Tests (338 tests, 10 files — server only, no frontend tests)
 npx vitest run                # Run all tests
 npx vitest run --coverage     # With coverage (needs @vitest/coverage-v8)
 npx vitest                    # Watch mode
@@ -125,10 +134,9 @@ TLS_CERT=/home/YOUR_USER/sparkle/certs/YOUR_VPN_IP+2.pem
 TLS_KEY=/home/YOUR_USER/sparkle/certs/YOUR_VPN_IP+2-key.pem
 LINE_CHANNEL_SECRET=<from-line-console>
 LINE_CHANNEL_ACCESS_TOKEN=<from-line-console>
-OBSIDIAN_VAULT_PATH=/home/YOUR_USER/obsidian-vault    # Optional: enables Obsidian export
-OBSIDIAN_INBOX_FOLDER=0_Inbox                    # Optional: default 0_Inbox
-OBSIDIAN_EXPORT_MODE=overwrite                   # Optional: overwrite (default) or new
 ```
+
+Obsidian export settings are stored in the `settings` table in SQLite (configured via Settings page or `PUT /api/settings`).
 
 ### Access Points
 
@@ -220,7 +228,7 @@ When type changes (note ↔ todo), status auto-maps server-side. Auto-mapping ov
 
 ### DB Migration
 
-Schema version tracked in `schema_version` table (version 0→8). Each step is idempotent. Fresh install creates new schema directly at version 8.
+Schema version tracked in `schema_version` table (version 0→9). Each step is idempotent. Fresh install creates new schema directly at version 9. Migration 8→9 creates the `settings` table with Obsidian export defaults.
 
 ## Conventions
 
@@ -231,7 +239,8 @@ Schema version tracked in `schema_version` table (version 0→8). Each step is i
 - Timestamps: ISO 8601 strings
 - Database: SQLite WAL mode, FTS5 trigram tokenizer for search (supports Chinese)
 - Tests: Vitest, in-memory SQLite, mock db module with vi.mock
-- Obsidian export: .md with YAML frontmatter, local time (no TZ suffix), written to vault path
+- Obsidian export: .md with YAML frontmatter, local time (no TZ suffix), written to vault path. Config stored in `settings` table, read via `getObsidianSettings()`. `exportToObsidian(item, config)` is a pure function (no env dependency).
+- Settings API: `GET /api/settings` returns all settings; `PUT /api/settings` accepts partial updates with Zod validation (key whitelist, vault path writability check when enabling)
 
 ## CLAUDE.md Maintenance
 
