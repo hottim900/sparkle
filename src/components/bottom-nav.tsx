@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { ViewType } from "@/lib/types";
-import { FileText, ListTodo, LayoutDashboard, Search, Menu, Archive, Settings } from "lucide-react";
+import { FileText, ListTodo, LayoutDashboard, Search, Menu, Archive, Settings, StickyNote } from "lucide-react";
 
 interface BottomNavProps {
   currentView: ViewType;
@@ -10,6 +10,7 @@ interface BottomNavProps {
 const mainNavItems: { id: ViewType; label: string; icon: React.ReactNode }[] = [
   { id: "notes", label: "筆記", icon: <FileText className="h-5 w-5" /> },
   { id: "todos", label: "待辦", icon: <ListTodo className="h-5 w-5" /> },
+  { id: "scratch", label: "暫存", icon: <StickyNote className="h-5 w-5" /> },
   { id: "dashboard", label: "儀表板", icon: <LayoutDashboard className="h-5 w-5" /> },
   { id: "search", label: "搜尋", icon: <Search className="h-5 w-5" /> },
 ];
