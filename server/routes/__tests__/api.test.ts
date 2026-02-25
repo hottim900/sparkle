@@ -810,6 +810,81 @@ describe("Linked Todos", () => {
 });
 
 // ============================================================
+// Scratch Items Tests
+// ============================================================
+describe("scratch items", () => {
+  it("creates a scratch item with type=scratch", async () => {
+    const res = await app.request("/api/items", {
+      method: "POST",
+      headers: jsonHeaders(),
+      body: JSON.stringify({ title: "temp note", type: "scratch" }),
+    });
+    expect(res.status).toBe(201);
+    const body = await res.json();
+    expect(body.type).toBe("scratch");
+    expect(body.status).toBe("draft");
+  });
+
+  it("rejects invalid status for scratch type", async () => {
+    const res = await app.request("/api/items", {
+      method: "POST",
+      headers: jsonHeaders(),
+      body: JSON.stringify({ title: "temp", type: "scratch", status: "fleeting" }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("lists scratch items with type=scratch filter", async () => {
+    await app.request("/api/items", {
+      method: "POST",
+      headers: jsonHeaders(),
+      body: JSON.stringify({ title: "scratch1", type: "scratch" }),
+    });
+    await app.request("/api/items", {
+      method: "POST",
+      headers: jsonHeaders(),
+      body: JSON.stringify({ title: "note1", type: "note" }),
+    });
+    const res = await app.request("/api/items?type=scratch", {
+      headers: authHeaders(),
+    });
+    const body = await res.json();
+    expect(body.items.every((i: { type: string }) => i.type === "scratch")).toBe(true);
+  });
+
+  it("converts scratch to note via type change", async () => {
+    const createRes = await app.request("/api/items", {
+      method: "POST",
+      headers: jsonHeaders(),
+      body: JSON.stringify({ title: "will upgrade", type: "scratch" }),
+    });
+    const { id } = await createRes.json();
+    const updateRes = await app.request(`/api/items/${id}`, {
+      method: "PATCH",
+      headers: jsonHeaders(),
+      body: JSON.stringify({ type: "note" }),
+    });
+    const body = await updateRes.json();
+    expect(body.type).toBe("note");
+    expect(body.status).toBe("fleeting");
+  });
+
+  it("hard deletes a scratch item", async () => {
+    const createRes = await app.request("/api/items", {
+      method: "POST",
+      headers: jsonHeaders(),
+      body: JSON.stringify({ title: "delete me", type: "scratch" }),
+    });
+    const { id } = await createRes.json();
+    const deleteRes = await app.request(`/api/items/${id}`, {
+      method: "DELETE",
+      headers: authHeaders(),
+    });
+    expect(deleteRes.status).toBe(200);
+  });
+});
+
+// ============================================================
 // Search Tests
 // ============================================================
 describe("Search", () => {
