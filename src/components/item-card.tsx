@@ -1,5 +1,5 @@
 import { Badge } from "@/components/ui/badge";
-import { updateItem } from "@/lib/api";
+import { updateItem, deleteItem } from "@/lib/api";
 import type { ParsedItem } from "@/lib/types";
 import { toast } from "sonner";
 import {
@@ -7,6 +7,7 @@ import {
   CheckSquare,
   FileText,
   ListTodo,
+  Trash2,
 } from "lucide-react";
 
 const priorityColors: Record<string, string> = {
@@ -71,6 +72,21 @@ export function ItemCard({
   const isOverdue =
     dueDateInfo?.className === "text-red-500" && item.status !== "done";
 
+  const handleScratchDelete = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const hasContent = item.content && item.content.trim().length > 0;
+    if (hasContent) {
+      const confirmed = window.confirm(`確定要刪除「${item.title}」嗎？`);
+      if (!confirmed) return;
+    }
+    try {
+      await deleteItem(item.id);
+      onUpdated?.();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "刪除失敗");
+    }
+  };
+
   const handleToggleDone = async (e: React.MouseEvent) => {
     e.stopPropagation();
     try {
@@ -124,6 +140,15 @@ export function ItemCard({
             ) : (
               <Square className="h-4 w-4" />
             )}
+          </button>
+        )}
+        {!selectionMode && item.type === "scratch" && (
+          <button
+            onClick={handleScratchDelete}
+            className="mt-0.5 text-muted-foreground hover:text-destructive"
+            title="刪除"
+          >
+            <Trash2 className="h-4 w-4" />
           </button>
         )}
         <div className="flex-1 min-w-0">
