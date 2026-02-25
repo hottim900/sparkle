@@ -202,7 +202,7 @@ function MainApp() {
 
             {/* Detail panel */}
             {selectedItem && (
-              <div className="fixed inset-0 z-50 bg-background md:static md:z-auto md:flex-1 md:border-l">
+              <div className="fixed inset-0 z-50 bg-background md:static md:z-auto md:flex-1 md:min-w-0 md:border-l">
                 <ItemDetail
                   itemId={selectedItem.id}
                   obsidianEnabled={obsidianEnabled}

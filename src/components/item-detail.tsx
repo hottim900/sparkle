@@ -303,7 +303,7 @@ export function ItemDetail({
     obsidianEnabled && item.type === "note" && item.status === "permanent";
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full flex flex-col min-w-0">
       {/* Header */}
       <div className="flex items-center justify-between p-3 border-b">
         <Button variant="ghost" size="icon" onClick={onClose}>
@@ -378,7 +378,7 @@ export function ItemDetail({
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 animate-fade-in">
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 animate-fade-in break-words">
         {/* Title */}
         <Input
           value={item.title}
@@ -619,7 +619,7 @@ export function ItemDetail({
             </div>
           </div>
           {previewMode ? (
-            <div className="min-h-[240px] rounded-md border p-3 text-sm">
+            <div className="min-h-[240px] rounded-md border p-3 text-sm break-words">
               {item.content ? (
                 <ReactMarkdown
                   remarkPlugins={[remarkGfm]}
