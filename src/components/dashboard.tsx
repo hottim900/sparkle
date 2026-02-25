@@ -15,6 +15,7 @@ import {
   Gem,
   Pencil,
   CheckCircle,
+  StickyNote,
 } from "lucide-react";
 
 interface DashboardProps {
@@ -282,6 +283,25 @@ export function Dashboard({ onViewChange, onSelectItem }: DashboardProps) {
             )}
           </div>
         </section>
+
+        {/* Section 4: Scratch count (only show if there are scratch items) */}
+        {stats.scratch_count > 0 && (
+          <section>
+            <button
+              className="w-full border rounded-lg p-4 flex items-center justify-between hover:bg-accent transition-colors"
+              onClick={() => onViewChange("scratch")}
+            >
+              <div className="flex items-center gap-2">
+                <StickyNote className="h-4 w-4 text-amber-500" />
+                <span className="text-sm font-medium">暫存區</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-lg font-bold">{stats.scratch_count}</span>
+                <ChevronRight className="h-4 w-4 text-muted-foreground" />
+              </div>
+            </button>
+          </section>
+        )}
       </div>
     </div>
   );
