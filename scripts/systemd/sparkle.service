@@ -4,11 +4,16 @@ After=network.target
 
 [Service]
 Type=simple
+# TODO: Change to your Linux username
 User=YOUR_USER
+# TODO: Change to your sparkle installation path
 WorkingDirectory=/home/YOUR_USER/sparkle
+# TODO: Change to your Node.js path (run `which node` to find it)
 Environment=PATH=/home/YOUR_USER/.nvm/versions/node/v22.22.0/bin:/usr/bin
+# Firewall: only allow specific sources to access port 3000
 ExecStartPre=+/bin/sh -c '/usr/sbin/iptables -C INPUT -s 127.0.0.1 -p tcp --dport 3000 -j ACCEPT 2>/dev/null || /usr/sbin/iptables -A INPUT -s 127.0.0.1 -p tcp --dport 3000 -j ACCEPT'
-ExecStartPre=+/bin/sh -c '/usr/sbin/iptables -C INPUT -s YOUR_VPN_SUBNET/24 -p tcp --dport 3000 -j ACCEPT 2>/dev/null || /usr/sbin/iptables -A INPUT -s YOUR_VPN_SUBNET/24 -p tcp --dport 3000 -j ACCEPT'
+# TODO: Adjust to your VPN subnet (e.g., 10.0.0.0/24 for WireGuard)
+ExecStartPre=+/bin/sh -c '/usr/sbin/iptables -C INPUT -s 10.0.0.0/8 -p tcp --dport 3000 -j ACCEPT 2>/dev/null || /usr/sbin/iptables -A INPUT -s 10.0.0.0/8 -p tcp --dport 3000 -j ACCEPT'
 ExecStartPre=+/bin/sh -c '/usr/sbin/iptables -C INPUT -s 172.16.0.0/12 -p tcp --dport 3000 -j ACCEPT 2>/dev/null || /usr/sbin/iptables -A INPUT -s 172.16.0.0/12 -p tcp --dport 3000 -j ACCEPT'
 ExecStartPre=+/bin/sh -c '/usr/sbin/iptables -C INPUT -p tcp --dport 3000 -j DROP 2>/dev/null || /usr/sbin/iptables -A INPUT -p tcp --dport 3000 -j DROP'
 ExecStart=/home/YOUR_USER/.nvm/versions/node/v22.22.0/bin/node --env-file=.env --import tsx server/index.ts
