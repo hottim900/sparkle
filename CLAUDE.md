@@ -73,6 +73,21 @@ scripts/
     sparkle.service         # Node.js HTTPS server
     sparkle-tunnel.service  # Cloudflare Tunnel
 
+mcp-server/
+  package.json            # MCP server dependencies
+  tsconfig.json           # TypeScript config
+  src/
+    index.ts              # Entry point, McpServer + stdio transport
+    types.ts              # Sparkle API response types
+    client.ts             # Sparkle REST API client (fetch-based)
+    format.ts             # Markdown formatting helpers
+    tools/
+      search.ts           # sparkle_search
+      read.ts             # sparkle_get_note, sparkle_list_notes
+      write.ts            # sparkle_create_note, sparkle_update_note
+      workflow.ts         # sparkle_advance_note, sparkle_export_to_obsidian
+      meta.ts             # sparkle_get_stats, sparkle_list_tags
+
 certs/                  # mkcert TLS certificates (gitignored)
 data/                   # SQLite database (gitignored)
 ```
@@ -197,6 +212,16 @@ netsh interface portproxy add v4tov4 listenaddress=YOUR_VPN_IP listenport=3000 c
 - Date parsing: chrono-node zh.hant，支援「明天」「3天後」「下週一」「3/15」「清除」
 - Quick reply buttons shown after each response
 - Chat mode must be OFF, Webhook must be ON in LINE Official Account Manager
+
+### MCP Server (Claude Code Integration)
+
+- MCP server in `mcp-server/` enables Claude Code to read/write Sparkle notes
+- Config: `.mcp.json` at project root (Claude Code auto-discovers)
+- Transport: stdio (subprocess of Claude Code)
+- 9 tools: sparkle_search, sparkle_get_note, sparkle_list_notes, sparkle_create_note, sparkle_update_note, sparkle_advance_note, sparkle_export_to_obsidian, sparkle_get_stats, sparkle_list_tags
+- Build: `cd mcp-server && npm install && npm run build`
+- Dev: `cd mcp-server && npm run dev`
+- Test: `cd mcp-server && npx @modelcontextprotocol/inspector node dist/index.js`
 
 ## Data Model
 
