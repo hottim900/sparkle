@@ -2,7 +2,6 @@ import { useEffect, useState, useCallback } from "react";
 import { listItems, updateItem, getTags } from "@/lib/api";
 import { parseItems, type ParsedItem } from "@/lib/types";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { TagInput } from "@/components/tag-input";
 import { toast } from "sonner";
 import {
@@ -14,8 +13,6 @@ import {
   Loader2,
   FileText,
   ListTodo,
-  X,
-  Calendar,
 } from "lucide-react";
 
 interface FleetingTriageProps {
@@ -25,32 +22,6 @@ interface FleetingTriageProps {
 interface PendingChanges {
   type?: "note" | "todo";
   tags?: string[];
-  due?: string | null;
-}
-
-function toDateStr(date: Date): string {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
-}
-
-function getTodayStr(): string {
-  return toDateStr(new Date());
-}
-
-function getTomorrowStr(): string {
-  const d = new Date();
-  d.setDate(d.getDate() + 1);
-  return toDateStr(d);
-}
-
-function getNextMondayStr(): string {
-  const d = new Date();
-  const day = d.getDay();
-  const diff = day === 0 ? 1 : 8 - day;
-  d.setDate(d.getDate() + diff);
-  return toDateStr(d);
 }
 
 export function FleetingTriage({ onDone }: FleetingTriageProps) {
@@ -58,7 +29,6 @@ export function FleetingTriage({ onDone }: FleetingTriageProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [pending, setPending] = useState<PendingChanges>({});
-  const [showDateInput, setShowDateInput] = useState(false);
   const [allTags, setAllTags] = useState<string[]>([]);
 
   const fetchFleeting = useCallback(async () => {
@@ -85,11 +55,8 @@ export function FleetingTriage({ onDone }: FleetingTriageProps) {
   // Resolved values: pending overrides current
   const resolvedType = pending.type ?? current?.type ?? "note";
   const resolvedTags = pending.tags ?? current?.tags ?? [];
-  const resolvedDue = pending.due !== undefined ? pending.due : (current?.due ?? null);
-
   const resetAndNext = () => {
     setPending({});
-    setShowDateInput(false);
     if (currentIndex + 1 >= items.length) {
       toast.success("閃念筆記已處理完畢！");
       onDone?.();
@@ -108,7 +75,6 @@ export function FleetingTriage({ onDone }: FleetingTriageProps) {
       updates.status = targetType === "note" ? "developing" : "active";
       if (pending.type !== undefined) updates.type = pending.type;
       if (pending.tags !== undefined) updates.tags = pending.tags;
-      if (pending.due !== undefined) updates.due = pending.due;
       await updateItem(current.id, updates);
       toast.success(targetType === "note" ? "已設為發展中" : "已設為進行中");
       resetAndNext();
@@ -123,7 +89,6 @@ export function FleetingTriage({ onDone }: FleetingTriageProps) {
       const updates: Record<string, unknown> = { status: "archived" };
       if (pending.type !== undefined) updates.type = pending.type;
       if (pending.tags !== undefined) updates.tags = pending.tags;
-      if (pending.due !== undefined) updates.due = pending.due;
       await updateItem(current.id, updates);
       toast.success("已封存");
       resetAndNext();
@@ -152,11 +117,6 @@ export function FleetingTriage({ onDone }: FleetingTriageProps) {
     }));
   };
 
-  const setDueDate = (date: string | null) => {
-    setPending((p) => ({ ...p, due: date }));
-    setShowDateInput(false);
-  };
-
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -176,10 +136,6 @@ export function FleetingTriage({ onDone }: FleetingTriageProps) {
       </div>
     );
   }
-
-  const todayStr = getTodayStr();
-  const tomorrowStr = getTomorrowStr();
-  const nextMondayStr = getNextMondayStr();
 
   return (
     <div className="max-w-lg mx-auto p-4 space-y-4">
@@ -243,46 +199,6 @@ export function FleetingTriage({ onDone }: FleetingTriageProps) {
           </div>
         </div>
 
-        {/* Due date */}
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-muted-foreground w-10">到期</span>
-          {resolvedDue ? (
-            <Badge variant="outline" className="gap-1">
-              <Calendar className="h-3 w-3" />
-              {resolvedDue}
-              <button onClick={() => setDueDate(null)} className="ml-0.5 hover:text-destructive">
-                <X className="h-3 w-3" />
-              </button>
-            </Badge>
-          ) : (
-            <div className="flex flex-wrap gap-1">
-              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setDueDate(todayStr)}>
-                今天
-              </Button>
-              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setDueDate(tomorrowStr)}>
-                明天
-              </Button>
-              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setDueDate(nextMondayStr)}>
-                下週一
-              </Button>
-              {showDateInput ? (
-                <input
-                  type="date"
-                  autoFocus
-                  className="h-7 text-xs border rounded px-2 bg-background"
-                  onChange={(e) => {
-                    if (e.target.value) setDueDate(e.target.value);
-                  }}
-                  onBlur={() => setShowDateInput(false)}
-                />
-              ) : (
-                <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setShowDateInput(true)}>
-                  自訂...
-                </Button>
-              )}
-            </div>
-          )}
-        </div>
       </div>
 
       {/* Actions */}

@@ -108,7 +108,7 @@ export function ItemCard({
     ? priorityColors[item.priority] ?? ""
     : "";
 
-  const dueDateInfo = item.due ? getDueDateInfo(item.due) : null;
+  const dueDateInfo = item.type === "todo" && item.due ? getDueDateInfo(item.due) : null;
   const isOverdue =
     dueDateInfo?.className === "text-red-500" && item.status !== "done";
 

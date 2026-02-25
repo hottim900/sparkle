@@ -180,7 +180,7 @@ describe("GET /api/stats", () => {
     expect(body.active_count).toBe(3);
   });
 
-  it("counts overdue items (active/fleeting with past due) but NOT done items with past due", async () => {
+  it("counts overdue items (active todos with past due) but NOT done items with past due", async () => {
     const pastDate = daysFromNow(-3);
     const futureDate = daysFromNow(5);
 
@@ -189,13 +189,6 @@ describe("GET /api/stats", () => {
       id: "o1",
       title: "Overdue active",
       status: "active",
-      due: pastDate,
-    });
-    insertItem({
-      id: "o2",
-      title: "Overdue fleeting",
-      type: "note",
-      status: "fleeting",
       due: pastDate,
     });
 
@@ -229,7 +222,26 @@ describe("GET /api/stats", () => {
     });
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.overdue_count).toBe(2);
+    expect(body.overdue_count).toBe(1);
+  });
+
+  it("does not count notes with past due as overdue", async () => {
+    const pastDate = daysFromNow(-3);
+
+    insertItem({
+      id: "note-overdue",
+      title: "Note with past due",
+      type: "note",
+      status: "fleeting",
+      due: pastDate,
+    });
+
+    const res = await app.request("/api/stats", {
+      headers: authHeaders(),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.overdue_count).toBe(0);
   });
 
   it("counts done and created items this week and this month", async () => {
@@ -393,6 +405,41 @@ describe("GET /api/stats/focus", () => {
 
     expect(body.items.length).toBeGreaterThanOrEqual(1);
     expect(body.items[0].id).toBe("overdue1");
+  });
+
+  it("does not give notes due-based focus ranks", async () => {
+    const pastDate = daysFromNow(-5);
+
+    // Note with overdue due date (legacy data) — should NOT get rank 1
+    insertItem({
+      id: "note-with-due",
+      title: "Note with overdue",
+      type: "note",
+      status: "fleeting",
+      due: pastDate,
+    });
+
+    // Todo with overdue due date — should get rank 1
+    insertItem({
+      id: "todo-overdue",
+      title: "Overdue todo",
+      status: "active",
+      due: pastDate,
+    });
+
+    const res = await app.request("/api/stats/focus", {
+      headers: authHeaders(),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+
+    // Todo should appear first (rank 1: overdue todo)
+    expect(body.items[0].id).toBe("todo-overdue");
+
+    // Note enters via rank 5 (fleeting), not rank 1 (overdue)
+    const todoIdx = body.items.findIndex((i: { id: string }) => i.id === "todo-overdue");
+    const noteIdx = body.items.findIndex((i: { id: string }) => i.id === "note-with-due");
+    expect(noteIdx).toBeGreaterThan(todoIdx);
   });
 
   it("returns at most 5 items", async () => {

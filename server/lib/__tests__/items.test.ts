@@ -77,6 +77,12 @@ describe("Data Access Layer", () => {
       expect(item.status).toBe("active");
     });
 
+    it("ignores due for notes", () => {
+      const item = createItem(db, { title: "Note with due", type: "note", due: "2026-03-01" });
+      expect(item.type).toBe("note");
+      expect(item.due).toBeNull();
+    });
+
     it("creates an item with all fields", () => {
       const item = createItem(db, {
         title: "Buy groceries",
@@ -219,6 +225,12 @@ describe("Data Access Layer", () => {
       expect(JSON.parse(updated!.tags)).toEqual(["new-tag"]);
     });
 
+    it("ignores due update for notes", () => {
+      const item = createItem(db, { title: "A note", type: "note" });
+      const updated = updateItem(db, item.id, { due: "2026-03-01" });
+      expect(updated!.due).toBeNull();
+    });
+
     it("auto-maps status on type conversion (note→todo)", () => {
       const item = createItem(db, { title: "Note", type: "note" }); // fleeting
       const updated = updateItem(db, item.id, { type: "todo" });
@@ -227,10 +239,11 @@ describe("Data Access Layer", () => {
     });
 
     it("auto-maps status on type conversion (todo→note)", () => {
-      const item = createItem(db, { title: "Todo", type: "todo" }); // active
+      const item = createItem(db, { title: "Todo", type: "todo", due: "2026-03-01" }); // active
       const updated = updateItem(db, item.id, { type: "note" });
       expect(updated!.type).toBe("note");
       expect(updated!.status).toBe("fleeting"); // active → fleeting
+      expect(updated!.due).toBeNull(); // due cleared on todo→note conversion
     });
 
     it("reverts exported note to permanent when title changes", () => {
