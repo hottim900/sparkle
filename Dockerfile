@@ -23,7 +23,6 @@ RUN apk add --no-cache python3 make g++
 
 COPY package*.json ./
 RUN npm ci --omit=dev && \
-    npm install tsx && \
     apk del python3 make g++
 
 # Copy built frontend assets
@@ -31,7 +30,6 @@ COPY --from=builder /app/dist ./dist
 
 # Copy server source (runs via tsx at runtime)
 COPY --from=builder /app/server ./server
-COPY --from=builder /app/drizzle.config.ts ./
 COPY --from=builder /app/tsconfig.json ./
 
 # Ensure data directory exists for SQLite database
