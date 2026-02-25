@@ -11,6 +11,7 @@ export interface Item {
   origin: string; // Capture channel (was 'source')
   aliases: string; // JSON array string
   linked_note_id: string | null;
+  linked_note_title: string | null;
   created: string;
   modified: string;
 }
@@ -68,6 +69,13 @@ export interface ConfigResponse {
   obsidian_export_enabled: boolean;
 }
 
+export interface SettingsResponse {
+  obsidian_enabled: string;
+  obsidian_vault_path: string;
+  obsidian_inbox_folder: string;
+  obsidian_export_mode: string;
+}
+
 // Parsed item with tags and aliases as arrays
 export interface ParsedItem extends Omit<Item, "tags" | "aliases"> {
   tags: string[];
@@ -102,4 +110,5 @@ export type ViewType =
   | "search"
   | "dashboard"
   | "notes"
-  | "todos";
+  | "todos"
+  | "settings";

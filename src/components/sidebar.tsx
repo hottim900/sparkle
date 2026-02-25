@@ -22,6 +22,7 @@ import {
   Moon,
   Download,
   Upload,
+  Settings,
 } from "lucide-react";
 
 interface SidebarProps {
@@ -175,8 +176,19 @@ export function Sidebar({
         </div>
       )}
 
-      {/* Theme toggle + Export/Import + Logout */}
+      {/* Settings + Theme toggle + Export/Import + Logout */}
       <div className="p-2 border-t space-y-1">
+        <Button
+          variant={currentView === "settings" ? "secondary" : "ghost"}
+          className="w-full justify-start gap-2 text-muted-foreground"
+          onClick={() => {
+            onViewChange("settings");
+            onTagSelect(undefined);
+          }}
+        >
+          <Settings className="h-4 w-4" />
+          設定
+        </Button>
         <Button
           variant="ghost"
           className="w-full justify-start gap-2 text-muted-foreground"

@@ -113,6 +113,12 @@ export function generateMarkdown(item: ExportableItem): string {
   return `${frontmatter}\n\n# ${item.title}\n\n${body}\n`;
 }
 
+export interface ExportConfig {
+  vaultPath: string;
+  inboxFolder: string;
+  exportMode: string;
+}
+
 export interface ExportResult {
   path: string; // relative path within vault, e.g. "0_Inbox/Title.md"
 }
@@ -121,14 +127,11 @@ export interface ExportResult {
  * Write a .md file to the Obsidian vault.
  * Returns the relative path of the written file.
  */
-export function exportToObsidian(item: ExportableItem): ExportResult {
-  const vaultPath = process.env.OBSIDIAN_VAULT_PATH;
+export function exportToObsidian(item: ExportableItem, config: ExportConfig): ExportResult {
+  const { vaultPath, inboxFolder, exportMode } = config;
   if (!vaultPath) {
-    throw new Error("OBSIDIAN_VAULT_PATH is not configured");
+    throw new Error("Obsidian vault path is not configured");
   }
-
-  const inboxFolder = process.env.OBSIDIAN_INBOX_FOLDER || "0_Inbox";
-  const exportMode = process.env.OBSIDIAN_EXPORT_MODE || "overwrite";
 
   const targetDir = join(vaultPath, inboxFolder);
 

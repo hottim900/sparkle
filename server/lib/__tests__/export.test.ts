@@ -8,6 +8,7 @@ import {
   generateMarkdown,
   exportToObsidian,
   ExportableItem,
+  ExportConfig,
 } from "../export.js";
 
 // ============================================================
@@ -191,27 +192,24 @@ describe("generateMarkdown", () => {
 // ============================================================
 describe("exportToObsidian", () => {
   let tempDir: string;
-  const originalEnv = { ...process.env };
+  let config: ExportConfig;
 
   beforeEach(() => {
     tempDir = mkdtempSync(join(tmpdir(), "sparkle-export-test-"));
-    process.env.OBSIDIAN_VAULT_PATH = tempDir;
-    process.env.OBSIDIAN_INBOX_FOLDER = "0_Inbox";
-    // Use "new" mode for collision tests
-    delete process.env.OBSIDIAN_EXPORT_MODE;
+    config = {
+      vaultPath: tempDir,
+      inboxFolder: "0_Inbox",
+      exportMode: "overwrite",
+    };
   });
 
   afterEach(() => {
     rmSync(tempDir, { recursive: true, force: true });
-    // Restore env
-    process.env.OBSIDIAN_VAULT_PATH = originalEnv.OBSIDIAN_VAULT_PATH;
-    process.env.OBSIDIAN_INBOX_FOLDER = originalEnv.OBSIDIAN_INBOX_FOLDER;
-    process.env.OBSIDIAN_EXPORT_MODE = originalEnv.OBSIDIAN_EXPORT_MODE;
   });
 
   it("writes file to vault inbox folder", () => {
     const item = makeItem({ title: "Test Export" });
-    const result = exportToObsidian(item);
+    const result = exportToObsidian(item, config);
 
     expect(result.path).toBe("0_Inbox/Test Export.md");
     const filePath = join(tempDir, "0_Inbox", "Test Export.md");
@@ -221,9 +219,9 @@ describe("exportToObsidian", () => {
   });
 
   it("creates directory if it does not exist", () => {
-    process.env.OBSIDIAN_INBOX_FOLDER = "nested/deep/folder";
+    config.inboxFolder = "nested/deep/folder";
     const item = makeItem({ title: "Nested" });
-    const result = exportToObsidian(item);
+    const result = exportToObsidian(item, config);
 
     expect(result.path).toBe("nested/deep/folder/Nested.md");
     const content = readFileSync(
@@ -234,7 +232,7 @@ describe("exportToObsidian", () => {
   });
 
   it("handles collision in new mode by appending timestamp", () => {
-    process.env.OBSIDIAN_EXPORT_MODE = "new";
+    config.exportMode = "new";
     const item = makeItem({ title: "Collision" });
 
     // Create the file first so there's a collision
@@ -242,7 +240,7 @@ describe("exportToObsidian", () => {
     mkdirSync(inboxDir, { recursive: true });
     writeFileSync(join(inboxDir, "Collision.md"), "existing", "utf-8");
 
-    const result = exportToObsidian(item);
+    const result = exportToObsidian(item, config);
 
     // Should have a timestamp suffix instead of the original filename
     expect(result.path).not.toBe("0_Inbox/Collision.md");
@@ -250,7 +248,7 @@ describe("exportToObsidian", () => {
   });
 
   it("overwrites existing file in overwrite mode", () => {
-    process.env.OBSIDIAN_EXPORT_MODE = "overwrite";
+    config.exportMode = "overwrite";
     const item = makeItem({ title: "Overwrite Me" });
 
     // Create the file first
@@ -258,7 +256,7 @@ describe("exportToObsidian", () => {
     mkdirSync(inboxDir, { recursive: true });
     writeFileSync(join(inboxDir, "Overwrite Me.md"), "old content", "utf-8");
 
-    const result = exportToObsidian(item);
+    const result = exportToObsidian(item, config);
 
     expect(result.path).toBe("0_Inbox/Overwrite Me.md");
     const content = readFileSync(
@@ -271,15 +269,15 @@ describe("exportToObsidian", () => {
 
   it("returns correct relative path", () => {
     const item = makeItem({ title: "Path Check" });
-    const result = exportToObsidian(item);
+    const result = exportToObsidian(item, config);
     expect(result.path).toBe("0_Inbox/Path Check.md");
   });
 
-  it("throws when OBSIDIAN_VAULT_PATH is not set", () => {
-    delete process.env.OBSIDIAN_VAULT_PATH;
+  it("throws when vaultPath is empty", () => {
+    config.vaultPath = "";
     const item = makeItem({ title: "No Vault" });
-    expect(() => exportToObsidian(item)).toThrow(
-      "OBSIDIAN_VAULT_PATH is not configured",
+    expect(() => exportToObsidian(item, config)).toThrow(
+      "Obsidian vault path is not configured",
     );
   });
 });

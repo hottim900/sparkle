@@ -26,6 +26,7 @@ type SortOption = {
 const baseSortOptions: SortOption[] = [
   { label: "最新建立", sort: "created", order: "desc" },
   { label: "最舊建立", sort: "created", order: "asc" },
+  { label: "最近更新", sort: "modified", order: "desc" },
   { label: "優先度高→低", sort: "priority", order: "desc" },
 ];
 
@@ -55,7 +56,7 @@ type BatchActionConfig = {
   confirm?: string;
 };
 
-function getBatchActions(view: ViewType, subView?: string): BatchActionConfig[] {
+function getBatchActions(view: ViewType, subView?: string, obsidianEnabled?: boolean): BatchActionConfig[] {
   const effectiveView = subView ?? view;
   const universal: BatchActionConfig[] = [
     { action: "archive", label: "封存", icon: <Archive className="h-3.5 w-3.5" /> },
@@ -73,11 +74,13 @@ function getBatchActions(view: ViewType, subView?: string): BatchActionConfig[] 
         { action: "mature", label: "成熟", icon: <Gem className="h-3.5 w-3.5" /> },
         ...universal,
       ];
-    case "permanent":
-      return [
-        { action: "export", label: "匯出", icon: <ExternalLink className="h-3.5 w-3.5" /> },
-        ...universal,
-      ];
+    case "permanent": {
+      const actions: BatchActionConfig[] = [];
+      if (obsidianEnabled) {
+        actions.push({ action: "export", label: "匯出", icon: <ExternalLink className="h-3.5 w-3.5" /> });
+      }
+      return [...actions, ...universal];
+    }
     case "active":
       return [
         { action: "done", label: "完成", icon: <CheckCircle className="h-3.5 w-3.5" /> },
@@ -94,12 +97,14 @@ interface ItemListProps {
   tag?: string;
   selectedId?: string;
   onSelect?: (item: ParsedItem) => void;
+  onNavigate?: (itemId: string) => void;
   refreshKey?: number;
   currentView?: ViewType;
   noteSubView?: NoteSubView;
   todoSubView?: TodoSubView;
   onNoteSubViewChange?: (v: NoteSubView) => void;
   onTodoSubViewChange?: (v: TodoSubView) => void;
+  obsidianEnabled?: boolean;
 }
 
 export function ItemList({
@@ -108,12 +113,14 @@ export function ItemList({
   tag,
   selectedId,
   onSelect,
+  onNavigate,
   refreshKey,
   currentView,
   noteSubView,
   todoSubView,
   onNoteSubViewChange,
   onTodoSubViewChange,
+  obsidianEnabled,
 }: ItemListProps) {
   const [items, setItems] = useState<ParsedItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -230,7 +237,7 @@ export function ItemList({
   };
 
   const activeSubView = currentView === "notes" ? noteSubView : currentView === "todos" ? todoSubView : undefined;
-  const batchActions = getBatchActions(currentView ?? "all", activeSubView);
+  const batchActions = getBatchActions(currentView ?? "all", activeSubView, obsidianEnabled);
 
   if (loading && items.length === 0) {
     return (
@@ -352,6 +359,7 @@ export function ItemList({
             item={item}
             selected={item.id === selectedId}
             onSelect={onSelect}
+            onNavigate={onNavigate}
             onUpdated={fetchItems}
             selectionMode={selectionMode}
             checked={selectedIds.has(item.id)}

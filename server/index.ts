@@ -9,10 +9,12 @@ import { itemsRouter } from "./routes/items.js";
 import { searchRouter } from "./routes/search.js";
 import { statsRouter } from "./routes/stats.js";
 import { webhookRouter } from "./routes/webhook.js";
+import { settingsRouter } from "./routes/settings.js";
 import { db, sqlite } from "./db/index.js";
 import { items } from "./db/schema.js";
 import { eq } from "drizzle-orm";
 import { getAllTags } from "./lib/items.js";
+import { getObsidianSettings } from "./lib/settings.js";
 import { z, ZodError } from "zod";
 import { statusEnum } from "./schemas/items.js";
 
@@ -28,6 +30,7 @@ app.route("/api/items", itemsRouter);
 app.route("/api/search", searchRouter);
 app.route("/api/stats", statsRouter);
 app.route("/api/webhook", webhookRouter);
+app.route("/api/settings", settingsRouter);
 
 // Tags endpoint (separate from items CRUD to avoid /:id conflict)
 app.get("/api/tags", (c) => {
@@ -37,8 +40,9 @@ app.get("/api/tags", (c) => {
 
 // Config endpoint — tells frontend whether Obsidian export is available
 app.get("/api/config", (c) => {
+  const obsidian = getObsidianSettings(sqlite);
   return c.json({
-    obsidian_export_enabled: !!process.env.OBSIDIAN_VAULT_PATH,
+    obsidian_export_enabled: obsidian.obsidian_enabled && !!obsidian.obsidian_vault_path,
   });
 });
 

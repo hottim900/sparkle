@@ -33,6 +33,16 @@ function createTestDb() {
     CREATE INDEX idx_items_status ON items(status);
     CREATE INDEX idx_items_type ON items(type);
     CREATE INDEX idx_items_created ON items(created DESC);
+
+    CREATE TABLE settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
+    INSERT INTO settings (key, value) VALUES
+      ('obsidian_enabled', 'false'),
+      ('obsidian_vault_path', ''),
+      ('obsidian_inbox_folder', '0_Inbox'),
+      ('obsidian_export_mode', 'overwrite');
   `);
 
   setupFTS(sqlite);
@@ -56,7 +66,9 @@ import { Hono } from "hono";
 import { authMiddleware } from "../../middleware/auth.js";
 import { itemsRouter } from "../items.js";
 import { searchRouter } from "../search.js";
+import { settingsRouter } from "../settings.js";
 import { getAllTags } from "../../lib/items.js";
+import { getObsidianSettings } from "../../lib/settings.js";
 import { items } from "../../db/schema.js";
 import { eq } from "drizzle-orm";
 import { z, ZodError } from "zod";
@@ -89,14 +101,16 @@ function createApp() {
   app.use("/api/*", authMiddleware);
   app.route("/api/items", itemsRouter);
   app.route("/api/search", searchRouter);
+  app.route("/api/settings", settingsRouter);
   app.get("/api/tags", (c) => {
     const tags = getAllTags(testSqlite);
     return c.json({ tags });
   });
 
   app.get("/api/config", (c) => {
+    const obsidian = getObsidianSettings(testSqlite);
     return c.json({
-      obsidian_export_enabled: !!process.env.OBSIDIAN_VAULT_PATH,
+      obsidian_export_enabled: obsidian.obsidian_enabled && !!obsidian.obsidian_vault_path,
     });
   });
 
@@ -398,6 +412,75 @@ describe("Items CRUD", () => {
       // "low" > "high" lexicographically in desc order
       expect(body.items[0].priority).toBe("low");
       expect(body.items[1].priority).toBe("high");
+    });
+
+    it("sorts items by modified descending", async () => {
+      const res1 = await app.request("/api/items", {
+        method: "POST",
+        headers: jsonHeaders(),
+        body: JSON.stringify({ title: "First" }),
+      });
+      const item1 = await res1.json();
+
+      const res2 = await app.request("/api/items", {
+        method: "POST",
+        headers: jsonHeaders(),
+        body: JSON.stringify({ title: "Second" }),
+      });
+      await res2.json();
+
+      // Update first item so it has a newer modified timestamp
+      await new Promise((r) => setTimeout(r, 5));
+      await app.request(`/api/items/${item1.id}`, {
+        method: "PATCH",
+        headers: jsonHeaders(),
+        body: JSON.stringify({ title: "First Updated" }),
+      });
+
+      const res = await app.request(
+        "/api/items?sort=modified&order=desc",
+        { headers: authHeaders() },
+      );
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.items).toHaveLength(2);
+      expect(body.items[0].title).toBe("First Updated");
+      expect(body.items[1].title).toBe("Second");
+    });
+
+    it("returns linked_note_title in list response", async () => {
+      const noteRes = await app.request("/api/items", {
+        method: "POST",
+        headers: jsonHeaders(),
+        body: JSON.stringify({ title: "My Reference Note", type: "note" }),
+      });
+      const note = await noteRes.json();
+
+      await app.request("/api/items", {
+        method: "POST",
+        headers: jsonHeaders(),
+        body: JSON.stringify({
+          title: "Linked Todo",
+          type: "todo",
+          linked_note_id: note.id,
+        }),
+      });
+
+      await app.request("/api/items", {
+        method: "POST",
+        headers: jsonHeaders(),
+        body: JSON.stringify({ title: "Plain Todo", type: "todo" }),
+      });
+
+      const res = await app.request("/api/items?type=todo", {
+        headers: authHeaders(),
+      });
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      const linked = body.items.find((i: { title: string }) => i.title === "Linked Todo");
+      const plain = body.items.find((i: { title: string }) => i.title === "Plain Todo");
+      expect(linked.linked_note_title).toBe("My Reference Note");
+      expect(plain.linked_note_title).toBeNull();
     });
   });
 
@@ -1241,8 +1324,6 @@ describe("POST /api/items/:id/export", () => {
     if (tempDir) {
       fs.rmSync(tempDir, { recursive: true, force: true });
     }
-    delete process.env.OBSIDIAN_VAULT_PATH;
-    delete process.env.OBSIDIAN_INBOX_FOLDER;
   });
 
   it("returns 404 for nonexistent item", async () => {
@@ -1289,9 +1370,8 @@ describe("POST /api/items/:id/export", () => {
     expect(body.error).toMatch(/only permanent/i);
   });
 
-  it("returns 500 when OBSIDIAN_VAULT_PATH not set", async () => {
-    delete process.env.OBSIDIAN_VAULT_PATH;
-
+  it("returns 500 when Obsidian export not configured", async () => {
+    // Default settings: obsidian_enabled=false, vault_path=""
     const createRes = await app.request("/api/items", {
       method: "POST",
       headers: jsonHeaders(),
@@ -1305,12 +1385,17 @@ describe("POST /api/items/:id/export", () => {
     });
     expect(res.status).toBe(500);
     const body = await res.json();
-    expect(body.error).toMatch(/OBSIDIAN_VAULT_PATH/i);
+    expect(body.error).toMatch(/not configured/i);
   });
 
   it("exports permanent note and updates status to exported", async () => {
-    process.env.OBSIDIAN_VAULT_PATH = tempDir;
-    process.env.OBSIDIAN_INBOX_FOLDER = "0_Inbox";
+    // Enable obsidian export via DB settings
+    const { updateSettings: us } = await import("../../lib/settings.js");
+    us(testSqlite, {
+      obsidian_enabled: "true",
+      obsidian_vault_path: tempDir,
+      obsidian_inbox_folder: "0_Inbox",
+    });
 
     const createRes = await app.request("/api/items", {
       method: "POST",
@@ -1357,8 +1442,7 @@ describe("GET /api/config", () => {
     expect(res.status).toBe(401);
   });
 
-  it("returns obsidian_export_enabled=false when OBSIDIAN_VAULT_PATH not set", async () => {
-    delete process.env.OBSIDIAN_VAULT_PATH;
+  it("returns obsidian_export_enabled=false by default", async () => {
     const res = await app.request("/api/config", {
       headers: authHeaders(),
     });
@@ -1367,18 +1451,195 @@ describe("GET /api/config", () => {
     expect(body.obsidian_export_enabled).toBe(false);
   });
 
-  it("returns obsidian_export_enabled=true when OBSIDIAN_VAULT_PATH is set", async () => {
-    process.env.OBSIDIAN_VAULT_PATH = "/tmp/test-vault";
+  it("returns obsidian_export_enabled=true when enabled with vault path", async () => {
+    const { updateSettings } = await import("../../lib/settings.js");
+    updateSettings(testSqlite, {
+      obsidian_enabled: "true",
+      obsidian_vault_path: "/tmp/test-vault",
+    });
+    const res = await app.request("/api/config", {
+      headers: authHeaders(),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.obsidian_export_enabled).toBe(true);
+  });
+
+  it("returns obsidian_export_enabled=false when enabled but no vault path", async () => {
+    const { updateSettings } = await import("../../lib/settings.js");
+    updateSettings(testSqlite, {
+      obsidian_enabled: "true",
+      obsidian_vault_path: "",
+    });
+    const res = await app.request("/api/config", {
+      headers: authHeaders(),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.obsidian_export_enabled).toBe(false);
+  });
+});
+
+// ============================================================
+// Settings API Tests
+// ============================================================
+describe("GET /api/settings", () => {
+  it("returns 401 without auth", async () => {
+    const res = await app.request("/api/settings");
+    expect(res.status).toBe(401);
+  });
+
+  it("returns default settings", async () => {
+    const res = await app.request("/api/settings", {
+      headers: authHeaders(),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toEqual({
+      obsidian_enabled: "false",
+      obsidian_vault_path: "",
+      obsidian_inbox_folder: "0_Inbox",
+      obsidian_export_mode: "overwrite",
+    });
+  });
+});
+
+describe("PUT /api/settings", () => {
+  it("returns 401 without auth", async () => {
+    const res = await app.request("/api/settings", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ obsidian_inbox_folder: "Inbox" }),
+    });
+    expect(res.status).toBe(401);
+  });
+
+  it("updates a single setting", async () => {
+    const res = await app.request("/api/settings", {
+      method: "PUT",
+      headers: jsonHeaders(),
+      body: JSON.stringify({ obsidian_inbox_folder: "1_Inbox" }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.obsidian_inbox_folder).toBe("1_Inbox");
+  });
+
+  it("updates multiple settings at once", async () => {
+    const res = await app.request("/api/settings", {
+      method: "PUT",
+      headers: jsonHeaders(),
+      body: JSON.stringify({
+        obsidian_inbox_folder: "MyInbox",
+        obsidian_export_mode: "new",
+      }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.obsidian_inbox_folder).toBe("MyInbox");
+    expect(body.obsidian_export_mode).toBe("new");
+  });
+
+  it("returns 400 for unknown key", async () => {
+    const res = await app.request("/api/settings", {
+      method: "PUT",
+      headers: jsonHeaders(),
+      body: JSON.stringify({ unknown_key: "value" }),
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toMatch(/Unknown settings key/);
+  });
+
+  it("returns 400 for invalid obsidian_enabled value", async () => {
+    const res = await app.request("/api/settings", {
+      method: "PUT",
+      headers: jsonHeaders(),
+      body: JSON.stringify({ obsidian_enabled: "yes" }),
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toMatch(/obsidian_enabled/);
+  });
+
+  it("returns 400 for invalid obsidian_export_mode value", async () => {
+    const res = await app.request("/api/settings", {
+      method: "PUT",
+      headers: jsonHeaders(),
+      body: JSON.stringify({ obsidian_export_mode: "append" }),
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toMatch(/obsidian_export_mode/);
+  });
+
+  it("returns 400 for empty body", async () => {
+    const res = await app.request("/api/settings", {
+      method: "PUT",
+      headers: jsonHeaders(),
+      body: JSON.stringify({}),
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toMatch(/No settings/);
+  });
+
+  it("returns 400 when enabling with empty vault path", async () => {
+    const res = await app.request("/api/settings", {
+      method: "PUT",
+      headers: jsonHeaders(),
+      body: JSON.stringify({ obsidian_enabled: "true" }),
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toMatch(/vault_path must be non-empty/);
+  });
+
+  it("returns 400 when enabling with non-writable vault path", async () => {
+    const res = await app.request("/api/settings", {
+      method: "PUT",
+      headers: jsonHeaders(),
+      body: JSON.stringify({
+        obsidian_enabled: "true",
+        obsidian_vault_path: "/nonexistent/path/that/does/not/exist",
+      }),
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toMatch(/not writable/);
+  });
+
+  it("enables obsidian with valid writable vault path", async () => {
+    const os = await import("node:os");
+    const fs = await import("node:fs");
+    const tempDir = fs.mkdtempSync(os.tmpdir() + "/sparkle-settings-test-");
     try {
-      const res = await app.request("/api/config", {
-        headers: authHeaders(),
+      const res = await app.request("/api/settings", {
+        method: "PUT",
+        headers: jsonHeaders(),
+        body: JSON.stringify({
+          obsidian_enabled: "true",
+          obsidian_vault_path: tempDir,
+        }),
       });
       expect(res.status).toBe(200);
       const body = await res.json();
-      expect(body.obsidian_export_enabled).toBe(true);
+      expect(body.obsidian_enabled).toBe("true");
+      expect(body.obsidian_vault_path).toBe(tempDir);
     } finally {
-      delete process.env.OBSIDIAN_VAULT_PATH;
+      fs.rmSync(tempDir, { recursive: true, force: true });
     }
+  });
+
+  it("allows disabling without vault path validation", async () => {
+    const res = await app.request("/api/settings", {
+      method: "PUT",
+      headers: jsonHeaders(),
+      body: JSON.stringify({ obsidian_enabled: "false" }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.obsidian_enabled).toBe("false");
   });
 });
 

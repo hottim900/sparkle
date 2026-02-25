@@ -4,6 +4,7 @@ import { db, sqlite } from "../db/index.js";
 import { createItem, getItem, listItems, searchItems, updateItem } from "../lib/items.js";
 import { getStats, getFocusItems } from "../lib/stats.js";
 import { exportToObsidian } from "../lib/export.js";
+import { getObsidianSettings } from "../lib/settings.js";
 import { parseCommand } from "../lib/line.js";
 import { setSession, getItemId } from "../lib/line-session.js";
 import { parseDate } from "../lib/line-date.js";
@@ -312,12 +313,17 @@ webhookRouter.post("/line", async (c) => {
           reply = `❌ 只有永久筆記可以匯出，目前狀態：${label}`;
           break;
         }
-        if (!process.env.OBSIDIAN_VAULT_PATH) {
-          reply = "❌ Obsidian 匯出未設定，請聯繫管理員";
+        const obsidian = getObsidianSettings(sqlite);
+        if (!obsidian.obsidian_enabled || !obsidian.obsidian_vault_path) {
+          reply = "❌ Obsidian 匯出未設定，請至設定頁面啟用";
           break;
         }
         try {
-          const result = exportToObsidian(resolved.item);
+          const result = exportToObsidian(resolved.item, {
+            vaultPath: obsidian.obsidian_vault_path,
+            inboxFolder: obsidian.obsidian_inbox_folder,
+            exportMode: obsidian.obsidian_export_mode,
+          });
           updateItem(db, resolved.itemId, { status: "exported" });
           reply = `✅ 已匯出到 Obsidian: ${result.path}`;
         } catch (err) {

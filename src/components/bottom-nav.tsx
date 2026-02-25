@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { ViewType } from "@/lib/types";
-import { FileText, ListTodo, LayoutDashboard, Search, Menu, Archive } from "lucide-react";
+import { FileText, ListTodo, LayoutDashboard, Search, Menu, Archive, Settings } from "lucide-react";
 
 interface BottomNavProps {
   currentView: ViewType;
@@ -17,6 +17,7 @@ const mainNavItems: { id: ViewType; label: string; icon: React.ReactNode }[] = [
 const moreItems: { id: ViewType; label: string; icon: React.ReactNode }[] = [
   { id: "all", label: "全部", icon: <FileText className="h-4 w-4" /> },
   { id: "archived", label: "已封存", icon: <Archive className="h-4 w-4" /> },
+  { id: "settings", label: "設定", icon: <Settings className="h-4 w-4" /> },
 ];
 
 export function BottomNav({ currentView, onViewChange }: BottomNavProps) {

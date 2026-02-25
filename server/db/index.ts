@@ -5,7 +5,7 @@ import { setupFTS } from "./fts.js";
 
 const DB_PATH = process.env.DATABASE_URL || "./data/todo.db";
 
-const TARGET_VERSION = 8;
+const TARGET_VERSION = 9;
 
 function getSchemaVersion(sqlite: Database.Database): number {
   // Check if schema_version table exists
@@ -147,6 +147,22 @@ function runMigrations(sqlite: Database.Database) {
     }
     setSchemaVersion(sqlite, 8);
   }
+
+  // Step 8→9: Create settings table with defaults
+  if (version < 9) {
+    sqlite.exec(`
+      CREATE TABLE IF NOT EXISTS settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      );
+      INSERT OR IGNORE INTO settings (key, value) VALUES
+        ('obsidian_enabled', 'false'),
+        ('obsidian_vault_path', ''),
+        ('obsidian_inbox_folder', '0_Inbox'),
+        ('obsidian_export_mode', 'overwrite');
+    `);
+    setSchemaVersion(sqlite, 9);
+  }
 }
 
 function createDb() {
@@ -186,6 +202,16 @@ function createDb() {
       CREATE INDEX idx_items_status ON items(status);
       CREATE INDEX idx_items_type ON items(type);
       CREATE INDEX idx_items_created ON items(created DESC);
+
+      CREATE TABLE settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      );
+      INSERT INTO settings (key, value) VALUES
+        ('obsidian_enabled', 'false'),
+        ('obsidian_vault_path', ''),
+        ('obsidian_inbox_folder', '0_Inbox'),
+        ('obsidian_export_mode', 'overwrite');
     `);
 
     // Set version to target directly for fresh installs

@@ -17,6 +17,7 @@ import {
   batchSchema,
 } from "../schemas/items.js";
 import { exportToObsidian } from "../lib/export.js";
+import { getObsidianSettings } from "../lib/settings.js";
 import { ZodError } from "zod";
 
 const itemsRouter = new Hono();
@@ -110,6 +111,15 @@ itemsRouter.post("/batch", async (c) => {
       }
     } else if (action === "export") {
       // permanent → exported (notes only, writes .md)
+      const obsidian = getObsidianSettings(sqlite);
+      if (!obsidian.obsidian_enabled || !obsidian.obsidian_vault_path) {
+        return c.json({ error: "Obsidian export is not configured" }, 400);
+      }
+      const exportConfig = {
+        vaultPath: obsidian.obsidian_vault_path,
+        inboxFolder: obsidian.obsidian_inbox_folder,
+        exportMode: obsidian.obsidian_export_mode,
+      };
       for (const id of ids) {
         const item = getItem(db, id);
         if (!item || item.type !== "note" || item.status !== "permanent") {
@@ -117,7 +127,7 @@ itemsRouter.post("/batch", async (c) => {
           continue;
         }
         try {
-          exportToObsidian(item);
+          exportToObsidian(item, exportConfig);
           updateItem(db, id, { status: "exported" });
           affected++;
         } catch (e) {
@@ -188,12 +198,17 @@ itemsRouter.post("/:id/export", (c) => {
   if (item.status !== "permanent") {
     return c.json({ error: "Only permanent notes can be exported" }, 400);
   }
-  if (!process.env.OBSIDIAN_VAULT_PATH) {
-    return c.json({ error: "OBSIDIAN_VAULT_PATH is not configured" }, 500);
+  const obsidian = getObsidianSettings(sqlite);
+  if (!obsidian.obsidian_enabled || !obsidian.obsidian_vault_path) {
+    return c.json({ error: "Obsidian export is not configured" }, 500);
   }
 
   try {
-    const result = exportToObsidian(item);
+    const result = exportToObsidian(item, {
+      vaultPath: obsidian.obsidian_vault_path,
+      inboxFolder: obsidian.obsidian_inbox_folder,
+      exportMode: obsidian.obsidian_export_mode,
+    });
     updateItem(db, item.id, { status: "exported" });
     return c.json({ path: result.path });
   } catch (e) {
