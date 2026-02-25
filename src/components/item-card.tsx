@@ -12,6 +12,7 @@ import {
   PlayCircle,
   Check,
   Archive,
+  FileText,
 } from "lucide-react";
 
 const priorityColors: Record<string, string> = {
@@ -89,6 +90,7 @@ interface ItemCardProps {
   item: ParsedItem;
   selected?: boolean;
   onSelect?: (item: ParsedItem) => void;
+  onNavigate?: (itemId: string) => void;
   onUpdated?: () => void;
   selectionMode?: boolean;
   checked?: boolean;
@@ -99,6 +101,7 @@ export function ItemCard({
   item,
   selected,
   onSelect,
+  onNavigate,
   onUpdated,
   selectionMode,
   checked,
@@ -189,6 +192,20 @@ export function ItemCard({
                 {tag}
               </Badge>
             ))}
+            {item.type === "todo" && item.linked_note_id && item.linked_note_title && (
+              <button
+                type="button"
+                className="inline-flex items-center gap-0.5 text-xs text-muted-foreground hover:text-foreground transition-colors max-w-[120px]"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onNavigate?.(item.linked_note_id!);
+                }}
+                title={item.linked_note_title}
+              >
+                <FileText className="h-3 w-3 shrink-0" />
+                <span className="truncate">{item.linked_note_title}</span>
+              </button>
+            )}
             {dueDateInfo && (
               <span className={`text-xs ${dueDateInfo.className}`}>
                 {dueDateInfo.label}

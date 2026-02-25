@@ -177,6 +177,39 @@ describe("Data Access Layer", () => {
       expect(page2.items).toHaveLength(2);
     });
 
+    it("sorts by modified descending", () => {
+      const { v4: uuidv4 } = require("uuid");
+      // Insert items with different modified timestamps
+      for (const [title, created, modified] of [
+        ["OldModified", "2026-01-01T00:00:00.000Z", "2026-01-01T00:00:00.000Z"],
+        ["MidModified", "2026-01-02T00:00:00.000Z", "2026-01-05T00:00:00.000Z"],
+        ["NewModified", "2026-01-03T00:00:00.000Z", "2026-01-10T00:00:00.000Z"],
+      ] as const) {
+        sqlite.prepare(
+          "INSERT INTO items (id, title, type, status, tags, origin, aliases, created, modified) VALUES (?, ?, 'note', 'fleeting', '[]', '', '[]', ?, ?)",
+        ).run(uuidv4(), title, created, modified);
+      }
+      const result = listItems(db, { sort: "modified", order: "desc" });
+      expect(result.items[0]!.title).toBe("NewModified");
+      expect(result.items[2]!.title).toBe("OldModified");
+    });
+
+    it("sorts by modified ascending", () => {
+      const { v4: uuidv4 } = require("uuid");
+      for (const [title, created, modified] of [
+        ["OldModified", "2026-01-01T00:00:00.000Z", "2026-01-01T00:00:00.000Z"],
+        ["MidModified", "2026-01-02T00:00:00.000Z", "2026-01-05T00:00:00.000Z"],
+        ["NewModified", "2026-01-03T00:00:00.000Z", "2026-01-10T00:00:00.000Z"],
+      ] as const) {
+        sqlite.prepare(
+          "INSERT INTO items (id, title, type, status, tags, origin, aliases, created, modified) VALUES (?, ?, 'note', 'fleeting', '[]', '', '[]', ?, ?)",
+        ).run(uuidv4(), title, created, modified);
+      }
+      const result = listItems(db, { sort: "modified", order: "asc" });
+      expect(result.items[0]!.title).toBe("OldModified");
+      expect(result.items[2]!.title).toBe("NewModified");
+    });
+
     it("returns items in newest-first order", () => {
       // Insert directly with explicit timestamps to avoid same-ms issues
       const { v4: uuidv4 } = require("uuid");
@@ -477,6 +510,59 @@ describe("Data Access Layer", () => {
       const updated = updateItem(db, todo.id, { type: "note" });
       expect(updated!.type).toBe("note");
       expect(updated!.linked_note_id).toBeNull();
+    });
+  });
+
+  describe("linked_note_title resolution", () => {
+    it("getItem returns linked_note_title for todo with linked_note_id", () => {
+      const note = createItem(db, { title: "My linked note", type: "note" });
+      const todo = createItem(db, {
+        title: "Track note",
+        type: "todo",
+        linked_note_id: note.id,
+      });
+      const fetched = getItem(db, todo.id);
+      expect(fetched!.linked_note_title).toBe("My linked note");
+    });
+
+    it("getItem returns null linked_note_title when no linked_note_id", () => {
+      const todo = createItem(db, { title: "Plain todo", type: "todo" });
+      const fetched = getItem(db, todo.id);
+      expect(fetched!.linked_note_title).toBeNull();
+    });
+
+    it("getItem returns null linked_note_title for note items", () => {
+      const note = createItem(db, { title: "A note", type: "note" });
+      const fetched = getItem(db, note.id);
+      expect(fetched!.linked_note_title).toBeNull();
+    });
+
+    it("getItem returns null linked_note_title when linked note is deleted", () => {
+      const note = createItem(db, { title: "Will be deleted", type: "note" });
+      const todo = createItem(db, {
+        title: "Track note",
+        type: "todo",
+        linked_note_id: note.id,
+      });
+      deleteItem(db, note.id);
+      const fetched = getItem(db, todo.id);
+      expect(fetched!.linked_note_id).toBe(note.id);
+      expect(fetched!.linked_note_title).toBeNull();
+    });
+
+    it("listItems returns linked_note_title for items with linked_note_id", () => {
+      const note = createItem(db, { title: "Reference note", type: "note" });
+      createItem(db, {
+        title: "Linked todo",
+        type: "todo",
+        linked_note_id: note.id,
+      });
+      createItem(db, { title: "Plain todo", type: "todo" });
+      const result = listItems(db, { type: "todo" });
+      const linked = result.items.find((i) => i.title === "Linked todo");
+      const plain = result.items.find((i) => i.title === "Plain todo");
+      expect(linked!.linked_note_title).toBe("Reference note");
+      expect(plain!.linked_note_title).toBeNull();
     });
   });
 
