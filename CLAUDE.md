@@ -37,7 +37,7 @@ server/
     line-date.ts        # Natural language date parser (chrono-node zh.hant)
   schemas/items.ts      # Zod validation schemas (statusEnum, excludeStatus, batch actions)
   db/
-    index.ts            # DB connection + schema migration (version 0→9)
+    index.ts            # DB connection + schema migration (version 0→10)
     schema.ts           # Drizzle table schema (items + settings)
     fts.ts              # FTS5 virtual table + sync triggers
 
@@ -45,15 +45,15 @@ src/
   App.tsx               # Main layout, view routing, keyboard shortcuts
   components/
     auth-gate.tsx        # Login screen
-    dashboard.tsx        # Review dashboard (Zettelkasten progress, focus, fleeting health)
+    dashboard.tsx        # Review dashboard (Zettelkasten progress, focus, fleeting health, scratch count)
     quick-capture.tsx    # New item form (GTD quick-select tags for todos)
     item-list.tsx        # Item list + filter chips + contextual batch actions + type grouping
     item-detail.tsx      # Editor + markdown preview + export button + aliases + linked items
     item-card.tsx        # List item display with tags, linked indicators, due date
     search-bar.tsx       # FTS search with keyword highlighting
     settings.tsx         # Settings page (Obsidian config + general tools)
-    sidebar.tsx          # Desktop nav (筆記/待辦/共用 sections + settings)
-    bottom-nav.tsx       # Mobile nav (Notes, Todos, Dashboard, Search, More + settings)
+    sidebar.tsx          # Desktop nav (筆記/待辦/暫存/共用 sections + settings)
+    bottom-nav.tsx       # Mobile nav (Notes, Todos, Scratch, Dashboard, Search + settings)
     fleeting-triage.tsx  # Fleeting note triage mode (發展/進行/封存/保留)
     offline-indicator.tsx
     install-prompt.tsx   # PWA install banner
@@ -102,7 +102,7 @@ npm run dev:server   # Hono on :3000 with tsx watch
 # IMPORTANT: Tests require node v22 (better-sqlite3 native module is incompatible with v24)
 nvm use 22
 
-# Tests (345 tests, 10 files — server only, no frontend tests)
+# Tests (380 tests, 10 files — server only, no frontend tests)
 npx vitest run                # Run all tests
 npx vitest run --coverage     # With coverage (needs @vitest/coverage-v8)
 npx vitest                    # Watch mode
@@ -168,9 +168,10 @@ After PC reboot, right-click `scripts/update-portproxy.ps1` → Run as Administr
 - LINE Official Account with Messaging API enabled
 - Webhook URL: `https://YOUR_DOMAIN/api/webhook/line`
 - Commands:
-  - 新增：`!todo`=待辦, `!high`=高優先, 直接輸入=閃念筆記
-  - 查詢：`!fleeting`=閃念筆記, `!developing`=發展中, `!permanent`=永久筆記, `!active`=進行中待辦, `!notes`=所有筆記, `!todos`=所有待辦, `!today`=今日焦點, `!find <keyword>`=搜尋, `!list <tag>`=標籤篩選, `!stats`=統計
+  - 新增：`!todo`=待辦, `!high`=高優先, `!tmp <內容>`=暫存, 直接輸入=閃念筆記
+  - 查詢：`!fleeting`=閃念筆記, `!developing`=發展中, `!permanent`=永久筆記, `!active`=進行中待辦, `!scratch`/`!s`=暫存項目, `!notes`=所有筆記, `!todos`=所有待辦, `!today`=今日焦點, `!find <keyword>`=搜尋, `!list <tag>`=標籤篩選, `!stats`=統計
   - 筆記推進（需先查詢建立 session）：`!develop N`=閃念→發展中, `!mature N`=發展中→永久, `!export N`=匯出到 Obsidian
+  - 暫存操作（需先查詢建立 session）：`!delete N`=刪除項目, `!upgrade N`=暫存升級為閃念筆記
   - 操作（需先查詢建立 session）：`!detail N`=詳情, `!due N <日期>`=設到期日(待辦only), `!track N [日期]`=從筆記建立追蹤待辦, `!tag N <標籤...>`=加標籤, `!untag N <標籤...>`=移除標籤, `!done N`=待辦完成, `!archive N`=封存, `!priority N <high|medium|low|none>`=優先度
   - `?`/`help`/`說明`=說明
   - `!inbox` 為 `!fleeting` 的向後相容別名
@@ -204,12 +205,14 @@ After PC reboot, right-click `scripts/update-portproxy.ps1` → Run as Administr
 
 Notes follow Zettelkasten maturity: `fleeting` → `developing` → `permanent` → `exported`
 Todos use simplified lifecycle: `active` → `done`
+Scratch is disposable temporary storage: `draft`
 Shared: `archived` (any type)
 
 | Type | Valid Statuses | Default |
 |------|---------------|---------|
 | `note` | fleeting, developing, permanent, exported, archived | fleeting |
 | `todo` | active, done, archived | active |
+| `scratch` | draft, archived | draft |
 
 ### Field Names (Obsidian-aligned)
 
@@ -228,11 +231,11 @@ id, type, title, content, status, priority, due, tags, origin, source, aliases, 
 
 ### Type Conversion Auto-Mapping
 
-When type changes (note ↔ todo), status auto-maps server-side. Auto-mapping overrides explicit status. Due date and linked_note_id are cleared on todo→note conversion.
+When type changes (note ↔ todo ↔ scratch), status auto-maps server-side. Auto-mapping overrides explicit status. Due date and linked_note_id are cleared on todo→note conversion. Tags, priority, due, aliases, and linked_note_id are cleared on conversion to scratch.
 
 ### DB Migration
 
-Schema version tracked in `schema_version` table (version 0→9). Each step is idempotent. Fresh install creates new schema directly at version 9. Migration 8→9 creates the `settings` table with Obsidian export defaults.
+Schema version tracked in `schema_version` table (version 0→10). Each step is idempotent. Fresh install creates new schema directly at version 10. Migration 8→9 creates the `settings` table with Obsidian export defaults. Migration 9→10 is a no-op version bump for scratch type support (SQLite text columns need no schema change).
 
 ## Conventions
 
