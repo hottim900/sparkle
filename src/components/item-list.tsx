@@ -22,6 +22,8 @@ import {
   Gem,
   ExternalLink,
   CheckCircle,
+  FileText,
+  ListTodo,
 } from "lucide-react";
 
 type SortOption = {
@@ -372,19 +374,72 @@ export function ItemList({
         </div>
       )}
       <div className="divide-y">
-        {items.map((item) => (
-          <ItemCard
-            key={item.id}
-            item={item}
-            selected={item.id === selectedId}
-            onSelect={onSelect}
-            onNavigate={onNavigate}
-            onUpdated={fetchItems}
-            selectionMode={selectionMode}
-            checked={selectedIds.has(item.id)}
-            onToggle={toggleSelection}
-          />
-        ))}
+        {(currentView === "all" || currentView === "archived") ? (() => {
+          const notes = items.filter((i) => i.type === "note");
+          const todos = items.filter((i) => i.type === "todo");
+          return (
+            <>
+              {notes.length > 0 && (
+                <>
+                  <div className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-muted-foreground bg-muted/50 sticky top-0 z-10">
+                    <FileText className="h-3.5 w-3.5" />
+                    筆記
+                    <span className="text-muted-foreground/60">({notes.length})</span>
+                  </div>
+                  {notes.map((item) => (
+                    <ItemCard
+                      key={item.id}
+                      item={item}
+                      selected={item.id === selectedId}
+                      onSelect={onSelect}
+                      onNavigate={onNavigate}
+                      onUpdated={fetchItems}
+                      selectionMode={selectionMode}
+                      checked={selectedIds.has(item.id)}
+                      onToggle={toggleSelection}
+                    />
+                  ))}
+                </>
+              )}
+              {todos.length > 0 && (
+                <>
+                  <div className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-muted-foreground bg-muted/50 sticky top-0 z-10">
+                    <ListTodo className="h-3.5 w-3.5" />
+                    待辦
+                    <span className="text-muted-foreground/60">({todos.length})</span>
+                  </div>
+                  {todos.map((item) => (
+                    <ItemCard
+                      key={item.id}
+                      item={item}
+                      selected={item.id === selectedId}
+                      onSelect={onSelect}
+                      onNavigate={onNavigate}
+                      onUpdated={fetchItems}
+                      selectionMode={selectionMode}
+                      checked={selectedIds.has(item.id)}
+                      onToggle={toggleSelection}
+                    />
+                  ))}
+                </>
+              )}
+            </>
+          );
+        })() : (
+          items.map((item) => (
+            <ItemCard
+              key={item.id}
+              item={item}
+              selected={item.id === selectedId}
+              onSelect={onSelect}
+              onNavigate={onNavigate}
+              onUpdated={fetchItems}
+              selectionMode={selectionMode}
+              checked={selectedIds.has(item.id)}
+              onToggle={toggleSelection}
+            />
+          ))
+        )}
         {total > offset + limit && (
           <button
             className="w-full py-3 text-sm text-muted-foreground hover:text-foreground"

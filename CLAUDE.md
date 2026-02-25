@@ -47,9 +47,9 @@ src/
     auth-gate.tsx        # Login screen
     dashboard.tsx        # Review dashboard (Zettelkasten progress, focus, fleeting health)
     quick-capture.tsx    # New item form (GTD quick-select tags for todos)
-    item-list.tsx        # Item list + filter chips + contextual batch actions
-    item-detail.tsx      # Editor + markdown preview + export button + aliases
-    item-card.tsx        # List item display with status icons and colors
+    item-list.tsx        # Item list + filter chips + contextual batch actions + type grouping
+    item-detail.tsx      # Editor + markdown preview + export button + aliases + linked items
+    item-card.tsx        # List item display with tags, linked indicators, due date
     search-bar.tsx       # FTS search with keyword highlighting
     settings.tsx         # Settings page (Obsidian config + general tools)
     sidebar.tsx          # Desktop nav (筆記/待辦/共用 sections + settings)
@@ -90,7 +90,7 @@ nvm use 22
 # Or set PATH directly:
 export PATH="/home/YOUR_USER/.nvm/versions/node/v22.22.0/bin:/usr/bin:/bin:$PATH"
 
-# Tests (338 tests, 10 files — server only, no frontend tests)
+# Tests (345 tests, 10 files — server only, no frontend tests)
 npx vitest run                # Run all tests
 npx vitest run --coverage     # With coverage (needs @vitest/coverage-v8)
 npx vitest                    # Watch mode
@@ -222,6 +222,8 @@ id, type, title, content, status, priority, due, tags, origin, source, aliases, 
 - `aliases`: alternative names for Obsidian linking (JSON array)
 - `due`: YYYY-MM-DD format, **todo-only** (notes ignore due; todo→note conversion clears due)
 - `linked_note_id`: todo→note reference (nullable, todo-only; cleared on todo→note conversion)
+- `linked_todo_count`: computed field in API responses — number of non-archived todos linked to a note (0 for todos)
+- `linked_note_title`: computed field in API responses — title of linked note for todos (null if none)
 - `created`/`modified`: ISO 8601 timestamps
 
 ### Type Conversion Auto-Mapping

@@ -48,14 +48,16 @@ function defaultStatusForType(type: string): string {
   return type === "todo" ? "active" : "fleeting";
 }
 
-export type ItemWithLinkedTitle = typeof items.$inferSelect & {
+export type ItemWithLinkedInfo = typeof items.$inferSelect & {
   linked_note_title: string | null;
+  linked_todo_count: number;
 };
 
-function resolveLinkedNoteTitles(
+function resolveLinkedInfo(
   db: DB,
   rows: (typeof items.$inferSelect)[],
-): ItemWithLinkedTitle[] {
+): ItemWithLinkedInfo[] {
+  // Resolve linked_note_title for todos
   const linkedIds = rows
     .map((r) => r.linked_note_id)
     .filter((id): id is string => id != null);
@@ -73,11 +75,41 @@ function resolveLinkedNoteTitles(
     }
   }
 
+  // Resolve linked_todo_count for notes
+  const noteIds = rows
+    .filter((r) => r.type === "note")
+    .map((r) => r.id);
+
+  const countMap = new Map<string, number>();
+  if (noteIds.length > 0) {
+    const uniqueNoteIds = [...new Set(noteIds)];
+    const counts = db
+      .select({
+        linked_note_id: items.linked_note_id,
+        count: sql<number>`count(*)`,
+      })
+      .from(items)
+      .where(
+        and(
+          inArray(items.linked_note_id, uniqueNoteIds),
+          sql`${items.status} != 'archived'`,
+        ),
+      )
+      .groupBy(items.linked_note_id)
+      .all();
+    for (const c of counts) {
+      if (c.linked_note_id) {
+        countMap.set(c.linked_note_id, c.count);
+      }
+    }
+  }
+
   return rows.map((row) => ({
     ...row,
     linked_note_title: row.linked_note_id
       ? (titleMap.get(row.linked_note_id) ?? null)
       : null,
+    linked_todo_count: row.type === "note" ? (countMap.get(row.id) ?? 0) : 0,
   }));
 }
 
@@ -111,10 +143,10 @@ export function createItem(
   return db.select().from(items).where(eq(items.id, id)).get()!;
 }
 
-export function getItem(db: DB, id: string): ItemWithLinkedTitle | null {
+export function getItem(db: DB, id: string): ItemWithLinkedInfo | null {
   const row = db.select().from(items).where(eq(items.id, id)).get() ?? null;
   if (!row) return null;
-  return resolveLinkedNoteTitles(db, [row])[0]!;
+  return resolveLinkedInfo(db, [row])[0]!;
 }
 
 export function listItems(
@@ -178,7 +210,7 @@ export function listItems(
       sql`SELECT DISTINCT items.* FROM items, json_each(items.tags) ${whereClause} ${orderSql} LIMIT ${limit} OFFSET ${offset}`,
     );
 
-    return { items: resolveLinkedNoteTitles(db, rows), total };
+    return { items: resolveLinkedInfo(db, rows), total };
   }
 
   const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
@@ -199,7 +231,7 @@ export function listItems(
     .offset(offset)
     .all();
 
-  return { items: resolveLinkedNoteTitles(db, rows), total };
+  return { items: resolveLinkedInfo(db, rows), total };
 }
 
 export function updateItem(db: DB, id: string, input: UpdateItemInput) {
