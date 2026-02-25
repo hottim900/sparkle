@@ -134,7 +134,7 @@ function MainApp() {
   const statusFilter: ItemStatus | undefined = (() => {
     const directStatusViews: ViewType[] = [
       "fleeting", "developing", "permanent", "exported",
-      "active", "done", "archived",
+      "active", "done", "draft", "archived",
     ];
     if (directStatusViews.includes(currentView)) {
       return currentView as ItemStatus;
@@ -146,8 +146,10 @@ function MainApp() {
   const typeFilter: ItemType | undefined = (() => {
     if (currentView === "notes") return "note";
     if (currentView === "todos") return "todo";
+    if (currentView === "scratch") return "scratch";
     if (["fleeting", "developing", "permanent", "exported"].includes(currentView)) return "note";
     if (["active", "done"].includes(currentView)) return "todo";
+    if (currentView === "draft") return "scratch";
     return undefined;
   })();
 

@@ -24,6 +24,7 @@ import {
   CheckCircle,
   FileText,
   ListTodo,
+  StickyNote,
 } from "lucide-react";
 
 type SortOption = {
@@ -95,6 +96,11 @@ function getBatchActions(view: ViewType, subView?: string, obsidianEnabled?: boo
         { action: "done", label: "完成", icon: <CheckCircle className="h-3.5 w-3.5" /> },
         ...universal,
       ];
+    case "draft":
+      return [
+        { action: "delete", label: "刪除", icon: <Trash2 className="h-3.5 w-3.5" />, variant: "destructive", confirm: "確定要刪除所選項目嗎？此操作無法復原。" },
+        { action: "archive", label: "封存", icon: <Archive className="h-3.5 w-3.5" /> },
+      ];
     default:
       return universal;
   }
@@ -142,9 +148,11 @@ export function ItemList({
 
   const noteViews = ["notes", "fleeting", "developing", "permanent", "exported"];
   const todoViews = ["todos", "active", "done"];
+  const scratchViews = ["scratch", "draft"];
   const isNoteView = currentView ? noteViews.includes(currentView) : false;
   const isTodoView = currentView ? todoViews.includes(currentView) : false;
-  const sortOptions = isNoteView ? baseSortOptions : [...baseSortOptions, dueSortOption];
+  const isScratchView = currentView ? scratchViews.includes(currentView) : false;
+  const sortOptions = (isNoteView || isScratchView) ? baseSortOptions : [...baseSortOptions, dueSortOption];
   const defaultSortIdx = isTodoView ? sortOptions.length - 1 : 0; // todos default to due date
   const safeSortIdx = sortIdx < sortOptions.length ? sortIdx : defaultSortIdx;
   const currentSort = sortOptions[safeSortIdx];
@@ -153,12 +161,14 @@ export function ItemList({
   const effectiveStatus: ItemStatus | undefined = (() => {
     if (currentView === "notes" && noteSubView) return noteSubView;
     if (currentView === "todos" && todoSubView) return todoSubView;
+    if (currentView === "scratch") return "draft";
     return status;
   })();
 
   const effectiveType: ItemType | undefined = (() => {
     if (currentView === "notes") return "note";
     if (currentView === "todos") return "todo";
+    if (currentView === "scratch") return "scratch";
     return type;
   })();
 
@@ -193,7 +203,13 @@ export function ItemList({
 
   // Reset sort to view-appropriate default when switching views
   useEffect(() => {
-    setSortIdx(isTodoView ? sortOptions.length - 1 : 0);
+    if (isScratchView) {
+      setSortIdx(2); // "最近更新" (index 2 in baseSortOptions)
+    } else if (isTodoView) {
+      setSortIdx(sortOptions.length - 1);
+    } else {
+      setSortIdx(0);
+    }
   }, [currentView]);
 
   useEffect(() => {
@@ -377,6 +393,7 @@ export function ItemList({
         {(currentView === "all" || currentView === "archived") ? (() => {
           const notes = items.filter((i) => i.type === "note");
           const todos = items.filter((i) => i.type === "todo");
+          const scratches = items.filter((i) => i.type === "scratch");
           return (
             <>
               {notes.length > 0 && (
@@ -409,6 +426,28 @@ export function ItemList({
                     <span className="text-muted-foreground/60">({todos.length})</span>
                   </div>
                   {todos.map((item) => (
+                    <ItemCard
+                      key={item.id}
+                      item={item}
+                      selected={item.id === selectedId}
+                      onSelect={onSelect}
+                      onNavigate={onNavigate}
+                      onUpdated={fetchItems}
+                      selectionMode={selectionMode}
+                      checked={selectedIds.has(item.id)}
+                      onToggle={toggleSelection}
+                    />
+                  ))}
+                </>
+              )}
+              {scratches.length > 0 && (
+                <>
+                  <div className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-muted-foreground bg-muted/50 sticky top-0 z-10">
+                    <StickyNote className="h-3.5 w-3.5" />
+                    暫存
+                    <span className="text-muted-foreground/60">({scratches.length})</span>
+                  </div>
+                  {scratches.map((item) => (
                     <ItemCard
                       key={item.id}
                       item={item}
