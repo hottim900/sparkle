@@ -64,7 +64,7 @@ export function createItem(
     content: input.content ?? "",
     status: status as "fleeting",
     priority: input.priority ?? null,
-    due: input.due ?? null,
+    due: (type === "todo" ? (input.due ?? null) : null),
     tags: JSON.stringify(input.tags ?? []),
     origin: input.origin ?? "",
     source: input.source ?? null,
@@ -198,6 +198,17 @@ export function updateItem(db: DB, id: string, input: UpdateItemInput) {
     const contentChanged = input.content !== undefined && input.content !== existing.content;
     if (titleChanged || contentChanged) {
       updates.status = "permanent";
+    }
+  }
+
+  // Notes don't support due dates — clear due on todo→note conversion, ignore due updates for notes
+  if (effectiveType === "note") {
+    if (input.type !== undefined && input.type !== existing.type) {
+      // Converting to note: explicitly clear existing due
+      updates.due = null;
+    } else {
+      // Already a note: ignore any due update attempt
+      delete updates.due;
     }
   }
 

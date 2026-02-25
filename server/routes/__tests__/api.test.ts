@@ -495,6 +495,25 @@ describe("Items CRUD", () => {
       });
     });
 
+    it("ignores due field when updating a note", async () => {
+      const createRes = await app.request("/api/items", {
+        method: "POST",
+        headers: jsonHeaders(),
+        body: JSON.stringify({ title: "A note", type: "note" }),
+      });
+      const created = await createRes.json();
+      expect(created.due).toBeNull();
+
+      const res = await app.request(`/api/items/${created.id}`, {
+        method: "PATCH",
+        headers: jsonHeaders(),
+        body: JSON.stringify({ due: "2026-03-15" }),
+      });
+      expect(res.status).toBe(200);
+      const updated = await res.json();
+      expect(updated.due).toBeNull();
+    });
+
     describe("auto-mapping override", () => {
       it("type conversion auto-mapping overrides explicit status", async () => {
         const createRes = await app.request("/api/items", {

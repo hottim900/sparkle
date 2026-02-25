@@ -358,21 +358,23 @@ export function ItemDetail({
           </Select>
         </div>
 
-        {/* Due date */}
-        <div>
-          <label className="text-sm text-muted-foreground block mb-1">
-            到期日
-          </label>
-          <Input
-            type="date"
-            value={item.due ?? ""}
-            onChange={(e) => {
-              const val = e.target.value || null;
-              setItem({ ...item, due: val });
-              saveField("due", val);
-            }}
-          />
-        </div>
+        {/* Due date (todo only) */}
+        {item.type === "todo" && (
+          <div>
+            <label className="text-sm text-muted-foreground block mb-1">
+              到期日
+            </label>
+            <Input
+              type="date"
+              value={item.due ?? ""}
+              onChange={(e) => {
+                const val = e.target.value || null;
+                setItem({ ...item, due: val });
+                saveField("due", val);
+              }}
+            />
+          </div>
+        )}
 
         {/* Source URL */}
         <div>

@@ -701,8 +701,8 @@ describe("POST /api/webhook/line", () => {
       process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
       seedItems();
 
-      // Establish session
-      await sendLineMessage(app, "!inbox");
+      // Establish session with todos (not notes — notes don't support due)
+      await sendLineMessage(app, "!active");
       vi.mocked(fetch).mockClear();
 
       // Set due date
@@ -717,7 +717,7 @@ describe("POST /api/webhook/line", () => {
 
       // Verify DB was updated
       const allItems = testDb.select().from(items).all();
-      const updated = allItems.find((i) => i.title === "研究 Hono" || i.due === "2026-03-15");
+      const updated = allItems.find((i) => i.due === "2026-03-15");
       expect(updated).toBeDefined();
     });
 
@@ -744,7 +744,7 @@ describe("POST /api/webhook/line", () => {
       process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
       seedItems();
 
-      await sendLineMessage(app, "!inbox");
+      await sendLineMessage(app, "!active");
       vi.mocked(fetch).mockClear();
 
       const res = await sendLineMessage(app, "!due 1 不知道什麼");
@@ -765,6 +765,24 @@ describe("POST /api/webhook/line", () => {
       const fetchMock = vi.mocked(fetch);
       const callBody = JSON.parse(fetchMock.mock.calls[0][1]!.body as string);
       expect(callBody.messages[0].text).toContain("編號 1 不存在");
+    });
+
+    it("rejects due on notes", async () => {
+      process.env.LINE_CHANNEL_SECRET = TEST_LINE_SECRET;
+      process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
+      seedItems();
+
+      // Query fleeting notes to get a note in session
+      await sendLineMessage(app, "!fleeting");
+      vi.mocked(fetch).mockClear();
+
+      // Try to set due on the note
+      const res = await sendLineMessage(app, "!due 1 2026-03-15");
+      expect(res.status).toBe(200);
+
+      const fetchMock = vi.mocked(fetch);
+      const callBody = JSON.parse(fetchMock.mock.calls[0][1]!.body as string);
+      expect(callBody.messages[0].text).toContain("筆記不支援到期日");
     });
   });
 

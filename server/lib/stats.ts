@@ -77,7 +77,7 @@ export function getStats(sqlite: Database.Database): Stats {
         COALESCE(SUM(CASE WHEN status = 'done' AND modified >= ? THEN 1 ELSE 0 END), 0) AS done_this_month,
         COALESCE(SUM(CASE WHEN created >= ? THEN 1 ELSE 0 END), 0) AS created_this_week,
         COALESCE(SUM(CASE WHEN created >= ? THEN 1 ELSE 0 END), 0) AS created_this_month,
-        COALESCE(SUM(CASE WHEN due < ? AND status NOT IN ('done', 'exported', 'archived') THEN 1 ELSE 0 END), 0) AS overdue_count
+        COALESCE(SUM(CASE WHEN due < ? AND type = 'todo' AND status NOT IN ('done', 'exported', 'archived') THEN 1 ELSE 0 END), 0) AS overdue_count
       FROM items`,
     )
     .get(weekStart, monthStart, weekStart, monthStart, weekStart, monthStart, today) as Stats;
@@ -117,15 +117,15 @@ export function getFocusItems(sqlite: Database.Database): FocusItem[] {
       `SELECT * FROM (
         SELECT items.*,
           CASE
-            WHEN due < :today THEN 1
-            WHEN due = :today THEN 2
-            WHEN due > :today AND due <= date(:today, '+7 days') THEN 3
+            WHEN type = 'todo' AND due < :today THEN 1
+            WHEN type = 'todo' AND due = :today THEN 2
+            WHEN type = 'todo' AND due > :today AND due <= date(:today, '+7 days') THEN 3
             WHEN priority = 'high' AND status = 'active' THEN 4
             WHEN status = 'fleeting' THEN 5
             ELSE 6
           END AS focus_rank,
           CASE
-            WHEN due IS NOT NULL AND due <= date(:today, '+7 days') THEN due
+            WHEN type = 'todo' AND due IS NOT NULL AND due <= date(:today, '+7 days') THEN due
             ELSE created
           END AS focus_sort
         FROM items

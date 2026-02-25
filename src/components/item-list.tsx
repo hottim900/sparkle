@@ -23,12 +23,13 @@ type SortOption = {
   order: string;
 };
 
-const sortOptions: SortOption[] = [
+const baseSortOptions: SortOption[] = [
   { label: "最新建立", sort: "created", order: "desc" },
   { label: "最舊建立", sort: "created", order: "asc" },
   { label: "優先度高→低", sort: "priority", order: "desc" },
-  { label: "到期日近→遠", sort: "due", order: "asc" },
 ];
+
+const dueSortOption: SortOption = { label: "到期日近→遠", sort: "due", order: "asc" };
 
 type NoteSubView = "fleeting" | "developing" | "permanent" | "exported";
 type TodoSubView = "active" | "done";
@@ -123,7 +124,11 @@ export function ItemList({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const limit = 50;
 
-  const currentSort = sortOptions[sortIdx];
+  const noteViews = ["notes", "fleeting", "developing", "permanent", "exported"];
+  const isNoteView = currentView ? noteViews.includes(currentView) : false;
+  const sortOptions = isNoteView ? baseSortOptions : [...baseSortOptions, dueSortOption];
+  const safeSortIdx = sortIdx < sortOptions.length ? sortIdx : 0;
+  const currentSort = sortOptions[safeSortIdx];
 
   // Determine effective status and type from view + sub-navigation
   const effectiveStatus: ItemStatus | undefined = (() => {
@@ -165,11 +170,11 @@ export function ItemList({
     } finally {
       setLoading(false);
     }
-  }, [effectiveStatus, effectiveType, tag, offset, refreshKey, sortIdx, excludeStatus?.join()]);
+  }, [effectiveStatus, effectiveType, tag, offset, refreshKey, safeSortIdx, excludeStatus?.join()]);
 
   useEffect(() => {
     setOffset(0);
-  }, [effectiveStatus, effectiveType, tag, sortIdx]);
+  }, [effectiveStatus, effectiveType, tag, safeSortIdx]);
 
   useEffect(() => {
     fetchItems();
@@ -320,7 +325,7 @@ export function ItemList({
           <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground" />
           <select
             className="text-sm bg-transparent text-muted-foreground outline-none cursor-pointer"
-            value={sortIdx}
+            value={safeSortIdx}
             onChange={(e) => setSortIdx(Number(e.target.value))}
           >
             {sortOptions.map((opt, i) => (

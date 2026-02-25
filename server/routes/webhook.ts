@@ -220,6 +220,10 @@ webhookRouter.post("/line", async (c) => {
       case "due": {
         const resolved = resolveSessionItem(userId, cmd.index);
         if ("error" in resolved) { reply = resolved.error; break; }
+        if (resolved.item.type === "note") {
+          reply = "❌ 筆記不支援到期日，請改用待辦追蹤期限";
+          break;
+        }
         const dateParsed = parseDate(cmd.dateInput);
         if (!dateParsed.success) {
           reply = "❌ 無法辨識日期，請用 YYYY-MM-DD 或中文如『明天』『3天後』";
