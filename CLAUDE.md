@@ -100,10 +100,7 @@ npm run dev          # Vite on :5173, proxies /api to :3000
 npm run dev:server   # Hono on :3000 with tsx watch
 
 # IMPORTANT: Tests require node v22 (better-sqlite3 native module is incompatible with v24)
-# If using nvm:
 nvm use 22
-# Or set PATH directly:
-export PATH="/home/YOUR_USER/.nvm/versions/node/v22.22.0/bin:/usr/bin:/bin:$PATH"
 
 # Tests (345 tests, 10 files — server only, no frontend tests)
 npx vitest run                # Run all tests
@@ -119,88 +116,57 @@ npm run build        # Production frontend → dist/
 
 ## Production Deployment
 
-Deployed on home PC (WSL2) with WireGuard VPN. Managed by systemd.
+Self-hosted on WSL2 with WireGuard VPN. Managed by systemd. See `docs/self-hosting.md` for full setup instructions.
 
-### First-time setup
-
-```bash
-sudo ./scripts/install-services.sh   # Install and start systemd services
-```
-
-### Restart / manage
+### Quick Reference
 
 ```bash
-sudo ./scripts/start.sh                                    # Restart all
-sudo systemctl restart sparkle sparkle-tunnel      # Restart manually
-sudo systemctl status sparkle                          # Check status
-journalctl -u sparkle -f                               # Tail logs
+# First-time setup
+sudo ./scripts/install-services.sh
+
+# Restart
+sudo ./scripts/start.sh
+sudo systemctl restart sparkle sparkle-tunnel
+
+# Status & logs
+sudo systemctl status sparkle
+journalctl -u sparkle -f
 ```
-
-### After PC reboot
-
-WSL services auto-start. Only manual step: run `scripts/update-portproxy.ps1` as admin in Windows (right-click → Run as Administrator) to update port forwarding.
 
 ### Environment Variables (.env)
 
-```
-NODE_ENV=production
-PORT=3000
-DATABASE_URL=/home/YOUR_USER/sparkle/data/todo.db
-AUTH_TOKEN=<login-token>
-TLS_CERT=/home/YOUR_USER/sparkle/certs/YOUR_VPN_IP+2.pem
-TLS_KEY=/home/YOUR_USER/sparkle/certs/YOUR_VPN_IP+2-key.pem
-LINE_CHANNEL_SECRET=<from-line-console>
-LINE_CHANNEL_ACCESS_TOKEN=<from-line-console>
-```
-
-Obsidian export settings are stored in the `settings` table in SQLite (configured via Settings page or `PUT /api/settings`).
-
-### Access Points
-
-| What | URL |
-|------|-----|
-| PC browser | https://localhost:3000 |
-| Mobile (VPN) | https://YOUR_VPN_IP:3000 |
-| LINE webhook | https://YOUR_WEBHOOK_DOMAIN/api/webhook/line |
+Copy `.env.example` to `.env` and fill in your values. See `.env.example` for all available variables.
 
 ### HTTPS (mkcert)
 
-- CA root: `~/.local/share/mkcert/rootCA.pem`
-- Cert covers: `YOUR_VPN_IP`, `localhost`, `127.0.0.1`
-- CA installed on: Windows (certutil), iOS/Android (profile)
+- Generate certs with mkcert for your local IPs / localhost
+- Install the CA root on all devices that need to access the app
+- Configure cert paths in `.env` (TLS_CERT, TLS_KEY)
 
 ### Firewall (iptables)
 
-Port 3000 透過 iptables 限制只允許特定來源存取，規則在 `sparkle.service` 的 `ExecStartPre` 自動設定（WSL2 重開後 iptables 規則會消失，service 啟動時自動重建）：
+Port 3000 is restricted via iptables rules in `sparkle.service`:
+- `127.0.0.1` → ACCEPT (localhost / Cloudflare Tunnel)
+- VPN subnet → ACCEPT (WireGuard)
+- `172.16.0.0/12` → ACCEPT (Windows host via WSL2 port proxy)
+- All others → DROP
 
-- `127.0.0.1` → ACCEPT（localhost / Cloudflare Tunnel）
-- `YOUR_VPN_SUBNET/24` → ACCEPT（WireGuard VPN 子網）
-- `172.16.0.0/12` → ACCEPT（Windows host 經 port proxy 轉發進 WSL2 的流量）
-- 其餘 → DROP
-
-需要 `iptables` 套件：`sudo apt install -y iptables`
+Requires `iptables` package: `sudo apt install -y iptables`
 
 ### WSL2 Port Forwarding
 
 After PC reboot, right-click `scripts/update-portproxy.ps1` → Run as Administrator.
 
-Or manually in PowerShell (admin):
-```powershell
-$wslIp = wsl hostname -I | ForEach-Object { $_.Trim().Split()[0] }
-netsh interface portproxy add v4tov4 listenaddress=YOUR_VPN_IP listenport=3000 connectaddress=$wslIp connectport=3000
-```
-
 ### Cloudflare Tunnel
 
-- Named tunnel: `sparkle` (ID: YOUR_TUNNEL_ID)
-- Domain: `YOUR_WEBHOOK_DOMAIN` → only `/api/webhook/*` is public
-- Config: `~/.cloudflared/config.yml`
-- Credentials: `~/.cloudflared/YOUR_TUNNEL_ID-*.json`
+- Run `scripts/setup-cloudflared.sh` for interactive setup
+- Only `/api/webhook/*` is exposed publicly (everything else returns 404)
+- Config stored in `~/.cloudflared/config.yml`
 
 ### LINE Bot
 
 - LINE Official Account with Messaging API enabled
-- Webhook: `https://YOUR_WEBHOOK_DOMAIN/api/webhook/line`
+- Webhook URL: `https://YOUR_DOMAIN/api/webhook/line`
 - Commands:
   - 新增：`!todo`=待辦, `!high`=高優先, 直接輸入=閃念筆記
   - 查詢：`!fleeting`=閃念筆記, `!developing`=發展中, `!permanent`=永久筆記, `!active`=進行中待辦, `!notes`=所有筆記, `!todos`=所有待辦, `!today`=今日焦點, `!find <keyword>`=搜尋, `!list <tag>`=標籤篩選, `!stats`=統計
@@ -216,21 +182,21 @@ netsh interface portproxy add v4tov4 listenaddress=YOUR_VPN_IP listenport=3000 c
 ### MCP Server (Claude Code Integration)
 
 - MCP server in `mcp-server/` enables Claude Code to read/write Sparkle notes via REST API
-- Config: user-scoped in `~/.claude.json`（全域可用，不限專案目錄）
+- Config: user-scoped in `~/.claude.json`
 - Transport: stdio (subprocess of Claude Code)
 - 9 tools: sparkle_search, sparkle_get_note, sparkle_list_notes, sparkle_create_note, sparkle_update_note, sparkle_advance_note, sparkle_export_to_obsidian, sparkle_get_stats, sparkle_list_tags
 - Build: `cd mcp-server && npm install && npm run build`
 - Dev: `cd mcp-server && npm run dev`
 - Test: `cd mcp-server && npx @modelcontextprotocol/inspector node dist/index.js`
-- 註冊指令（已完成，記錄備查）：
+- Registration example:
   ```bash
   claude mcp add sparkle --transport stdio --scope user \
     --env SPARKLE_AUTH_TOKEN=<token> \
     --env SPARKLE_API_URL=https://localhost:3000 \
     --env NODE_TLS_REJECT_UNAUTHORIZED=0 \
-    -- /home/YOUR_USER/.nvm/versions/node/v22.22.0/bin/node /home/YOUR_USER/sparkle/mcp-server/dist/index.js
+    -- node /path/to/sparkle/mcp-server/dist/index.js
   ```
-- Note: 必須用 node 絕對路徑，因為 nvm 只在 interactive shell 載入
+- Note: Use the full node path if nvm is not available in non-interactive shells
 
 ## Data Model
 
