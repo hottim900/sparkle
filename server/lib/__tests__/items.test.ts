@@ -417,6 +417,30 @@ describe("Data Access Layer", () => {
       expect(getAutoMappedStatus("note", "todo", "archived")).toBe("archived");
       expect(getAutoMappedStatus("todo", "note", "archived")).toBe("archived");
     });
+
+    it("maps scratch → note statuses", () => {
+      expect(getAutoMappedStatus("scratch", "note", "draft")).toBe("fleeting");
+      expect(getAutoMappedStatus("scratch", "note", "archived")).toBe("archived");
+    });
+
+    it("maps scratch → todo statuses", () => {
+      expect(getAutoMappedStatus("scratch", "todo", "draft")).toBe("active");
+      expect(getAutoMappedStatus("scratch", "todo", "archived")).toBe("archived");
+    });
+
+    it("maps note → scratch statuses", () => {
+      expect(getAutoMappedStatus("note", "scratch", "fleeting")).toBe("draft");
+      expect(getAutoMappedStatus("note", "scratch", "developing")).toBe("draft");
+      expect(getAutoMappedStatus("note", "scratch", "permanent")).toBe("archived");
+      expect(getAutoMappedStatus("note", "scratch", "exported")).toBe("archived");
+      expect(getAutoMappedStatus("note", "scratch", "archived")).toBe("archived");
+    });
+
+    it("maps todo → scratch statuses", () => {
+      expect(getAutoMappedStatus("todo", "scratch", "active")).toBe("draft");
+      expect(getAutoMappedStatus("todo", "scratch", "done")).toBe("archived");
+      expect(getAutoMappedStatus("todo", "scratch", "archived")).toBe("archived");
+    });
   });
 
   describe("updateItem — type conversion", () => {
@@ -612,6 +636,39 @@ describe("Data Access Layer", () => {
       const withoutTodos = result.items.find((i) => i.title === "Note without todos");
       expect(withTodos!.linked_todo_count).toBe(2);
       expect(withoutTodos!.linked_todo_count).toBe(0);
+    });
+  });
+
+  describe("scratch field clearing", () => {
+    it("creates scratch item without tags/priority/due/aliases/linked_note_id", () => {
+      const item = createItem(db, {
+        title: "temp note",
+        type: "scratch",
+        tags: ["should-be-ignored"],
+        priority: "high",
+        due: "2026-03-01",
+        aliases: ["alias1"],
+        linked_note_id: "some-uuid",
+      });
+      expect(item.type).toBe("scratch");
+      expect(item.status).toBe("draft");
+      expect(item.tags).toBe("[]");
+      expect(item.priority).toBeNull();
+      expect(item.due).toBeNull();
+      expect(item.aliases).toBe("[]");
+      expect(item.linked_note_id).toBeNull();
+    });
+
+    it("clears tags/priority/due/aliases when converting to scratch", () => {
+      const note = createItem(db, { title: "note", type: "note", tags: ["a"], priority: "high" });
+      const updated = updateItem(db, note.id, { type: "scratch" });
+      expect(updated!.type).toBe("scratch");
+      expect(updated!.status).toBe("draft");
+      expect(updated!.tags).toBe("[]");
+      expect(updated!.priority).toBeNull();
+      expect(updated!.due).toBeNull();
+      expect(updated!.aliases).toBe("[]");
+      expect(updated!.linked_note_id).toBeNull();
     });
   });
 
