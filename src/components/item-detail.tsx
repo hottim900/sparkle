@@ -377,6 +377,22 @@ export function ItemDetail({
         </div>
       </div>
 
+      {/* Type indicator bar */}
+      <div
+        className={`flex items-center gap-1.5 px-4 py-1.5 text-xs font-medium ${
+          item.type === "note"
+            ? "bg-purple-50 text-purple-700 dark:bg-purple-950 dark:text-purple-300"
+            : "bg-sky-50 text-sky-700 dark:bg-sky-950 dark:text-sky-300"
+        }`}
+      >
+        {item.type === "note" ? (
+          <FileText className="h-3.5 w-3.5" />
+        ) : (
+          <ListTodo className="h-3.5 w-3.5" />
+        )}
+        {item.type === "note" ? "筆記" : "待辦"}
+      </div>
+
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4 animate-fade-in break-words">
         {/* Title */}
