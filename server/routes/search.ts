@@ -18,7 +18,8 @@ searchRouter.get("/", (c) => {
     if (e instanceof ZodError) {
       return c.json({ error: e.errors[0]?.message ?? "Validation error" }, 400);
     }
-    throw e;
+    // Catch FTS5 syntax errors and other unexpected failures gracefully
+    return c.json({ results: [] });
   }
 });
 

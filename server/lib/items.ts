@@ -306,6 +306,18 @@ export function deleteItem(db: DB, id: string): boolean {
   return result.changes > 0;
 }
 
+/**
+ * Escape user input for FTS5 MATCH. Each token is wrapped in double-quotes
+ * (phrase literal) to prevent FTS5 syntax characters from being interpreted.
+ * Multiple tokens are AND-joined so all must match.
+ * Embedded double-quotes are doubled per FTS5 syntax.
+ */
+function escapeFts5Query(raw: string): string {
+  const tokens = raw.trim().split(/\s+/).filter(Boolean);
+  if (tokens.length === 0) return '""';
+  return tokens.map((t) => `"${t.replace(/"/g, '""')}"`).join(" AND ");
+}
+
 export function searchItems(
   sqlite: Database.Database,
   query: string,
@@ -323,6 +335,7 @@ export function searchItems(
     return stmt.all(pattern, pattern, limit) as (typeof items.$inferSelect)[];
   }
 
+  const escaped = escapeFts5Query(query);
   const stmt = sqlite.prepare(`
     SELECT items.*
     FROM items_fts
@@ -332,7 +345,7 @@ export function searchItems(
     LIMIT ?
   `);
 
-  return stmt.all(query, limit) as (typeof items.$inferSelect)[];
+  return stmt.all(escaped, limit) as (typeof items.$inferSelect)[];
 }
 
 export function getAllTags(sqlite: Database.Database): string[] {
