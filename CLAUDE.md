@@ -96,9 +96,11 @@ npx vitest run --coverage     # With coverage (needs @vitest/coverage-v8)
 npx vitest                    # Watch mode
 # Coverage: server/lib ~97%, server/routes ~94%, frontend 0%
 
-# Build
+# Build — ALWAYS build after frontend changes before committing
 npm run build        # Production frontend → dist/
 ```
+
+**Important:** After any frontend code change, run `npm run build` before committing. The production deployment serves from `dist/`, so forgetting to build means changes won't be visible in production.
 
 ## Production Deployment
 
