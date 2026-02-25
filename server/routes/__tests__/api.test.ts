@@ -26,6 +26,7 @@ function createTestDb() {
       origin TEXT DEFAULT '',
       source TEXT DEFAULT NULL,
       aliases TEXT NOT NULL DEFAULT '[]',
+      linked_note_id TEXT DEFAULT NULL,
       created TEXT NOT NULL,
       modified TEXT NOT NULL
     );
@@ -568,6 +569,89 @@ describe("Items CRUD", () => {
       });
       expect(res.status).toBe(404);
     });
+  });
+});
+
+// ============================================================
+// Linked Todos Tests
+// ============================================================
+describe("Linked Todos", () => {
+  it("POST create todo with linked_note_id saves the field", async () => {
+    // Create a note first
+    const noteRes = await app.request("/api/items", {
+      method: "POST",
+      headers: jsonHeaders(),
+      body: JSON.stringify({ title: "My note", type: "note" }),
+    });
+    const note = await noteRes.json();
+
+    // Create a todo linked to the note
+    const todoRes = await app.request("/api/items", {
+      method: "POST",
+      headers: jsonHeaders(),
+      body: JSON.stringify({
+        title: "Track note",
+        type: "todo",
+        linked_note_id: note.id,
+      }),
+    });
+    expect(todoRes.status).toBe(201);
+    const todo = await todoRes.json();
+    expect(todo.linked_note_id).toBe(note.id);
+  });
+
+  it("GET /api/items/:id/linked-todos returns linked todos", async () => {
+    // Create a note
+    const noteRes = await app.request("/api/items", {
+      method: "POST",
+      headers: jsonHeaders(),
+      body: JSON.stringify({ title: "My note", type: "note" }),
+    });
+    const note = await noteRes.json();
+
+    // Create two linked todos
+    await app.request("/api/items", {
+      method: "POST",
+      headers: jsonHeaders(),
+      body: JSON.stringify({
+        title: "Track 1",
+        type: "todo",
+        linked_note_id: note.id,
+      }),
+    });
+    await app.request("/api/items", {
+      method: "POST",
+      headers: jsonHeaders(),
+      body: JSON.stringify({
+        title: "Track 2",
+        type: "todo",
+        linked_note_id: note.id,
+      }),
+    });
+
+    const res = await app.request(`/api/items/${note.id}/linked-todos`, {
+      headers: authHeaders(),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.items).toHaveLength(2);
+    expect(body.items.map((i: { title: string }) => i.title).sort()).toEqual(["Track 1", "Track 2"]);
+  });
+
+  it("GET /api/items/:id/linked-todos returns empty when no linked todos", async () => {
+    const noteRes = await app.request("/api/items", {
+      method: "POST",
+      headers: jsonHeaders(),
+      body: JSON.stringify({ title: "Lonely note", type: "note" }),
+    });
+    const note = await noteRes.json();
+
+    const res = await app.request(`/api/items/${note.id}/linked-todos`, {
+      headers: authHeaders(),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.items).toHaveLength(0);
   });
 });
 

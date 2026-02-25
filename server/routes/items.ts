@@ -167,6 +167,15 @@ itemsRouter.post("/batch", async (c) => {
   }
 });
 
+// Get linked todos for a note
+itemsRouter.get("/:id/linked-todos", (c) => {
+  const id = c.req.param("id");
+  const rows = sqlite.prepare(
+    "SELECT * FROM items WHERE linked_note_id = ? ORDER BY created DESC"
+  ).all(id);
+  return c.json({ items: rows });
+});
+
 // Export item to Obsidian
 itemsRouter.post("/:id/export", (c) => {
   const item = getItem(db, c.req.param("id"));

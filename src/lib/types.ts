@@ -10,6 +10,7 @@ export interface Item {
   source: string | null; // Reference URL
   origin: string; // Capture channel (was 'source')
   aliases: string; // JSON array string
+  linked_note_id: string | null;
   created: string;
   modified: string;
 }

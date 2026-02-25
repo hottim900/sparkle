@@ -5,7 +5,7 @@ import { setupFTS } from "./fts.js";
 
 const DB_PATH = process.env.DATABASE_URL || "./data/todo.db";
 
-const TARGET_VERSION = 7;
+const TARGET_VERSION = 8;
 
 function getSchemaVersion(sqlite: Database.Database): number {
   // Check if schema_version table exists
@@ -134,6 +134,19 @@ function runMigrations(sqlite: Database.Database) {
     migrateStatuses();
     setSchemaVersion(sqlite, 7);
   }
+
+  // Step 7→8: Add linked_note_id column
+  if (version < 8) {
+    try {
+      sqlite.exec(
+        "ALTER TABLE items ADD COLUMN linked_note_id TEXT DEFAULT NULL"
+      );
+    } catch (e: unknown) {
+      const msg = (e as Error).message || "";
+      if (!msg.includes("duplicate column")) throw e;
+    }
+    setSchemaVersion(sqlite, 8);
+  }
 }
 
 function createDb() {
@@ -165,6 +178,7 @@ function createDb() {
         origin TEXT DEFAULT '',
         source TEXT DEFAULT NULL,
         aliases TEXT NOT NULL DEFAULT '[]',
+        linked_note_id TEXT DEFAULT NULL,
         created TEXT NOT NULL,
         modified TEXT NOT NULL
       );

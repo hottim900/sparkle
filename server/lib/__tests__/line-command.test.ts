@@ -184,6 +184,33 @@ describe("parseCommand", () => {
     });
   });
 
+  // Track command
+  describe("track command", () => {
+    it("parses '!track 1' as track command with index 1", () => {
+      expect(parseCommand("!track 1")).toEqual({ type: "track", index: 1 });
+    });
+
+    it("parses '!track 1 後天' as track command with dateInput", () => {
+      expect(parseCommand("!track 1 後天")).toEqual({ type: "track", index: 1, dateInput: "後天" });
+    });
+
+    it("parses '!track 2 2026-03-15' as track with date string", () => {
+      expect(parseCommand("!track 2 2026-03-15")).toEqual({ type: "track", index: 2, dateInput: "2026-03-15" });
+    });
+
+    it("parses '!track' without number as unknown", () => {
+      expect(parseCommand("!track")).toEqual({ type: "unknown" });
+    });
+
+    it("parses '!track abc' as unknown", () => {
+      expect(parseCommand("!track abc")).toEqual({ type: "unknown" });
+    });
+
+    it("parses '!track 0' as unknown", () => {
+      expect(parseCommand("!track 0")).toEqual({ type: "unknown" });
+    });
+  });
+
   // Zettelkasten commands
   describe("new Zettelkasten commands", () => {
     it("parses '!fleeting' as fleeting query", () => {

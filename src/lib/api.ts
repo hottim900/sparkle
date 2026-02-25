@@ -117,6 +117,7 @@ export async function createItem(input: {
   due?: string | null;
   tags?: string[];
   source?: string | null;
+  linked_note_id?: string | null;
 }): Promise<Item> {
   return request<Item>("/items", {
     method: "POST",
@@ -168,6 +169,11 @@ export async function exportItem(id: string): Promise<{ path: string }> {
   return request<{ path: string }>(`/items/${id}/export`, {
     method: "POST",
   });
+}
+
+// Linked Todos API
+export async function getLinkedTodos(noteId: string): Promise<ListItemsResponse> {
+  return request<ListItemsResponse>(`/items/${noteId}/linked-todos`);
 }
 
 // Search API

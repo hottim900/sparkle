@@ -12,10 +12,10 @@ import { BottomNav } from "@/components/bottom-nav";
 import { OfflineIndicator } from "@/components/offline-indicator";
 import { InstallPrompt } from "@/components/install-prompt";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
-import { getConfig } from "@/lib/api";
+import { getConfig, getItem } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { List, ListTodo } from "lucide-react";
-import type { ViewType, ParsedItem, ItemStatus, ItemType } from "@/lib/types";
+import { parseItem, type ViewType, type ParsedItem, type ItemStatus, type ItemType } from "@/lib/types";
 
 const isMobile = () => window.innerWidth < 768;
 
@@ -54,6 +54,15 @@ function MainApp() {
     setSelectedTag(undefined);
     setTriageMode(false);
   };
+
+  const handleNavigate = useCallback(async (itemId: string) => {
+    try {
+      const itemData = await getItem(itemId);
+      setSelectedItem(parseItem(itemData));
+    } catch {
+      // item may have been deleted
+    }
+  }, []);
 
   const keyboardHandlers = useMemo(
     () => ({
@@ -203,6 +212,7 @@ function MainApp() {
                     setSelectedItem(null);
                     refresh();
                   }}
+                  onNavigate={handleNavigate}
                 />
               </div>
             )}

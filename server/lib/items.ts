@@ -69,6 +69,7 @@ export function createItem(
     origin: input.origin ?? "",
     source: input.source ?? null,
     aliases: JSON.stringify(input.aliases ?? []),
+    linked_note_id: type === "note" ? null : (input.linked_note_id ?? null),
     created: now,
     modified: now,
   };
@@ -181,6 +182,7 @@ export function updateItem(db: DB, id: string, input: UpdateItemInput) {
   if (input.tags !== undefined) updates.tags = JSON.stringify(input.tags);
   if (input.source !== undefined) updates.source = input.source;
   if (input.aliases !== undefined) updates.aliases = JSON.stringify(input.aliases);
+  if (input.linked_note_id !== undefined) updates.linked_note_id = input.linked_note_id;
 
   // Type conversion auto-mapping (Section 9)
   if (input.type !== undefined && input.type !== existing.type) {
@@ -198,6 +200,17 @@ export function updateItem(db: DB, id: string, input: UpdateItemInput) {
     const contentChanged = input.content !== undefined && input.content !== existing.content;
     if (titleChanged || contentChanged) {
       updates.status = "permanent";
+    }
+  }
+
+  // Notes don't have linked_note_id; clear on todo→note conversion, ignore for notes
+  if (effectiveType === "note") {
+    if (input.type !== undefined && input.type !== existing.type) {
+      // Converting to note: explicitly clear linked_note_id
+      updates.linked_note_id = null;
+    } else {
+      // Already a note: ignore any linked_note_id update
+      delete updates.linked_note_id;
     }
   }
 

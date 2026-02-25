@@ -27,8 +27,10 @@ import {
   getItem,
   getTags,
   exportItem,
+  createItem,
+  getLinkedTodos,
 } from "@/lib/api";
-import { parseItem, type ParsedItem, type ItemStatus } from "@/lib/types";
+import { parseItem, parseItems, type ParsedItem, type ItemStatus, type ItemPriority } from "@/lib/types";
 import { TagInput } from "@/components/tag-input";
 import { toast } from "sonner";
 import {
@@ -40,6 +42,9 @@ import {
   Check,
   ExternalLink,
   X,
+  ListTodo,
+  FileText,
+  Plus,
 } from "lucide-react";
 
 interface ItemDetailProps {
@@ -48,6 +53,7 @@ interface ItemDetailProps {
   onClose?: () => void;
   onUpdated?: () => void;
   onDeleted?: () => void;
+  onNavigate?: (itemId: string) => void;
 }
 
 const noteStatuses: { value: ItemStatus; label: string }[] = [
@@ -75,6 +81,7 @@ export function ItemDetail({
   onClose,
   onUpdated,
   onDeleted,
+  onNavigate,
 }: ItemDetailProps) {
   const [item, setItem] = useState<ParsedItem | null>(null);
   const [allTags, setAllTags] = useState<string[]>([]);
@@ -87,11 +94,25 @@ export function ItemDetail({
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const savedTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
+  // Linked todo state
+  const [showCreateTodo, setShowCreateTodo] = useState(false);
+  const [linkedTodoTitle, setLinkedTodoTitle] = useState("");
+  const [linkedTodoDue, setLinkedTodoDue] = useState("");
+  const [linkedTodoPriority, setLinkedTodoPriority] = useState<ItemPriority | "none">("none");
+  const [linkedTodoTags, setLinkedTodoTags] = useState<string[]>([]);
+  const [creatingTodo, setCreatingTodo] = useState(false);
+  const [linkedTodos, setLinkedTodos] = useState<ParsedItem[]>([]);
+  const [linkedTodosLoading, setLinkedTodosLoading] = useState(false);
+  const [linkedNoteTitle, setLinkedNoteTitle] = useState<string | null>(null);
+
   useEffect(() => {
     setLoading(true);
+    setShowCreateTodo(false);
+    setLinkedNoteTitle(null);
     Promise.all([getItem(itemId), getTags()])
       .then(([itemData, tagsData]) => {
-        setItem(parseItem(itemData));
+        const parsed = parseItem(itemData);
+        setItem(parsed);
         setAllTags(tagsData.tags);
       })
       .catch((err) => {
@@ -99,6 +120,35 @@ export function ItemDetail({
       })
       .finally(() => setLoading(false));
   }, [itemId]);
+
+  // Fetch linked todos for notes
+  const loadLinkedTodos = useCallback(async () => {
+    if (!item || item.type !== "note") return;
+    setLinkedTodosLoading(true);
+    try {
+      const res = await getLinkedTodos(item.id);
+      setLinkedTodos(parseItems(res.items));
+    } catch {
+      // silently fail — section just won't show data
+    } finally {
+      setLinkedTodosLoading(false);
+    }
+  }, [item?.id, item?.type]);
+
+  useEffect(() => {
+    if (item?.type === "note") {
+      loadLinkedTodos();
+    }
+  }, [item?.id, item?.type, loadLinkedTodos]);
+
+  // Fetch linked note title for backlink display on todos
+  useEffect(() => {
+    if (item?.type === "todo" && item.linked_note_id) {
+      getItem(item.linked_note_id)
+        .then((noteData) => setLinkedNoteTitle(noteData.title))
+        .catch(() => setLinkedNoteTitle(null));
+    }
+  }, [item?.type, item?.linked_note_id]);
 
   const saveField = useCallback(
     async (field: string, value: unknown) => {
@@ -161,6 +211,44 @@ export function ItemDetail({
     } finally {
       setExporting(false);
     }
+  };
+
+  const handleCreateLinkedTodo = async () => {
+    if (!item || creatingTodo) return;
+    const trimmedTitle = linkedTodoTitle.trim();
+    if (!trimmedTitle) return;
+    setCreatingTodo(true);
+    try {
+      await createItem({
+        title: trimmedTitle,
+        type: "todo",
+        priority: linkedTodoPriority === "none" ? null : linkedTodoPriority,
+        due: linkedTodoDue || null,
+        tags: linkedTodoTags,
+        linked_note_id: item.id,
+      });
+      toast.success("已建立關聯待辦");
+      setShowCreateTodo(false);
+      setLinkedTodoTitle("");
+      setLinkedTodoDue("");
+      setLinkedTodoPriority("none");
+      setLinkedTodoTags([]);
+      loadLinkedTodos();
+      onUpdated?.();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "建立失敗");
+    } finally {
+      setCreatingTodo(false);
+    }
+  };
+
+  const openCreateTodoForm = () => {
+    if (!item) return;
+    setLinkedTodoTitle(`處理：${item.title}`);
+    setLinkedTodoDue("");
+    setLinkedTodoPriority("none");
+    setLinkedTodoTags([...item.tags]);
+    setShowCreateTodo(true);
   };
 
   const addTag = (tag: string) => {
@@ -236,6 +324,17 @@ export function ItemDetail({
           )}
         </div>
         <div className="flex items-center gap-1">
+          {item.type === "note" && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1 text-xs"
+              onClick={openCreateTodoForm}
+            >
+              <ListTodo className="h-3 w-3" />
+              建立追蹤待辦
+            </Button>
+          )}
           {showExportButton && (
             <Button
               variant="outline"
@@ -373,6 +472,23 @@ export function ItemDetail({
                 saveField("due", val);
               }}
             />
+          </div>
+        )}
+
+        {/* Backlink to linked note (todo only) */}
+        {item.type === "todo" && item.linked_note_id && linkedNoteTitle && (
+          <div>
+            <label className="text-sm text-muted-foreground block mb-1">
+              關聯筆記
+            </label>
+            <button
+              type="button"
+              className="flex items-center gap-1.5 text-sm text-primary hover:underline"
+              onClick={() => onNavigate?.(item.linked_note_id!)}
+            >
+              <FileText className="h-3.5 w-3.5" />
+              {linkedNoteTitle}
+            </button>
           </div>
         )}
 
@@ -570,6 +686,129 @@ export function ItemDetail({
             />
           )}
         </div>
+
+        {/* Create linked todo inline form (note only) */}
+        {item.type === "note" && showCreateTodo && (
+          <div className="rounded-md border p-3 space-y-3 bg-muted/30">
+            <div className="flex items-center justify-between">
+              <label className="text-sm font-medium flex items-center gap-1.5">
+                <Plus className="h-3.5 w-3.5" />
+                建立追蹤待辦
+              </label>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6"
+                onClick={() => setShowCreateTodo(false)}
+              >
+                <X className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+            <Input
+              value={linkedTodoTitle}
+              onChange={(e) => setLinkedTodoTitle(e.target.value)}
+              placeholder="待辦標題"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  handleCreateLinkedTodo();
+                }
+              }}
+            />
+            <div className="flex gap-2 flex-wrap">
+              <Input
+                type="date"
+                value={linkedTodoDue}
+                onChange={(e) => setLinkedTodoDue(e.target.value)}
+                className="w-40"
+              />
+              <Select
+                value={linkedTodoPriority}
+                onValueChange={(v) => setLinkedTodoPriority(v as ItemPriority | "none")}
+              >
+                <SelectTrigger className="w-24">
+                  <SelectValue placeholder="優先度" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">無</SelectItem>
+                  <SelectItem value="low">低</SelectItem>
+                  <SelectItem value="medium">中</SelectItem>
+                  <SelectItem value="high">高</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <TagInput
+              tags={linkedTodoTags}
+              allTags={allTags}
+              onAdd={(tag) => setLinkedTodoTags((prev) => [...prev, tag])}
+              onRemove={(tag) => setLinkedTodoTags((prev) => prev.filter((t) => t !== tag))}
+            />
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowCreateTodo(false)}
+              >
+                取消
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleCreateLinkedTodo}
+                disabled={!linkedTodoTitle.trim() || creatingTodo}
+              >
+                {creatingTodo ? (
+                  <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                ) : null}
+                建立
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Linked todos section (note only) */}
+        {item.type === "note" && (linkedTodos.length > 0 || linkedTodosLoading) && (
+          <div>
+            <label className="text-sm text-muted-foreground block mb-2">
+              關聯待辦
+            </label>
+            {linkedTodosLoading ? (
+              <p className="text-xs text-muted-foreground">載入中...</p>
+            ) : (
+              <div className="space-y-1">
+                {linkedTodos.map((todo) => (
+                  <button
+                    key={todo.id}
+                    type="button"
+                    className="w-full text-left p-2 rounded-md border hover:bg-accent transition-colors flex items-center gap-2"
+                    onClick={() => onNavigate?.(todo.id)}
+                  >
+                    <ListTodo className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                    <span className={`text-sm truncate flex-1 ${todo.status === "done" ? "line-through text-muted-foreground" : ""}`}>
+                      {todo.title}
+                    </span>
+                    <Badge
+                      variant="outline"
+                      className={`text-xs shrink-0 ${
+                        todo.status === "done"
+                          ? "text-muted-foreground"
+                          : todo.status === "active"
+                            ? "text-sky-600 dark:text-sky-400"
+                            : ""
+                      }`}
+                    >
+                      {todo.status === "active" ? "進行中" : todo.status === "done" ? "已完成" : "已封存"}
+                    </Badge>
+                    {todo.due && (
+                      <span className="text-xs text-muted-foreground shrink-0">
+                        {todo.due}
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Metadata */}
         <div className="text-xs text-muted-foreground space-y-1">
