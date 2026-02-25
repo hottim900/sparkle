@@ -1383,4 +1383,180 @@ describe("POST /api/webhook/line", () => {
       expect(replyText).toContain("不存在");
     });
   });
+
+  // ============================================================
+  // Scratch command tests
+  // ============================================================
+
+  describe("!scratch command", () => {
+    it("lists draft scratch items", async () => {
+      process.env.LINE_CHANNEL_SECRET = TEST_LINE_SECRET;
+      process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
+      const now = new Date().toISOString();
+      testSqlite.exec(`
+        INSERT INTO items (id, type, title, content, status, priority, due, tags, origin, source, aliases, created, modified) VALUES
+          ('id-s1', 'scratch', 'temp note 1', '', 'draft', NULL, NULL, '[]', 'LINE', NULL, '[]', '${now}', '${now}'),
+          ('id-s2', 'scratch', 'temp note 2', '', 'draft', NULL, NULL, '[]', 'LINE', NULL, '[]', '${now}', '${now}');
+      `);
+
+      const res = await sendLineMessage(app, "!scratch");
+      expect(res.status).toBe(200);
+
+      const fetchMock = vi.mocked(fetch);
+      const callBody = JSON.parse(fetchMock.mock.calls[0][1]!.body as string);
+      const replyText: string = callBody.messages[0].text;
+      expect(replyText).toContain("暫存");
+      expect(replyText).toContain("temp note");
+      expect(callBody.messages[0].quickReply).toBeDefined();
+    });
+
+    it("returns empty message when no scratch items", async () => {
+      process.env.LINE_CHANNEL_SECRET = TEST_LINE_SECRET;
+      process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
+
+      const res = await sendLineMessage(app, "!scratch");
+      expect(res.status).toBe(200);
+
+      const fetchMock = vi.mocked(fetch);
+      const callBody = JSON.parse(fetchMock.mock.calls[0][1]!.body as string);
+      expect(callBody.messages[0].text).toContain("沒有暫存項目");
+    });
+
+    it("!s works as alias for !scratch", async () => {
+      process.env.LINE_CHANNEL_SECRET = TEST_LINE_SECRET;
+      process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
+
+      const res = await sendLineMessage(app, "!s");
+      expect(res.status).toBe(200);
+
+      const fetchMock = vi.mocked(fetch);
+      const callBody = JSON.parse(fetchMock.mock.calls[0][1]!.body as string);
+      expect(callBody.messages[0].text).toContain("沒有暫存項目");
+    });
+  });
+
+  describe("!tmp command", () => {
+    it("creates scratch item via !tmp", async () => {
+      process.env.LINE_CHANNEL_SECRET = TEST_LINE_SECRET;
+      process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
+
+      const res = await sendLineMessage(app, "!tmp quick note");
+      expect(res.status).toBe(200);
+
+      const fetchMock = vi.mocked(fetch);
+      const callBody = JSON.parse(fetchMock.mock.calls[0][1]!.body as string);
+      const replyText: string = callBody.messages[0].text;
+      expect(replyText).toContain("暫存");
+      expect(replyText).toContain("quick note");
+
+      // Verify item was created as scratch with draft status
+      const allItems = testDb.select().from(items).all();
+      expect(allItems).toHaveLength(1);
+      expect(allItems[0].type).toBe("scratch");
+      expect(allItems[0].status).toBe("draft");
+      expect(allItems[0].title).toBe("quick note");
+    });
+  });
+
+  describe("!delete command", () => {
+    it("hard deletes item after query session", async () => {
+      process.env.LINE_CHANNEL_SECRET = TEST_LINE_SECRET;
+      process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
+      const now = new Date().toISOString();
+      testSqlite.exec(`
+        INSERT INTO items (id, type, title, content, status, priority, due, tags, origin, source, aliases, created, modified) VALUES
+          ('id-d1', 'scratch', 'deletable note', '', 'draft', NULL, NULL, '[]', 'LINE', NULL, '[]', '${now}', '${now}');
+      `);
+
+      // Establish session
+      await sendLineMessage(app, "!scratch");
+      vi.mocked(fetch).mockClear();
+
+      // Delete first item
+      const res = await sendLineMessage(app, "!delete 1");
+      expect(res.status).toBe(200);
+
+      const fetchMock = vi.mocked(fetch);
+      const callBody = JSON.parse(fetchMock.mock.calls[0][1]!.body as string);
+      const replyText: string = callBody.messages[0].text;
+      expect(replyText).toContain("已刪除");
+      expect(replyText).toContain("deletable note");
+
+      // Verify item was actually deleted from DB
+      const allItems = testDb.select().from(items).all();
+      expect(allItems).toHaveLength(0);
+    });
+
+    it("returns error when no session exists", async () => {
+      process.env.LINE_CHANNEL_SECRET = TEST_LINE_SECRET;
+      process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
+
+      const res = await sendLineMessage(app, "!delete 1", "no-session-user");
+      expect(res.status).toBe(200);
+
+      const fetchMock = vi.mocked(fetch);
+      const callBody = JSON.parse(fetchMock.mock.calls[0][1]!.body as string);
+      expect(callBody.messages[0].text).toContain("不存在");
+    });
+  });
+
+  describe("!upgrade command", () => {
+    it("converts scratch to fleeting note", async () => {
+      process.env.LINE_CHANNEL_SECRET = TEST_LINE_SECRET;
+      process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
+      const now = new Date().toISOString();
+      testSqlite.exec(`
+        INSERT INTO items (id, type, title, content, status, priority, due, tags, origin, source, aliases, created, modified) VALUES
+          ('id-u1', 'scratch', 'upgrade me', '', 'draft', NULL, NULL, '[]', 'LINE', NULL, '[]', '${now}', '${now}');
+      `);
+
+      // Establish session
+      await sendLineMessage(app, "!scratch");
+      vi.mocked(fetch).mockClear();
+
+      // Upgrade first item
+      const res = await sendLineMessage(app, "!upgrade 1");
+      expect(res.status).toBe(200);
+
+      const fetchMock = vi.mocked(fetch);
+      const callBody = JSON.parse(fetchMock.mock.calls[0][1]!.body as string);
+      const replyText: string = callBody.messages[0].text;
+      expect(replyText).toContain("升級為閃念筆記");
+      expect(replyText).toContain("upgrade me");
+
+      // Verify DB: type changed to note, status auto-mapped to fleeting
+      const item = testSqlite.prepare("SELECT type, status FROM items WHERE id = ?").get("id-u1") as any;
+      expect(item.type).toBe("note");
+      expect(item.status).toBe("fleeting");
+    });
+
+    it("rejects non-scratch items", async () => {
+      process.env.LINE_CHANNEL_SECRET = TEST_LINE_SECRET;
+      process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
+      seedItems();
+
+      // Establish session with notes (id-2 is a note)
+      await sendLineMessage(app, "!fleeting");
+      vi.mocked(fetch).mockClear();
+
+      const res = await sendLineMessage(app, "!upgrade 1");
+      expect(res.status).toBe(200);
+
+      const fetchMock = vi.mocked(fetch);
+      const callBody = JSON.parse(fetchMock.mock.calls[0][1]!.body as string);
+      expect(callBody.messages[0].text).toContain("此指令只適用於暫存項目");
+    });
+
+    it("returns error when no session exists", async () => {
+      process.env.LINE_CHANNEL_SECRET = TEST_LINE_SECRET;
+      process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
+
+      const res = await sendLineMessage(app, "!upgrade 1", "no-session-user");
+      expect(res.status).toBe(200);
+
+      const fetchMock = vi.mocked(fetch);
+      const callBody = JSON.parse(fetchMock.mock.calls[0][1]!.body as string);
+      expect(callBody.messages[0].text).toContain("不存在");
+    });
+  });
 });
