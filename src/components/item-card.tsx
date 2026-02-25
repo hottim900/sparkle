@@ -1,13 +1,61 @@
 import { Badge } from "@/components/ui/badge";
 import { updateItem } from "@/lib/api";
-import type { ParsedItem } from "@/lib/types";
+import type { ParsedItem, ItemStatus } from "@/lib/types";
 import { toast } from "sonner";
-import { Square, CheckSquare } from "lucide-react";
+import {
+  Square,
+  CheckSquare,
+  Sparkles,
+  Pencil,
+  Gem,
+  ExternalLink,
+  PlayCircle,
+  Check,
+  Archive,
+} from "lucide-react";
 
 const priorityColors: Record<string, string> = {
   high: "border-l-red-500",
   medium: "border-l-yellow-500",
   low: "border-l-blue-500",
+};
+
+const statusConfig: Record<ItemStatus, { label: string; color: string; icon: React.ReactNode }> = {
+  fleeting: {
+    label: "閃念",
+    color: "text-amber-600 dark:text-amber-400",
+    icon: <Sparkles className="h-3 w-3" />,
+  },
+  developing: {
+    label: "發展中",
+    color: "text-blue-600 dark:text-blue-400",
+    icon: <Pencil className="h-3 w-3" />,
+  },
+  permanent: {
+    label: "永久筆記",
+    color: "text-green-600 dark:text-green-400",
+    icon: <Gem className="h-3 w-3" />,
+  },
+  exported: {
+    label: "已匯出",
+    color: "text-purple-600 dark:text-purple-400",
+    icon: <ExternalLink className="h-3 w-3" />,
+  },
+  active: {
+    label: "進行中",
+    color: "text-sky-600 dark:text-sky-400",
+    icon: <PlayCircle className="h-3 w-3" />,
+  },
+  done: {
+    label: "已完成",
+    color: "text-muted-foreground",
+    icon: <Check className="h-3 w-3" />,
+  },
+  archived: {
+    label: "已封存",
+    color: "text-muted-foreground",
+    icon: <Archive className="h-3 w-3" />,
+  },
 };
 
 function getDueDateInfo(dueDate: string): { label: string; className: string } {
@@ -60,9 +108,11 @@ export function ItemCard({
     ? priorityColors[item.priority] ?? ""
     : "";
 
-  const dueDateInfo = item.due_date ? getDueDateInfo(item.due_date) : null;
+  const dueDateInfo = item.due ? getDueDateInfo(item.due) : null;
   const isOverdue =
     dueDateInfo?.className === "text-red-500" && item.status !== "done";
+
+  const status = statusConfig[item.status];
 
   const handleToggleDone = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -128,9 +178,10 @@ export function ItemCard({
             {item.title}
           </p>
           <div className="flex items-center gap-1 mt-1 flex-wrap">
-            {item.type === "todo" && (
-              <Badge variant="outline" className="text-xs">
-                待辦
+            {status && (
+              <Badge variant="outline" className={`text-xs gap-0.5 ${status.color}`}>
+                {status.icon}
+                {status.label}
               </Badge>
             )}
             {item.tags.map((tag) => (

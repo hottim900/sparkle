@@ -14,6 +14,7 @@ import { items } from "./db/schema.js";
 import { eq } from "drizzle-orm";
 import { getAllTags } from "./lib/items.js";
 import { z, ZodError } from "zod";
+import { statusEnum } from "./schemas/items.js";
 
 const app = new Hono();
 
@@ -34,38 +35,71 @@ app.get("/api/tags", (c) => {
   return c.json({ tags });
 });
 
-// Export all items
+// Config endpoint — tells frontend whether Obsidian export is available
+app.get("/api/config", (c) => {
+  return c.json({
+    obsidian_export_enabled: !!process.env.OBSIDIAN_VAULT_PATH,
+  });
+});
+
+// Export all items (new field names)
 app.get("/api/export", (c) => {
   const allItems = db.select().from(items).all();
   return c.json({
-    version: 1,
+    version: 2,
     exported_at: new Date().toISOString(),
     items: allItems,
   });
 });
 
-// Import items (upsert)
+// Import items (upsert) — only accepts new field names/status values
 const importItemSchema = z.object({
   id: z.string().min(1),
   type: z.enum(["note", "todo"]).default("note"),
   title: z.string().min(1).max(500),
   content: z.string().default(""),
-  status: z.enum(["inbox", "active", "done", "archived"]).default("inbox"),
+  status: statusEnum.default("fleeting"),
   priority: z.enum(["low", "medium", "high"]).nullable().default(null),
-  due_date: z.string().nullable().default(null),
+  due: z.string().nullable().default(null),
   tags: z.string().default("[]"),
-  source: z.string().default(""),
-  created_at: z.string().min(1),
-  updated_at: z.string().min(1),
+  origin: z.string().default(""),
+  source: z.string().nullable().default(null),
+  aliases: z.string().default("[]"),
+  created: z.string().min(1),
+  modified: z.string().min(1),
 });
 
 const importSchema = z.object({
   items: z.array(importItemSchema),
 });
 
+// Detect old format fields and reject with helpful message
+const OLD_FIELD_NAMES = ["due_date", "created_at", "updated_at"] as const;
+
 app.post("/api/import", async (c) => {
   try {
     const body = await c.req.json();
+
+    // Check for old format fields
+    if (body.items && Array.isArray(body.items) && body.items.length > 0) {
+      const sample = body.items[0];
+      for (const oldField of OLD_FIELD_NAMES) {
+        if (oldField in sample) {
+          return c.json(
+            { error: "Unrecognized field names — please re-export from current version" },
+            400,
+          );
+        }
+      }
+      // Also check for old status values
+      if (sample.status === "inbox") {
+        return c.json(
+          { error: "Unrecognized field names — please re-export from current version" },
+          400,
+        );
+      }
+    }
+
     const { items: importItems } = importSchema.parse(body);
 
     let imported = 0;
@@ -86,11 +120,13 @@ app.post("/api/import", async (c) => {
             content: item.content,
             status: item.status,
             priority: item.priority,
-            due_date: item.due_date,
+            due: item.due,
             tags: item.tags,
+            origin: item.origin,
             source: item.source,
-            created_at: item.created_at,
-            updated_at: item.updated_at,
+            aliases: item.aliases,
+            created: item.created,
+            modified: item.modified,
           })
           .where(eq(items.id, item.id))
           .run();

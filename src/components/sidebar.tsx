@@ -8,13 +8,15 @@ import { getTags, exportData, importData } from "@/lib/api";
 import { clearToken } from "@/lib/api";
 import type { ViewType, ParsedItem } from "@/lib/types";
 import {
-  Inbox,
-  Zap,
-  FileText,
+  Sparkles,
+  Pencil,
+  Gem,
+  ExternalLink,
+  PlayCircle,
   CheckCircle,
   Archive,
   LayoutDashboard,
-  ListTodo,
+  FileText,
   LogOut,
   Sun,
   Moon,
@@ -40,24 +42,25 @@ const navGroups: NavGroup[] = [
     ],
   },
   {
-    label: "主要",
+    label: "筆記",
     items: [
-      { id: "inbox", label: "收件匣", icon: <Inbox className="h-4 w-4" /> },
-      { id: "active", label: "進行中", icon: <Zap className="h-4 w-4" /> },
+      { id: "fleeting", label: "閃念", icon: <Sparkles className="h-4 w-4" /> },
+      { id: "developing", label: "發展中", icon: <Pencil className="h-4 w-4" /> },
+      { id: "permanent", label: "永久筆記", icon: <Gem className="h-4 w-4" /> },
+      { id: "exported", label: "已匯出", icon: <ExternalLink className="h-4 w-4" /> },
     ],
   },
   {
-    label: "依類型",
+    label: "待辦",
+    items: [
+      { id: "active", label: "進行中", icon: <PlayCircle className="h-4 w-4" /> },
+      { id: "done", label: "已完成", icon: <CheckCircle className="h-4 w-4" /> },
+    ],
+  },
+  {
+    label: "共用",
     items: [
       { id: "all", label: "全部", icon: <FileText className="h-4 w-4" /> },
-      { id: "notes", label: "筆記", icon: <FileText className="h-4 w-4" /> },
-      { id: "todos", label: "待辦", icon: <ListTodo className="h-4 w-4" /> },
-    ],
-  },
-  {
-    label: "已處理",
-    items: [
-      { id: "done", label: "已完成", icon: <CheckCircle className="h-4 w-4" /> },
       { id: "archived", label: "已封存", icon: <Archive className="h-4 w-4" /> },
     ],
   },

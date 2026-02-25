@@ -3,12 +3,15 @@ import type { Stats } from "./stats.js";
 export interface ItemLike {
   id: string;
   title: string;
-  due_date?: string | null;
+  due?: string | null;
   priority?: string | null;
 }
 
-const STATUS_LABELS: Record<string, string> = {
-  inbox: "收件匣",
+export const STATUS_LABELS: Record<string, string> = {
+  fleeting: "閃念",
+  developing: "發展中",
+  permanent: "永久筆記",
+  exported: "已匯出",
   active: "進行中",
   done: "已完成",
   archived: "已封存",
@@ -19,7 +22,7 @@ export function formatNumberedList(header: string, items: ItemLike[], total: num
   const title = `${header}（${countNote}）`;
   const lines = items.map((item, i) => {
     let suffix = "";
-    if (item.due_date) suffix += ` 📅${item.due_date}`;
+    if (item.due) suffix += ` 📅${item.due}`;
     if (item.priority === "high") suffix += " ⚡";
     return `[${i + 1}] ${item.title}${suffix}`;
   });
@@ -33,17 +36,21 @@ export function formatDetail(item: {
   type: string;
   status: string;
   priority: string | null;
-  due_date: string | null;
+  due: string | null;
   tags: string;
   content: string | null;
+  origin?: string | null;
+  source?: string | null;
 }): string {
   const lines = [`📋 ${item.title}`];
   lines.push(`類型：${item.type === "todo" ? "待辦" : "筆記"}`);
   lines.push(`狀態：${STATUS_LABELS[item.status] ?? item.status}`);
   if (item.priority) lines.push(`優先：${item.priority}`);
-  if (item.due_date) lines.push(`到期：${item.due_date}`);
+  if (item.due) lines.push(`到期：${item.due}`);
   const tags: string[] = JSON.parse(item.tags || "[]");
   if (tags.length > 0) lines.push(`標籤：${tags.join("、")}`);
+  if (item.origin) lines.push(`來源：${item.origin}`);
+  if (item.source) lines.push(`參考：${item.source}`);
 
   if (item.content) {
     const header = lines.join("\n");
@@ -61,15 +68,17 @@ export function formatDetail(item: {
 
 export function formatStats(stats: Stats): string {
   return `📊 Sparkle 統計
-📥 收件匣：${stats.inbox_count}
-🔵 進行中：${stats.active_count}
-⚠️ 逾期：${stats.overdue_count}
-✅ 本週完成：${stats.completed_this_week}
-✅ 本月完成：${stats.completed_this_month}`;
+── 筆記 ──
+閃念: ${stats.fleeting_count} | 發展中: ${stats.developing_count} | 永久: ${stats.permanent_count}
+本週匯出: ${stats.exported_this_week} | 本月匯出: ${stats.exported_this_month}
+── 待辦 ──
+進行中: ${stats.active_count} | 本週完成: ${stats.done_this_week} | 本月完成: ${stats.done_this_month}
+── 整體 ──
+本週新增: ${stats.created_this_week} | 逾期: ${stats.overdue_count}`;
 }
 
 const QUICK_REPLY_ITEMS = [
-  { type: "action" as const, action: { type: "message" as const, label: "📥 收件匣", text: "!inbox" } },
+  { type: "action" as const, action: { type: "message" as const, label: "✨ 閃念", text: "!fleeting" } },
   { type: "action" as const, action: { type: "message" as const, label: "🔵 進行中", text: "!active" } },
   { type: "action" as const, action: { type: "message" as const, label: "📅 今日", text: "!today" } },
   { type: "action" as const, action: { type: "message" as const, label: "📊 統計", text: "!stats" } },

@@ -19,6 +19,12 @@ interface QuickCaptureProps {
   onCreated?: () => void;
 }
 
+const gtdTags = [
+  { tag: "next-action", label: "下一步" },
+  { tag: "waiting-on", label: "等待中" },
+  { tag: "someday", label: "有一天" },
+];
+
 export function QuickCapture({ onCreated }: QuickCaptureProps) {
   const { theme, setTheme } = useTheme();
   const [title, setTitle] = useState("");
@@ -44,6 +50,14 @@ export function QuickCapture({ onCreated }: QuickCaptureProps) {
     setSelectedTags((prev) => prev.filter((t) => t !== tag));
   };
 
+  const toggleGtdTag = (tag: string) => {
+    if (selectedTags.includes(tag)) {
+      removeTag(tag);
+    } else {
+      addTag(tag);
+    }
+  };
+
   const handleSubmit = async (e?: React.FormEvent) => {
     e?.preventDefault();
     const trimmed = title.trim();
@@ -56,7 +70,7 @@ export function QuickCapture({ onCreated }: QuickCaptureProps) {
         type,
         priority: priority === "none" ? null : priority,
         tags: selectedTags,
-        source: source.trim() || undefined,
+        source: source.trim() || null,
       });
       setTitle("");
       setSelectedTags([]);
@@ -158,12 +172,31 @@ export function QuickCapture({ onCreated }: QuickCaptureProps) {
             </Select>
 
             <Input
-              placeholder="來源（如 Discord、LINE）"
+              type="url"
+              placeholder="參考連結 (URL)"
               value={source}
               onChange={(e) => setSource(e.target.value)}
-              className="w-40"
+              className="w-48"
             />
           </div>
+
+          {/* GTD quick-select for todos */}
+          {type === "todo" && (
+            <div className="flex gap-1">
+              {gtdTags.map((gtd) => (
+                <Button
+                  key={gtd.tag}
+                  type="button"
+                  size="sm"
+                  variant={selectedTags.includes(gtd.tag) ? "default" : "outline"}
+                  className="h-7 text-xs"
+                  onClick={() => toggleGtdTag(gtd.tag)}
+                >
+                  {gtd.label}
+                </Button>
+              ))}
+            </div>
+          )}
 
           <TagInput
             tags={selectedTags}

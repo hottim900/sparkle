@@ -1,36 +1,38 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { getStats, getFocus, listItems } from "@/lib/api";
-import { parseItems, type ParsedItem, type StatsResponse } from "@/lib/types";
+import { getStats, getFocus } from "@/lib/api";
+import { parseItems, type ParsedItem, type StatsResponse, type ViewType } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
-  CheckCircle,
   TrendingUp,
-  Inbox,
+  Sparkles,
   AlertTriangle,
   Target,
   ChevronRight,
   LayoutDashboard,
   Loader2,
+  Gem,
+  Pencil,
+  CheckCircle,
 } from "lucide-react";
 
 interface DashboardProps {
-  onViewChange: (view: "inbox") => void;
+  onViewChange: (view: ViewType) => void;
   onSelectItem: (item: ParsedItem) => void;
 }
 
-function isOverdue(dueDate: string | null): boolean {
-  if (!dueDate) return false;
+function isOverdue(due: string | null): boolean {
+  if (!due) return false;
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const due = new Date(dueDate);
-  due.setHours(0, 0, 0, 0);
-  return due < today;
+  const dueDate = new Date(due);
+  dueDate.setHours(0, 0, 0, 0);
+  return dueDate < today;
 }
 
-function formatDueDate(dueDate: string): string {
-  const date = new Date(dueDate);
+function formatDueDate(due: string): string {
+  const date = new Date(due);
   return date.toLocaleDateString("zh-TW", {
     month: "short",
     day: "numeric",
@@ -68,7 +70,6 @@ function priorityVariant(
 export function Dashboard({ onViewChange, onSelectItem }: DashboardProps) {
   const [stats, setStats] = useState<StatsResponse | null>(null);
   const [focusItems, setFocusItems] = useState<ParsedItem[]>([]);
-  const [recentDone, setRecentDone] = useState<ParsedItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -76,22 +77,15 @@ export function Dashboard({ onViewChange, onSelectItem }: DashboardProps) {
 
     async function load() {
       try {
-        const [statsRes, focusRes, doneRes] = await Promise.all([
+        const [statsRes, focusRes] = await Promise.all([
           getStats(),
           getFocus(),
-          listItems({
-            status: "done",
-            sort: "created_at",
-            order: "desc",
-            limit: 10,
-          }),
         ]);
 
         if (cancelled) return;
 
         setStats(statsRes);
         setFocusItems(parseItems(focusRes.items).slice(0, 5));
-        setRecentDone(parseItems(doneRes.items));
       } catch {
         if (!cancelled) {
           toast.error("無法載入總覽資料");
@@ -128,12 +122,12 @@ export function Dashboard({ onViewChange, onSelectItem }: DashboardProps) {
           <h1 className="text-xl font-bold">總覽</h1>
         </div>
 
-        {/* Section 1: Achievement Summary */}
+        {/* Section 1: Zettelkasten Progress */}
         <section className="space-y-3">
           <div className="flex items-center gap-2">
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
             <h2 className="text-sm font-semibold text-muted-foreground">
-              完成摘要
+              知識庫進度
             </h2>
           </div>
 
@@ -141,33 +135,42 @@ export function Dashboard({ onViewChange, onSelectItem }: DashboardProps) {
           <div className="grid grid-cols-2 gap-3">
             <div className="border rounded-lg p-4 text-center">
               <p className="text-2xl font-bold">
-                {stats.completed_this_week}
+                {stats.exported_this_week}
               </p>
-              <p className="text-xs text-muted-foreground">本週完成</p>
+              <p className="text-xs text-muted-foreground">本週匯出</p>
             </div>
             <div className="border rounded-lg p-4 text-center">
               <p className="text-2xl font-bold">
-                {stats.completed_this_month}
+                {stats.exported_this_month}
               </p>
-              <p className="text-xs text-muted-foreground">本月完成</p>
+              <p className="text-xs text-muted-foreground">本月匯出</p>
             </div>
           </div>
 
-          {/* Recently completed items */}
-          {recentDone.length > 0 && (
-            <div className="space-y-1">
-              {recentDone.map((item) => (
-                <button
-                  key={item.id}
-                  className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-left text-sm hover:bg-accent transition-colors"
-                  onClick={() => onSelectItem(item)}
-                >
-                  <CheckCircle className="h-4 w-4 text-green-500 flex-shrink-0" />
-                  <span className="truncate">{item.title}</span>
-                </button>
-              ))}
+          {/* Note maturity stats */}
+          <div className="grid grid-cols-3 gap-2">
+            <div className="border rounded-lg p-3 text-center">
+              <div className="flex items-center justify-center gap-1 text-green-600 dark:text-green-400">
+                <Gem className="h-3.5 w-3.5" />
+                <p className="text-lg font-bold">{stats.permanent_count}</p>
+              </div>
+              <p className="text-xs text-muted-foreground">永久筆記</p>
             </div>
-          )}
+            <div className="border rounded-lg p-3 text-center">
+              <div className="flex items-center justify-center gap-1 text-blue-600 dark:text-blue-400">
+                <Pencil className="h-3.5 w-3.5" />
+                <p className="text-lg font-bold">{stats.developing_count}</p>
+              </div>
+              <p className="text-xs text-muted-foreground">發展中</p>
+            </div>
+            <div className="border rounded-lg p-3 text-center">
+              <div className="flex items-center justify-center gap-1 text-muted-foreground">
+                <CheckCircle className="h-3.5 w-3.5" />
+                <p className="text-lg font-bold">{stats.done_this_week}</p>
+              </div>
+              <p className="text-xs text-muted-foreground">本週完成</p>
+            </div>
+          </div>
         </section>
 
         {/* Section 2: Today's Focus */}
@@ -186,7 +189,7 @@ export function Dashboard({ onViewChange, onSelectItem }: DashboardProps) {
           ) : (
             <div className="space-y-2">
               {focusItems.map((item) => {
-                const overdue = isOverdue(item.due_date);
+                const overdue = isOverdue(item.due);
                 return (
                   <button
                     key={item.id}
@@ -207,15 +210,15 @@ export function Dashboard({ onViewChange, onSelectItem }: DashboardProps) {
                             {priorityLabel(item.priority)}
                           </Badge>
                         )}
-                        {item.status === "inbox" && (
-                          <Badge variant="outline">
-                            <Inbox className="h-3 w-3 mr-1" />
-                            收件匣
+                        {item.status === "fleeting" && (
+                          <Badge variant="outline" className="text-amber-600 dark:text-amber-400">
+                            <Sparkles className="h-3 w-3 mr-1" />
+                            閃念
                           </Badge>
                         )}
                       </div>
                     </div>
-                    {item.due_date && (
+                    {item.due && (
                       <p
                         className={`text-xs mt-1 ${
                           overdue
@@ -224,7 +227,7 @@ export function Dashboard({ onViewChange, onSelectItem }: DashboardProps) {
                         }`}
                       >
                         {overdue ? "已逾期 - " : "到期日 "}
-                        {formatDueDate(item.due_date)}
+                        {formatDueDate(item.due)}
                       </p>
                     )}
                   </button>
@@ -234,38 +237,38 @@ export function Dashboard({ onViewChange, onSelectItem }: DashboardProps) {
           )}
         </section>
 
-        {/* Section 3: Inbox Health */}
+        {/* Section 3: Fleeting Health */}
         <section className="space-y-3">
           <div className="flex items-center gap-2">
-            <Inbox className="h-4 w-4 text-muted-foreground" />
+            <Sparkles className="h-4 w-4 text-muted-foreground" />
             <h2 className="text-sm font-semibold text-muted-foreground">
-              收件匣健康度
+              閃念健康度
             </h2>
           </div>
 
           <div
             className={`border rounded-lg p-6 text-center space-y-2 ${
-              stats.inbox_count === 0
+              stats.fleeting_count === 0
                 ? "border-green-300 bg-green-50 dark:border-green-800 dark:bg-green-950"
-                : stats.inbox_count > 10
+                : stats.fleeting_count > 10
                   ? "border-yellow-300 bg-yellow-50 dark:border-yellow-800 dark:bg-yellow-950"
                   : ""
             }`}
           >
-            <p className="text-3xl font-bold">{stats.inbox_count}</p>
+            <p className="text-3xl font-bold">{stats.fleeting_count}</p>
             <p className="text-sm text-muted-foreground">
-              {stats.inbox_count === 0
-                ? "收件匣已清空！"
-                : stats.inbox_count <= 10
-                  ? "收件匣狀態良好"
-                  : `收件匣有 ${stats.inbox_count} 筆待整理`}
+              {stats.fleeting_count === 0
+                ? "閃念筆記已清空！"
+                : stats.fleeting_count <= 10
+                  ? "閃念筆記狀態良好"
+                  : `有 ${stats.fleeting_count} 筆閃念待整理`}
             </p>
-            {stats.inbox_count > 10 && (
+            {stats.fleeting_count > 10 && (
               <Button
                 variant="outline"
                 size="sm"
                 className="mt-2"
-                onClick={() => onViewChange("inbox")}
+                onClick={() => onViewChange("notes")}
               >
                 開始整理
                 <ChevronRight className="h-4 w-4 ml-1" />

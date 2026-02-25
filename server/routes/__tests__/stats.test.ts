@@ -19,17 +19,19 @@ function createTestDb() {
       type TEXT NOT NULL DEFAULT 'note',
       title TEXT NOT NULL,
       content TEXT DEFAULT '',
-      status TEXT NOT NULL DEFAULT 'inbox',
+      status TEXT NOT NULL DEFAULT 'fleeting',
       priority TEXT,
-      due_date TEXT,
+      due TEXT,
       tags TEXT NOT NULL DEFAULT '[]',
-      source TEXT DEFAULT '',
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
+      origin TEXT DEFAULT '',
+      source TEXT DEFAULT NULL,
+      aliases TEXT NOT NULL DEFAULT '[]',
+      created TEXT NOT NULL,
+      modified TEXT NOT NULL
     );
     CREATE INDEX idx_items_status ON items(status);
     CREATE INDEX idx_items_type ON items(type);
-    CREATE INDEX idx_items_created_at ON items(created_at DESC);
+    CREATE INDEX idx_items_created ON items(created DESC);
   `);
 
   setupFTS(sqlite);
@@ -90,25 +92,25 @@ function insertItem(fields: {
   type?: string;
   status?: string;
   priority?: string | null;
-  due_date?: string | null;
-  created_at?: string;
-  updated_at?: string;
+  due?: string | null;
+  created?: string;
+  modified?: string;
 }) {
   const now = new Date().toISOString();
   testSqlite
     .prepare(
-      `INSERT INTO items (id, type, title, content, status, priority, due_date, tags, source, created_at, updated_at)
-       VALUES (?, ?, ?, '', ?, ?, ?, '[]', '', ?, ?)`,
+      `INSERT INTO items (id, type, title, content, status, priority, due, tags, origin, source, aliases, created, modified)
+       VALUES (?, ?, ?, '', ?, ?, ?, '[]', '', NULL, '[]', ?, ?)`,
     )
     .run(
       fields.id,
       fields.type ?? "todo",
       fields.title,
-      fields.status ?? "inbox",
+      fields.status ?? "active",
       fields.priority ?? null,
-      fields.due_date ?? null,
-      fields.created_at ?? now,
-      fields.updated_at ?? now,
+      fields.due ?? null,
+      fields.created ?? now,
+      fields.modified ?? now,
     );
 }
 
@@ -146,19 +148,23 @@ describe("GET /api/stats", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body).toEqual({
-      completed_this_week: 0,
-      completed_this_month: 0,
+      fleeting_count: 0,
+      developing_count: 0,
+      permanent_count: 0,
+      exported_this_week: 0,
+      exported_this_month: 0,
+      active_count: 0,
+      done_this_week: 0,
+      done_this_month: 0,
       created_this_week: 0,
       created_this_month: 0,
-      inbox_count: 0,
-      active_count: 0,
       overdue_count: 0,
     });
   });
 
-  it("counts inbox and active items correctly", async () => {
-    insertItem({ id: "i1", title: "Inbox 1", status: "inbox" });
-    insertItem({ id: "i2", title: "Inbox 2", status: "inbox" });
+  it("counts fleeting and active items correctly", async () => {
+    insertItem({ id: "i1", title: "Fleeting 1", type: "note", status: "fleeting" });
+    insertItem({ id: "i2", title: "Fleeting 2", type: "note", status: "fleeting" });
     insertItem({ id: "a1", title: "Active 1", status: "active" });
     insertItem({ id: "a2", title: "Active 2", status: "active" });
     insertItem({ id: "a3", title: "Active 3", status: "active" });
@@ -170,11 +176,11 @@ describe("GET /api/stats", () => {
     });
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.inbox_count).toBe(2);
+    expect(body.fleeting_count).toBe(2);
     expect(body.active_count).toBe(3);
   });
 
-  it("counts overdue items (active with past due_date) but NOT done items with past due_date", async () => {
+  it("counts overdue items (active/fleeting with past due) but NOT done items with past due", async () => {
     const pastDate = daysFromNow(-3);
     const futureDate = daysFromNow(5);
 
@@ -183,13 +189,14 @@ describe("GET /api/stats", () => {
       id: "o1",
       title: "Overdue active",
       status: "active",
-      due_date: pastDate,
+      due: pastDate,
     });
     insertItem({
       id: "o2",
-      title: "Overdue inbox",
-      status: "inbox",
-      due_date: pastDate,
+      title: "Overdue fleeting",
+      type: "note",
+      status: "fleeting",
+      due: pastDate,
     });
 
     // These should NOT be overdue
@@ -197,19 +204,19 @@ describe("GET /api/stats", () => {
       id: "nd1",
       title: "Done with past date",
       status: "done",
-      due_date: pastDate,
+      due: pastDate,
     });
     insertItem({
       id: "nd2",
       title: "Archived with past date",
       status: "archived",
-      due_date: pastDate,
+      due: pastDate,
     });
     insertItem({
       id: "nd3",
       title: "Active with future date",
       status: "active",
-      due_date: futureDate,
+      due: futureDate,
     });
     insertItem({
       id: "nd4",
@@ -225,17 +232,17 @@ describe("GET /api/stats", () => {
     expect(body.overdue_count).toBe(2);
   });
 
-  it("counts completed and created items this week and this month", async () => {
+  it("counts done and created items this week and this month", async () => {
     const now = new Date();
     const today = now.toISOString();
 
-    // Item created and completed this week (should count for both week and month)
+    // Item created and done this week (should count for both week and month)
     insertItem({
       id: "cw1",
-      title: "Completed this week",
+      title: "Done this week",
       status: "done",
-      created_at: today,
-      updated_at: today,
+      created: today,
+      modified: today,
     });
 
     // Item created this week, still active
@@ -243,8 +250,8 @@ describe("GET /api/stats", () => {
       id: "cr1",
       title: "Created this week",
       status: "active",
-      created_at: today,
-      updated_at: today,
+      created: today,
+      modified: today,
     });
 
     // Item created long ago, should NOT count for this week or month
@@ -253,8 +260,8 @@ describe("GET /api/stats", () => {
       id: "old1",
       title: "Old item",
       status: "done",
-      created_at: oldDate,
-      updated_at: oldDate,
+      created: oldDate,
+      modified: oldDate,
     });
 
     const res = await app.request("/api/stats", {
@@ -266,8 +273,8 @@ describe("GET /api/stats", () => {
     // At minimum, items created today count for this week and month
     expect(body.created_this_week).toBeGreaterThanOrEqual(2);
     expect(body.created_this_month).toBeGreaterThanOrEqual(2);
-    expect(body.completed_this_week).toBeGreaterThanOrEqual(1);
-    expect(body.completed_this_month).toBeGreaterThanOrEqual(1);
+    expect(body.done_this_week).toBeGreaterThanOrEqual(1);
+    expect(body.done_this_month).toBeGreaterThanOrEqual(1);
   });
 });
 
@@ -298,7 +305,7 @@ describe("GET /api/stats/focus", () => {
       id: "overdue1",
       title: "Overdue task",
       status: "active",
-      due_date: pastDate,
+      due: pastDate,
       priority: "low",
     });
 
@@ -307,7 +314,7 @@ describe("GET /api/stats/focus", () => {
       id: "soon1",
       title: "Due soon task",
       status: "active",
-      due_date: futureDate,
+      due: futureDate,
       priority: "high",
     });
 
@@ -336,7 +343,7 @@ describe("GET /api/stats/focus", () => {
         id: `item-${i}`,
         title: `Task ${i}`,
         status: "active",
-        due_date: daysFromNow(-i),
+        due: daysFromNow(-i),
         priority: "high",
       });
     }

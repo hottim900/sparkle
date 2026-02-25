@@ -21,8 +21,8 @@ describe("parseCommand", () => {
     expect(result).toEqual({ type: "find", keyword: "Hono" });
   });
 
-  it("parses '!inbox' as inbox command", () => {
-    expect(parseCommand("!inbox")).toEqual({ type: "inbox" });
+  it("parses '!inbox' as fleeting command (backward compat)", () => {
+    expect(parseCommand("!inbox")).toEqual({ type: "fleeting" });
   });
 
   it("parses '!today' as today command", () => {

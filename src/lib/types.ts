@@ -3,13 +3,15 @@ export interface Item {
   type: "note" | "todo";
   title: string;
   content: string;
-  status: "inbox" | "active" | "done" | "archived";
+  status: "fleeting" | "developing" | "permanent" | "exported" | "active" | "done" | "archived";
   priority: "low" | "medium" | "high" | null;
-  due_date: string | null;
+  due: string | null;
   tags: string; // JSON array string from server
-  source: string;
-  created_at: string;
-  updated_at: string;
+  source: string | null; // Reference URL
+  origin: string; // Capture channel (was 'source')
+  aliases: string; // JSON array string
+  created: string;
+  modified: string;
 }
 
 export interface ListItemsResponse {
@@ -41,12 +43,19 @@ export interface ApiError {
 }
 
 export interface StatsResponse {
-  completed_this_week: number;
-  completed_this_month: number;
+  // Zettelkasten
+  fleeting_count: number;
+  developing_count: number;
+  permanent_count: number;
+  exported_this_week: number;
+  exported_this_month: number;
+  // GTD
+  active_count: number;
+  done_this_week: number;
+  done_this_month: number;
+  // Shared
   created_this_week: number;
   created_this_month: number;
-  inbox_count: number;
-  active_count: number;
   overdue_count: number;
 }
 
@@ -54,15 +63,21 @@ export interface FocusResponse {
   items: Item[];
 }
 
-// Parsed item with tags as array
-export interface ParsedItem extends Omit<Item, "tags"> {
+export interface ConfigResponse {
+  obsidian_export_enabled: boolean;
+}
+
+// Parsed item with tags and aliases as arrays
+export interface ParsedItem extends Omit<Item, "tags" | "aliases"> {
   tags: string[];
+  aliases: string[];
 }
 
 export function parseItem(item: Item): ParsedItem {
   return {
     ...item,
     tags: JSON.parse(item.tags) as string[],
+    aliases: JSON.parse(item.aliases) as string[],
   };
 }
 
@@ -75,12 +90,15 @@ export type ItemType = Item["type"];
 export type ItemPriority = NonNullable<Item["priority"]>;
 
 export type ViewType =
-  | "inbox"
+  | "fleeting"
+  | "developing"
+  | "permanent"
+  | "exported"
   | "active"
-  | "all"
   | "done"
+  | "all"
   | "archived"
   | "search"
+  | "dashboard"
   | "notes"
-  | "todos"
-  | "dashboard";
+  | "todos";

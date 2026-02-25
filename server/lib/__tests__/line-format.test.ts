@@ -4,8 +4,8 @@ import { formatNumberedList, formatDetail, formatStats } from "../line-format.js
 describe("formatNumberedList", () => {
   it("formats items with index, due date and priority", () => {
     const items = [
-      { id: "1", title: "Buy milk", due_date: "2026-03-01", priority: "high" },
-      { id: "2", title: "Read book", due_date: null, priority: null },
+      { id: "1", title: "Buy milk", due: "2026-03-01", priority: "high" },
+      { id: "2", title: "Read book", due: null, priority: null },
     ];
     const result = formatNumberedList("📥 收件匣", items, 2);
     expect(result).toContain("📥 收件匣（共 2 筆）");
@@ -14,7 +14,7 @@ describe("formatNumberedList", () => {
   });
 
   it("shows partial count when total > displayed", () => {
-    const items = [{ id: "1", title: "A", due_date: null, priority: null }];
+    const items = [{ id: "1", title: "A", due: null, priority: null }];
     const result = formatNumberedList("Test", items, 10);
     expect(result).toContain("共 10 筆，顯示 5 筆");
   });
@@ -27,7 +27,7 @@ describe("formatDetail", () => {
       type: "todo",
       status: "active",
       priority: "high",
-      due_date: "2026-03-01",
+      due: "2026-03-01",
       tags: '["work","urgent"]',
       content: "Some content here",
     };
@@ -45,9 +45,9 @@ describe("formatDetail", () => {
     const item = {
       title: "T",
       type: "note",
-      status: "inbox",
+      status: "fleeting",
       priority: null,
-      due_date: null,
+      due: null,
       tags: "[]",
       content: "x".repeat(6000),
     };
@@ -60,17 +60,26 @@ describe("formatDetail", () => {
 describe("formatStats", () => {
   it("formats all stat fields", () => {
     const stats = {
-      inbox_count: 5,
-      active_count: 3,
-      overdue_count: 1,
-      completed_this_week: 8,
-      completed_this_month: 20,
+      fleeting_count: 5,
+      developing_count: 3,
+      permanent_count: 2,
+      exported_this_week: 1,
+      exported_this_month: 4,
+      active_count: 8,
+      done_this_week: 3,
+      done_this_month: 12,
+      created_this_week: 6,
+      created_this_month: 15,
+      overdue_count: 2,
     };
     const result = formatStats(stats);
-    expect(result).toContain("📥 收件匣：5");
-    expect(result).toContain("🔵 進行中：3");
-    expect(result).toContain("⚠️ 逾期：1");
-    expect(result).toContain("✅ 本週完成：8");
-    expect(result).toContain("✅ 本月完成：20");
+    expect(result).toContain("Sparkle 統計");
+    expect(result).toContain("閃念: 5");
+    expect(result).toContain("發展中: 3");
+    expect(result).toContain("永久: 2");
+    expect(result).toContain("進行中: 8");
+    expect(result).toContain("本週完成: 3");
+    expect(result).toContain("本月完成: 12");
+    expect(result).toContain("逾期: 2");
   });
 });
