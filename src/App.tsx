@@ -132,6 +132,7 @@ function MainApp() {
           selectedTag={selectedTag}
           onTagSelect={setSelectedTag}
           onSearchSelect={handleSelect}
+          refreshKey={refreshKey}
         />
       </div>
 

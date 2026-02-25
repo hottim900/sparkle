@@ -31,6 +31,7 @@ interface SidebarProps {
   selectedTag?: string;
   onTagSelect: (tag: string | undefined) => void;
   onSearchSelect?: (item: ParsedItem) => void;
+  refreshKey?: number;
 }
 
 type NavItem = { id: ViewType; label: string; icon: React.ReactNode };
@@ -73,6 +74,7 @@ export function Sidebar({
   selectedTag,
   onTagSelect,
   onSearchSelect,
+  refreshKey,
 }: SidebarProps) {
   const [tags, setTags] = useState<string[]>([]);
   const { theme, setTheme } = useTheme();
@@ -117,7 +119,7 @@ export function Sidebar({
     getTags()
       .then((res) => setTags(res.tags))
       .catch(() => {});
-  }, []);
+  }, [refreshKey]);
 
   return (
     <div className="w-64 border-r h-full flex flex-col bg-card">
