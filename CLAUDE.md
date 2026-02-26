@@ -165,10 +165,12 @@ After PC reboot, right-click `scripts/update-portproxy.ps1` → Run as Administr
 
 ### Cloudflare Tunnel + Access
 
-- Run `scripts/setup-cloudflared.sh` for interactive setup
+- Run `scripts/setup-cloudflared.sh` for interactive setup (new tunnel only; existing tunnels already have separate configs)
 - Full service exposed through Tunnel; access controlled by **Cloudflare Access** (Zero Trust)
 - `/api/webhook/*` bypasses CF Access (LINE Bot needs direct access)
-- Config stored in `~/.cloudflared/config.yml`, template at `scripts/cloudflared-config.yml.template`
+- Config stored in `~/.cloudflared/`, template at `scripts/cloudflared-config.yml.template`
+- **Deployed configs are per-tunnel** (e.g., `sparkle-config.yml`, `lanshare-config.yml`), separate from the repo template
+- `sparkle-tunnel.service` references `~/.cloudflared/sparkle-config.yml` directly
 - Setup guide: `docs/cloudflare-access-setup.md`
 
 ### LINE Bot
