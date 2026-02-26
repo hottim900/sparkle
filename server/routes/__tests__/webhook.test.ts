@@ -794,7 +794,7 @@ describe("POST /api/webhook/line", () => {
 
       const fetchMock = vi.mocked(fetch);
       const callBody = JSON.parse(fetchMock.mock.calls[0][1]!.body as string);
-      expect(callBody.messages[0].text).toContain("筆記不支援到期日");
+      expect(callBody.messages[0].text).toContain("只適用於待辦");
     });
   });
 
@@ -1244,13 +1244,12 @@ describe("POST /api/webhook/line", () => {
     });
   });
 
-  describe("!done on note (rejection)", () => {
-    it("rejects !done on a note with guidance message", async () => {
+  describe("!done on non-todo (rejection)", () => {
+    it("rejects !done on a note", async () => {
       process.env.LINE_CHANNEL_SECRET = TEST_LINE_SECRET;
       process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
       seedItems();
 
-      // id-2 is a fleeting note
       await sendLineMessage(app, "!fleeting");
       vi.mocked(fetch).mockClear();
 
@@ -1259,7 +1258,49 @@ describe("POST /api/webhook/line", () => {
 
       const fetchMock = vi.mocked(fetch);
       const callBody = JSON.parse(fetchMock.mock.calls[0][1]!.body as string);
-      expect(callBody.messages[0].text).toContain("筆記請用 !develop 或 !mature");
+      expect(callBody.messages[0].text).toContain("只適用於待辦");
+    });
+
+    it("rejects !done on a scratch item", async () => {
+      process.env.LINE_CHANNEL_SECRET = TEST_LINE_SECRET;
+      process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
+      const now = new Date().toISOString();
+      testSqlite.exec(`
+        INSERT INTO items (id, type, title, content, status, priority, due, tags, origin, source, aliases, created, modified) VALUES
+          ('id-scratch-done', 'scratch', 'scratch done test', '', 'draft', NULL, NULL, '[]', 'LINE', NULL, '[]', '${now}', '${now}');
+      `);
+
+      await sendLineMessage(app, "!scratch");
+      vi.mocked(fetch).mockClear();
+
+      const res = await sendLineMessage(app, "!done 1");
+      expect(res.status).toBe(200);
+
+      const fetchMock = vi.mocked(fetch);
+      const callBody = JSON.parse(fetchMock.mock.calls[0][1]!.body as string);
+      expect(callBody.messages[0].text).toContain("只適用於待辦");
+    });
+  });
+
+  describe("!due on non-todo (rejection)", () => {
+    it("rejects !due on a scratch item", async () => {
+      process.env.LINE_CHANNEL_SECRET = TEST_LINE_SECRET;
+      process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
+      const now = new Date().toISOString();
+      testSqlite.exec(`
+        INSERT INTO items (id, type, title, content, status, priority, due, tags, origin, source, aliases, created, modified) VALUES
+          ('id-scratch-due', 'scratch', 'scratch due test', '', 'draft', NULL, NULL, '[]', 'LINE', NULL, '[]', '${now}', '${now}');
+      `);
+
+      await sendLineMessage(app, "!scratch");
+      vi.mocked(fetch).mockClear();
+
+      const res = await sendLineMessage(app, "!due 1 明天");
+      expect(res.status).toBe(200);
+
+      const fetchMock = vi.mocked(fetch);
+      const callBody = JSON.parse(fetchMock.mock.calls[0][1]!.body as string);
+      expect(callBody.messages[0].text).toContain("只適用於待辦");
     });
   });
 

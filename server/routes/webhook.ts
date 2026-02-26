@@ -221,8 +221,8 @@ webhookRouter.post("/line", async (c) => {
       case "due": {
         const resolved = resolveSessionItem(userId, cmd.index);
         if ("error" in resolved) { reply = resolved.error; break; }
-        if (resolved.item.type === "note") {
-          reply = "❌ 筆記不支援到期日，請改用待辦追蹤期限";
+        if (resolved.item.type !== "todo") {
+          reply = "❌ 到期日只適用於待辦";
           break;
         }
         const dateParsed = parseDate(cmd.dateInput);
@@ -252,8 +252,8 @@ webhookRouter.post("/line", async (c) => {
       case "done": {
         const resolved = resolveSessionItem(userId, cmd.index);
         if ("error" in resolved) { reply = resolved.error; break; }
-        if (resolved.item.type === "note") {
-          reply = "❌ 筆記請用 !develop 或 !mature";
+        if (resolved.item.type !== "todo") {
+          reply = "❌ 此指令只適用於待辦";
           break;
         }
         updateItem(db, resolved.itemId, { status: "done" });
