@@ -13,7 +13,7 @@ import { createItem, getTags } from "@/lib/api";
 import { TagInput } from "@/components/tag-input";
 import { toast } from "sonner";
 import type { ItemType, ItemPriority, ViewType } from "@/lib/types";
-import { ChevronDown, ChevronUp, Send, Sun, Moon } from "lucide-react";
+import { ChevronDown, ChevronUp, Send, Sun, Moon, StickyNote, Pin, Paperclip } from "lucide-react";
 
 interface QuickCaptureProps {
   currentView: ViewType;
@@ -24,6 +24,12 @@ const gtdTags = [
   { tag: "next-action", label: "下一步" },
   { tag: "waiting-on", label: "等待中" },
   { tag: "someday", label: "有一天" },
+];
+
+const typeOptions: { value: ItemType; icon: typeof StickyNote; label: string }[] = [
+  { value: "note", icon: StickyNote, label: "筆記" },
+  { value: "todo", icon: Pin, label: "待辦" },
+  { value: "scratch", icon: Paperclip, label: "暫存" },
 ];
 
 function viewToDefaultType(view: ViewType): ItemType {
@@ -107,9 +113,29 @@ export function QuickCapture({ currentView, onCreated }: QuickCaptureProps) {
 
   return (
     <div className="border-b bg-card p-3 space-y-2">
+      {/* Type segmented control */}
+      <div className="flex gap-1">
+        {typeOptions.map((opt) => (
+          <Button
+            key={opt.value}
+            type="button"
+            size="sm"
+            variant={type === opt.value ? "default" : "ghost"}
+            className="h-7 gap-1 text-xs flex-1"
+            onClick={() => setType(opt.value)}
+          >
+            <opt.icon className="h-3.5 w-3.5" />
+            {opt.label}
+          </Button>
+        ))}
+      </div>
       <form onSubmit={handleSubmit} className="flex gap-2">
         <Input
-          placeholder="快速記錄..."
+          placeholder={
+            type === "todo" ? "新增待辦..." :
+            type === "scratch" ? "暫存筆記..." :
+            "快速記錄..."
+          }
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           onKeyDown={handleKeyDown}
@@ -155,20 +181,6 @@ export function QuickCapture({ currentView, onCreated }: QuickCaptureProps) {
       {expanded && (
         <>
           <div className="flex gap-2 flex-wrap">
-            <Select
-              value={type}
-              onValueChange={(v) => setType(v as ItemType)}
-            >
-              <SelectTrigger className="w-24">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="note">筆記</SelectItem>
-                <SelectItem value="todo">待辦</SelectItem>
-                <SelectItem value="scratch">暫存</SelectItem>
-              </SelectContent>
-            </Select>
-
             {type !== "scratch" && (
               <Select
                 value={priority}
