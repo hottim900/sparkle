@@ -65,4 +65,5 @@ if [ "$INSTALL_TUNNEL" = true ]; then
 fi
 echo ""
 echo "💡 WSL2 mirrored 模式下不需要 port forwarding"
-echo "   如需外部裝置存取，請確認 Windows Firewall 已開放 port 3000"
+echo "   如需外部裝置存取，請確認 Hyper-V Firewall 已開放 port 3000"
+echo "   詳見 docs/self-hosting.md 的 WSL2 章節"

@@ -257,13 +257,22 @@ networkingMode=mirrored
 
 Then restart WSL: `wsl --shutdown`
 
-### Windows Firewall
+### Hyper-V Firewall
 
-In mirrored mode, WSL2 processes can typically accept inbound connections without explicit Windows Firewall rules (Hyper-V networking allows them by default). If external devices cannot connect, add an inbound rule:
+In mirrored mode, WSL2 traffic is controlled by the **Hyper-V firewall** (not regular Windows Firewall). The default inbound action is Block. To allow external devices to connect, run one of the following in PowerShell as Administrator:
 
 ```powershell
-# Run in PowerShell as Administrator
-New-NetFirewallRule -DisplayName "Sparkle (WSL2)" -Direction Inbound -Protocol TCP -LocalPort 3000 -Action Allow
+# Option 1: Allow all inbound to WSL2
+Set-NetFirewallHyperVVMSetting -Name '{40E0AC32-46A5-438A-A0B2-2B479E8F2E90}' -DefaultInboundAction Allow
+
+# Option 2: Allow only port 3000
+New-NetFirewallHyperVRule -Name "Sparkle" -DisplayName "Sparkle" -Direction Inbound -VMCreatorId '{40E0AC32-46A5-438A-A0B2-2B479E8F2E90}' -Protocol TCP -LocalPorts 3000
+```
+
+To verify current settings:
+
+```powershell
+Get-NetFirewallHyperVVMSetting -PolicyStore ActiveStore -Name '{40E0AC32-46A5-438A-A0B2-2B479E8F2E90}'
 ```
 
 ### iptables (Defense-in-Depth)

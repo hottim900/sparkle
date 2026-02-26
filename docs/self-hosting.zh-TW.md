@@ -257,13 +257,22 @@ networkingMode=mirrored
 
 然後重啟 WSL：`wsl --shutdown`
 
-### Windows 防火牆
+### Hyper-V 防火牆
 
-Mirrored 模式下，WSL2 程序通常不需要額外的 Windows 防火牆規則即可接受外部連入（Hyper-V 網路層預設允許）。若外部裝置無法連線，再新增輸入規則：
+Mirrored 模式下，WSL2 流量由 **Hyper-V 防火牆**（非一般 Windows 防火牆）控制。預設 inbound 為 Block。若需要外部裝置連入，以系統管理員身分在 PowerShell 中執行：
 
 ```powershell
-# 以系統管理員身分在 PowerShell 中執行
-New-NetFirewallRule -DisplayName "Sparkle (WSL2)" -Direction Inbound -Protocol TCP -LocalPort 3000 -Action Allow
+# 方式一：允許所有 WSL2 外部連入
+Set-NetFirewallHyperVVMSetting -Name '{40E0AC32-46A5-438A-A0B2-2B479E8F2E90}' -DefaultInboundAction Allow
+
+# 方式二：僅允許 port 3000
+New-NetFirewallHyperVRule -Name "Sparkle" -DisplayName "Sparkle" -Direction Inbound -VMCreatorId '{40E0AC32-46A5-438A-A0B2-2B479E8F2E90}' -Protocol TCP -LocalPorts 3000
+```
+
+確認目前設定：
+
+```powershell
+Get-NetFirewallHyperVVMSetting -PolicyStore ActiveStore -Name '{40E0AC32-46A5-438A-A0B2-2B479E8F2E90}'
 ```
 
 ### iptables（縱深防禦）
