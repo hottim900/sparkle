@@ -239,28 +239,36 @@ Sparkle 可將永久筆記匯出為帶有 YAML frontmatter 的 Markdown 檔案�
 
 ## WSL2 注意事項（選用）
 
-若在 WSL2 中執行 Sparkle 並從 Windows 主機或其他裝置存取：
+若在 WSL2 中執行 Sparkle，建議使用 **mirrored 網路模式** 以簡化設定。
 
-### 連接埠轉發
+### Mirrored 網路模式
 
-每次 PC 重新啟動後，WSL2 的 IP 位址會改變。請以**系統管理員**身分執行內建的 PowerShell 腳本來更新連接埠轉發：
+Mirrored 模式下，WSL2 與 Windows 主機共用網路介面。這代表：
+- 不需要連接埠轉發（`netsh portproxy`）
+- 重開機後不會 IP 變動
+- 服務直接綁定在主機網路上
 
+在 `%USERPROFILE%\.wslconfig` 中加入：
+
+```ini
+[wsl2]
+networkingMode=mirrored
 ```
-右鍵點擊 scripts/update-portproxy.ps1 > 以系統管理員身分執行
-```
 
-執行前，請編輯腳本並將 `YOUR_VPN_IP` 替換為您實際的 VPN 或區域網路 IP 位址。
+然後重啟 WSL：`wsl --shutdown`
 
-或在系統管理員 PowerShell 中手動執行：
+### Windows 防火牆
+
+即使在 mirrored 模式下，Windows 防火牆仍會控制外部連入的連線。若需要從外部裝置（例如 VPN 上的手機）存取 Sparkle，請新增輸入規則：
 
 ```powershell
-$wslIp = (wsl hostname -I).Trim().Split()[0]
-netsh interface portproxy add v4tov4 listenaddress=YOUR_LAN_IP listenport=3000 connectaddress=$wslIp connectport=3000
+# 以系統管理員身分在 PowerShell 中執行
+New-NetFirewallRule -DisplayName "Sparkle (WSL2)" -Direction Inbound -Protocol TCP -LocalPort 3000 -Action Allow
 ```
 
-### 防火牆
+### iptables（縱深防禦）
 
-內建的 `sparkle.service` 範本會設定 iptables 規則以限制連接埠 3000 的存取。請在服務檔案中調整允許的子網路以符合您的網路設定。
+內建的 `sparkle.service` 範本會在 WSL2 內設定 iptables 規則作為額外防護層。請在服務檔案中調整允許的子網路以符合您的網路設定。
 
 ## Claude Code MCP 伺服器（選用）
 

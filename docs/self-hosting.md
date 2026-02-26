@@ -239,28 +239,36 @@ Once configured, an export button appears on permanent notes. Exported files inc
 
 ## WSL2 Notes (Optional)
 
-If running Sparkle inside WSL2 and accessing from the Windows host or other devices:
+If running Sparkle inside WSL2, we recommend using **mirrored networking mode** for simplicity.
 
-### Port Forwarding
+### Mirrored Networking Mode
 
-After each PC reboot, the WSL2 IP changes. Run the included PowerShell script **as Administrator** to update port forwarding:
+With mirrored mode, WSL2 shares the Windows host's network interfaces. This means:
+- No port forwarding (`netsh portproxy`) required
+- No IP changes after reboot
+- Services bind directly on the host network
 
+To enable, add to `%USERPROFILE%\.wslconfig`:
+
+```ini
+[wsl2]
+networkingMode=mirrored
 ```
-Right-click scripts/update-portproxy.ps1 > Run as Administrator
-```
 
-Before running, edit the script and replace `YOUR_VPN_IP` with your actual VPN or LAN IP address.
+Then restart WSL: `wsl --shutdown`
 
-Or manually in an admin PowerShell:
+### Windows Firewall
+
+Even with mirrored mode, Windows Firewall still controls incoming connections. If you need external devices (e.g., phones on VPN) to access Sparkle, add an inbound rule:
 
 ```powershell
-$wslIp = (wsl hostname -I).Trim().Split()[0]
-netsh interface portproxy add v4tov4 listenaddress=YOUR_LAN_IP listenport=3000 connectaddress=$wslIp connectport=3000
+# Run in PowerShell as Administrator
+New-NetFirewallRule -DisplayName "Sparkle (WSL2)" -Direction Inbound -Protocol TCP -LocalPort 3000 -Action Allow
 ```
 
-### Firewall
+### iptables (Defense-in-Depth)
 
-The included `sparkle.service` template configures iptables rules to restrict port 3000 access. Adjust the allowed subnets in the service file to match your network configuration.
+The included `sparkle.service` template configures iptables rules inside WSL2 as an additional layer. Adjust the allowed subnets in the service file to match your network configuration.
 
 ## MCP Server for Claude Code (Optional)
 

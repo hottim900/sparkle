@@ -69,7 +69,6 @@ scripts/
   install-services.sh   # Install systemd services
   setup-cloudflared.sh  # Cloudflare Tunnel setup (interactive)
   cloudflared-config.yml.template  # Tunnel config template
-  update-portproxy.ps1  # Windows port forwarding (run as admin)
   systemd/
     sparkle.service         # Node.js HTTPS server
     sparkle-tunnel.service  # Cloudflare Tunnel
@@ -122,7 +121,7 @@ npm run build        # Production frontend → dist/
 
 ## Production Deployment
 
-Self-hosted on WSL2 with WireGuard VPN. Managed by systemd. See `docs/self-hosting.md` for full setup instructions.
+Self-hosted on WSL2 (mirrored networking mode) with WireGuard VPN. Managed by systemd. See `docs/self-hosting.md` for full setup instructions.
 
 ### Quick Reference
 
@@ -149,19 +148,16 @@ Copy `.env.example` to `.env` and fill in your values. See `.env.example` for al
 - Install the CA root on all devices that need to access the app
 - Configure cert paths in `.env` (TLS_CERT, TLS_KEY)
 
-### Firewall (iptables)
+### Firewall
 
-Port 3000 is restricted via iptables rules in `sparkle.service` (defense-in-depth alongside CF Access):
+**Windows Firewall** is the primary firewall (WSL2 mirrored mode). Add an inbound rule for port 3000 if external access is needed.
+
+**iptables** rules in `sparkle.service` provide defense-in-depth:
 - `127.0.0.1` → ACCEPT (localhost / Cloudflare Tunnel)
 - VPN subnet → ACCEPT (WireGuard)
-- `172.16.0.0/12` → ACCEPT (Windows host via WSL2 port proxy)
 - All others → DROP
 
 Requires `iptables` package: `sudo apt install -y iptables`
-
-### WSL2 Port Forwarding
-
-After PC reboot, right-click `scripts/update-portproxy.ps1` → Run as Administrator.
 
 ### Cloudflare Tunnel + Access
 
