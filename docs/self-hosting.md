@@ -259,7 +259,7 @@ Then restart WSL: `wsl --shutdown`
 
 ### Windows Firewall
 
-Even with mirrored mode, Windows Firewall still controls incoming connections. If you need external devices (e.g., phones on VPN) to access Sparkle, add an inbound rule:
+In mirrored mode, WSL2 processes can typically accept inbound connections without explicit Windows Firewall rules (Hyper-V networking allows them by default). If external devices cannot connect, add an inbound rule:
 
 ```powershell
 # Run in PowerShell as Administrator
