@@ -2,9 +2,10 @@
 # ----------------------------------------------------------------------------
 # setup-cloudflared.sh
 #
-# Interactive script to set up a Cloudflare Tunnel that exposes ONLY the
-# LINE webhook endpoint (/api/webhook/*) to the public internet.
-# Everything else returns 404.
+# Interactive script to set up a Cloudflare Tunnel that exposes the full
+# Sparkle service to the internet. Access control is handled by Cloudflare
+# Access — the /api/webhook/* path is left public for LINE Bot, while all
+# other paths require authentication via CF Access policy.
 #
 # Designed for Debian / Ubuntu (including WSL).
 # ----------------------------------------------------------------------------
@@ -193,7 +194,6 @@ credentials-file: ${creds_file}
 
 ingress:
   - hostname: ${HOSTNAME}
-    path: /api/webhook/*
     service: ${LOCAL_SERVICE}
   - service: http_status:404
 EOF
@@ -260,11 +260,12 @@ print_summary() {
     echo -e "==========================================================${NC}"
     echo ""
     info "設定步驟："
-    info "  1. 前往 LINE Developer Console: https://developers.line.biz/"
-    info "  2. 選擇你的 Messaging API Channel"
-    info "  3. 在 Webhook settings 中填入上方 URL"
-    info "  4. 點擊 Verify 確認連線正常"
-    info "  5. 開啟 Use webhook"
+    info "  1. 設定 Cloudflare Access 保護應用程式（詳見 docs/cloudflare-access-setup.md）"
+    info "  2. 前往 LINE Developer Console: https://developers.line.biz/"
+    info "  3. 選擇你的 Messaging API Channel"
+    info "  4. 在 Webhook settings 中填入上方 URL"
+    info "  5. 點擊 Verify 確認連線正常"
+    info "  6. 開啟 Use webhook"
     echo ""
     info "常用指令："
     info "  查看 Tunnel 狀態:   cloudflared tunnel info $TUNNEL_NAME"
@@ -278,9 +279,12 @@ print_summary() {
     echo -e " 安全提醒"
     echo -e "==========================================================${NC}"
     echo ""
-    warn "此 Tunnel 僅公開 /api/webhook/* 路徑。"
-    warn "其他所有路徑將回傳 404，不會暴露到公網。"
-    warn "你的 TODO 清單介面仍然只能透過 VPN / localhost 存取。"
+    warn "此 Tunnel 會將完整 Sparkle 服務公開至網際網路。"
+    warn "請務必設定 Cloudflare Access 保護應用程式："
+    warn "  - /api/webhook/* 設為公開（Bypass）供 LINE Bot 使用"
+    warn "  - 所有其他路徑需要透過 Cloudflare Access 驗證"
+    warn ""
+    warn "設定教學請參考: docs/cloudflare-access-setup.md"
     echo ""
 }
 
@@ -289,7 +293,7 @@ main() {
     echo ""
     echo "=========================================================="
     echo "  Cloudflare Tunnel 設定工具"
-    echo "  僅公開 /api/webhook/* 路徑給 LINE Messaging API"
+    echo "  透過 Cloudflare Access 安全公開 Sparkle 服務"
     echo "=========================================================="
     echo ""
 

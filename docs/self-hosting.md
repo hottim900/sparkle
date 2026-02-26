@@ -186,7 +186,7 @@ After a query, results are numbered. Use the number to operate on items (e.g., `
 
 ## Cloudflare Tunnel (Optional)
 
-A Cloudflare Tunnel exposes only the webhook endpoint to the public internet, keeping the rest of the app private.
+A Cloudflare Tunnel exposes your Sparkle instance to the internet through Cloudflare's network. Access control is handled by **Cloudflare Access** (see next section), while the `/api/webhook/*` path is left open for LINE Bot.
 
 An interactive setup script is included:
 
@@ -199,7 +199,7 @@ This script will:
 2. Authenticate with Cloudflare
 3. Create a named tunnel
 4. Ask whether to use your own domain or a `cfargotunnel.com` address
-5. Generate a config file that only routes `/api/webhook/*`
+5. Generate a config file that routes all traffic to the local Sparkle server
 6. Optionally install as a systemd service
 
 Alternatively, set it up manually:
@@ -208,10 +208,22 @@ Alternatively, set it up manually:
 2. Authenticate: `cloudflared tunnel login`
 3. Create a tunnel: `cloudflared tunnel create sparkle`
 4. Create `~/.cloudflared/config.yml` using `scripts/cloudflared-config.yml.template` as a reference
-5. Route DNS: `cloudflared tunnel route dns sparkle webhook.example.com`
+5. Route DNS: `cloudflared tunnel route dns sparkle sparkle.example.com`
 6. Run: `cloudflared tunnel run sparkle`
 
-The config template restricts public access to `/api/webhook/*` only. All other paths return 404.
+> **Important**: After setting up the tunnel, you should configure Cloudflare Access to protect your Sparkle instance. See the next section.
+
+## Cloudflare Access (Recommended with Tunnel)
+
+If you expose Sparkle through a Cloudflare Tunnel, you should set up **Cloudflare Access** to require authentication before anyone can access the app. This replaces the need for a VPN while keeping your data secure.
+
+Key points:
+- Free for up to 50 users (no credit card required)
+- Supports Email OTP, Google, GitHub, and other identity providers
+- LINE Bot webhook is configured to bypass authentication
+- MCP Server and localhost access are not affected
+
+For a detailed step-by-step setup guide (in Traditional Chinese), see **[docs/cloudflare-access-setup.md](cloudflare-access-setup.md)**.
 
 ## Obsidian Integration (Optional)
 

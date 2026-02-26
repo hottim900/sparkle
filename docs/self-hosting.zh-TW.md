@@ -186,7 +186,7 @@ LINE webhook 端點為 `https://YOUR_DOMAIN/api/webhook/line`。
 
 ## Cloudflare Tunnel（選用）
 
-Cloudflare Tunnel 僅將 webhook 端點暴露至公開網路，其餘部分保持私有。
+Cloudflare Tunnel 透過 Cloudflare 的網路將你的 Sparkle 實例對外公開。存取控制由 **Cloudflare Access** 處理（請參閱下一節），而 `/api/webhook/*` 路徑保持開放供 LINE Bot 使用。
 
 內建互動式設定腳本：
 
@@ -199,7 +199,7 @@ Cloudflare Tunnel 僅將 webhook 端點暴露至公開網路，其餘部分保�
 2. 向 Cloudflare 進行身分驗證
 3. 建立命名 tunnel
 4. 詢問要使用自有網域還是 `cfargotunnel.com` 位址
-5. 產生僅路由 `/api/webhook/*` 的設定檔
+5. 產生將所有流量導向本機 Sparkle 伺服器的設定檔
 6. 可選擇安裝為 systemd 服務
 
 也可以手動設定：
@@ -208,10 +208,22 @@ Cloudflare Tunnel 僅將 webhook 端點暴露至公開網路，其餘部分保�
 2. 身分驗證：`cloudflared tunnel login`
 3. 建立 tunnel：`cloudflared tunnel create sparkle`
 4. 參考 `scripts/cloudflared-config.yml.template` 建立 `~/.cloudflared/config.yml`
-5. 設定 DNS 路由：`cloudflared tunnel route dns sparkle webhook.example.com`
+5. 設定 DNS 路由：`cloudflared tunnel route dns sparkle sparkle.example.com`
 6. 執行：`cloudflared tunnel run sparkle`
 
-設定範本限制公開存取僅限 `/api/webhook/*`，其他路徑皆回傳 404。
+> **重要**：設定好 Tunnel 後，建議設定 Cloudflare Access 來保護你的 Sparkle 實例。請參閱下一節。
+
+## Cloudflare Access（搭配 Tunnel 時建議啟用）
+
+如果你透過 Cloudflare Tunnel 對外公開 Sparkle，建議設定 **Cloudflare Access** 來要求身份驗證後才能存取應用程式。這可以取代 VPN 的需求，同時確保你的資料安全。
+
+重點：
+- 免費方案最多支援 50 位使用者（不需信用卡）
+- 支援 Email OTP、Google、GitHub 等身份驗證方式
+- LINE Bot webhook 設定為繞過身份驗證
+- MCP Server 和 localhost 存取不受影響
+
+詳細的逐步設定指南，請參閱 **[docs/cloudflare-access-setup.md](cloudflare-access-setup.md)**。
 
 ## Obsidian 整合（選用）
 
