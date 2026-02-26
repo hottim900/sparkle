@@ -12,10 +12,11 @@ import {
 import { createItem, getTags } from "@/lib/api";
 import { TagInput } from "@/components/tag-input";
 import { toast } from "sonner";
-import type { ItemType, ItemPriority } from "@/lib/types";
+import type { ItemType, ItemPriority, ViewType } from "@/lib/types";
 import { ChevronDown, ChevronUp, Send, Sun, Moon } from "lucide-react";
 
 interface QuickCaptureProps {
+  currentView: ViewType;
   onCreated?: () => void;
 }
 
@@ -25,11 +26,18 @@ const gtdTags = [
   { tag: "someday", label: "有一天" },
 ];
 
-export function QuickCapture({ onCreated }: QuickCaptureProps) {
+function viewToDefaultType(view: ViewType): ItemType {
+  if (["todos", "active", "done"].includes(view)) return "todo";
+  if (["scratch", "draft"].includes(view)) return "scratch";
+  return "note";
+}
+
+export function QuickCapture({ currentView, onCreated }: QuickCaptureProps) {
   const { resolvedTheme, setTheme } = useTheme();
   const [title, setTitle] = useState("");
   const [expanded, setExpanded] = useState(false);
-  const [type, setType] = useState<ItemType>("note");
+  const defaultType = viewToDefaultType(currentView);
+  const [type, setType] = useState<ItemType>(defaultType);
   const [priority, setPriority] = useState<ItemPriority | "none">("none");
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [allTags, setAllTags] = useState<string[]>([]);
@@ -41,6 +49,10 @@ export function QuickCapture({ onCreated }: QuickCaptureProps) {
       .then((res) => setAllTags(res.tags ?? []))
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    setType(viewToDefaultType(currentView));
+  }, [currentView]);
 
   const addTag = (tag: string) => {
     setSelectedTags((prev) => [...prev, tag]);
