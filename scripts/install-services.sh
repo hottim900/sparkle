@@ -64,5 +64,5 @@ if [ "$INSTALL_TUNNEL" = true ]; then
   echo "  重啟全部:  sudo systemctl restart sparkle sparkle-tunnel"
 fi
 echo ""
-echo "⚠️  Port forwarding 需要在 Windows 端手動執行："
-echo "  右鍵以管理員身分執行 scripts/update-portproxy.ps1"
+echo "💡 WSL2 mirrored 模式下不需要 port forwarding"
+echo "   如需外部裝置存取，請確認 Windows Firewall 已開放 port 3000"

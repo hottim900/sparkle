@@ -7,7 +7,7 @@ set -euo pipefail
 echo "🚀 Sparkle 啟動中..."
 
 # 1. 重啟 systemd services
-echo "[1/2] 重啟 services..."
+echo "重啟 services..."
 systemctl restart sparkle.service
 systemctl restart sparkle-tunnel.service
 sleep 3
@@ -27,15 +27,6 @@ else
   echo "  ❌ Tunnel 啟動失敗"
   journalctl -u sparkle-tunnel.service --no-pager -n 5
 fi
-
-# 2. 提示 port forwarding
-# TODO: Replace YOUR_VPN_IP with your WireGuard VPN IP address
-WSL_IP=$(hostname -I | awk '{print $1}')
-echo ""
-echo "[2/2] Port forwarding"
-echo "  如果手機連不上，在 Windows PowerShell (管理員) 執行："
-echo "  右鍵執行 scripts/update-portproxy.ps1"
-echo "  或手動: netsh interface portproxy add v4tov4 listenaddress=YOUR_VPN_IP listenport=3000 connectaddress=$WSL_IP connectport=3000"
 
 echo ""
 echo "========================================="
