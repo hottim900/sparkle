@@ -7,9 +7,9 @@
 1. [前置條件](#前置條件)
 2. [啟用 Zero Trust 免費方案](#啟用-zero-trust-免費方案)
 3. [設定身份驗證方式](#設定身份驗證方式)
-4. [建立 Access Application](#建立-access-application)
-5. [建立 Access Policy](#建立-access-policy)
-6. [設定 LINE Webhook Bypass](#設定-line-webhook-bypass)
+4. [建立 Access Policy](#建立-access-policy)
+5. [建立 Access Application](#建立-access-application)
+6. [建立 Bypass Applications](#建立-bypass-applications)
 7. [驗證](#驗證)
 8. [Service Token（程式化存取）](#service-token程式化存取)
 9. [常見問題](#常見問題)
@@ -101,6 +101,41 @@ Cloudflare Access 支援多種身份驗證方式（Identity Provider）。以下
 
 ---
 
+## 建立 Access Policy
+
+Policy 是獨立建立的存取規則，之後在 Application 中以引用方式套用。先建 Policy，再建 Application。
+
+### 建立 Allow Policy（允許你自己存取）
+
+1. 在 Zero Trust Dashboard 側邊欄，前往 **Access > Policies**
+
+2. 點擊 **Create a policy**
+
+3. 填寫：
+   - **Policy name**：`Allow owner`
+   - **Action**：`Allow`
+   - 在 **Configure rules** 區塊，新增一條 **Include** 規則：
+     - **Selector**：`Emails`
+     - **Value**：填入你的 email 地址（例如 `you@example.com`）
+
+4. 點擊 **Save** 儲存
+
+### 建立 Bypass Policy（公開存取）
+
+1. 再次點擊 **Create a policy**
+
+2. 填寫：
+   - **Policy name**：`Bypass all`
+   - **Action**：`Bypass`
+   - 在 **Configure rules** 的 **Include** 區塊：
+     - **Selector**：`Everyone`
+
+3. 儲存
+
+> **說明**：`Allow owner` 之後會套用在主 Application 上，限制只有你能存取。`Bypass all` 之後會套用在 LINE webhook 和 PWA 靜態資源的 bypass Applications 上。
+
+---
+
 ## 建立 Access Application
 
 Application 定義了「哪個網站」要受到 Cloudflare Access 保護。
@@ -121,61 +156,23 @@ Application 定義了「哪個網站」要受到 Cloudflare Access 保護。
    - 完整的 URL 會是類似 `sparkle.example.com`
    - 如果你使用 `cfargotunnel.com`，直接填入完整的 hostname
 
-6. 點擊 **Next** 進入 Policy 設定
+6. 在 **Policies** 區塊，引用先前建立的 `Allow owner` policy
+
+7. 儲存
 
 > **提示**：Session Duration 設為 30 天表示你登入一次後，30 天內不需要重新驗證。
 
 ---
 
-## 建立 Access Policy
+## 建立 Bypass Applications
 
-Policy 定義了「誰」可以存取這個 Application。
+某些路徑需要繞過 CF Access 認證，包括 LINE Bot webhook 和 PWA 靜態資源。每個 bypass 路徑建立一個獨立的 Application。
 
-### 建立 Allow Policy（允許你自己存取）
+> **原理**：Cloudflare Access 會先匹配最具體的路徑。特定路徑的 bypass Application 會優先於主 Application，讓這些請求不需要登入。
 
-在建立 Application 的流程中（或之後編輯），你需要設定 Policy：
-
-1. **Policy name**：`Allow owner`
-
-2. **Action**：`Allow`
-
-3. 在 **Configure rules** 區塊，新增一條 **Include** 規則：
-   - **Selector**：`Emails`
-   - **Value**：填入你的 email 地址（例如 `you@example.com`）
-
-4. 點擊 **Save** 儲存 Policy
-
-> **說明**：這條規則的意思是「只有這個 email 地址的人可以存取 Sparkle」。如果你用 Email OTP，Cloudflare 會寄驗證碼到這個 email；如果你用 Google/GitHub 登入，則必須用這個 email 對應的帳號登入。
-
----
-
-## 設定 LINE Webhook Bypass
+### LINE Webhook Bypass
 
 **這是關鍵步驟。** LINE 的伺服器需要直接存取 `/api/webhook/line` 端點來傳送訊息，不能經過 Cloudflare Access 的登入流程。如果不設定 bypass，LINE Bot 會完全無法運作。
-
-### 方法：新增 Bypass Policy
-
-1. 回到 **Access > Applications**，點擊你剛建立的 **Sparkle** Application
-
-2. 進入 **Policies** 頁籤
-
-3. 點擊 **Add a policy**
-
-4. 填寫：
-   - **Policy name**：`LINE Webhook Bypass`
-   - **Action**：`Bypass`
-   - 在 **Configure rules** 的 **Include** 區塊：
-     - **Selector**：`Everyone`
-
-5. 在 Policy 的上方，找到 **Additional settings** 或回到 Application 設定
-
-6. **重要**：你需要確保這條 bypass policy 只套用在 webhook 路徑。在 Application 設定中，新增一條額外的 path rule：
-   - 回到 Application 設定 > **Application domain** 區塊
-   - 在 **Path** 欄位加入：`/api/webhook/*` 這屬於另一個做法
-
-**更推薦的做法：建立第二個 Application 專門處理 webhook bypass。**
-
-### 推薦做法：獨立的 Webhook Bypass Application
 
 1. 前往 **Access > Applications** > **Add an application** > **Self-hosted**
 
@@ -187,17 +184,29 @@ Policy 定義了「誰」可以存取這個 Application。
      - **Domain**：與主 Application 相同（例如 `example.com`）
      - **Path**：`/api/webhook/`
 
-3. 點擊 **Next**
+3. 在 **Policies** 區塊，引用先前建立的 `Bypass all` policy
 
-4. 建立 Policy：
-   - **Policy name**：`Bypass webhook`
-   - **Action**：`Bypass`
-   - **Include** rule：
-     - **Selector**：`Everyone`
+4. 儲存
 
-5. 儲存
+### PWA 靜態資源 Bypass
 
-> **原理**：Cloudflare Access 會先匹配最具體的路徑。對 `/api/webhook/*` 的請求會匹配到這個 bypass Application，不需要登入；其他所有路徑則匹配到主 Application，需要通過身份驗證。
+瀏覽器在載入 PWA 時會自動抓取 manifest 和 service worker 等檔案。這些請求不一定會帶上 CF Access 的 session cookie，導致被攔截而無法安裝 PWA。需要將這些非敏感的靜態資源設為 bypass。
+
+1. 前往 **Access > Applications** > **Add an application** > **Self-hosted**
+
+2. 填寫：
+   - **Application name**：`Sparkle PWA Assets`
+   - **Session Duration**：`24 hours`（無所謂，因為是 bypass）
+   - **Application domain**：
+     - **Subdomain**：與主 Application 相同（例如 `sparkle`）
+     - **Domain**：與主 Application 相同（例如 `example.com`）
+     - **Path**：`/manifest.webmanifest`
+
+3. 在 **Policies** 區塊，引用先前建立的 `Bypass all` policy
+
+4. 儲存
+
+> **說明**：`/manifest.webmanifest` 和 `/sw.js` 都是公開的靜態檔案，不含敏感資料，bypass 不會造成安全風險。如果 PWA 安裝仍有問題，可用相同方式為 `/sw.js` 再建一個 bypass Application。
 
 ---
 
@@ -224,10 +233,12 @@ Policy 定義了「誰」可以存取這個 Application。
 
 ### 3. 測試 PWA
 
-1. 在手機瀏覽器中開啟 Sparkle URL
-2. 完成 Cloudflare Access 登入
-3. 新增至主畫面（PWA 安裝）
-4. 從主畫面開啟 Sparkle，應該可以直接使用（Session 期間內不需重新登入）
+1. 在瀏覽器中開啟 Sparkle URL，完成 Cloudflare Access 登入
+2. 應該看到 PWA 安裝提示（「安裝到主畫面，享受更好的體驗」）
+3. 點擊安裝，從主畫面開啟 Sparkle，應該可以直接使用
+4. 如果沒有出現安裝提示，開啟 DevTools（F12）> Console 檢查：
+   - 如果看到 `manifest` 被 redirect 到 `cloudflareaccess.com` 的 CORS 錯誤 → 確認 PWA Assets bypass Application 已建立且路徑正確
+   - 如果看到 `beforeinstallpromptevent.preventDefault() called` → 這是正常的，Sparkle 使用自訂安裝提示
 
 ---
 
@@ -273,11 +284,12 @@ Policy 定義了「誰」可以存取這個 Application。
 
 ### Q: LINE Bot 不通怎麼辦？
 
-1. 確認 Bypass Application 的路徑設定為 `/api/webhook/`，且 domain 與主 Application 相同
-2. 在 LINE Developers Console 點擊 **Verify** 測試 webhook 連線
-3. 檢查 Cloudflare Tunnel 狀態：`sudo systemctl status cloudflared`
-4. 查看 Tunnel 日誌：`sudo journalctl -u cloudflared -f`
-5. 查看 Sparkle 日誌：`journalctl -u sparkle -f`
+1. 確認 LINE Webhook bypass Application 的路徑設定為 `/api/webhook/`，且 domain 與主 Application 完全一致
+2. 確認該 bypass Application 已引用 `Bypass all` policy
+3. 在 LINE Developers Console 點擊 **Verify** 測試 webhook 連線
+4. 檢查 Cloudflare Tunnel 狀態：`sudo systemctl status cloudflared`
+5. 查看 Tunnel 日誌：`sudo journalctl -u cloudflared -f`
+6. 查看 Sparkle 日誌：`journalctl -u sparkle -f`
 
 ### Q: 想用多台裝置存取？
 
@@ -290,6 +302,10 @@ Policy 定義了「誰」可以存取這個 Application。
 - 或使用 email domain 規則（例如允許所有 `@yourcompany.com` 的人）
 
 免費方案最多支援 50 位使用者。
+
+### Q: PWA 安裝提示沒有出現？
+
+確認 PWA Assets bypass Application 已正確建立（path 為 `/manifest.webmanifest`）。開啟 DevTools Console 檢查是否有 CORS 錯誤。如果 `/sw.js` 也被攔截，用相同方式再建一個 bypass Application。
 
 ### Q: 之前用 VPN 存取，還需要嗎？
 
