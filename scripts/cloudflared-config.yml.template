@@ -2,9 +2,8 @@ tunnel: TUNNEL_ID
 credentials-file: CREDENTIALS_PATH
 
 ingress:
-  # Only expose the LINE webhook endpoint to the public internet.
-  # All other paths return 404 — the TODO app UI stays VPN/localhost only.
+  # Route all traffic through Cloudflare Tunnel.
+  # Access control is handled by Cloudflare Access — see docs/cloudflare-access-setup.md
   - hostname: YOUR_HOSTNAME
-    path: /api/webhook/*
     service: LOCAL_SERVICE
   - service: http_status:404

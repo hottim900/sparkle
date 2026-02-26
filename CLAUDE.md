@@ -68,10 +68,16 @@ scripts/
   start.sh              # One-command restart (uses systemctl)
   install-services.sh   # Install systemd services
   setup-cloudflared.sh  # Cloudflare Tunnel setup (interactive)
+  cloudflared-config.yml.template  # Tunnel config template
   update-portproxy.ps1  # Windows port forwarding (run as admin)
   systemd/
     sparkle.service         # Node.js HTTPS server
     sparkle-tunnel.service  # Cloudflare Tunnel
+
+docs/
+  self-hosting.md              # Self-hosting guide (English)
+  self-hosting.zh-TW.md        # Self-hosting guide (繁體中文)
+  cloudflare-access-setup.md   # Cloudflare Access setup guide (繁體中文)
 
 mcp-server/
   package.json            # MCP server dependencies
@@ -145,7 +151,7 @@ Copy `.env.example` to `.env` and fill in your values. See `.env.example` for al
 
 ### Firewall (iptables)
 
-Port 3000 is restricted via iptables rules in `sparkle.service`:
+Port 3000 is restricted via iptables rules in `sparkle.service` (defense-in-depth alongside CF Access):
 - `127.0.0.1` → ACCEPT (localhost / Cloudflare Tunnel)
 - VPN subnet → ACCEPT (WireGuard)
 - `172.16.0.0/12` → ACCEPT (Windows host via WSL2 port proxy)
@@ -157,11 +163,13 @@ Requires `iptables` package: `sudo apt install -y iptables`
 
 After PC reboot, right-click `scripts/update-portproxy.ps1` → Run as Administrator.
 
-### Cloudflare Tunnel
+### Cloudflare Tunnel + Access
 
 - Run `scripts/setup-cloudflared.sh` for interactive setup
-- Only `/api/webhook/*` is exposed publicly (everything else returns 404)
-- Config stored in `~/.cloudflared/config.yml`
+- Full service exposed through Tunnel; access controlled by **Cloudflare Access** (Zero Trust)
+- `/api/webhook/*` bypasses CF Access (LINE Bot needs direct access)
+- Config stored in `~/.cloudflared/config.yml`, template at `scripts/cloudflared-config.yml.template`
+- Setup guide: `docs/cloudflare-access-setup.md`
 
 ### LINE Bot
 
