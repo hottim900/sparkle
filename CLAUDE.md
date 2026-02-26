@@ -150,7 +150,7 @@ Copy `.env.example` to `.env` and fill in your values. See `.env.example` for al
 
 ### Firewall
 
-**Windows Firewall**: In mirrored mode, Hyper-V networking allows WSL2 inbound by default. Add a firewall rule only if external access is blocked.
+**Hyper-V Firewall**: In mirrored mode, WSL2 inbound traffic is controlled by Hyper-V firewall (default: Block). Configure via `Set-NetFirewallHyperVVMSetting` or `New-NetFirewallHyperVRule`.
 
 **iptables** rules in `sparkle.service` provide defense-in-depth:
 - `127.0.0.1` → ACCEPT (localhost / Cloudflare Tunnel)
