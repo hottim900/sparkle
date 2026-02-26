@@ -259,7 +259,7 @@ networkingMode=mirrored
 
 ### Windows 防火牆
 
-即使在 mirrored 模式下，Windows 防火牆仍會控制外部連入的連線。若需要從外部裝置（例如 VPN 上的手機）存取 Sparkle，請新增輸入規則：
+Mirrored 模式下，WSL2 程序通常不需要額外的 Windows 防火牆規則即可接受外部連入（Hyper-V 網路層預設允許）。若外部裝置無法連線，再新增輸入規則：
 
 ```powershell
 # 以系統管理員身分在 PowerShell 中執行

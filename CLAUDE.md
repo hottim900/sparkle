@@ -150,7 +150,7 @@ Copy `.env.example` to `.env` and fill in your values. See `.env.example` for al
 
 ### Firewall
 
-**Windows Firewall** is the primary firewall (WSL2 mirrored mode). Add an inbound rule for port 3000 if external access is needed.
+**Windows Firewall**: In mirrored mode, Hyper-V networking allows WSL2 inbound by default. Add a firewall rule only if external access is blocked.
 
 **iptables** rules in `sparkle.service` provide defense-in-depth:
 - `127.0.0.1` → ACCEPT (localhost / Cloudflare Tunnel)
