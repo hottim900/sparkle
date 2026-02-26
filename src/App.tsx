@@ -202,7 +202,7 @@ function MainApp() {
                 selectedItem ? "hidden md:flex" : "flex"
               } md:w-96 md:max-w-none md:flex-none md:border-r`}
             >
-              <QuickCapture onCreated={refresh} />
+              <QuickCapture currentView={currentView} onCreated={refresh} />
 
               {/* Triage toggle for fleeting view */}
               {isFleetingView && (
