@@ -110,7 +110,7 @@ mcp-server/
     tools/
       search.ts           # sparkle_search
       read.ts             # sparkle_get_note, sparkle_list_notes
-      write.ts            # sparkle_create_note, sparkle_update_note (note/todo/scratch, full field support)
+      write.ts            # sparkle_create_note, sparkle_update_note (note/todo/scratch, full field support, partial edit via old_content)
       workflow.ts         # sparkle_advance_note, sparkle_export_to_obsidian
       meta.ts             # sparkle_get_stats, sparkle_list_tags
       guide.ts            # sparkle_guide (documentation query by topic)
@@ -233,7 +233,7 @@ Requires `iptables` package: `sudo apt install -y iptables`
 - **Knowledge layer**: Server `instructions` auto-injected into system prompt (role definition, Zettelkasten workflow, tool usage patterns). 7 MCP Resources at `sparkle://docs/*` for deep reference. `sparkle_guide` tool as fallback.
 - 10 tools: sparkle_search, sparkle_get_note, sparkle_list_notes, sparkle_create_note, sparkle_update_note, sparkle_advance_note, sparkle_export_to_obsidian, sparkle_get_stats, sparkle_list_tags, sparkle_guide
 - sparkle_create_note supports all 3 types (note/todo/scratch) with priority, due, linked_note_id
-- sparkle_update_note supports type conversion, priority, due, linked_note_id
+- sparkle_update_note supports type conversion, priority, due, linked_note_id, partial content edit (old_content + content for find-and-replace)
 - Build: `cd mcp-server && npm install && npm run build`
 - Dev: `cd mcp-server && npm run dev`
 - Test: `cd mcp-server && npx @modelcontextprotocol/inspector node dist/index.js`
