@@ -97,8 +97,8 @@ npm start
 
 The server starts on the configured port. If TLS is configured, it runs HTTPS; otherwise plain HTTP.
 
-- HTTPS: `https://localhost:3000`
-- HTTP: `http://localhost:3000`
+- HTTP: `http://localhost:3000` (default, recommended when using Cloudflare Tunnel)
+- HTTPS: `https://localhost:3000` (only if TLS_CERT and TLS_KEY are set)
 
 ## Systemd Service (Optional)
 
@@ -298,12 +298,11 @@ npm run build
 ```bash
 claude mcp add sparkle --transport stdio --scope user \
   --env SPARKLE_AUTH_TOKEN=your-auth-token \
-  --env SPARKLE_API_URL=https://localhost:3000 \
-  --env NODE_TLS_REJECT_UNAUTHORIZED=0 \
+  --env SPARKLE_API_URL=http://localhost:3000 \
   -- /path/to/node /path/to/sparkle/mcp-server/dist/index.js
 ```
 
-Replace `/path/to/node` with the absolute path to your Node.js binary (`which node`) and adjust the other paths accordingly. The `NODE_TLS_REJECT_UNAUTHORIZED=0` is needed if using self-signed certificates (mkcert).
+Replace `/path/to/node` with the absolute path to your Node.js binary (`which node`) and adjust the other paths accordingly. If using HTTPS with self-signed certificates (mkcert), change the URL to `https://` and add `--env NODE_TLS_REJECT_UNAUTHORIZED=0`.
 
 ### Available Tools
 

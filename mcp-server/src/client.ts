@@ -7,7 +7,7 @@ import type {
   ExportResult,
 } from "./types.js";
 
-const API_URL = process.env.SPARKLE_API_URL || "https://localhost:3000";
+const API_URL = process.env.SPARKLE_API_URL || "http://localhost:3000";
 const AUTH_TOKEN = process.env.SPARKLE_AUTH_TOKEN;
 
 export class SparkleApiError extends Error {

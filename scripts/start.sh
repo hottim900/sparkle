@@ -43,7 +43,7 @@ fi
 echo ""
 echo "========================================="
 echo "  Sparkle 已啟動"
-echo "  PC:     https://localhost:3000"
+echo "  PC:     http://localhost:3000"
 echo "  手機:   https://YOUR_TUNNEL_HOSTNAME (Cloudflare Tunnel)"
 echo "  LINE:   https://YOUR_WEBHOOK_DOMAIN/api/webhook/line"
 echo "========================================="

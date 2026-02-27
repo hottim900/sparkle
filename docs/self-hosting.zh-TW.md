@@ -97,8 +97,8 @@ npm start
 
 伺服器會在設定的連接埠啟動。若已設定 TLS，則以 HTTPS 執行；否則以純 HTTP 執行。
 
-- HTTPS：`https://localhost:3000`
-- HTTP：`http://localhost:3000`
+- HTTP：`http://localhost:3000`（預設，使用 Cloudflare Tunnel 時建議）
+- HTTPS：`https://localhost:3000`（僅在設定 TLS_CERT 和 TLS_KEY 時）
 
 ## Systemd 服務（選用）
 
@@ -298,12 +298,11 @@ npm run build
 ```bash
 claude mcp add sparkle --transport stdio --scope user \
   --env SPARKLE_AUTH_TOKEN=your-auth-token \
-  --env SPARKLE_API_URL=https://localhost:3000 \
-  --env NODE_TLS_REJECT_UNAUTHORIZED=0 \
+  --env SPARKLE_API_URL=http://localhost:3000 \
   -- /path/to/node /path/to/sparkle/mcp-server/dist/index.js
 ```
 
-將 `/path/to/node` 替換為 Node.js 執行檔的絕對路徑（`which node`），並根據實際情況調整其他路徑。若使用自簽憑證（mkcert），需要 `NODE_TLS_REJECT_UNAUTHORIZED=0`。
+將 `/path/to/node` 替換為 Node.js 執行檔的絕對路徑（`which node`），並根據實際情況調整其他路徑。若使用 HTTPS 搭配自簽憑證（mkcert），請將 URL 改為 `https://` 並加上 `--env NODE_TLS_REJECT_UNAUTHORIZED=0`。
 
 ### 可用工具
 
