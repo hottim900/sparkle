@@ -55,6 +55,7 @@ src/
   App.tsx               # Main layout, view routing, keyboard shortcuts, lazy-loaded components
   components/
     auth-gate.tsx        # Login screen
+    error-boundary.tsx   # ErrorBoundary class component for lazy-loaded chunks (retry on failure)
     dashboard.tsx        # Review dashboard (Zettelkasten progress, focus, fleeting health, scratch count)
     quick-capture.tsx    # New item form (GTD quick-select tags for todos)
     item-list.tsx        # Item list + filter chips + contextual batch actions + type grouping
@@ -128,7 +129,7 @@ npm run dev:server   # Hono on :3000 with tsx watch
 # IMPORTANT: Tests require node v22 (better-sqlite3 native module is incompatible with v24)
 nvm use 22
 
-# Tests (462 tests, 14 files — server only, no frontend tests)
+# Tests (463 tests, 14 files — server only, no frontend tests)
 npx vitest run                # Run all tests
 npx vitest run --coverage     # With coverage (needs @vitest/coverage-v8)
 npx vitest                    # Watch mode
@@ -300,7 +301,7 @@ Schema version tracked in `schema_version` table (version 0→11). Each step is 
 - Obsidian export: .md with YAML frontmatter, local time (no TZ suffix), written to vault path. Config stored in `settings` table, read via `getObsidianSettings()`. `exportToObsidian(item, config)` is a pure function (no env dependency).
 - Settings API: `GET /api/settings` returns all settings; `PUT /api/settings` accepts partial updates with Zod validation (key whitelist, vault path writability check when enabling)
 - Public sharing: Notes can be shared via token-based URLs (`/s/:token`). SSR HTML pages with marked for Markdown, OpenGraph meta tags, dark mode CSS. Two visibility modes: `unlisted` (link-only) and `public` (listed in `/api/public`). Auth bypass on `/api/public/*` and `/s/*` paths. Share management via authenticated API (`/api/items/:id/share`, `/api/shares`)
-- Performance: gzip/deflate compression via `hono/compress` on all responses. Static assets (`/assets/*`) served with `Cache-Control: immutable` (Vite content-hashed filenames). Frontend uses code splitting — heavy components (ItemDetail, Settings, Dashboard, FleetingTriage, MarkdownPreview) are lazy-loaded via `React.lazy()`. Vendor chunks split: `ui` (radix + cva), `markdown` (react-markdown + remark-gfm)
+- Performance: gzip/deflate compression via `hono/compress` on all responses with `Vary: Accept-Encoding` for CDN cache correctness. Static assets (`/assets/*`) served with `Cache-Control: immutable` (Vite content-hashed filenames). Frontend uses code splitting — heavy components (ItemDetail, Settings, Dashboard, FleetingTriage, MarkdownPreview) are lazy-loaded via `React.lazy()` with `ErrorBoundary` wrappers for chunk load failure recovery. Vendor chunks split: `ui` (radix + cva), `markdown` (react-markdown + remark-gfm)
 
 ## CLAUDE.md Maintenance
 
