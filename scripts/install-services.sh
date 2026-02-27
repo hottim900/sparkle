@@ -20,7 +20,13 @@ echo "ℹ️  使用者: $SPARKLE_USER"
 # 偵測 Node.js 路徑
 detect_node() {
   local node_path
+  # nvm 在 .bashrc 中載入，但 su - 的 non-interactive shell 不會 source .bashrc
+  # 先嘗試直接找，找不到再嘗試載入 nvm
   node_path="$(su - "$SPARKLE_USER" -c 'which node' 2>/dev/null)" || true
+
+  if [[ -z "$node_path" ]]; then
+    node_path="$(su - "$SPARKLE_USER" -c 'source "$HOME/.nvm/nvm.sh" 2>/dev/null && which node' 2>/dev/null)" || true
+  fi
 
   if [[ -z "$node_path" ]]; then
     echo "❌ 找不到 Node.js，請先安裝 Node.js (建議 v22.x)"
