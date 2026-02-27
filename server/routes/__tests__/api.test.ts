@@ -110,6 +110,12 @@ const importSchema = z.object({
 
 function createApp() {
   const app = new Hono();
+  app.use("*", async (c, next) => {
+    await next();
+    if (!c.res.headers.has("Vary")) {
+      c.res.headers.set("Vary", "Accept-Encoding");
+    }
+  });
   app.use(
     "/api/*",
     bodyLimit({
@@ -1911,5 +1917,18 @@ describe("Body size limit", () => {
       }),
     });
     expect(res.status).toBe(201);
+  });
+});
+
+// ============================================================
+// Vary Header Tests
+// ============================================================
+describe("Vary header", () => {
+  it("sets Vary: Accept-Encoding on API responses", async () => {
+    const res = await app.request("/api/items", {
+      headers: authHeaders(),
+    });
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Vary")).toBe("Accept-Encoding");
   });
 });
