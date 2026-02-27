@@ -117,3 +117,22 @@ export type ViewType =
   | "todos"
   | "scratch"
   | "settings";
+
+// Share types
+export interface ShareToken {
+  id: string;
+  item_id: string;
+  token: string;
+  visibility: "unlisted" | "public";
+  created: string;
+  item_title?: string;
+}
+
+export interface ShareResponse {
+  share: ShareToken;
+  url: string;
+}
+
+export interface ListSharesResponse {
+  shares: ShareToken[];
+}

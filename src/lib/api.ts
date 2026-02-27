@@ -9,6 +9,8 @@ import type {
   FocusResponse,
   ConfigResponse,
   SettingsResponse,
+  ShareResponse,
+  ListSharesResponse,
 } from "./types";
 
 const API_BASE = "/api";
@@ -233,6 +235,29 @@ export async function updateSettings(
     method: "PUT",
     body: JSON.stringify(data),
   });
+}
+
+// Shares API
+export async function createShare(
+  itemId: string,
+  visibility: "unlisted" | "public" = "unlisted",
+): Promise<ShareResponse> {
+  return request<ShareResponse>(`/items/${itemId}/share`, {
+    method: "POST",
+    body: JSON.stringify({ visibility }),
+  });
+}
+
+export async function listShares(): Promise<ListSharesResponse> {
+  return request<ListSharesResponse>("/shares");
+}
+
+export async function getItemShares(itemId: string): Promise<ListSharesResponse> {
+  return request<ListSharesResponse>(`/items/${itemId}/shares`);
+}
+
+export async function revokeShare(shareId: string): Promise<void> {
+  await request(`/shares/${shareId}`, { method: "DELETE" });
 }
 
 export { ApiClientError };

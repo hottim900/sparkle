@@ -7,7 +7,7 @@ Self-hosted PWA for personal idea capture + task management with Zettelkasten no
 ## Tech Stack
 
 - **Frontend**: Vite + React 19 + TypeScript + Tailwind CSS + shadcn/ui (Radix)
-- **Backend**: Hono (Node.js) + Drizzle ORM + better-sqlite3 + FTS5 + hono-rate-limiter
+- **Backend**: Hono (Node.js) + Drizzle ORM + better-sqlite3 + FTS5 + hono-rate-limiter + marked (SSR Markdown)
 - **PWA**: vite-plugin-pwa + Workbox + IndexedDB offline queue
 - **Validation**: Zod on all API endpoints
 - **Themes**: next-themes (dark/light)
@@ -20,13 +20,15 @@ Self-hosted PWA for personal idea capture + task management with Zettelkasten no
 server/
   index.ts              # Hono app, route registration, HTTPS/TLS support, startup validation, graceful shutdown
   middleware/
-    auth.ts             # Bearer token auth (skips /api/webhook/)
+    auth.ts             # Bearer token auth (skips /api/webhook/ and /api/public/)
     rate-limit.ts       # Rate limiting (API general, auth failure, webhook)
   routes/
     items.ts            # CRUD + batch operations + POST /:id/export
     search.ts           # FTS5 full-text search
     stats.ts            # GET /api/stats, GET /api/stats/focus
     settings.ts         # GET/PUT /api/settings (Obsidian config)
+    shares.ts           # Share management (create, list, revoke) — auth required
+    public.ts           # Public routes (JSON API + SSR page at /s/:token) — no auth
     webhook.ts          # LINE Bot webhook (POST /api/webhook/line)
   lib/
     items.ts            # DB query functions (Drizzle + raw SQLite), type-status validation, auto-mapping
@@ -39,10 +41,14 @@ server/
     line-format.ts      # LINE reply formatting (numbered list, detail, stats)
     line-session.ts     # LINE Bot session (numbered item mapping, in-memory)
     line-date.ts        # Natural language date parser (chrono-node zh.hant)
-  schemas/items.ts      # Zod validation schemas (statusEnum, excludeStatus, batch actions)
+    shares.ts           # Share token CRUD (create, query by token/item, list, revoke)
+    render-public-page.ts # SSR HTML rendering (marked, OpenGraph tags, dark mode CSS)
+  schemas/
+    items.ts            # Zod validation schemas (statusEnum, excludeStatus, batch actions)
+    shares.ts           # Zod schema for share creation (visibility enum)
   db/
-    index.ts            # DB connection + schema migration (version 0→10)
-    schema.ts           # Drizzle table schema (items + settings)
+    index.ts            # DB connection + schema migration (version 0→11)
+    schema.ts           # Drizzle table schema (items + settings + share_tokens)
     fts.ts              # FTS5 virtual table + sync triggers
 
 src/
@@ -52,18 +58,19 @@ src/
     dashboard.tsx        # Review dashboard (Zettelkasten progress, focus, fleeting health, scratch count)
     quick-capture.tsx    # New item form (GTD quick-select tags for todos)
     item-list.tsx        # Item list + filter chips + contextual batch actions + type grouping
-    item-detail.tsx      # Editor + markdown preview + export button + aliases + linked items
+    item-detail.tsx      # Editor + markdown preview + export button + aliases + linked items + share button
     item-card.tsx        # List item display with tags, linked indicators, due date
     search-bar.tsx       # FTS search with keyword highlighting
-    settings.tsx         # Settings page (Obsidian config + general tools)
+    settings.tsx         # Settings page (Obsidian config + share management + general tools)
+    share-dialog.tsx     # Share dialog (create share, copy link, revoke)
     sidebar.tsx          # Desktop nav (筆記/待辦/暫存/共用 sections + settings)
     bottom-nav.tsx       # Mobile nav (Notes, Todos, Scratch, Dashboard, Search + settings)
     fleeting-triage.tsx  # Fleeting note triage mode (發展/進行/封存/保留)
     offline-indicator.tsx
     install-prompt.tsx   # PWA install banner
   lib/
-    api.ts              # API client (auto-logout on 401)
-    types.ts            # TypeScript interfaces + ViewType
+    api.ts              # API client (auto-logout on 401, shares API)
+    types.ts            # TypeScript interfaces + ViewType + ShareToken types
   hooks/
     use-keyboard-shortcuts.ts  # N=new, /=search, Esc=close
   sw.ts                 # Service worker (offline capture queue)
@@ -115,7 +122,7 @@ npm run dev:server   # Hono on :3000 with tsx watch
 # IMPORTANT: Tests require node v22 (better-sqlite3 native module is incompatible with v24)
 nvm use 22
 
-# Tests (403 tests, 12 files — server only, no frontend tests)
+# Tests (454 tests, 14 files — server only, no frontend tests)
 npx vitest run                # Run all tests
 npx vitest run --coverage     # With coverage (needs @vitest/coverage-v8)
 npx vitest                    # Watch mode
@@ -263,7 +270,7 @@ When type changes (note ↔ todo ↔ scratch), status auto-maps server-side. Aut
 
 ### DB Migration
 
-Schema version tracked in `schema_version` table (version 0→10). Each step is idempotent. Fresh install creates new schema directly at version 10. Migration 8→9 creates the `settings` table with Obsidian export defaults. Migration 9→10 is a no-op version bump for scratch type support (SQLite text columns need no schema change).
+Schema version tracked in `schema_version` table (version 0→11). Each step is idempotent. Fresh install creates new schema directly at version 11. Migration 8→9 creates the `settings` table with Obsidian export defaults. Migration 9→10 is a no-op version bump for scratch type support (SQLite text columns need no schema change). Migration 10→11 creates the `share_tokens` table with CASCADE foreign key to items.
 
 ## Conventions
 
@@ -279,6 +286,7 @@ Schema version tracked in `schema_version` table (version 0→10). Each step is 
 - Tests: Vitest, in-memory SQLite, mock db module with vi.mock
 - Obsidian export: .md with YAML frontmatter, local time (no TZ suffix), written to vault path. Config stored in `settings` table, read via `getObsidianSettings()`. `exportToObsidian(item, config)` is a pure function (no env dependency).
 - Settings API: `GET /api/settings` returns all settings; `PUT /api/settings` accepts partial updates with Zod validation (key whitelist, vault path writability check when enabling)
+- Public sharing: Notes can be shared via token-based URLs (`/s/:token`). SSR HTML pages with marked for Markdown, OpenGraph meta tags, dark mode CSS. Two visibility modes: `unlisted` (link-only) and `public` (listed in `/api/public`). Auth bypass on `/api/public/*` and `/s/*` paths. Share management via authenticated API (`/api/items/:id/share`, `/api/shares`)
 
 ## CLAUDE.md Maintenance
 

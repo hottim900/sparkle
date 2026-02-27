@@ -49,3 +49,23 @@ export const settings = sqliteTable("settings", {
 });
 
 export type Setting = typeof settings.$inferSelect;
+
+export const shareTokens = sqliteTable(
+  "share_tokens",
+  {
+    id: text("id").primaryKey(),
+    item_id: text("item_id").notNull(),
+    token: text("token").notNull().unique(),
+    visibility: text("visibility", { enum: ["unlisted", "public"] })
+      .notNull()
+      .default("unlisted"),
+    created: text("created").notNull(),
+  },
+  (table) => [
+    index("idx_share_tokens_token").on(table.token),
+    index("idx_share_tokens_item_id").on(table.item_id),
+  ],
+);
+
+export type ShareToken = typeof shareTokens.$inferSelect;
+export type NewShareToken = typeof shareTokens.$inferInsert;

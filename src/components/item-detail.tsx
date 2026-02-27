@@ -49,7 +49,9 @@ import {
   Search,
   Unlink,
   StickyNote,
+  Share2,
 } from "lucide-react";
+import { ShareDialog } from "@/components/share-dialog";
 
 interface ItemDetailProps {
   itemId: string;
@@ -99,6 +101,7 @@ export function ItemDetail({
   const [item, setItem] = useState<ParsedItem | null>(null);
   const [allTags, setAllTags] = useState<string[]>([]);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
   const [previewMode, setPreviewMode] = useState(false);
@@ -442,6 +445,17 @@ export function ItemDetail({
                 <ExternalLink className="h-3 w-3" />
               )}
               匯出到 Obsidian
+            </Button>
+          )}
+          {item.type === "note" && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1 text-xs"
+              onClick={() => setShareOpen(true)}
+            >
+              <Share2 className="h-3 w-3" />
+              分享
             </Button>
           )}
           <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
@@ -999,6 +1013,16 @@ export function ItemDetail({
           <p>更新: {new Date(item.modified).toLocaleString("zh-TW")}</p>
         </div>
       </div>
+
+      {/* Share Dialog */}
+      {item.type === "note" && (
+        <ShareDialog
+          itemId={item.id}
+          itemTitle={item.title}
+          open={shareOpen}
+          onOpenChange={setShareOpen}
+        />
+      )}
     </div>
   );
 }
