@@ -1,12 +1,8 @@
-import { useState, useCallback, useMemo, useEffect } from "react";
+import { useState, useCallback, useMemo, useEffect, lazy, Suspense } from "react";
 import { AuthGate } from "@/components/auth-gate";
 import { Toaster } from "@/components/ui/sonner";
 import { QuickCapture } from "@/components/quick-capture";
 import { ItemList } from "@/components/item-list";
-import { ItemDetail } from "@/components/item-detail";
-import { FleetingTriage } from "@/components/fleeting-triage";
-import { Dashboard } from "@/components/dashboard";
-import { Settings } from "@/components/settings";
 import { SearchBar } from "@/components/search-bar";
 import { Sidebar } from "@/components/sidebar";
 import { BottomNav } from "@/components/bottom-nav";
@@ -15,8 +11,19 @@ import { InstallPrompt } from "@/components/install-prompt";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
 import { getConfig, getItem } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { List, ListTodo } from "lucide-react";
+import { List, ListTodo, Loader2 } from "lucide-react";
 import { parseItem, type ViewType, type ParsedItem, type ItemStatus, type ItemType } from "@/lib/types";
+
+const ItemDetail = lazy(() => import("@/components/item-detail").then(m => ({ default: m.ItemDetail })));
+const Settings = lazy(() => import("@/components/settings").then(m => ({ default: m.Settings })));
+const FleetingTriage = lazy(() => import("@/components/fleeting-triage").then(m => ({ default: m.FleetingTriage })));
+const Dashboard = lazy(() => import("@/components/dashboard").then(m => ({ default: m.Dashboard })));
+
+const LoadingFallback = (
+  <div className="flex items-center justify-center h-full">
+    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+  </div>
+);
 
 const isMobile = () => window.innerWidth < 768;
 
@@ -180,20 +187,24 @@ function MainApp() {
       <div className="flex-1 flex flex-col md:flex-row min-w-0 overflow-hidden">
         {currentView === "dashboard" ? (
           /* Dashboard takes full width */
-          <Dashboard
-            onViewChange={handleViewChange}
-            onSelectItem={(item) => {
-              setNavStack((prev) => [
-                ...prev,
-                { view: "dashboard", itemId: null },
-              ]);
-              setCurrentView("all");
-              setSelectedItem(item);
-            }}
-          />
+          <Suspense fallback={LoadingFallback}>
+            <Dashboard
+              onViewChange={handleViewChange}
+              onSelectItem={(item) => {
+                setNavStack((prev) => [
+                  ...prev,
+                  { view: "dashboard", itemId: null },
+                ]);
+                setCurrentView("all");
+                setSelectedItem(item);
+              }}
+            />
+          </Suspense>
         ) : currentView === "settings" ? (
           /* Settings takes full width */
-          <Settings onSettingsChanged={refreshConfig} />
+          <Suspense fallback={LoadingFallback}>
+            <Settings onSettingsChanged={refreshConfig} />
+          </Suspense>
         ) : (
           <>
             {/* List panel */}
@@ -228,7 +239,9 @@ function MainApp() {
 
               {isTriageActive ? (
                 <div className="flex-1 overflow-y-auto">
-                  <FleetingTriage onDone={() => setTriageMode(false)} />
+                  <Suspense fallback={LoadingFallback}>
+                    <FleetingTriage onDone={() => setTriageMode(false)} />
+                  </Suspense>
                 </div>
               ) : currentView === "search" ? (
                 <div className="flex-1 overflow-y-auto p-3 md:hidden">
@@ -258,20 +271,22 @@ function MainApp() {
             {/* Detail panel */}
             {selectedItem && (
               <div className="fixed inset-0 z-50 bg-background md:static md:z-auto md:flex-1 md:min-w-0 md:border-l">
-                <ItemDetail
-                  itemId={selectedItem.id}
-                  obsidianEnabled={obsidianEnabled}
-                  onBack={handleBack}
-                  onClose={handleClearDetail}
-                  canGoBack={navStack.length > 0}
-                  onUpdated={refresh}
-                  onDeleted={() => {
-                    setSelectedItem(null);
-                    setNavStack([]);
-                    refresh();
-                  }}
-                  onNavigate={handleNavigate}
-                />
+                <Suspense fallback={LoadingFallback}>
+                  <ItemDetail
+                    itemId={selectedItem.id}
+                    obsidianEnabled={obsidianEnabled}
+                    onBack={handleBack}
+                    onClose={handleClearDetail}
+                    canGoBack={navStack.length > 0}
+                    onUpdated={refresh}
+                    onDeleted={() => {
+                      setSelectedItem(null);
+                      setNavStack([]);
+                      refresh();
+                    }}
+                    onNavigate={handleNavigate}
+                  />
+                </Suspense>
               </div>
             )}
 
