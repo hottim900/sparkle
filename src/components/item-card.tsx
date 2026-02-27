@@ -8,6 +8,8 @@ import {
   FileText,
   ListTodo,
   Trash2,
+  Link,
+  Globe,
 } from "lucide-react";
 
 const priorityColors: Record<string, string> = {
@@ -183,6 +185,18 @@ export function ItemCard({
               <span className="inline-flex items-center gap-0.5 text-xs text-muted-foreground">
                 <ListTodo className="h-3 w-3 shrink-0" />
                 {item.linked_todo_count} 待辦
+              </span>
+            )}
+            {item.type === "note" && item.share_visibility && (
+              <span
+                className="inline-flex items-center text-xs"
+                title={item.share_visibility === "public" ? "已公開分享" : "已建立分享連結"}
+              >
+                {item.share_visibility === "public" ? (
+                  <Globe className="h-3 w-3 shrink-0 text-blue-500 dark:text-blue-400" />
+                ) : (
+                  <Link className="h-3 w-3 shrink-0 text-muted-foreground" />
+                )}
               </span>
             )}
             {dueDateInfo && (

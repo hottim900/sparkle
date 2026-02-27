@@ -13,6 +13,7 @@ export interface Item {
   linked_note_id: string | null;
   linked_note_title: string | null;
   linked_todo_count: number;
+  share_visibility: "unlisted" | "public" | null;
   created: string;
   modified: string;
 }

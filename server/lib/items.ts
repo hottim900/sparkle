@@ -2,7 +2,7 @@ import { eq, desc, asc, sql, and, notInArray, inArray } from "drizzle-orm";
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import type Database from "better-sqlite3";
 import { v4 as uuidv4 } from "uuid";
-import { items } from "../db/schema.js";
+import { items, shareTokens } from "../db/schema.js";
 import type { CreateItemInput, UpdateItemInput } from "../schemas/items.js";
 import type * as schema from "../db/schema.js";
 
@@ -73,6 +73,7 @@ function defaultStatusForType(type: string): string {
 export type ItemWithLinkedInfo = typeof items.$inferSelect & {
   linked_note_title: string | null;
   linked_todo_count: number;
+  share_visibility: "public" | "unlisted" | null;
 };
 
 function resolveLinkedInfo(
@@ -126,12 +127,32 @@ function resolveLinkedInfo(
     }
   }
 
+  // Resolve share_visibility for all items
+  const allIds = rows.map((r) => r.id);
+  const shareMap = new Map<string, "public" | "unlisted">();
+  if (allIds.length > 0) {
+    const uniqueAllIds = [...new Set(allIds)];
+    const shareRows = db
+      .select({
+        item_id: shareTokens.item_id,
+        has_public: sql<number>`MAX(CASE WHEN ${shareTokens.visibility} = 'public' THEN 1 ELSE 0 END)`,
+      })
+      .from(shareTokens)
+      .where(inArray(shareTokens.item_id, uniqueAllIds))
+      .groupBy(shareTokens.item_id)
+      .all();
+    for (const sr of shareRows) {
+      shareMap.set(sr.item_id, sr.has_public ? "public" : "unlisted");
+    }
+  }
+
   return rows.map((row) => ({
     ...row,
     linked_note_title: row.linked_note_id
       ? (titleMap.get(row.linked_note_id) ?? null)
       : null,
     linked_todo_count: row.type === "note" ? (countMap.get(row.id) ?? 0) : 0,
+    share_visibility: shareMap.get(row.id) ?? null,
   }));
 }
 

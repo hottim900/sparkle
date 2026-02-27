@@ -50,6 +50,8 @@ import {
   Unlink,
   StickyNote,
   Share2,
+  Link,
+  Globe,
 } from "lucide-react";
 import { ShareDialog } from "@/components/share-dialog";
 
@@ -451,11 +453,21 @@ export function ItemDetail({
             <Button
               variant="outline"
               size="sm"
-              className="gap-1 text-xs"
+              className={`gap-1 text-xs ${item.share_visibility === "public" ? "text-blue-600 dark:text-blue-400" : ""}`}
               onClick={() => setShareOpen(true)}
             >
-              <Share2 className="h-3 w-3" />
-              分享
+              {item.share_visibility === "public" ? (
+                <Globe className="h-3 w-3" />
+              ) : item.share_visibility === "unlisted" ? (
+                <Link className="h-3 w-3" />
+              ) : (
+                <Share2 className="h-3 w-3" />
+              )}
+              {item.share_visibility === "public"
+                ? "已公開分享"
+                : item.share_visibility === "unlisted"
+                  ? "已分享"
+                  : "分享"}
             </Button>
           )}
           <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
