@@ -6,7 +6,7 @@ Self-hosted PWA for personal idea capture + task management with Zettelkasten no
 
 ## Tech Stack
 
-- **Frontend**: Vite + React 19 + TypeScript + Tailwind CSS + shadcn/ui (Radix)
+- **Frontend**: Vite + React 19 + TypeScript + Tailwind CSS + shadcn/ui (Radix) + code splitting (lazy-loaded routes)
 - **Backend**: Hono (Node.js) + Drizzle ORM + better-sqlite3 + FTS5 + hono-rate-limiter + marked (SSR Markdown)
 - **PWA**: vite-plugin-pwa + Workbox + IndexedDB offline queue
 - **Validation**: Zod on all API endpoints
@@ -18,7 +18,7 @@ Self-hosted PWA for personal idea capture + task management with Zettelkasten no
 
 ```
 server/
-  index.ts              # Hono app, route registration, HTTPS/TLS support, startup validation, graceful shutdown
+  index.ts              # Hono app, route registration, compress + cache-control middleware, HTTPS/TLS support, startup validation, graceful shutdown
   middleware/
     auth.ts             # Bearer token auth (skips /api/webhook/ and /api/public/)
     rate-limit.ts       # Rate limiting (API general, auth failure, webhook)
@@ -52,13 +52,14 @@ server/
     fts.ts              # FTS5 virtual table + sync triggers
 
 src/
-  App.tsx               # Main layout, view routing, keyboard shortcuts
+  App.tsx               # Main layout, view routing, keyboard shortcuts, lazy-loaded components
   components/
     auth-gate.tsx        # Login screen
     dashboard.tsx        # Review dashboard (Zettelkasten progress, focus, fleeting health, scratch count)
     quick-capture.tsx    # New item form (GTD quick-select tags for todos)
     item-list.tsx        # Item list + filter chips + contextual batch actions + type grouping
-    item-detail.tsx      # Editor + markdown preview + export button + aliases + linked items + share button
+    item-detail.tsx      # Editor + export button + aliases + linked items + share button (lazy-loaded)
+    markdown-preview.tsx # ReactMarkdown + remarkGfm rendering (lazy-loaded, extracted from item-detail)
     item-card.tsx        # List item display with tags, linked indicators, due date, share indicators
     search-bar.tsx       # FTS search with keyword highlighting
     settings.tsx         # Settings page (Obsidian config + share management + general tools)
@@ -78,14 +79,14 @@ src/
 scripts/
   start.sh              # One-command restart (uses systemctl)
   install-services.sh   # Install systemd services
-  setup-cloudflared.sh  # Cloudflare Tunnel setup (interactive, auto-detects mkcert CA)
+  setup-cloudflared.sh  # Cloudflare Tunnel setup (interactive, plain HTTP default)
   setup-backup.sh       # Restic backup one-time setup (interactive)
   backup.sh             # Automated DB backup (cron-compatible)
   firewall.sh           # iptables setup (atomic all-or-nothing, graceful skip if unavailable)
   firewall-cleanup.sh   # iptables cleanup on service stop
-  cloudflared-config.yml.template  # Tunnel config template (caPool for mkcert TLS)
+  cloudflared-config.yml.template  # Tunnel config template (plain HTTP default, HTTPS optional)
   systemd/
-    sparkle.service         # Node.js HTTPS server
+    sparkle.service         # Node.js server (HTTP or HTTPS)
     sparkle-tunnel.service  # Cloudflare Tunnel
 
 docs/
@@ -162,8 +163,10 @@ journalctl -u sparkle -f
 
 Copy `.env.example` to `.env` and fill in your values. See `.env.example` for all available variables.
 
-### HTTPS (mkcert)
+### HTTPS (mkcert) — Optional
 
+- When behind Cloudflare Tunnel, plain HTTP on localhost is recommended (no TLS overhead)
+- TLS is only needed for direct LAN access without a tunnel
 - Generate certs with mkcert for your local IPs / localhost
 - Install the CA root on all devices that need to access the app
 - Configure cert paths in `.env` (TLS_CERT, TLS_KEY)
@@ -196,6 +199,7 @@ Requires `iptables` package: `sudo apt install -y iptables`
 ### Cloudflare Tunnel + Access
 
 - Run `scripts/setup-cloudflared.sh` for interactive setup (new tunnel only; existing tunnels already have separate configs)
+- **Default: plain HTTP** between cloudflared and Sparkle (both on localhost, TLS unnecessary)
 - Full service exposed through Tunnel; access controlled by **Cloudflare Access** (Zero Trust)
 - `/api/webhook/*` bypasses CF Access (LINE Bot needs direct access)
 - Config stored in `~/.cloudflared/`, template at `scripts/cloudflared-config.yml.template`
@@ -296,6 +300,7 @@ Schema version tracked in `schema_version` table (version 0→11). Each step is 
 - Obsidian export: .md with YAML frontmatter, local time (no TZ suffix), written to vault path. Config stored in `settings` table, read via `getObsidianSettings()`. `exportToObsidian(item, config)` is a pure function (no env dependency).
 - Settings API: `GET /api/settings` returns all settings; `PUT /api/settings` accepts partial updates with Zod validation (key whitelist, vault path writability check when enabling)
 - Public sharing: Notes can be shared via token-based URLs (`/s/:token`). SSR HTML pages with marked for Markdown, OpenGraph meta tags, dark mode CSS. Two visibility modes: `unlisted` (link-only) and `public` (listed in `/api/public`). Auth bypass on `/api/public/*` and `/s/*` paths. Share management via authenticated API (`/api/items/:id/share`, `/api/shares`)
+- Performance: gzip/deflate compression via `hono/compress` on all responses. Static assets (`/assets/*`) served with `Cache-Control: immutable` (Vite content-hashed filenames). Frontend uses code splitting — heavy components (ItemDetail, Settings, Dashboard, FleetingTriage, MarkdownPreview) are lazy-loaded via `React.lazy()`. Vendor chunks split: `ui` (radix + cva), `markdown` (react-markdown + remark-gfm)
 
 ## CLAUDE.md Maintenance
 
