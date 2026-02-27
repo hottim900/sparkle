@@ -132,7 +132,7 @@ test_backup() {
 # ── Step 7: Print summary ───────────────────────────────────────────────────
 print_summary() {
     local backup_script="$SCRIPT_DIR/backup.sh"
-    local cron_line="0 3 * * * RESTIC_REPOSITORY=$BACKUP_REPO RESTIC_PASSWORD_FILE=$PASSWORD_FILE $backup_script >> /var/log/sparkle-backup.log 2>&1"
+    local cron_line="0 3 * * * RESTIC_REPOSITORY=$BACKUP_REPO RESTIC_PASSWORD_FILE=$PASSWORD_FILE $backup_script >> \$HOME/sparkle-backup.log 2>&1"
 
     echo ""
     echo "=========================================================="
@@ -165,6 +165,8 @@ print_summary() {
     echo "  sudo systemctl stop sparkle"
     echo "  gunzip /tmp/sparkle-restore/tmp/sparkle-backup.db.gz"
     echo "  cp /tmp/sparkle-restore/tmp/sparkle-backup.db $SPARKLE_DIR/data/todo.db"
+    echo "  rm -f $SPARKLE_DIR/data/todo.db-wal $SPARKLE_DIR/data/todo.db-shm"
+    echo "  chown \$(whoami) $SPARKLE_DIR/data/todo.db"
     echo "  sudo systemctl start sparkle"
     echo ""
     echo -e "${YELLOW}=========================================================="

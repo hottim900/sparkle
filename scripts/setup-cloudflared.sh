@@ -207,37 +207,24 @@ EOF
     echo "---"
 }
 
-# ── Step 6: Install systemd service ──────────────────────────────────────────
-install_service() {
+# ── Step 6: Print systemd service instructions ──────────────────────────────
+print_service_instructions() {
     echo ""
-    read -rp "是否要將 cloudflared 安裝為 systemd 服務（開機自動啟動）？ [Y/n] " install_svc
-    install_svc="${install_svc:-Y}"
-
-    if [[ "$install_svc" =~ ^[Yy]$ ]]; then
-        info "安裝 systemd 服務 ..."
-
-        # If already installed, uninstall first to avoid conflicts
-        if systemctl is-active --quiet cloudflared 2>/dev/null; then
-            warn "cloudflared 服務已在執行，先停止並移除舊服務 ..."
-            sudo cloudflared service uninstall 2>/dev/null || true
-        fi
-
-        sudo cloudflared --config "$CONFIG_FILE" service install
-        sudo systemctl enable cloudflared
-        sudo systemctl start cloudflared
-
-        if systemctl is-active --quiet cloudflared; then
-            success "cloudflared 服務已啟動並設為開機自動執行。"
-        else
-            warn "服務啟動可能失敗，請執行以下指令檢查："
-            warn "  sudo systemctl status cloudflared"
-            warn "  sudo journalctl -u cloudflared -f"
-        fi
-    else
-        info "跳過 systemd 服務安裝。"
-        info "你可以手動啟動 Tunnel："
-        info "  cloudflared tunnel --config $CONFIG_FILE run $TUNNEL_NAME"
-    fi
+    info "=========================================="
+    info " systemd 服務設定"
+    info "=========================================="
+    echo ""
+    info "Tunnel 設定檔已就緒。請使用 install-services.sh 統一管理 systemd 服務："
+    echo ""
+    echo "  sudo ./scripts/install-services.sh"
+    echo ""
+    info "此腳本會安裝 sparkle.service 和 sparkle-tunnel.service，"
+    info "並統一管理 Node.js 和 cloudflared 的 systemd 服務。"
+    echo ""
+    warn "請勿使用 'cloudflared service install'，以免與 sparkle-tunnel.service 衝突。"
+    echo ""
+    info "手動測試 Tunnel（不透過 systemd）："
+    info "  cloudflared tunnel --config $CONFIG_FILE run $TUNNEL_NAME"
 }
 
 # ── Step 7: Print summary ────────────────────────────────────────────────────
@@ -269,8 +256,9 @@ print_summary() {
     echo ""
     info "常用指令："
     info "  查看 Tunnel 狀態:   cloudflared tunnel info $TUNNEL_NAME"
-    info "  查看服務日誌:       sudo journalctl -u cloudflared -f"
-    info "  停止服務:           sudo systemctl stop cloudflared"
+    info "  查看服務日誌:       sudo journalctl -u sparkle-tunnel -f"
+    info "  停止服務:           sudo systemctl stop sparkle-tunnel"
+    info "  重啟服務:           sudo systemctl restart sparkle sparkle-tunnel"
     info "  手動執行:           cloudflared tunnel --config $CONFIG_FILE run $TUNNEL_NAME"
     echo ""
 
@@ -302,7 +290,7 @@ main() {
     get_or_create_tunnel
     configure_hostname
     generate_config
-    install_service
+    print_service_instructions
     print_summary
 }
 

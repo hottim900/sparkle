@@ -1,4 +1,5 @@
 import type { Context, Next } from "hono";
+import { safeCompare } from "../lib/safe-compare.js";
 
 export async function authMiddleware(c: Context, next: Next) {
   const pathname = new URL(c.req.url).pathname;
@@ -25,7 +26,7 @@ export async function authMiddleware(c: Context, next: Next) {
     return c.json({ error: "Invalid Authorization format. Use: Bearer <token>" }, 401);
   }
 
-  if (token !== authToken) {
+  if (!safeCompare(token, authToken)) {
     return c.json({ error: "Invalid token" }, 401);
   }
 

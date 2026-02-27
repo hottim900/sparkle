@@ -45,19 +45,43 @@ detect_node() {
 
 detect_node
 
-# Substitute YOUR_USER and NODE_BIN_DIR, then install sparkle.service
-sed -e "s|YOUR_USER|$SPARKLE_USER|g" -e "s|NODE_BIN_DIR|$NODE_BIN_DIR|g" \
+# 偵測 cloudflared 路徑
+detect_cloudflared() {
+  local cf_path
+  cf_path="$(su - "$SPARKLE_USER" -c 'which cloudflared' 2>/dev/null)" || true
+
+  if [[ -z "$cf_path" ]]; then
+    echo "⏭️  cloudflared 未安裝，跳過 tunnel service"
+    INSTALL_TUNNEL=false
+    return
+  fi
+
+  CLOUDFLARED_BIN="$cf_path"
+  INSTALL_TUNNEL=true
+  echo "ℹ️  cloudflared: $cf_path"
+}
+
+detect_cloudflared
+
+# iptables 檢查（非必要，服務會優雅跳過）
+if ! command -v iptables &>/dev/null; then
+  echo "⚠️  iptables 未安裝 — sparkle.service 的防火牆規則將被跳過"
+  echo "   如需防火牆功能，請執行: sudo apt install -y iptables"
+fi
+
+# Substitute placeholders and install sparkle.service
+sed -e "s|YOUR_USER|$SPARKLE_USER|g" \
+    -e "s|NODE_BIN_DIR|$NODE_BIN_DIR|g" \
+    -e "s|SPARKLE_DIR|$PROJECT_DIR|g" \
     "$SERVICE_DIR/sparkle.service" > /etc/systemd/system/sparkle.service
 echo "✅ 已安裝 sparkle.service"
 
-# Only install tunnel service if cloudflared is available
-if command -v cloudflared &>/dev/null; then
-  sed "s|YOUR_USER|$SPARKLE_USER|g" "$SERVICE_DIR/sparkle-tunnel.service" > /etc/systemd/system/sparkle-tunnel.service
+# Install tunnel service if cloudflared is available
+if [ "$INSTALL_TUNNEL" = true ]; then
+  sed -e "s|YOUR_USER|$SPARKLE_USER|g" \
+      -e "s|CLOUDFLARED_BIN|$CLOUDFLARED_BIN|g" \
+      "$SERVICE_DIR/sparkle-tunnel.service" > /etc/systemd/system/sparkle-tunnel.service
   echo "✅ 已安裝 sparkle-tunnel.service"
-  INSTALL_TUNNEL=true
-else
-  echo "⏭️  cloudflared not found — skipping tunnel service"
-  INSTALL_TUNNEL=false
 fi
 
 # 重新載入 systemd
@@ -69,12 +93,6 @@ if [ "$INSTALL_TUNNEL" = true ]; then
   systemctl enable sparkle-tunnel.service
 fi
 
-# 立即啟動
-systemctl start sparkle.service
-if [ "$INSTALL_TUNNEL" = true ]; then
-  systemctl start sparkle-tunnel.service
-fi
-
 # 設定 .env 檔案權限
 if [[ -f "$PROJECT_DIR/.env" ]]; then
   chmod 600 "$PROJECT_DIR/.env"
@@ -82,14 +100,48 @@ if [[ -f "$PROJECT_DIR/.env" ]]; then
   echo "🔒 已設定 .env 權限為 600"
 fi
 
-echo ""
-echo "✅ 安裝完成！服務狀態："
-echo ""
-systemctl status sparkle.service --no-pager -l | head -5
+# ── 啟動前檢查 ──────────────────────────────────────────────────────────────
+START_SERVICES=true
 
-if [ "$INSTALL_TUNNEL" = true ]; then
+if [[ ! -f "$PROJECT_DIR/.env" ]]; then
   echo ""
-  systemctl status sparkle-tunnel.service --no-pager -l | head -5
+  echo "⚠️  找不到 .env 檔案: $PROJECT_DIR/.env"
+  echo "   服務需要 .env 才能正常啟動（AUTH_TOKEN 等設定）。"
+  echo "   請先建立 .env 檔案："
+  echo "     cp $PROJECT_DIR/.env.example $PROJECT_DIR/.env"
+  echo "     vim $PROJECT_DIR/.env"
+  echo "   然後執行："
+  echo "     sudo systemctl restart sparkle"
+  START_SERVICES=false
+fi
+
+if [[ ! -d "$PROJECT_DIR/dist" ]]; then
+  echo ""
+  echo "⚠️  找不到 dist/ 目錄: $PROJECT_DIR/dist"
+  echo "   前端尚未建置，請執行："
+  echo "     cd $PROJECT_DIR && npm run build"
+fi
+
+# 啟動服務（使用 restart 確保冪等）
+if [ "$START_SERVICES" = true ]; then
+  systemctl restart sparkle.service
+  if [ "$INSTALL_TUNNEL" = true ]; then
+    systemctl restart sparkle-tunnel.service
+  fi
+
+  echo ""
+  echo "✅ 安裝完成！服務狀態："
+  echo ""
+  systemctl status sparkle.service --no-pager -l | head -5
+
+  if [ "$INSTALL_TUNNEL" = true ]; then
+    echo ""
+    systemctl status sparkle-tunnel.service --no-pager -l | head -5
+  fi
+else
+  echo ""
+  echo "✅ 服務已安裝但尚未啟動（缺少必要設定檔）。"
+  echo "   完成設定後請執行: sudo systemctl restart sparkle"
 fi
 
 echo ""

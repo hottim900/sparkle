@@ -23,6 +23,8 @@
 #   sudo systemctl stop sparkle
 #   gunzip /tmp/sparkle-restore/tmp/sparkle-backup.db.gz
 #   cp /tmp/sparkle-restore/tmp/sparkle-backup.db ~/sparkle/data/todo.db
+#   rm -f ~/sparkle/data/todo.db-wal ~/sparkle/data/todo.db-shm
+#   chown $(whoami) ~/sparkle/data/todo.db
 #   sudo systemctl start sparkle
 # ----------------------------------------------------------------------------
 set -euo pipefail

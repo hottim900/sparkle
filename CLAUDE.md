@@ -30,6 +30,7 @@ server/
     items.ts            # DB query functions (Drizzle + raw SQLite), type-status validation, auto-mapping
     stats.ts            # Stats (Zettelkasten + GTD) + focus query functions
     export.ts           # Obsidian .md export (frontmatter, sanitize filename, write to vault)
+    safe-compare.ts     # Timing-safe string comparison (crypto.timingSafeEqual)
     settings.ts         # Settings CRUD (getSetting, getSettings, getObsidianSettings, updateSettings)
     line.ts             # LINE message/command parser
     line-format.ts      # LINE reply formatting (numbered list, detail, stats)
@@ -171,7 +172,7 @@ Requires `iptables` package: `sudo apt install -y iptables`
 - Tags: `--tag db,sqlite,sparkle`
 - Env vars: `RESTIC_REPOSITORY` (default `~/sparkle-backups`), `RESTIC_PASSWORD_FILE` (required), `HEALTHCHECK_URL` (optional)
 - Suggested cron: `0 3 * * *` (daily at 3 AM)
-- Restore: `restic restore latest --tag sparkle --target /tmp/sparkle-restore` → `gunzip` → copy DB back
+- Restore: `restic restore latest --tag sparkle --target /tmp/sparkle-restore` → `gunzip` → stop service → copy DB → remove stale WAL/SHM → `chown` → start service
 
 ### Cloudflare Tunnel + Access
 

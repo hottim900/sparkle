@@ -1,21 +1,25 @@
 [Unit]
 Description=Sparkle Server
 After=network.target
+StartLimitBurst=5
+StartLimitIntervalSec=120
 
 [Service]
 Type=simple
 # TODO: Change to your Linux username
 User=YOUR_USER
-# TODO: Change to your sparkle installation path
-WorkingDirectory=/home/YOUR_USER/sparkle
+# Working directory — auto-detected by install-services.sh
+WorkingDirectory=SPARKLE_DIR
 # Node.js path — auto-detected by install-services.sh
 Environment=PATH=NODE_BIN_DIR:/usr/bin
+MemoryMax=512M
 # Firewall (defense-in-depth): only allow specific sources to access port 3000
-# Primary firewall is Windows Firewall (WSL2 mirrored mode)
-ExecStartPre=+/bin/sh -c '/usr/sbin/iptables -C INPUT -s 127.0.0.1 -p tcp --dport 3000 -j ACCEPT 2>/dev/null || /usr/sbin/iptables -A INPUT -s 127.0.0.1 -p tcp --dport 3000 -j ACCEPT'
+# Primary firewall is Hyper-V Firewall (WSL2 mirrored mode)
+# Uses +- prefix: + runs as root, - ignores failure (e.g. iptables not installed)
+ExecStartPre=+-/bin/sh -c '/usr/sbin/iptables -C INPUT -s 127.0.0.1 -p tcp --dport 3000 -j ACCEPT 2>/dev/null || /usr/sbin/iptables -A INPUT -s 127.0.0.1 -p tcp --dport 3000 -j ACCEPT'
 # TODO: Adjust to your VPN subnet (e.g., 10.0.0.0/24 for WireGuard)
-ExecStartPre=+/bin/sh -c '/usr/sbin/iptables -C INPUT -s 10.0.0.0/8 -p tcp --dport 3000 -j ACCEPT 2>/dev/null || /usr/sbin/iptables -A INPUT -s 10.0.0.0/8 -p tcp --dport 3000 -j ACCEPT'
-ExecStartPre=+/bin/sh -c '/usr/sbin/iptables -C INPUT -p tcp --dport 3000 -j DROP 2>/dev/null || /usr/sbin/iptables -A INPUT -p tcp --dport 3000 -j DROP'
+ExecStartPre=+-/bin/sh -c '/usr/sbin/iptables -C INPUT -s 10.0.0.0/8 -p tcp --dport 3000 -j ACCEPT 2>/dev/null || /usr/sbin/iptables -A INPUT -s 10.0.0.0/8 -p tcp --dport 3000 -j ACCEPT'
+ExecStartPre=+-/bin/sh -c '/usr/sbin/iptables -C INPUT -p tcp --dport 3000 -j DROP 2>/dev/null || /usr/sbin/iptables -A INPUT -p tcp --dport 3000 -j DROP'
 ExecStart=NODE_BIN_DIR/node --env-file=.env --import tsx server/index.ts
 Restart=always
 RestartSec=5
