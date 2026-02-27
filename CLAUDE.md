@@ -97,16 +97,21 @@ mcp-server/
   package.json            # MCP server dependencies
   tsconfig.json           # TypeScript config
   src/
-    index.ts              # Entry point, McpServer + stdio transport
+    index.ts              # Entry point, McpServer + stdio transport + instructions
     types.ts              # Sparkle API response types
     client.ts             # Sparkle REST API client (fetch-based)
     format.ts             # Markdown formatting helpers
+    docs/
+      instructions.ts     # Server instructions (role definition, workflow, injected into system prompt)
+      content.ts          # Documentation content map (7 topics, shared by resources + guide tool)
+      resources.ts        # MCP Resource registration (sparkle://docs/*)
     tools/
       search.ts           # sparkle_search
       read.ts             # sparkle_get_note, sparkle_list_notes
-      write.ts            # sparkle_create_note, sparkle_update_note
+      write.ts            # sparkle_create_note, sparkle_update_note (note/todo/scratch, full field support)
       workflow.ts         # sparkle_advance_note, sparkle_export_to_obsidian
       meta.ts             # sparkle_get_stats, sparkle_list_tags
+      guide.ts            # sparkle_guide (documentation query by topic)
 
 certs/                  # mkcert TLS certificates (gitignored)
 data/                   # SQLite database (gitignored)
@@ -220,7 +225,10 @@ Requires `iptables` package: `sudo apt install -y iptables`
 - MCP server in `mcp-server/` enables Claude Code to read/write Sparkle notes via REST API
 - Config: user-scoped in `~/.claude.json`
 - Transport: stdio (subprocess of Claude Code)
-- 9 tools: sparkle_search, sparkle_get_note, sparkle_list_notes, sparkle_create_note, sparkle_update_note, sparkle_advance_note, sparkle_export_to_obsidian, sparkle_get_stats, sparkle_list_tags
+- **Knowledge layer**: Server `instructions` auto-injected into system prompt (role definition, Zettelkasten workflow, tool usage patterns). 7 MCP Resources at `sparkle://docs/*` for deep reference. `sparkle_guide` tool as fallback.
+- 10 tools: sparkle_search, sparkle_get_note, sparkle_list_notes, sparkle_create_note, sparkle_update_note, sparkle_advance_note, sparkle_export_to_obsidian, sparkle_get_stats, sparkle_list_tags, sparkle_guide
+- sparkle_create_note supports all 3 types (note/todo/scratch) with priority, due, linked_note_id
+- sparkle_update_note supports type conversion, priority, due, linked_note_id
 - Build: `cd mcp-server && npm install && npm run build`
 - Dev: `cd mcp-server && npm run dev`
 - Test: `cd mcp-server && npx @modelcontextprotocol/inspector node dist/index.js`
