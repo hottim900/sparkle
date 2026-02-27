@@ -2,7 +2,7 @@ import type { Context, Next } from "hono";
 import { safeCompare } from "../lib/safe-compare.js";
 
 export async function authMiddleware(c: Context, next: Next) {
-  const pathname = new URL(c.req.url).pathname;
+  const pathname = c.req.path;
   if (
     pathname.startsWith("/api/webhook/") ||
     pathname === "/api/public" ||

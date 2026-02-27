@@ -80,11 +80,11 @@ app.use("/api/webhook/*", webhookRateLimiter);
 
 // API rate limits — skip webhook paths (already handled above)
 app.use("/api/*", async (c, next) => {
-  if (new URL(c.req.url).pathname.startsWith("/api/webhook/")) return next();
+  if (c.req.path.startsWith("/api/webhook/")) return next();
   return apiRateLimiter(c, next);
 });
 app.use("/api/*", async (c, next) => {
-  if (new URL(c.req.url).pathname.startsWith("/api/webhook/")) return next();
+  if (c.req.path.startsWith("/api/webhook/")) return next();
   return authFailRateLimiter(c, next);
 });
 
@@ -250,7 +250,7 @@ if (process.env.NODE_ENV === "production") {
   // Cache-Control headers for static assets
   app.use("/*", async (c, next) => {
     await next();
-    const path = new URL(c.req.url).pathname;
+    const path = c.req.path;
     if (path.startsWith("/assets/")) {
       // Vite hashed filenames — safe to cache forever
       c.res.headers.set("Cache-Control", "public, max-age=31536000, immutable");
