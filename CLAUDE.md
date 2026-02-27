@@ -23,7 +23,7 @@ server/
     auth.ts             # Bearer token auth (skips /api/webhook/ and /api/public/)
     rate-limit.ts       # Rate limiting (API general, auth failure, webhook)
   routes/
-    items.ts            # CRUD + batch operations + POST /:id/export
+    items.ts            # CRUD + batch operations + GET /:id/linked-todos + POST /:id/export
     search.ts           # FTS5 full-text search
     stats.ts            # GET /api/stats, GET /api/stats/focus
     settings.ts         # GET/PUT /api/settings (Obsidian config)
@@ -31,7 +31,7 @@ server/
     public.ts           # Public routes (JSON API + SSR page at /s/:token) — no auth
     webhook.ts          # LINE Bot webhook (POST /api/webhook/line)
   lib/
-    items.ts            # DB query functions (Drizzle + raw SQLite), type-status validation, auto-mapping
+    items.ts            # DB query functions (Drizzle), type-status validation, auto-mapping, linked_note_id filter
     stats.ts            # Stats (Zettelkasten + GTD) + focus query functions
     export.ts           # Obsidian .md export (frontmatter, sanitize filename, write to vault)
     shutdown.ts         # Graceful shutdown (SIGTERM/SIGINT, WAL checkpoint, DB close)
