@@ -199,8 +199,11 @@ This script will:
 2. Authenticate with Cloudflare
 3. Create a named tunnel
 4. Ask whether to use your own domain or a `cfargotunnel.com` address
-5. Generate a config file that routes all traffic to the local Sparkle server
-6. Optionally install as a systemd service
+5. Detect mkcert CA root and configure TLS certificate verification (`caPool`)
+6. Generate a config file that routes all traffic to the local Sparkle server
+7. Optionally install as a systemd service
+
+The generated config uses `originRequest.caPool` to point cloudflared at the mkcert CA root certificate, enabling proper TLS verification between cloudflared and the local Sparkle server. If mkcert is not installed, the `caPool` line is omitted with a warning.
 
 Alternatively, set it up manually:
 
@@ -208,6 +211,7 @@ Alternatively, set it up manually:
 2. Authenticate: `cloudflared tunnel login`
 3. Create a tunnel: `cloudflared tunnel create sparkle`
 4. Create `~/.cloudflared/config.yml` using `scripts/cloudflared-config.yml.template` as a reference
+   - Replace `MKCERT_CA_PATH` with the path to your mkcert CA root (run `mkcert -CAROOT` to find it, then append `/rootCA.pem`)
 5. Route DNS: `cloudflared tunnel route dns sparkle sparkle.example.com`
 6. Run: `cloudflared tunnel run sparkle`
 

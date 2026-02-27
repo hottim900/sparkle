@@ -199,8 +199,11 @@ Cloudflare Tunnel 透過 Cloudflare 的網路將你的 Sparkle 實例對外公�
 2. 向 Cloudflare 進行身分驗證
 3. 建立命名 tunnel
 4. 詢問要使用自有網域還是 `cfargotunnel.com` 位址
-5. 產生將所有流量導向本機 Sparkle 伺服器的設定檔
-6. 可選擇安裝為 systemd 服務
+5. 偵測 mkcert CA 根憑證並設定 TLS 憑證驗證（`caPool`）
+6. 產生將所有流量導向本機 Sparkle 伺服器的設定檔
+7. 可選擇安裝為 systemd 服務
+
+產生的設定檔使用 `originRequest.caPool` 指向 mkcert CA 根憑證，讓 cloudflared 與本機 Sparkle server 之間能正確驗證 TLS 憑證。若未安裝 mkcert，會省略 `caPool` 並顯示警告。
 
 也可以手動設定：
 
@@ -208,6 +211,7 @@ Cloudflare Tunnel 透過 Cloudflare 的網路將你的 Sparkle 實例對外公�
 2. 身分驗證：`cloudflared tunnel login`
 3. 建立 tunnel：`cloudflared tunnel create sparkle`
 4. 參考 `scripts/cloudflared-config.yml.template` 建立 `~/.cloudflared/config.yml`
+   - 將 `MKCERT_CA_PATH` 替換為 mkcert CA 根憑證路徑（執行 `mkcert -CAROOT` 取得目錄，再加上 `/rootCA.pem`）
 5. 設定 DNS 路由：`cloudflared tunnel route dns sparkle sparkle.example.com`
 6. 執行：`cloudflared tunnel run sparkle`
 

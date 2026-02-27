@@ -7,5 +7,5 @@ ingress:
   - hostname: YOUR_HOSTNAME
     service: LOCAL_SERVICE
     originRequest:
-      noTLSVerify: true
+      caPool: MKCERT_CA_PATH
   - service: http_status:404
