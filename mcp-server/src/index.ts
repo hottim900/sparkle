@@ -7,11 +7,14 @@ import { registerReadTools } from "./tools/read.js";
 import { registerWriteTools } from "./tools/write.js";
 import { registerWorkflowTools } from "./tools/workflow.js";
 import { registerMetaTools } from "./tools/meta.js";
+import { registerGuideTools } from "./tools/guide.js";
+import { SPARKLE_INSTRUCTIONS } from "./docs/instructions.js";
+import { registerDocResources } from "./docs/resources.js";
 
-const server = new McpServer({
-  name: "sparkle-mcp-server",
-  version: "1.0.0",
-});
+const server = new McpServer(
+  { name: "sparkle", version: "1.0.0" },
+  { instructions: SPARKLE_INSTRUCTIONS },
+);
 
 // Register all tools
 registerSearchTools(server);
@@ -19,6 +22,10 @@ registerReadTools(server);
 registerWriteTools(server);
 registerWorkflowTools(server);
 registerMetaTools(server);
+registerGuideTools(server);
+
+// Register documentation resources
+registerDocResources(server);
 
 // Start stdio transport
 async function main(): Promise<void> {
