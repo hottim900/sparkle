@@ -14,6 +14,7 @@ export interface SparkleItem {
   linked_note_id: string | null;
   linked_note_title: string | null;
   linked_todo_count: number;
+  share_visibility: "public" | "unlisted" | null;
   created: string;
   modified: string;
 }

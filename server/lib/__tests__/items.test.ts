@@ -322,7 +322,7 @@ describe("Data Access Layer", () => {
     it("finds items by title", () => {
       createItem(db, { title: "Meeting notes for project Alpha" });
       createItem(db, { title: "Grocery list" });
-      const results = searchItems(sqlite, "project Alpha");
+      const results = searchItems(sqlite, db, "project Alpha");
       expect(results).toHaveLength(1);
       expect(results[0]!.title).toBe("Meeting notes for project Alpha");
     });
@@ -332,13 +332,13 @@ describe("Data Access Layer", () => {
         title: "My note",
         content: "Remember to buy milk and eggs",
       });
-      const results = searchItems(sqlite, "milk eggs");
+      const results = searchItems(sqlite, db, "milk eggs");
       expect(results).toHaveLength(1);
     });
 
     it("returns empty array for no matches", () => {
       createItem(db, { title: "Something" });
-      const results = searchItems(sqlite, "nonexistent");
+      const results = searchItems(sqlite, db, "nonexistent");
       expect(results).toHaveLength(0);
     });
 
@@ -346,8 +346,26 @@ describe("Data Access Layer", () => {
       for (let i = 0; i < 5; i++) {
         createItem(db, { title: `Search result ${i}` });
       }
-      const results = searchItems(sqlite, "Search result", 2);
+      const results = searchItems(sqlite, db, "Search result", 2);
       expect(results).toHaveLength(2);
+    });
+
+    it("returns enriched fields (share_visibility, linked_note_title, linked_todo_count)", () => {
+      const note = createItem(db, { title: "Searchable note for enrichment" });
+      // Create a share for the note
+      const shareId = crypto.randomUUID();
+      const token = crypto.randomUUID().slice(0, 12);
+      sqlite.prepare(
+        "INSERT INTO share_tokens (id, item_id, token, visibility, created) VALUES (?, ?, ?, ?, ?)",
+      ).run(shareId, note.id, token, "public", new Date().toISOString());
+      // Create a linked todo
+      createItem(db, { title: "Linked todo for search", type: "todo", linked_note_id: note.id });
+
+      const results = searchItems(sqlite, db, "Searchable note for enrichment");
+      expect(results).toHaveLength(1);
+      expect(results[0]!.share_visibility).toBe("public");
+      expect(results[0]!.linked_todo_count).toBe(1);
+      expect(results[0]!.linked_note_title).toBeNull();
     });
   });
 

@@ -41,6 +41,9 @@ export function formatItem(item: SparkleItem): string {
   if (item.type === "todo" && item.linked_note_title) {
     footer.push(`Linked note: ${item.linked_note_title}`);
   }
+  if (item.share_visibility) {
+    footer.push(`Shared: ${item.share_visibility}`);
+  }
   lines.push(`*${footer.join(" | ")}*`);
 
   return lines.join("\n");
