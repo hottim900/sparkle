@@ -7,7 +7,7 @@ import { setupFTS } from "./fts.js";
 
 const DB_PATH = process.env.DATABASE_URL || "./data/todo.db";
 
-const TARGET_VERSION = 10;
+const TARGET_VERSION = 11;
 
 function getSchemaVersion(sqlite: Database.Database): number {
   // Check if schema_version table exists
@@ -170,6 +170,23 @@ function runMigrations(sqlite: Database.Database) {
   if (version < 10) {
     setSchemaVersion(sqlite, 10);
   }
+
+  // Step 10→11: Create share_tokens table
+  if (version < 11) {
+    sqlite.exec(`
+      CREATE TABLE IF NOT EXISTS share_tokens (
+        id TEXT PRIMARY KEY,
+        item_id TEXT NOT NULL,
+        token TEXT NOT NULL UNIQUE,
+        visibility TEXT NOT NULL DEFAULT 'unlisted',
+        created TEXT NOT NULL,
+        FOREIGN KEY (item_id) REFERENCES items(id) ON DELETE CASCADE
+      );
+      CREATE INDEX IF NOT EXISTS idx_share_tokens_token ON share_tokens(token);
+      CREATE INDEX IF NOT EXISTS idx_share_tokens_item_id ON share_tokens(item_id);
+    `);
+    setSchemaVersion(sqlite, 11);
+  }
 }
 
 function createDb() {
@@ -222,6 +239,17 @@ function createDb() {
         ('obsidian_vault_path', ''),
         ('obsidian_inbox_folder', '0_Inbox'),
         ('obsidian_export_mode', 'overwrite');
+
+      CREATE TABLE share_tokens (
+        id TEXT PRIMARY KEY,
+        item_id TEXT NOT NULL,
+        token TEXT NOT NULL UNIQUE,
+        visibility TEXT NOT NULL DEFAULT 'unlisted',
+        created TEXT NOT NULL,
+        FOREIGN KEY (item_id) REFERENCES items(id) ON DELETE CASCADE
+      );
+      CREATE INDEX idx_share_tokens_token ON share_tokens(token);
+      CREATE INDEX idx_share_tokens_item_id ON share_tokens(item_id);
     `);
 
     // Set version to target directly for fresh installs

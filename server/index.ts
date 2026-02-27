@@ -13,6 +13,8 @@ import { searchRouter } from "./routes/search.js";
 import { statsRouter } from "./routes/stats.js";
 import { webhookRouter } from "./routes/webhook.js";
 import { settingsRouter } from "./routes/settings.js";
+import { sharesRouter } from "./routes/shares.js";
+import { publicRouter } from "./routes/public.js";
 import { db, sqlite } from "./db/index.js";
 import { items } from "./db/schema.js";
 import { eq } from "drizzle-orm";
@@ -84,6 +86,9 @@ app.use("/api/*", async (c, next) => {
   return authFailRateLimiter(c, next);
 });
 
+// Rate limit for public share pages
+app.use("/s/*", apiRateLimiter);
+
 // Body size limit — 1MB for all API POST/PUT requests (after rate limiter, before auth)
 app.use(
   "/api/*",
@@ -104,6 +109,7 @@ app.route("/api/search", searchRouter);
 app.route("/api/stats", statsRouter);
 app.route("/api/webhook", webhookRouter);
 app.route("/api/settings", settingsRouter);
+app.route("/api", sharesRouter);
 
 // Tags endpoint (separate from items CRUD to avoid /:id conflict)
 app.get("/api/tags", (c) => {
@@ -227,6 +233,9 @@ app.post("/api/import", async (c) => {
     throw e;
   }
 });
+
+// Public routes (no auth required — bypass handled in auth middleware)
+app.route("/", publicRouter);
 
 // Global error handler
 app.onError((err, c) => {
