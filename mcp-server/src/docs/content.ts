@@ -136,13 +136,15 @@ Sparkle 專注於知識的「孵化」階段——從模糊的靈感到成熟的
 - 追蹤某個想法需要的後續動作
 - 將抽象的知識轉化為可執行的任務
 
+**建立方式**：
+1. 使用 \`sparkle_create_note\` 建立待辦，設定 \`type: "todo"\` 和 \`linked_note_id: "<筆記ID>"\`
+2. 或用 \`sparkle_update_note\` 更新現有待辦的 \`linked_note_id\`
+
 **注意**：
 - \`linked_note_id\` 僅 todo 類型有效
 - 待辦轉換為筆記時，linked_note_id 會被清除
 - API 回應中的 \`linked_note_title\` 是計算欄位，顯示關聯筆記的標題
 - API 回應中筆記的 \`linked_todo_count\` 顯示關聯的非封存待辦數量
-
-> **MCP 工具限制**：目前 MCP 工具無法建立待辦（僅支援 note 和 scratch）、無法設定 linked_note_id、priority 或 due。這些操作需透過 Sparkle 網頁介面或 LINE Bot。
 
 ## 查詢待辦
 
@@ -176,7 +178,10 @@ Sparkle 專注於知識的「孵化」階段——從模糊的靈感到成熟的
 
 當暫存內容值得進入知識管理流程時，可以升級為閃念筆記。
 
-> **注意**：目前 MCP 工具不支援直接變更類型。類型轉換需透過 Sparkle 網頁介面或 LINE Bot 操作。
+透過 \`sparkle_update_note\` 變更類型：
+\`\`\`
+sparkle_update_note(id: "...", type: "note")
+\`\`\`
 
 **自動對應規則**（類型轉換時）：
 - draft → fleeting（草稿變為閃念筆記）
@@ -186,7 +191,7 @@ Sparkle 專注於知識的「孵化」階段——從模糊的靈感到成熟的
 
 ## 降級為暫存
 
-筆記或待辦也可以轉換為暫存，但要注意（需透過網頁介面或 LINE Bot）：
+筆記或待辦也可以轉換為暫存，但要注意：
 - 轉換時 tags、priority、due、aliases、linked_note_id 都會被清除
 - fleeting/developing → draft
 - permanent/exported → archived
@@ -259,11 +264,9 @@ Sparkle 專注於知識的「孵化」階段——從模糊的靈感到成熟的
 
 ## 從筆記建立追蹤待辦
 
-> **注意**：目前 MCP 工具無法直接建立待辦。建立待辦、設定優先度和到期日需透過 Sparkle 網頁介面或 LINE Bot。
-
 1. 閱讀筆記，識別需要行動的項目
-2. 建議使用者透過網頁介面或 LINE Bot 建立追蹤待辦
-3. 可透過 \`sparkle_list_notes\` 搭配 \`type: "todo"\` 查看已建立的待辦
+2. \`sparkle_create_note\` 建立 todo，設定 \`type: "todo"\` 和 \`linked_note_id\` 指向原筆記
+3. 設定適當的優先度 (\`priority\`) 和到期日 (\`due\`)
 
 ## 使用標籤組織知識
 
