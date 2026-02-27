@@ -59,7 +59,8 @@ itemsRouter.post("/", async (c) => {
       );
     }
 
-    const item = createItem(db, input);
+    const created = createItem(db, input);
+    const item = getItem(db, created.id)!;
     return c.json(item, 201);
   } catch (e) {
     if (e instanceof ZodError) {
@@ -180,10 +181,8 @@ itemsRouter.post("/batch", async (c) => {
 // Get linked todos for a note
 itemsRouter.get("/:id/linked-todos", (c) => {
   const id = c.req.param("id");
-  const rows = sqlite.prepare(
-    "SELECT * FROM items WHERE linked_note_id = ? ORDER BY created DESC"
-  ).all(id);
-  return c.json({ items: rows });
+  const result = listItems(db, { linked_note_id: id });
+  return c.json({ items: result.items });
 });
 
 // Export item to Obsidian

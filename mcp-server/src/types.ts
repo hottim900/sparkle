@@ -1,10 +1,10 @@
 /** Sparkle item as returned by the API (tags/aliases are JSON strings from server) */
 export interface SparkleItem {
   id: string;
-  type: "note" | "todo";
+  type: "note" | "todo" | "scratch";
   title: string;
   content: string;
-  status: "fleeting" | "developing" | "permanent" | "exported" | "active" | "done" | "archived";
+  status: "fleeting" | "developing" | "permanent" | "exported" | "active" | "done" | "draft" | "archived";
   priority: "low" | "medium" | "high" | null;
   due: string | null;
   tags: string; // JSON array string
