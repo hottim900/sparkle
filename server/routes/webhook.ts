@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import crypto from "node:crypto";
+import { safeCompare } from "../lib/safe-compare.js";
 import { db, sqlite } from "../db/index.js";
 import { createItem, deleteItem, getItem, listItems, searchItems, updateItem } from "../lib/items.js";
 import { getStats, getFocusItems } from "../lib/stats.js";
@@ -14,7 +15,7 @@ export const webhookRouter = new Hono();
 
 function verifySignature(body: string, signature: string, secret: string): boolean {
   const hash = crypto.createHmac("SHA256", secret).update(body).digest("base64");
-  return hash === signature;
+  return safeCompare(hash, signature);
 }
 
 function resolveSessionItem(userId: string, index: number) {
