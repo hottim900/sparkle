@@ -199,6 +199,7 @@ export function listItems(
     excludeStatus?: string[];
     type?: string;
     tag?: string;
+    linked_note_id?: string;
     sort?: "created" | "priority" | "due" | "modified";
     order?: "asc" | "desc";
     limit?: number;
@@ -217,6 +218,9 @@ export function listItems(
   }
   if (filters?.type) {
     conditions.push(eq(items.type, filters.type as "note"));
+  }
+  if (filters?.linked_note_id) {
+    conditions.push(eq(items.linked_note_id, filters.linked_note_id));
   }
   if (filters?.tag) {
     conditions.push(
