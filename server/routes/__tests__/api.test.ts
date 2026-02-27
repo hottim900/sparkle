@@ -3,6 +3,7 @@ import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import * as schema from "../../db/schema.js";
 import { setupFTS } from "../../db/fts.js";
+import { bodyLimit } from "hono/body-limit";
 
 // --- In-memory DB setup & module mock ---
 
@@ -98,6 +99,15 @@ const importSchema = z.object({
 
 function createApp() {
   const app = new Hono();
+  app.use(
+    "/api/*",
+    bodyLimit({
+      maxSize: 1024 * 1024, // 1MB
+      onError: (c) => {
+        return c.json({ error: "Request body too large (max 1MB)" }, 413);
+      },
+    }),
+  );
   app.use("/api/*", authMiddleware);
   app.route("/api/items", itemsRouter);
   app.route("/api/search", searchRouter);
@@ -1857,5 +1867,38 @@ describe("POST /api/import — old format rejection", () => {
     expect(res.status).toBe(400);
     const body = await res.json();
     expect(body.error).toMatch(/Unrecognized field names/);
+  });
+});
+
+// ============================================================
+// Body Size Limit Tests
+// ============================================================
+describe("Body size limit", () => {
+  it("rejects request body larger than 1MB with 413", async () => {
+    // Create a payload slightly over 1MB
+    const largeContent = "x".repeat(1024 * 1024 + 1);
+    const res = await app.request("/api/items", {
+      method: "POST",
+      headers: jsonHeaders(),
+      body: JSON.stringify({
+        title: "Large item",
+        content: largeContent,
+      }),
+    });
+    expect(res.status).toBe(413);
+    const body = await res.json();
+    expect(body.error).toMatch(/too large/i);
+  });
+
+  it("accepts request body under 1MB", async () => {
+    const res = await app.request("/api/items", {
+      method: "POST",
+      headers: jsonHeaders(),
+      body: JSON.stringify({
+        title: "Normal item",
+        content: "Normal content",
+      }),
+    });
+    expect(res.status).toBe(201);
   });
 });

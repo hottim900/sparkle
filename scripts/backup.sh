@@ -80,24 +80,34 @@ if ! flock -n 9; then
     exit 1
 fi
 
-# ── Step 1: VACUUM INTO (compacted hot snapshot) ────────────────────────────
+# ── Step 1: Database integrity check ────────────────────────────────────────
+log "執行資料庫完整性檢查..."
+integrity=$(sqlite3 "$DATABASE_URL" "PRAGMA integrity_check" 2>&1)
+if [[ "$integrity" != "ok" ]]; then
+    log "ERROR: 資料庫完整性檢查失敗:"
+    log "$integrity"
+    exit 1
+fi
+log "資料庫完整性檢查通過"
+
+# ── Step 2: VACUUM INTO (compacted hot snapshot) ────────────────────────────
 log "開始備份 — 建立 SQLite 快照 (VACUUM INTO)..."
 rm -f "$SNAPSHOT_FILE" "$COMPRESSED_FILE"
 sqlite3 "$DATABASE_URL" "VACUUM INTO '$SNAPSHOT_FILE'"
 log "SQLite 快照完成 ($(du -h "$SNAPSHOT_FILE" | cut -f1))"
 
-# ── Step 2: gzip --rsyncable (restic dedup friendly) ────────────────────────
+# ── Step 3: gzip --rsyncable (restic dedup friendly) ────────────────────────
 log "壓縮快照 (gzip --rsyncable)..."
 gzip --rsyncable "$SNAPSHOT_FILE"
 log "壓縮完成 ($(du -h "$COMPRESSED_FILE" | cut -f1))"
 
-# ── Step 3: Restic backup ───────────────────────────────────────────────────
+# ── Step 4: Restic backup ───────────────────────────────────────────────────
 log "上傳至 restic 儲存庫: $RESTIC_REPOSITORY"
 restic backup "$COMPRESSED_FILE" \
     --tag db,sqlite,sparkle \
     --quiet
 
-# ── Step 4: Apply retention policy ──────────────────────────────────────────
+# ── Step 5: Apply retention policy ──────────────────────────────────────────
 log "套用保留策略 (7日/4週/3月)..."
 if ! restic forget --prune \
     --group-by host,tags \
@@ -109,7 +119,7 @@ if ! restic forget --prune \
     log "WARN: 保留策略清理失敗，備份已完成但舊快照未清理"
 fi
 
-# ── Step 5: Health check ping (optional) ────────────────────────────────────
+# ── Step 6: Health check ping (optional) ────────────────────────────────────
 if [[ -n "${HEALTHCHECK_URL:-}" ]]; then
     if ! curl -fsS --max-time 10 "$HEALTHCHECK_URL" >/dev/null 2>&1; then
         log "WARN: Health check ping 失敗 ($HEALTHCHECK_URL)，備份本身已成功"

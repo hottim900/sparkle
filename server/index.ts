@@ -2,6 +2,7 @@ import { serve, getRequestListener } from "@hono/node-server";
 import { Hono } from "hono";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { logger } from "hono/logger";
+import { bodyLimit } from "hono/body-limit";
 import { readFileSync } from "node:fs";
 import { createServer } from "node:https";
 import { authMiddleware } from "./middleware/auth.js";
@@ -82,6 +83,17 @@ app.use("/api/*", async (c, next) => {
   if (new URL(c.req.url).pathname.startsWith("/api/webhook/")) return next();
   return authFailRateLimiter(c, next);
 });
+
+// Body size limit — 1MB for all API POST/PUT requests (after rate limiter, before auth)
+app.use(
+  "/api/*",
+  bodyLimit({
+    maxSize: 1024 * 1024, // 1MB
+    onError: (c) => {
+      return c.json({ error: "Request body too large (max 1MB)" }, 413);
+    },
+  }),
+);
 
 // Auth on all /api routes
 app.use("/api/*", authMiddleware);

@@ -1,8 +1,8 @@
 [Unit]
 Description=Sparkle Server
 After=network.target
-StartLimitBurst=5
-StartLimitIntervalSec=120
+StartLimitBurst=10
+StartLimitIntervalSec=180
 
 [Service]
 Type=simple
@@ -12,12 +12,16 @@ User=YOUR_USER
 WorkingDirectory=SPARKLE_DIR
 # Node.js path — auto-detected by install-services.sh
 Environment=PATH=NODE_BIN_DIR:/usr/bin
+MemoryHigh=450M
 MemoryMax=512M
 # Load .env for PORT and VPN_SUBNET used by firewall scripts
 EnvironmentFile=-SPARKLE_DIR/.env
 # Firewall (defense-in-depth): only allow specific sources to access the service port
 # Primary firewall is Hyper-V Firewall (WSL2 mirrored mode)
 # Script gracefully skips if iptables unavailable; fails if iptables exists but rules fail
+# Pre-start checks (non-fatal warnings)
+ExecStartPre=-/bin/sh -c '[ -f SPARKLE_DIR/.env ] || echo "Warning: .env file not found at SPARKLE_DIR/.env"'
+ExecStartPre=-/bin/sh -c '[ -d SPARKLE_DIR/dist ] || echo "Warning: dist/ directory not found at SPARKLE_DIR/dist"'
 ExecStartPre=+SPARKLE_DIR/scripts/firewall.sh
 ExecStart=NODE_BIN_DIR/node --env-file=.env --import tsx server/index.ts
 # Clean up iptables rules on stop (best-effort, failure ignored)

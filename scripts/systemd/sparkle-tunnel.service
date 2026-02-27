@@ -1,6 +1,7 @@
 [Unit]
 Description=Sparkle Cloudflare Tunnel
 After=network.target sparkle.service
+Requires=sparkle.service
 StartLimitBurst=5
 StartLimitIntervalSec=120
 
