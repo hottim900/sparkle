@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef, lazy, Suspense } from "react";
+import { ErrorBoundary } from "@/components/error-boundary";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
@@ -954,9 +955,11 @@ export function ItemDetail({
           {previewMode ? (
             <div className="min-h-[240px] rounded-md border p-3 text-sm break-words">
               {item.content ? (
-                <Suspense fallback={<div className="flex items-center justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>}>
-                  <MarkdownPreview content={item.content} />
-                </Suspense>
+                <ErrorBoundary>
+                  <Suspense fallback={<div className="flex items-center justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>}>
+                    <MarkdownPreview content={item.content} />
+                  </Suspense>
+                </ErrorBoundary>
               ) : (
                 <p className="text-muted-foreground">無內容</p>
               )}

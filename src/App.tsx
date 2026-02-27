@@ -8,6 +8,7 @@ import { Sidebar } from "@/components/sidebar";
 import { BottomNav } from "@/components/bottom-nav";
 import { OfflineIndicator } from "@/components/offline-indicator";
 import { InstallPrompt } from "@/components/install-prompt";
+import { ErrorBoundary } from "@/components/error-boundary";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
 import { getConfig, getItem } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -19,7 +20,7 @@ const Settings = lazy(() => import("@/components/settings").then(m => ({ default
 const FleetingTriage = lazy(() => import("@/components/fleeting-triage").then(m => ({ default: m.FleetingTriage })));
 const Dashboard = lazy(() => import("@/components/dashboard").then(m => ({ default: m.Dashboard })));
 
-const LoadingFallback = (
+const LoadingFallback = () => (
   <div className="flex items-center justify-center h-full">
     <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
   </div>
@@ -132,7 +133,7 @@ function MainApp() {
         handleClearDetail();
       },
     }),
-    []
+    [handleClearDetail]
   );
 
   useKeyboardShortcuts(keyboardHandlers);
@@ -187,24 +188,28 @@ function MainApp() {
       <div className="flex-1 flex flex-col md:flex-row min-w-0 overflow-hidden">
         {currentView === "dashboard" ? (
           /* Dashboard takes full width */
-          <Suspense fallback={LoadingFallback}>
-            <Dashboard
-              onViewChange={handleViewChange}
-              onSelectItem={(item) => {
-                setNavStack((prev) => [
-                  ...prev,
-                  { view: "dashboard", itemId: null },
-                ]);
-                setCurrentView("all");
-                setSelectedItem(item);
-              }}
-            />
-          </Suspense>
+          <ErrorBoundary>
+            <Suspense fallback={<LoadingFallback />}>
+              <Dashboard
+                onViewChange={handleViewChange}
+                onSelectItem={(item) => {
+                  setNavStack((prev) => [
+                    ...prev,
+                    { view: "dashboard", itemId: null },
+                  ]);
+                  setCurrentView("all");
+                  setSelectedItem(item);
+                }}
+              />
+            </Suspense>
+          </ErrorBoundary>
         ) : currentView === "settings" ? (
           /* Settings takes full width */
-          <Suspense fallback={LoadingFallback}>
-            <Settings onSettingsChanged={refreshConfig} />
-          </Suspense>
+          <ErrorBoundary>
+            <Suspense fallback={<LoadingFallback />}>
+              <Settings onSettingsChanged={refreshConfig} />
+            </Suspense>
+          </ErrorBoundary>
         ) : (
           <>
             {/* List panel */}
@@ -239,9 +244,11 @@ function MainApp() {
 
               {isTriageActive ? (
                 <div className="flex-1 overflow-y-auto">
-                  <Suspense fallback={LoadingFallback}>
-                    <FleetingTriage onDone={() => setTriageMode(false)} />
-                  </Suspense>
+                  <ErrorBoundary>
+                    <Suspense fallback={<LoadingFallback />}>
+                      <FleetingTriage onDone={() => setTriageMode(false)} />
+                    </Suspense>
+                  </ErrorBoundary>
                 </div>
               ) : currentView === "search" ? (
                 <div className="flex-1 overflow-y-auto p-3 md:hidden">
@@ -271,22 +278,24 @@ function MainApp() {
             {/* Detail panel */}
             {selectedItem && (
               <div className="fixed inset-0 z-50 bg-background md:static md:z-auto md:flex-1 md:min-w-0 md:border-l">
-                <Suspense fallback={LoadingFallback}>
-                  <ItemDetail
-                    itemId={selectedItem.id}
-                    obsidianEnabled={obsidianEnabled}
-                    onBack={handleBack}
-                    onClose={handleClearDetail}
-                    canGoBack={navStack.length > 0}
-                    onUpdated={refresh}
-                    onDeleted={() => {
-                      setSelectedItem(null);
-                      setNavStack([]);
-                      refresh();
-                    }}
-                    onNavigate={handleNavigate}
-                  />
-                </Suspense>
+                <ErrorBoundary>
+                  <Suspense fallback={<LoadingFallback />}>
+                    <ItemDetail
+                      itemId={selectedItem.id}
+                      obsidianEnabled={obsidianEnabled}
+                      onBack={handleBack}
+                      onClose={handleClearDetail}
+                      canGoBack={navStack.length > 0}
+                      onUpdated={refresh}
+                      onDeleted={() => {
+                        setSelectedItem(null);
+                        setNavStack([]);
+                        refresh();
+                      }}
+                      onNavigate={handleNavigate}
+                    />
+                  </Suspense>
+                </ErrorBoundary>
               </div>
             )}
 

@@ -74,6 +74,12 @@ const app = new Hono();
 
 app.use("*", logger());
 app.use("*", compress());
+app.use("*", async (c, next) => {
+  await next();
+  if (!c.res.headers.has("Vary")) {
+    c.res.headers.set("Vary", "Accept-Encoding");
+  }
+});
 
 // Rate limiting — webhook has its own limiter, applied before auth (webhook skips auth)
 app.use("/api/webhook/*", webhookRateLimiter);
