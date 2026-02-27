@@ -5,6 +5,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 SERVICE_DIR="$SCRIPT_DIR/systemd"
 
 echo "📦 安裝 Sparkle systemd services..."
@@ -16,8 +17,37 @@ SPARKLE_USER="${input:-$SPARKLE_USER}"
 
 echo "ℹ️  使用者: $SPARKLE_USER"
 
-# Substitute YOUR_USER and install sparkle.service
-sed "s|YOUR_USER|$SPARKLE_USER|g" "$SERVICE_DIR/sparkle.service" > /etc/systemd/system/sparkle.service
+# 偵測 Node.js 路徑
+detect_node() {
+  local node_path
+  node_path="$(su - "$SPARKLE_USER" -c 'which node' 2>/dev/null)" || true
+
+  if [[ -z "$node_path" ]]; then
+    echo "❌ 找不到 Node.js，請先安裝 Node.js (建議 v22.x)"
+    exit 1
+  fi
+
+  NODE_BIN_DIR="$(dirname "$node_path")"
+  local node_version
+  node_version="$("$node_path" --version)"
+
+  # 驗證 v22.x
+  if [[ ! "$node_version" =~ ^v22\. ]]; then
+    echo "⚠️  警告: 偵測到 Node.js $node_version，Sparkle 建議使用 v22.x"
+    read -p "繼續安裝？ [y/N] " confirm
+    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+      exit 1
+    fi
+  fi
+
+  echo "ℹ️  Node.js: $node_version ($node_path)"
+}
+
+detect_node
+
+# Substitute YOUR_USER and NODE_BIN_DIR, then install sparkle.service
+sed -e "s|YOUR_USER|$SPARKLE_USER|g" -e "s|NODE_BIN_DIR|$NODE_BIN_DIR|g" \
+    "$SERVICE_DIR/sparkle.service" > /etc/systemd/system/sparkle.service
 echo "✅ 已安裝 sparkle.service"
 
 # Only install tunnel service if cloudflared is available
@@ -43,6 +73,13 @@ fi
 systemctl start sparkle.service
 if [ "$INSTALL_TUNNEL" = true ]; then
   systemctl start sparkle-tunnel.service
+fi
+
+# 設定 .env 檔案權限
+if [[ -f "$PROJECT_DIR/.env" ]]; then
+  chmod 600 "$PROJECT_DIR/.env"
+  chown "$SPARKLE_USER:$SPARKLE_USER" "$PROJECT_DIR/.env"
+  echo "🔒 已設定 .env 權限為 600"
 fi
 
 echo ""

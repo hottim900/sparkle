@@ -7,7 +7,7 @@ Type=simple
 # TODO: Change to your Linux username
 User=YOUR_USER
 # TODO: Change to your cloudflared path (run `which cloudflared` to find it)
-ExecStart=/home/YOUR_USER/.local/bin/cloudflared tunnel run sparkle
+ExecStart=/home/YOUR_USER/.local/bin/cloudflared --config /home/YOUR_USER/.cloudflared/sparkle-config.yml tunnel run sparkle
 Restart=always
 RestartSec=5
 

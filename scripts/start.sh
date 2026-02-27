@@ -4,6 +4,18 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+
+# 檢查 .env 權限
+if [[ -f "$PROJECT_DIR/.env" ]]; then
+  PERMS=$(stat -c '%a' "$PROJECT_DIR/.env")
+  if [[ "$PERMS" != "600" ]]; then
+    echo "⚠️  警告: .env 檔案權限為 $PERMS，建議設定為 600"
+    echo "   執行: chmod 600 $PROJECT_DIR/.env"
+  fi
+fi
+
 echo "🚀 Sparkle 啟動中..."
 
 # 1. 重啟 systemd services

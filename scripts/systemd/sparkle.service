@@ -8,15 +8,15 @@ Type=simple
 User=YOUR_USER
 # TODO: Change to your sparkle installation path
 WorkingDirectory=/home/YOUR_USER/sparkle
-# TODO: Change to your Node.js path (run `which node` to find it)
-Environment=PATH=/home/YOUR_USER/.nvm/versions/node/v22.22.0/bin:/usr/bin
+# Node.js path — auto-detected by install-services.sh
+Environment=PATH=NODE_BIN_DIR:/usr/bin
 # Firewall (defense-in-depth): only allow specific sources to access port 3000
 # Primary firewall is Windows Firewall (WSL2 mirrored mode)
 ExecStartPre=+/bin/sh -c '/usr/sbin/iptables -C INPUT -s 127.0.0.1 -p tcp --dport 3000 -j ACCEPT 2>/dev/null || /usr/sbin/iptables -A INPUT -s 127.0.0.1 -p tcp --dport 3000 -j ACCEPT'
 # TODO: Adjust to your VPN subnet (e.g., 10.0.0.0/24 for WireGuard)
 ExecStartPre=+/bin/sh -c '/usr/sbin/iptables -C INPUT -s 10.0.0.0/8 -p tcp --dport 3000 -j ACCEPT 2>/dev/null || /usr/sbin/iptables -A INPUT -s 10.0.0.0/8 -p tcp --dport 3000 -j ACCEPT'
 ExecStartPre=+/bin/sh -c '/usr/sbin/iptables -C INPUT -p tcp --dport 3000 -j DROP 2>/dev/null || /usr/sbin/iptables -A INPUT -p tcp --dport 3000 -j DROP'
-ExecStart=/home/YOUR_USER/.nvm/versions/node/v22.22.0/bin/node --env-file=.env --import tsx server/index.ts
+ExecStart=NODE_BIN_DIR/node --env-file=.env --import tsx server/index.ts
 Restart=always
 RestartSec=5
 

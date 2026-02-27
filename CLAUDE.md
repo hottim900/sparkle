@@ -68,6 +68,8 @@ scripts/
   start.sh              # One-command restart (uses systemctl)
   install-services.sh   # Install systemd services
   setup-cloudflared.sh  # Cloudflare Tunnel setup (interactive)
+  setup-backup.sh       # Restic backup one-time setup (interactive)
+  backup.sh             # Automated DB backup (cron-compatible)
   cloudflared-config.yml.template  # Tunnel config template
   systemd/
     sparkle.service         # Node.js HTTPS server
@@ -158,6 +160,18 @@ Copy `.env.example` to `.env` and fill in your values. See `.env.example` for al
 - All others → DROP
 
 Requires `iptables` package: `sudo apt install -y iptables`
+
+### Backup (restic + sqlite3)
+
+- Run `scripts/setup-backup.sh` for interactive first-time setup (installs restic, inits repo, generates password)
+- `scripts/backup.sh` runs unattended: `VACUUM INTO` snapshot → `gzip --rsyncable` → `restic backup` → retention prune
+- `VACUUM INTO` creates compacted, consistent hot snapshot (safe with WAL mode)
+- `gzip --rsyncable` produces dedup-friendly output for restic incremental backups
+- Retention: 7 daily, 4 weekly, 3 monthly (`--group-by host,tags`)
+- Tags: `--tag db,sqlite,sparkle`
+- Env vars: `RESTIC_REPOSITORY` (default `~/sparkle-backups`), `RESTIC_PASSWORD_FILE` (required), `HEALTHCHECK_URL` (optional)
+- Suggested cron: `0 3 * * *` (daily at 3 AM)
+- Restore: `restic restore latest --tag sparkle --target /tmp/sparkle-restore` → `gunzip` → copy DB back
 
 ### Cloudflare Tunnel + Access
 
