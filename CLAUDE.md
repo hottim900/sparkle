@@ -240,10 +240,10 @@ Requires `iptables` package: `sudo apt install -y iptables`
   ```bash
   claude mcp add sparkle --transport stdio --scope user \
     --env SPARKLE_AUTH_TOKEN=<token> \
-    --env SPARKLE_API_URL=https://localhost:3000 \
-    --env NODE_TLS_REJECT_UNAUTHORIZED=0 \
+    --env SPARKLE_API_URL=http://localhost:3000 \
     -- node /path/to/sparkle/mcp-server/dist/index.js
   ```
+- If Sparkle uses HTTPS (direct LAN access without tunnel), add `--env NODE_TLS_REJECT_UNAUTHORIZED=0` and change URL to `https://`
 - Note: Use the full node path if nvm is not available in non-interactive shells
 
 ## Data Model
