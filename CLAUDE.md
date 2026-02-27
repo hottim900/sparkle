@@ -59,7 +59,7 @@ src/
     quick-capture.tsx    # New item form (GTD quick-select tags for todos)
     item-list.tsx        # Item list + filter chips + contextual batch actions + type grouping
     item-detail.tsx      # Editor + markdown preview + export button + aliases + linked items + share button
-    item-card.tsx        # List item display with tags, linked indicators, due date
+    item-card.tsx        # List item display with tags, linked indicators, due date, share indicators
     search-bar.tsx       # FTS search with keyword highlighting
     settings.tsx         # Settings page (Obsidian config + share management + general tools)
     share-dialog.tsx     # Share dialog (create share, copy link, revoke)
