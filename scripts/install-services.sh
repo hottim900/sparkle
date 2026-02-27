@@ -82,6 +82,9 @@ sed -e "s|YOUR_USER|$SPARKLE_USER|g" \
     "$SERVICE_DIR/sparkle.service" > /etc/systemd/system/sparkle.service
 echo "✅ 已安裝 sparkle.service"
 
+# 確保防火牆腳本可執行
+chmod +x "$PROJECT_DIR/scripts/firewall.sh" "$PROJECT_DIR/scripts/firewall-cleanup.sh"
+
 # Install tunnel service if cloudflared is available
 if [ "$INSTALL_TUNNEL" = true ]; then
   sed -e "s|YOUR_USER|$SPARKLE_USER|g" \

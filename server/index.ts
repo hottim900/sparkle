@@ -5,6 +5,8 @@ import { logger } from "hono/logger";
 import { readFileSync } from "node:fs";
 import { createServer } from "node:https";
 import { authMiddleware } from "./middleware/auth.js";
+import { apiRateLimiter, authFailRateLimiter, webhookRateLimiter } from "./middleware/rate-limit.js";
+import { setupGracefulShutdown } from "./lib/shutdown.js";
 import { itemsRouter } from "./routes/items.js";
 import { searchRouter } from "./routes/search.js";
 import { statsRouter } from "./routes/stats.js";
@@ -18,14 +20,68 @@ import { getObsidianSettings } from "./lib/settings.js";
 import { z, ZodError } from "zod";
 import { statusEnum } from "./schemas/items.js";
 
-if (!process.env.AUTH_TOKEN) {
-  console.error('ERROR: AUTH_TOKEN environment variable is not set. Exiting.');
+// --- Startup validation ---
+function shannonEntropy(s: string): number {
+  const freq = new Map<string, number>();
+  for (const c of s) freq.set(c, (freq.get(c) ?? 0) + 1);
+  const len = s.length;
+  let entropy = 0;
+  for (const count of freq.values()) {
+    const p = count / len;
+    entropy -= p * Math.log2(p);
+  }
+  return entropy;
+}
+
+const authToken = process.env.AUTH_TOKEN;
+if (!authToken) {
+  console.error("FATAL: AUTH_TOKEN environment variable is not set.");
+  console.error("Generate one with: openssl rand -base64 32");
   process.exit(1);
+}
+if (authToken.length < 32) {
+  console.error(`FATAL: AUTH_TOKEN is too short (${authToken.length} chars, minimum 32).`);
+  console.error("Generate one with: openssl rand -base64 32");
+  process.exit(1);
+}
+if (shannonEntropy(authToken) < 3.0) {
+  console.error("FATAL: AUTH_TOKEN has insufficient entropy (too predictable).");
+  console.error("Generate one with: openssl rand -base64 32");
+  process.exit(1);
+}
+
+// LINE secrets validation (non-blocking)
+const lineSecret = process.env.LINE_CHANNEL_SECRET;
+const lineToken = process.env.LINE_CHANNEL_ACCESS_TOKEN;
+if (lineSecret || lineToken) {
+  if (!lineSecret) {
+    console.warn("WARN: LINE_CHANNEL_SECRET is not set (LINE_CHANNEL_ACCESS_TOKEN is set). LINE Bot will not work.");
+  } else if (lineSecret.length < 20) {
+    console.warn(`WARN: LINE_CHANNEL_SECRET looks too short (${lineSecret.length} chars). Verify your LINE configuration.`);
+  }
+  if (!lineToken) {
+    console.warn("WARN: LINE_CHANNEL_ACCESS_TOKEN is not set (LINE_CHANNEL_SECRET is set). LINE Bot will not work.");
+  } else if (lineToken.length < 50) {
+    console.warn(`WARN: LINE_CHANNEL_ACCESS_TOKEN looks too short (${lineToken.length} chars). Verify your LINE configuration.`);
+  }
 }
 
 const app = new Hono();
 
 app.use("*", logger());
+
+// Rate limiting — webhook has its own limiter, applied before auth (webhook skips auth)
+app.use("/api/webhook/*", webhookRateLimiter);
+
+// API rate limits — skip webhook paths (already handled above)
+app.use("/api/*", async (c, next) => {
+  if (new URL(c.req.url).pathname.startsWith("/api/webhook/")) return next();
+  return apiRateLimiter(c, next);
+});
+app.use("/api/*", async (c, next) => {
+  if (new URL(c.req.url).pathname.startsWith("/api/webhook/")) return next();
+  return authFailRateLimiter(c, next);
+});
 
 // Auth on all /api routes
 app.use("/api/*", authMiddleware);
@@ -173,16 +229,23 @@ if (process.env.NODE_ENV === "production") {
 }
 
 const port = Number(process.env.PORT) || 3000;
+const host = process.env.HOST || "127.0.0.1";
+
+let httpServer;
 
 if (process.env.TLS_CERT && process.env.TLS_KEY) {
   const cert = readFileSync(process.env.TLS_CERT);
   const key = readFileSync(process.env.TLS_KEY);
-  createServer({ cert, key }, getRequestListener(app.fetch)).listen(port, () => {
-    console.log(`Server running on https://0.0.0.0:${port}`);
+  httpServer = createServer({ cert, key }, getRequestListener(app.fetch));
+  httpServer.listen(port, host, () => {
+    console.log(`Server running on https://${host}:${port}`);
   });
 } else {
-  serve({ fetch: app.fetch, port });
-  console.log(`Server running on http://localhost:${port}`);
+  httpServer = serve({ fetch: app.fetch, port, hostname: host }, (info) => {
+    console.log(`Server running on http://${info.address}:${info.port}`);
+  });
 }
+
+setupGracefulShutdown(httpServer, sqlite);
 
 export default app;

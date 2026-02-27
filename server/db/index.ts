@@ -249,7 +249,14 @@ function createDb() {
   setupFTS(sqlite);
 
   // Checkpoint and truncate WAL to reclaim space from previous sessions
-  sqlite.pragma("wal_checkpoint(TRUNCATE)");
+  try {
+    const result = sqlite.pragma("wal_checkpoint(TRUNCATE)");
+    if (Array.isArray(result) && result[0]?.busy) {
+      console.warn("WAL checkpoint blocked by another connection (busy=1), skipping");
+    }
+  } catch (e) {
+    console.error("WAL checkpoint failed (non-fatal):", (e as Error).message);
+  }
 
   return { db, sqlite };
 }

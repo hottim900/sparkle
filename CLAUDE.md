@@ -7,7 +7,7 @@ Self-hosted PWA for personal idea capture + task management with Zettelkasten no
 ## Tech Stack
 
 - **Frontend**: Vite + React 19 + TypeScript + Tailwind CSS + shadcn/ui (Radix)
-- **Backend**: Hono (Node.js) + Drizzle ORM + better-sqlite3 + FTS5
+- **Backend**: Hono (Node.js) + Drizzle ORM + better-sqlite3 + FTS5 + hono-rate-limiter
 - **PWA**: vite-plugin-pwa + Workbox + IndexedDB offline queue
 - **Validation**: Zod on all API endpoints
 - **Themes**: next-themes (dark/light)
@@ -18,8 +18,10 @@ Self-hosted PWA for personal idea capture + task management with Zettelkasten no
 
 ```
 server/
-  index.ts              # Hono app, route registration, HTTPS/TLS support
-  middleware/auth.ts     # Bearer token auth (skips /api/webhook/)
+  index.ts              # Hono app, route registration, HTTPS/TLS support, startup validation, graceful shutdown
+  middleware/
+    auth.ts             # Bearer token auth (skips /api/webhook/)
+    rate-limit.ts       # Rate limiting (API general, auth failure, webhook)
   routes/
     items.ts            # CRUD + batch operations + POST /:id/export
     search.ts           # FTS5 full-text search
@@ -30,6 +32,7 @@ server/
     items.ts            # DB query functions (Drizzle + raw SQLite), type-status validation, auto-mapping
     stats.ts            # Stats (Zettelkasten + GTD) + focus query functions
     export.ts           # Obsidian .md export (frontmatter, sanitize filename, write to vault)
+    shutdown.ts         # Graceful shutdown (SIGTERM/SIGINT, WAL checkpoint, DB close)
     safe-compare.ts     # Timing-safe string comparison (crypto.timingSafeEqual)
     settings.ts         # Settings CRUD (getSetting, getSettings, getObsidianSettings, updateSettings)
     line.ts             # LINE message/command parser
@@ -68,10 +71,12 @@ src/
 scripts/
   start.sh              # One-command restart (uses systemctl)
   install-services.sh   # Install systemd services
-  setup-cloudflared.sh  # Cloudflare Tunnel setup (interactive)
+  setup-cloudflared.sh  # Cloudflare Tunnel setup (interactive, auto-detects mkcert CA)
   setup-backup.sh       # Restic backup one-time setup (interactive)
   backup.sh             # Automated DB backup (cron-compatible)
-  cloudflared-config.yml.template  # Tunnel config template
+  firewall.sh           # iptables setup (atomic all-or-nothing, graceful skip if unavailable)
+  firewall-cleanup.sh   # iptables cleanup on service stop
+  cloudflared-config.yml.template  # Tunnel config template (caPool for mkcert TLS)
   systemd/
     sparkle.service         # Node.js HTTPS server
     sparkle-tunnel.service  # Cloudflare Tunnel
@@ -110,7 +115,7 @@ npm run dev:server   # Hono on :3000 with tsx watch
 # IMPORTANT: Tests require node v22 (better-sqlite3 native module is incompatible with v24)
 nvm use 22
 
-# Tests (382 tests, 10 files — server only, no frontend tests)
+# Tests (401 tests, 12 files — server only, no frontend tests)
 npx vitest run                # Run all tests
 npx vitest run --coverage     # With coverage (needs @vitest/coverage-v8)
 npx vitest                    # Watch mode
@@ -155,10 +160,12 @@ Copy `.env.example` to `.env` and fill in your values. See `.env.example` for al
 
 **Hyper-V Firewall**: In mirrored mode, WSL2 inbound traffic is controlled by Hyper-V firewall (default: Block). Configure via `Set-NetFirewallHyperVVMSetting` or `New-NetFirewallHyperVRule`.
 
-**iptables** rules in `sparkle.service` provide defense-in-depth:
+**iptables** rules via `scripts/firewall.sh` provide defense-in-depth:
 - `127.0.0.1` → ACCEPT (localhost / Cloudflare Tunnel)
 - VPN subnet → ACCEPT (WireGuard)
 - All others → DROP
+- Atomic setup: all rules succeed or all rollback; gracefully skips if iptables unavailable
+- Cleanup on stop via `scripts/firewall-cleanup.sh`
 
 Requires `iptables` package: `sudo apt install -y iptables`
 
@@ -261,7 +268,10 @@ Schema version tracked in `schema_version` table (version 0→10). Each step is 
 ## Conventions
 
 - UI language: 繁體中文
-- API: REST, JSON, Bearer token auth on /api/* (except /api/webhook/)
+- API: REST, JSON, Bearer token auth on /api/* (except /api/webhook/), rate-limited (hono-rate-limiter)
+- Startup validation: AUTH_TOKEN strength (length >= 32, Shannon entropy >= 3.0), LINE secrets (warn only)
+- Graceful shutdown: SIGTERM/SIGINT → server.close() → WAL checkpoint → sqlite.close() (25s timeout)
+- Node version: engines in package.json (>=22, <24), enforced by .npmrc engine-strict=true
 - Tags stored as JSON array string in SQLite
 - Aliases stored as JSON array string in SQLite
 - Timestamps: ISO 8601 strings

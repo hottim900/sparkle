@@ -159,6 +159,34 @@ configure_hostname() {
     success "Tunnel 主機名稱: $HOSTNAME"
 }
 
+# ── Step 4.5: Detect mkcert CA root ──────────────────────────────────────────
+detect_mkcert_ca() {
+    MKCERT_CA_PATH=""
+
+    if ! command -v mkcert &>/dev/null; then
+        warn "mkcert 未安裝，無法自動偵測 CA 根憑證。"
+        warn "若本地 server 使用 HTTPS，請手動在設定檔中加入 caPool 路徑。"
+        return
+    fi
+
+    local caroot
+    caroot="$(mkcert -CAROOT 2>/dev/null)" || true
+
+    if [[ -z "$caroot" ]]; then
+        warn "無法取得 mkcert CAROOT 路徑。"
+        return
+    fi
+
+    local ca_file="$caroot/rootCA.pem"
+    if [[ -f "$ca_file" ]]; then
+        MKCERT_CA_PATH="$ca_file"
+        success "偵測到 mkcert CA 根憑證: $MKCERT_CA_PATH"
+    else
+        warn "找不到 mkcert CA 根憑證: $ca_file"
+        warn "若本地 server 使用 HTTPS，請手動在設定檔中加入 caPool 路徑。"
+    fi
+}
+
 # ── Step 5: Generate config.yml ──────────────────────────────────────────────
 generate_config() {
     local creds_file="$CLOUDFLARED_DIR/${TUNNEL_ID}.json"
@@ -186,7 +214,15 @@ generate_config() {
             -e "s|CREDENTIALS_PATH|${creds_file}|g" \
             -e "s|YOUR_HOSTNAME|${HOSTNAME}|g" \
             -e "s|LOCAL_SERVICE|${LOCAL_SERVICE}|g" \
+            -e "s|MKCERT_CA_PATH|${MKCERT_CA_PATH}|g" \
             "$TEMPLATE_FILE" > "$CONFIG_FILE"
+
+        # If no mkcert CA was detected, remove the caPool line (falls back to no TLS verification config)
+        if [[ -z "$MKCERT_CA_PATH" ]]; then
+            sed -i '/caPool:/d' "$CONFIG_FILE"
+            warn "設定檔中未包含 caPool — cloudflared 將無法驗證本地 server 的 TLS 憑證。"
+            warn "若本地 server 使用 HTTPS，建議安裝 mkcert 並重新執行此腳本。"
+        fi
     else
         cat > "$CONFIG_FILE" <<EOF
 tunnel: ${TUNNEL_ID}
@@ -195,6 +231,10 @@ credentials-file: ${creds_file}
 ingress:
   - hostname: ${HOSTNAME}
     service: ${LOCAL_SERVICE}
+$(if [[ -n "$MKCERT_CA_PATH" ]]; then
+    echo "    originRequest:"
+    echo "      caPool: ${MKCERT_CA_PATH}"
+fi)
   - service: http_status:404
 EOF
     fi
@@ -289,6 +329,7 @@ main() {
     check_login
     get_or_create_tunnel
     configure_hostname
+    detect_mkcert_ca
     generate_config
     print_service_instructions
     print_summary

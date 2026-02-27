@@ -99,17 +99,21 @@ restic backup "$COMPRESSED_FILE" \
 
 # ── Step 4: Apply retention policy ──────────────────────────────────────────
 log "套用保留策略 (7日/4週/3月)..."
-restic forget --prune \
+if ! restic forget --prune \
     --group-by host,tags \
     --keep-daily 7 \
     --keep-weekly 4 \
     --keep-monthly 3 \
     --tag sparkle \
-    --quiet
+    --quiet; then
+    log "WARN: 保留策略清理失敗，備份已完成但舊快照未清理"
+fi
 
 # ── Step 5: Health check ping (optional) ────────────────────────────────────
 if [[ -n "${HEALTHCHECK_URL:-}" ]]; then
-    curl -fsS --max-time 10 "$HEALTHCHECK_URL" >/dev/null 2>&1 || true
+    if ! curl -fsS --max-time 10 "$HEALTHCHECK_URL" >/dev/null 2>&1; then
+        log "WARN: Health check ping 失敗 ($HEALTHCHECK_URL)，備份本身已成功"
+    fi
 fi
 
 # ── Done ────────────────────────────────────────────────────────────────────
