@@ -39,6 +39,17 @@ function createTestDb() {
     CREATE INDEX idx_items_status ON items(status);
     CREATE INDEX idx_items_type ON items(type);
     CREATE INDEX idx_items_created ON items(created DESC);
+
+    CREATE TABLE share_tokens (
+      id TEXT PRIMARY KEY,
+      item_id TEXT NOT NULL,
+      token TEXT NOT NULL UNIQUE,
+      visibility TEXT NOT NULL DEFAULT 'unlisted',
+      created TEXT NOT NULL,
+      FOREIGN KEY (item_id) REFERENCES items(id) ON DELETE CASCADE
+    );
+    CREATE INDEX idx_share_tokens_token ON share_tokens(token);
+    CREATE INDEX idx_share_tokens_item_id ON share_tokens(item_id);
   `);
 
   setupFTS(sqlite);
@@ -689,6 +700,71 @@ describe("Data Access Layer", () => {
       const item = createItem(db, { title: "Note", content: "original", type: "note", status: "exported" });
       const updated = updateItem(db, item.id, { content: "original" });
       expect(updated!.status).toBe("exported");
+    });
+  });
+
+  describe("share_visibility resolution", () => {
+    function insertShare(itemId: string, visibility: "unlisted" | "public" = "unlisted") {
+      const id = crypto.randomUUID();
+      const token = crypto.randomUUID().slice(0, 12);
+      const now = new Date().toISOString();
+      sqlite.prepare(
+        "INSERT INTO share_tokens (id, item_id, token, visibility, created) VALUES (?, ?, ?, ?, ?)",
+      ).run(id, itemId, token, visibility, now);
+    }
+
+    it("getItem returns null share_visibility when no shares", () => {
+      const item = createItem(db, { title: "No shares", type: "note" });
+      const fetched = getItem(db, item.id);
+      expect(fetched!.share_visibility).toBeNull();
+    });
+
+    it("getItem returns 'unlisted' when only unlisted shares exist", () => {
+      const item = createItem(db, { title: "Unlisted share", type: "note" });
+      insertShare(item.id, "unlisted");
+      const fetched = getItem(db, item.id);
+      expect(fetched!.share_visibility).toBe("unlisted");
+    });
+
+    it("getItem returns 'public' when a public share exists", () => {
+      const item = createItem(db, { title: "Public share", type: "note" });
+      insertShare(item.id, "public");
+      const fetched = getItem(db, item.id);
+      expect(fetched!.share_visibility).toBe("public");
+    });
+
+    it("getItem returns 'public' when both unlisted and public shares exist (public wins)", () => {
+      const item = createItem(db, { title: "Mixed shares", type: "note" });
+      insertShare(item.id, "unlisted");
+      insertShare(item.id, "public");
+      const fetched = getItem(db, item.id);
+      expect(fetched!.share_visibility).toBe("public");
+    });
+
+    it("listItems includes share_visibility for items", () => {
+      const shared = createItem(db, { title: "Shared note", type: "note" });
+      createItem(db, { title: "Unshared note", type: "note" });
+      insertShare(shared.id, "unlisted");
+      const result = listItems(db, { type: "note" });
+      const sharedItem = result.items.find((i) => i.title === "Shared note");
+      const unsharedItem = result.items.find((i) => i.title === "Unshared note");
+      expect(sharedItem!.share_visibility).toBe("unlisted");
+      expect(unsharedItem!.share_visibility).toBeNull();
+    });
+
+    it("listItems with tag filter includes share_visibility", () => {
+      const item = createItem(db, { title: "Tagged shared", type: "note", tags: ["test-tag"] });
+      insertShare(item.id, "public");
+      const result = listItems(db, { tag: "test-tag" });
+      expect(result.items).toHaveLength(1);
+      expect(result.items[0]!.share_visibility).toBe("public");
+    });
+
+    it("share_visibility works for todo items", () => {
+      const todo = createItem(db, { title: "Shared todo", type: "todo" });
+      insertShare(todo.id, "unlisted");
+      const fetched = getItem(db, todo.id);
+      expect(fetched!.share_visibility).toBe("unlisted");
     });
   });
 });

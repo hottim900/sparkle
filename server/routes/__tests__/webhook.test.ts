@@ -36,6 +36,17 @@ function createTestDb() {
     CREATE INDEX idx_items_type ON items(type);
     CREATE INDEX idx_items_created ON items(created DESC);
 
+    CREATE TABLE share_tokens (
+      id TEXT PRIMARY KEY,
+      item_id TEXT NOT NULL,
+      token TEXT NOT NULL UNIQUE,
+      visibility TEXT NOT NULL DEFAULT 'unlisted',
+      created TEXT NOT NULL,
+      FOREIGN KEY (item_id) REFERENCES items(id) ON DELETE CASCADE
+    );
+    CREATE INDEX idx_share_tokens_token ON share_tokens(token);
+    CREATE INDEX idx_share_tokens_item_id ON share_tokens(item_id);
+
     CREATE TABLE settings (
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
