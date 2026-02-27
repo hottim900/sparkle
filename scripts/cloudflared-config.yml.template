@@ -6,4 +6,6 @@ ingress:
   # Access control is handled by Cloudflare Access — see docs/cloudflare-access-setup.md
   - hostname: YOUR_HOSTNAME
     service: LOCAL_SERVICE
+    originRequest:
+      noTLSVerify: true
   - service: http_status:404

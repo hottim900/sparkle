@@ -25,9 +25,9 @@ error()   { echo -e "${RED}[ERROR]${NC} $*"; }
 
 # ── Constants ────────────────────────────────────────────────────────────────
 TUNNEL_NAME="sparkle"
-LOCAL_SERVICE="http://localhost:3000"
+LOCAL_SERVICE="https://localhost:3000"
 CLOUDFLARED_DIR="$HOME/.cloudflared"
-CONFIG_FILE="$CLOUDFLARED_DIR/config.yml"
+CONFIG_FILE="$CLOUDFLARED_DIR/${TUNNEL_NAME}-config.yml"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TEMPLATE_FILE="$SCRIPT_DIR/cloudflared-config.yml.template"
 

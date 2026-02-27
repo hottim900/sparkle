@@ -177,6 +177,8 @@ function createDb() {
   const sqlite = new Database(DB_PATH);
   sqlite.pragma("journal_mode = WAL");
   sqlite.pragma("foreign_keys = ON");
+  sqlite.pragma("synchronous = NORMAL");
+  sqlite.pragma("journal_size_limit = 67108864");
 
   const db = drizzle(sqlite, { schema });
 
@@ -245,6 +247,9 @@ function createDb() {
   }
 
   setupFTS(sqlite);
+
+  // Checkpoint and truncate WAL to reclaim space from previous sessions
+  sqlite.pragma("wal_checkpoint(TRUNCATE)");
 
   return { db, sqlite };
 }
