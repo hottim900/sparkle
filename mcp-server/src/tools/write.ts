@@ -1,6 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { createItem, updateItem } from "../client.js";
+import { createItem, getItem, updateItem } from "../client.js";
 import { formatItem } from "../format.js";
 
 export function registerWriteTools(server: McpServer): void {
@@ -79,6 +79,7 @@ Args:
   - id (string, required): Item UUID
   - title (string, optional): New title
   - content (string, optional): New content (markdown). Replaces entire content field.
+  - old_content (string, optional): When provided together with content, performs find-and-replace: old_content is matched against the existing note content and replaced with content. Exactly one match required — zero matches returns NO_MATCH error, multiple matches returns AMBIGUOUS_MATCH error. Omit old_content to replace the entire content field.
   - tags (string[], optional): New tags (replaces all existing tags)
   - status (string, optional): New status
   - type (string, optional): Change item type (note/todo/scratch). Status auto-maps on type change.
@@ -90,11 +91,14 @@ Args:
 
 Returns: The updated item with all fields.
 
-Note: To append content, first read the note with sparkle_get_note, then update with the combined content.`,
+Content editing modes:
+  - Full replace: provide only content — replaces the entire content field.
+  - Partial edit: provide both old_content and content — finds old_content in the note and replaces it with content. Always use sparkle_get_note first to get the exact text for old_content. Set content to empty string to delete the matched section.`,
       inputSchema: {
         id: z.string().uuid().describe("Item UUID"),
         title: z.string().min(1).max(500).optional().describe("New title"),
         content: z.string().max(50000).optional().describe("New content (replaces existing)"),
+        old_content: z.string().min(1).max(50000).optional().describe("Find-and-replace: text to find in existing content (use with content)"),
         tags: z.array(z.string().max(50)).max(20).optional().describe("New tags (replaces all)"),
         status: z.enum(["fleeting", "developing", "permanent", "exported", "active", "done", "draft", "archived"]).optional().describe("New status"),
         type: z.enum(["note", "todo", "scratch"]).optional().describe("Change item type (status auto-maps)"),
@@ -111,11 +115,39 @@ Note: To append content, first read the note with sparkle_get_note, then update 
         openWorldHint: false,
       },
     },
-    async ({ id, title, content, tags, status, type, priority, due, aliases, source, linked_note_id }) => {
+    async ({ id, title, content, old_content, tags, status, type, priority, due, aliases, source, linked_note_id }) => {
       try {
+        // Find-and-replace mode: old_content + content
+        if (old_content !== undefined && content === undefined) {
+          return {
+            content: [{ type: "text", text: "Error: content is required when old_content is provided." }],
+            isError: true,
+          };
+        }
+
+        let resolvedContent = content;
+        if (old_content !== undefined && content !== undefined) {
+          const current = await getItem(id);
+          const matchCount = current.content.split(old_content).length - 1;
+          if (matchCount === 0) {
+            const preview = current.content.slice(0, 200);
+            return {
+              content: [{ type: "text", text: `NO_MATCH: The specified old_content was not found in the note.\nCurrent content (first 200 chars): ${preview}` }],
+              isError: true,
+            };
+          }
+          if (matchCount > 1) {
+            return {
+              content: [{ type: "text", text: `AMBIGUOUS_MATCH: old_content was found ${matchCount} times. Provide more surrounding context to uniquely identify the section to replace.` }],
+              isError: true,
+            };
+          }
+          resolvedContent = current.content.replace(old_content, content);
+        }
+
         const update: Record<string, unknown> = {};
         if (title !== undefined) update.title = title;
-        if (content !== undefined) update.content = content;
+        if (resolvedContent !== undefined) update.content = resolvedContent;
         if (tags !== undefined) update.tags = tags;
         if (status !== undefined) update.status = status;
         if (type !== undefined) update.type = type;

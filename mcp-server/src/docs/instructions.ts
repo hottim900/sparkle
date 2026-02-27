@@ -41,6 +41,20 @@ export const SPARKLE_INSTRUCTIONS = `
 
 **permanent → exported**：透過 sparkle_export_to_obsidian 匯出。筆記成為 Obsidian vault 長期知識庫的一部分。
 
+## 內容編輯策略
+
+\`sparkle_update_note\` 支援兩種內容編輯模式：
+
+**全文替換**：只提供 \`content\`，整份內容被替換。
+- 適用：短筆記、大幅重寫、重新組織結構
+
+**局部編輯**：同時提供 \`old_content\` 和 \`content\`，精確替換指定片段。
+- 適用：長筆記只改一小段、修正錯字、插入或刪除特定段落
+- \`old_content\` 必須精確匹配筆記中的現有內容（包含換行和空白）
+- \`old_content\` 在筆記中必須唯一，若有多處匹配會回傳錯誤
+
+**重要**：使用局部編輯前，務必先用 \`sparkle_get_note\` 讀取筆記，從回傳的內容中精確複製要替換的片段作為 \`old_content\`。
+
 ## 工具使用模式
 
 | 情境 | 工具 |
@@ -48,7 +62,7 @@ export const SPARKLE_INSTRUCTIONS = `
 | 搜尋相關筆記 | sparkle_search（全文搜尋）、sparkle_list_notes（篩選列表）|
 | 讀取完整內容 | sparkle_get_note |
 | 新建項目 | sparkle_create_note |
-| 更新內容 | sparkle_update_note |
+| 更新內容 | sparkle_update_note（短筆記用全文替換；長筆記用 old_content 局部編輯）|
 | 提升成熟度 | sparkle_advance_note |
 | 匯出到 Obsidian | sparkle_export_to_obsidian |
 | 知識庫概覽 | sparkle_get_stats |
