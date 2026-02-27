@@ -148,7 +148,7 @@ Application 定義了「哪個網站」要受到 Cloudflare Access 保護。
 
 4. 填寫 Application 資訊：
    - **Application name**：`Sparkle`
-   - **Session Duration**：`30 days`（建議。個人使用不需要太頻繁重新登入）
+   - **Session Duration**：`7 days`（建議。兼顧便利性與安全性，每週重新驗證一次）
 
 5. 在 **Application domain** 區塊：
    - **Subdomain**：你的 Sparkle hostname 的子網域部分（例如 `sparkle`）
@@ -160,7 +160,7 @@ Application 定義了「哪個網站」要受到 Cloudflare Access 保護。
 
 7. 儲存
 
-> **提示**：Session Duration 設為 30 天表示你登入一次後，30 天內不需要重新驗證。
+> **提示**：Session Duration 設為 7 天表示你登入一次後，一週內不需要重新驗證。Cloudflare 預設為 30 天，但縮短至 7 天可以降低 session 被盜用的風險窗口，同時個人使用每週登入一次也不會太麻煩。
 
 ---
 
@@ -174,6 +174,8 @@ Application 定義了「哪個網站」要受到 Cloudflare Access 保護。
 
 **這是關鍵步驟。** LINE 的伺服器需要直接存取 `/api/webhook/line` 端點來傳送訊息，不能經過 Cloudflare Access 的登入流程。如果不設定 bypass，LINE Bot 會完全無法運作。
 
+> **安全警告**：Bypass 路徑務必設定為 `/api/webhook/`（精確路徑）。這確保只有 webhook 端點被公開，其餘所有 API 端點仍受 Cloudflare Access 保護。Sparkle 的 webhook 端點有自己的 LINE signature 驗證機制，所以 bypass 後仍然安全。
+
 1. 前往 **Access > Applications** > **Add an application** > **Self-hosted**
 
 2. 填寫：
@@ -182,11 +184,23 @@ Application 定義了「哪個網站」要受到 Cloudflare Access 保護。
    - **Application domain**：
      - **Subdomain**：與主 Application 相同（例如 `sparkle`）
      - **Domain**：與主 Application 相同（例如 `example.com`）
-     - **Path**：`/api/webhook/`
+     - **Path**：`/api/webhook/`（精確填入，不要使用萬用字元）
 
 3. 在 **Policies** 區塊，引用先前建立的 `Bypass all` policy
 
 4. 儲存
+
+#### 常見錯誤
+
+以下是設定 Bypass 路徑時常見的錯誤，任何一項都可能導致嚴重安全漏洞：
+
+| 錯誤路徑 | 風險 |
+|----------|------|
+| `/*` 或留空 | 整個網站完全暴露，任何人無需登入即可存取所有功能和資料 |
+| `/api/*` | 所有 API 端點暴露，攻擊者只需猜到 Bearer token 即可存取全部資料 |
+| `/api/webhook/*` | 雖然目前只有 `/api/webhook/line` 一個端點，但使用萬用字元會讓未來新增的任何 webhook 路徑自動被 bypass，違反最小權限原則 |
+
+> **正確做法**：只 bypass `/api/webhook/`。如果未來新增其他 webhook 端點，再逐一評估是否需要 bypass。
 
 ### PWA 靜態資源 Bypass
 
@@ -212,7 +226,31 @@ Application 定義了「哪個網站」要受到 Cloudflare Access 保護。
 
 ## 驗證
 
-完成以上設定後，請依序測試：
+完成以上設定後，請依序測試。
+
+### 0. 快速驗證存取控制（命令列）
+
+在終端機中執行以下指令，快速確認 Cloudflare Access 的路徑保護是否正確生效：
+
+```bash
+# 驗證 API 端點受保護（應回傳 302 導向 CF Access 登入，或 403 Forbidden）
+curl -I https://YOUR_DOMAIN/api/items
+
+# 驗證 webhook 可存取（應回傳 401 Unauthorized，因為缺少 LINE signature）
+# 回傳 401 表示請求成功穿過 CF Access bypass，被 Sparkle 自己的驗證擋住 — 這是正確行為
+curl -I -X POST https://YOUR_DOMAIN/api/webhook/line
+```
+
+將 `YOUR_DOMAIN` 替換為你的實際網域（例如 `sparkle.example.com`）。
+
+**預期結果**：
+
+| 端點 | 預期回應 | 意義 |
+|------|---------|------|
+| `/api/items` | `302` 或 `403` | CF Access 正確保護 API |
+| `/api/webhook/line` | `401` | Bypass 生效，請求到達 Sparkle 但缺少 LINE signature 被拒絕 |
+
+> 如果 `/api/items` 回傳 `401` 而非 `302`/`403`，表示 CF Access 沒有保護該路徑，請檢查 Application 設定。
 
 ### 1. 測試網頁存取
 
@@ -280,7 +318,7 @@ Application 定義了「哪個網站」要受到 Cloudflare Access 保護。
 
 ### Q: Session 過期了怎麼辦？
 
-重新登入即可。你在 Sparkle 中儲存的資料不受影響。如果你設定了 30 天的 Session Duration，每個月只需要重新登入一次。
+重新登入即可。你在 Sparkle 中儲存的資料不受影響。如果你設定了建議的 7 天 Session Duration，每週只需要重新登入一次。
 
 ### Q: LINE Bot 不通怎麼辦？
 
