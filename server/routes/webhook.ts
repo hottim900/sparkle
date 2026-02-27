@@ -69,7 +69,7 @@ webhookRouter.post("/line", async (c) => {
 
       case "find": {
         try {
-          const results = searchItems(sqlite, cmd.keyword, 5);
+          const results = searchItems(sqlite, db, cmd.keyword, 5);
           if (results.length === 0) {
             reply = `🔍 找不到「${cmd.keyword}」相關的項目`;
           } else {

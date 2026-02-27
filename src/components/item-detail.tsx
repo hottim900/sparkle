@@ -541,6 +541,7 @@ export function ItemDetail({
             value={item.type}
             onValueChange={(v) => {
               // Type conversion — server handles status auto-mapping
+              if (v !== "note") setShareOpen(false);
               setItem({ ...item, type: v as ParsedItem["type"] });
               saveField("type", v);
             }}

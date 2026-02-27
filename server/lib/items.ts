@@ -382,9 +382,10 @@ function escapeFts5Query(raw: string): string {
 
 export function searchItems(
   sqlite: Database.Database,
+  db: DB,
   query: string,
   limit = 20,
-) {
+): ItemWithLinkedInfo[] {
   // Trigram tokenizer requires at least 3 characters; fall back to LIKE for shorter queries
   if (query.length < 3) {
     const pattern = `%${query}%`;
@@ -394,7 +395,8 @@ export function searchItems(
       ORDER BY created DESC
       LIMIT ?
     `);
-    return stmt.all(pattern, pattern, limit) as (typeof items.$inferSelect)[];
+    const rows = stmt.all(pattern, pattern, limit) as (typeof items.$inferSelect)[];
+    return resolveLinkedInfo(db, rows);
   }
 
   const escaped = escapeFts5Query(query);
@@ -407,7 +409,8 @@ export function searchItems(
     LIMIT ?
   `);
 
-  return stmt.all(escaped, limit) as (typeof items.$inferSelect)[];
+  const rows = stmt.all(escaped, limit) as (typeof items.$inferSelect)[];
+  return resolveLinkedInfo(db, rows);
 }
 
 export function getAllTags(sqlite: Database.Database): string[] {

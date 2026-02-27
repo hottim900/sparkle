@@ -122,7 +122,7 @@ npm run dev:server   # Hono on :3000 with tsx watch
 # IMPORTANT: Tests require node v22 (better-sqlite3 native module is incompatible with v24)
 nvm use 22
 
-# Tests (461 tests, 14 files — server only, no frontend tests)
+# Tests (462 tests, 14 files — server only, no frontend tests)
 npx vitest run                # Run all tests
 npx vitest run --coverage     # With coverage (needs @vitest/coverage-v8)
 npx vitest                    # Watch mode
@@ -262,6 +262,7 @@ id, type, title, content, status, priority, due, tags, origin, source, aliases, 
 - `linked_note_id`: todo→note reference (nullable, todo-only; cleared on todo→note conversion)
 - `linked_todo_count`: computed field in API responses — number of non-archived todos linked to a note (0 for todos)
 - `linked_note_title`: computed field in API responses — title of linked note for todos (null if none)
+- `share_visibility`: computed field in API responses — share status of the item ("public", "unlisted", or null if not shared)
 - `created`/`modified`: ISO 8601 timestamps
 
 ### Type Conversion Auto-Mapping
