@@ -3,6 +3,7 @@ import { Hono } from "hono";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { logger } from "hono/logger";
 import { bodyLimit } from "hono/body-limit";
+import { compress } from "hono/compress";
 import { readFileSync } from "node:fs";
 import { createServer } from "node:https";
 import { authMiddleware } from "./middleware/auth.js";
@@ -72,6 +73,7 @@ if (lineSecret || lineToken) {
 const app = new Hono();
 
 app.use("*", logger());
+app.use("*", compress());
 
 // Rate limiting — webhook has its own limiter, applied before auth (webhook skips auth)
 app.use("/api/webhook/*", webhookRateLimiter);
@@ -245,6 +247,18 @@ app.onError((err, c) => {
 
 // In production, serve Vite build output
 if (process.env.NODE_ENV === "production") {
+  // Cache-Control headers for static assets
+  app.use("/*", async (c, next) => {
+    await next();
+    const path = new URL(c.req.url).pathname;
+    if (path.startsWith("/assets/")) {
+      // Vite hashed filenames — safe to cache forever
+      c.res.headers.set("Cache-Control", "public, max-age=31536000, immutable");
+    } else if (path === "/sw.js" || path === "/manifest.webmanifest") {
+      // Service worker and manifest must always be fresh
+      c.res.headers.set("Cache-Control", "no-cache");
+    }
+  });
   app.use("/*", serveStatic({ root: "./dist" }));
   app.get("*", serveStatic({ path: "./dist/index.html" }));
 }
@@ -254,6 +268,10 @@ const host = process.env.HOST || "127.0.0.1";
 
 let httpServer;
 
+// TLS is optional. When running behind a Cloudflare Tunnel, plain HTTP is
+// recommended (both processes share localhost, so TLS adds overhead with no
+// security benefit). Set TLS_CERT and TLS_KEY in .env only for direct LAN
+// access or non-tunnel deployments.
 if (process.env.TLS_CERT && process.env.TLS_KEY) {
   const cert = readFileSync(process.env.TLS_CERT);
   const key = readFileSync(process.env.TLS_KEY);

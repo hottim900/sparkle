@@ -5,7 +5,11 @@ ingress:
   # Route all traffic through Cloudflare Tunnel.
   # Access control is handled by Cloudflare Access — see docs/cloudflare-access-setup.md
   - hostname: YOUR_HOSTNAME
-    service: LOCAL_SERVICE
-    originRequest:
-      caPool: MKCERT_CA_PATH
+    service: http://localhost:3000
+    # Plain HTTP is recommended when using Cloudflare Tunnel — both processes
+    # share localhost, so TLS adds overhead with no security benefit.
+    # For direct LAN access with HTTPS, change to:
+    #   service: https://localhost:3000
+    #   originRequest:
+    #     caPool: /path/to/mkcert/rootCA.pem
   - service: http_status:404

@@ -43,6 +43,16 @@ export default defineConfig({
       },
     }),
   ],
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'ui': ['radix-ui', 'class-variance-authority', 'clsx', 'tailwind-merge'],
+          'markdown': ['react-markdown', 'remark-gfm'],
+        },
+      },
+    },
+  },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
