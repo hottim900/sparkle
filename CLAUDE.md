@@ -125,6 +125,12 @@ mcp-server/
       meta.ts             # sparkle_get_stats, sparkle_list_tags
       guide.ts            # sparkle_guide (documentation query by topic)
 
+e2e/
+  auth.setup.ts          # Playwright auth setup (login + save storageState)
+  basic-flow.spec.ts     # E2E tests: login, quick capture, search, item detail
+  .auth/                 # Generated auth state (gitignored)
+
+playwright.config.ts    # Playwright config (Chromium-only, auto-starts Hono server on :3456, temp test DB)
 eslint.config.js        # ESLint 9 flat config (typescript-eslint, react-hooks, prettier compat)
 .prettierrc             # Prettier config (double quotes, trailing commas, 100 char width)
 .prettierignore         # Prettier ignore (dist, node_modules, coverage, data, certs, mcp-server)
@@ -153,6 +159,10 @@ npx vitest run                # Run all tests
 npx vitest run --coverage     # With coverage (needs @vitest/coverage-v8)
 npx vitest                    # Watch mode
 # Coverage: server/lib ~97%, server/routes ~94%, frontend: ErrorBoundary, ItemCard, QuickCapture, SearchBar, Dashboard
+
+# E2E tests (Playwright, Chromium-only, requires dist/ build)
+npm run test:e2e     # Run E2E tests (auto-starts server on :3456 with temp DB)
+npm run test:e2e:ui  # Playwright UI mode for debugging
 
 # Linting & formatting
 npm run lint         # ESLint check (src/ + server/)
@@ -322,7 +332,7 @@ Schema version tracked in `schema_version` table (version 0→11). Each step is 
 - Aliases stored as JSON array string in SQLite
 - Timestamps: ISO 8601 strings
 - Database: SQLite WAL mode, FTS5 trigram tokenizer for search (supports Chinese)
-- Tests: Vitest with projects config (server=node, frontend=jsdom). Server: in-memory SQLite, mock db module with vi.mock, shared `createTestDb()` in `server/test-utils.ts`. Frontend: Testing Library + jest-dom, `renderWithContext()` helper in `src/test-utils.tsx` for components using AppContext.
+- Tests: Vitest with projects config (server=node, frontend=jsdom). Server: in-memory SQLite, mock db module with vi.mock, shared `createTestDb()` in `server/test-utils.ts`. Frontend: Testing Library + jest-dom, `renderWithContext()` helper in `src/test-utils.tsx` for components using AppContext. E2E: Playwright (Chromium-only) against production build (`dist/`), Hono server on port 3456 with temp SQLite DB (`/tmp/sparkle-e2e-test.db`), auth via storageState. 7 tests covering login, note/todo creation, search, item detail.
 - Obsidian export: .md with YAML frontmatter, local time (no TZ suffix), written to vault path. Config stored in `settings` table, read via `getObsidianSettings()`. `exportToObsidian(item, config)` is a pure function (no env dependency).
 - Settings API: `GET /api/settings` returns all settings; `PUT /api/settings` accepts partial updates with Zod validation (key whitelist, vault path writability check when enabling)
 - Public sharing: Notes can be shared via token-based URLs (`/s/:token`). SSR HTML pages with marked for Markdown, OpenGraph meta tags, dark mode CSS. Two visibility modes: `unlisted` (link-only) and `public` (listed in `/api/public`). Auth bypass on `/api/public/*` and `/s/*` paths. Share management via authenticated API (`/api/items/:id/share`, `/api/shares`)
@@ -332,7 +342,9 @@ Schema version tracked in `schema_version` table (version 0→11). Each step is 
 - State management: AppContext (`src/lib/app-context.ts`) provides view state, navigation, config, and refresh to child components via `useAppContext()`. Sidebar, BottomNav use context only (0 props). ItemDetail split into sub-components: ItemDetailHeader, ItemContentEditor, LinkedItemsSection.
 - Linting: ESLint 9 flat config with typescript-eslint (recommended), react-hooks plugin, eslint-config-prettier. Test files relaxed (`no-explicit-any` warn, `no-require-imports` off). Unused vars allowed with `_` prefix.
 - Formatting: Prettier (double quotes, trailing commas, 100 char width). Enforced via lint-staged + Husky pre-commit hook. `.prettierignore` excludes dist, mcp-server, data, certs.
-- CI: GitHub Actions on push/PR to main — lint → format:check → tsc (frontend + server) → build → test. Node 22 pinned.
+- CI: GitHub Actions on push/PR to main — npm audit → lint → format:check → tsc (frontend + server) → build → test. Node 22 pinned. Job timeout: 15 minutes.
+- Commit conventions: commitlint with `@commitlint/config-conventional`. Enforced via `.husky/commit-msg` hook. Allowed types: feat, fix, docs, chore, refactor, test, perf, ci, build, style, revert.
+- MCP server tests: Vitest in `mcp-server/`, 43 tests (format helpers + API client + tool handlers). Run with `cd mcp-server && npm test`.
 
 ## CLAUDE.md Maintenance
 

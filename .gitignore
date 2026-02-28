@@ -16,3 +16,6 @@ coverage/
 docs/plans/
 public/rootCA.pem
 .claude/*.md
+test-results/
+playwright-report/
+e2e/.auth/

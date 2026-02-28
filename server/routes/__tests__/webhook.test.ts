@@ -832,9 +832,9 @@ describe("POST /api/webhook/line", () => {
       expect(replyText).toContain("已完成");
 
       // Verify at least one item is now done
-      const doneItems = testSqlite
-        .prepare("SELECT * FROM items WHERE status = 'done'")
-        .all() as any[];
+      const doneItems = testSqlite.prepare("SELECT * FROM items WHERE status = 'done'").all() as {
+        status: string;
+      }[];
       expect(doneItems.length).toBeGreaterThanOrEqual(1);
     });
 
@@ -874,7 +874,7 @@ describe("POST /api/webhook/line", () => {
       // Verify at least one inbox item is now archived
       const archivedItems = testSqlite
         .prepare("SELECT * FROM items WHERE status = 'archived'")
-        .all() as any[];
+        .all() as { status: string }[];
       expect(archivedItems.length).toBeGreaterThanOrEqual(1);
     });
 
@@ -912,7 +912,7 @@ describe("POST /api/webhook/line", () => {
       // Verify at least one item now has high priority
       const highItems = testSqlite
         .prepare("SELECT * FROM items WHERE priority = 'high' AND status = 'fleeting'")
-        .all() as any[];
+        .all() as { priority: string }[];
       expect(highItems.length).toBeGreaterThanOrEqual(1);
     });
 
@@ -933,7 +933,9 @@ describe("POST /api/webhook/line", () => {
       expect(callBody.messages[0].text).toContain("已清除");
 
       // Verify DB state - id-3 (繳電費) is the first focus item (overdue)
-      const item = testSqlite.prepare("SELECT priority FROM items WHERE id = ?").get("id-3") as any;
+      const item = testSqlite.prepare("SELECT priority FROM items WHERE id = ?").get("id-3") as {
+        priority: string | null;
+      };
       expect(item.priority).toBeNull();
     });
 
@@ -975,7 +977,9 @@ describe("POST /api/webhook/line", () => {
       expect(replyText).toContain("重要");
 
       // Verify DB state
-      const item = testSqlite.prepare("SELECT tags FROM items WHERE id = ?").get("id-ut1") as any;
+      const item = testSqlite.prepare("SELECT tags FROM items WHERE id = ?").get("id-ut1") as {
+        tags: string;
+      };
       const tags = JSON.parse(item.tags);
       expect(tags).toEqual(["個人"]);
     });
@@ -1055,7 +1059,9 @@ describe("POST /api/webhook/line", () => {
       expect(replyText).toContain("發展中");
 
       // Verify DB
-      const item = testSqlite.prepare("SELECT status FROM items WHERE id = ?").get("id-2") as any;
+      const item = testSqlite.prepare("SELECT status FROM items WHERE id = ?").get("id-2") as {
+        status: string;
+      };
       expect(item.status).toBe("developing");
     });
 
@@ -1116,7 +1122,9 @@ describe("POST /api/webhook/line", () => {
       expect(replyText).toContain("永久筆記");
 
       // Verify DB
-      const item = testSqlite.prepare("SELECT status FROM items WHERE id = ?").get("id-2") as any;
+      const item = testSqlite.prepare("SELECT status FROM items WHERE id = ?").get("id-2") as {
+        status: string;
+      };
       expect(item.status).toBe("permanent");
     });
 
@@ -1532,7 +1540,7 @@ describe("POST /api/webhook/line", () => {
       // Verify DB: type changed to note, status auto-mapped to fleeting
       const item = testSqlite
         .prepare("SELECT type, status FROM items WHERE id = ?")
-        .get("id-u1") as any;
+        .get("id-u1") as { type: string; status: string };
       expect(item.type).toBe("note");
       expect(item.status).toBe("fleeting");
     });
