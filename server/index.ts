@@ -1,3 +1,5 @@
+import "./instrument.js";
+import * as Sentry from "@sentry/node";
 import { serve, getRequestListener } from "@hono/node-server";
 import { Hono } from "hono";
 import { serveStatic } from "@hono/node-server/serve-static";
@@ -270,6 +272,9 @@ app.post("/api/import", async (c) => {
 
 // Public routes (no auth required — bypass handled in auth middleware)
 app.route("/", publicRouter);
+
+// Sentry error handler (captures exceptions, skips 3xx/4xx)
+Sentry.setupHonoErrorHandler(app);
 
 // Global error handler
 app.onError((err, c) => {

@@ -13,6 +13,10 @@ vi.mock("../logger.js", () => ({
   },
 }));
 
+vi.mock("@sentry/node", () => ({
+  close: vi.fn().mockResolvedValue(true),
+}));
+
 import { logger } from "../logger.js";
 
 const mockLoggerInfo = logger.info as ReturnType<typeof vi.fn>;
@@ -82,12 +86,13 @@ describe("setupGracefulShutdown", () => {
     expect(signalHandlers.has("SIGINT")).toBe(true);
   });
 
-  it("closes server, checkpoints WAL, closes DB, and exits on SIGTERM", () => {
+  it("closes server, checkpoints WAL, closes DB, and exits on SIGTERM", async () => {
     const server = createMockServer();
     const sqlite = createMockSqlite();
     setupGracefulShutdown(server, sqlite);
 
     emitSignal("SIGTERM");
+    await vi.runAllTimersAsync();
 
     expect(server.close).toHaveBeenCalledOnce();
     expect(sqlite.pragma).toHaveBeenCalledWith("wal_checkpoint(TRUNCATE)");
@@ -95,12 +100,13 @@ describe("setupGracefulShutdown", () => {
     expect(processExitSpy).toHaveBeenCalledWith(0);
   });
 
-  it("closes server, checkpoints WAL, closes DB, and exits on SIGINT", () => {
+  it("closes server, checkpoints WAL, closes DB, and exits on SIGINT", async () => {
     const server = createMockServer();
     const sqlite = createMockSqlite();
     setupGracefulShutdown(server, sqlite);
 
     emitSignal("SIGINT");
+    await vi.runAllTimersAsync();
 
     expect(server.close).toHaveBeenCalledOnce();
     expect(sqlite.pragma).toHaveBeenCalledWith("wal_checkpoint(TRUNCATE)");
@@ -108,7 +114,7 @@ describe("setupGracefulShutdown", () => {
     expect(processExitSpy).toHaveBeenCalledWith(0);
   });
 
-  it("prevents duplicate shutdown on repeated signals", () => {
+  it("prevents duplicate shutdown on repeated signals", async () => {
     const server = createMockServer();
     const sqlite = createMockSqlite();
     setupGracefulShutdown(server, sqlite);
@@ -116,13 +122,14 @@ describe("setupGracefulShutdown", () => {
     emitSignal("SIGTERM");
     emitSignal("SIGTERM");
     emitSignal("SIGINT");
+    await vi.runAllTimersAsync();
 
     expect(server.close).toHaveBeenCalledOnce();
     expect(sqlite.close).toHaveBeenCalledOnce();
     expect(processExitSpy).toHaveBeenCalledTimes(1);
   });
 
-  it("force exits after timeout when server.close hangs", () => {
+  it("force exits after timeout when server.close hangs", async () => {
     const server = createMockServer();
     // Override close to never invoke callback (simulating a hang)
     (server.close as ReturnType<typeof vi.fn>).mockImplementation(() => server);
@@ -136,13 +143,13 @@ describe("setupGracefulShutdown", () => {
     expect(processExitSpy).not.toHaveBeenCalled();
 
     // Advance past timeout
-    vi.advanceTimersByTime(5000);
+    await vi.advanceTimersByTimeAsync(5000);
 
     expect(processExitSpy).toHaveBeenCalledWith(1);
     expect(mockLoggerError).toHaveBeenCalledWith("Graceful shutdown timed out, forcing exit");
   });
 
-  it("still closes DB and exits even if WAL checkpoint fails", () => {
+  it("still closes DB and exits even if WAL checkpoint fails", async () => {
     const server = createMockServer();
     const sqlite = createMockSqlite();
     (sqlite.pragma as ReturnType<typeof vi.fn>).mockImplementation(() => {
@@ -151,6 +158,7 @@ describe("setupGracefulShutdown", () => {
     setupGracefulShutdown(server, sqlite);
 
     emitSignal("SIGTERM");
+    await vi.runAllTimersAsync();
 
     expect(mockLoggerError).toHaveBeenCalledWith(
       { err: expect.any(Error) },
@@ -160,7 +168,7 @@ describe("setupGracefulShutdown", () => {
     expect(processExitSpy).toHaveBeenCalledWith(0);
   });
 
-  it("still exits even if DB close fails", () => {
+  it("still exits even if DB close fails", async () => {
     const server = createMockServer();
     const sqlite = createMockSqlite();
     (sqlite.close as ReturnType<typeof vi.fn>).mockImplementation(() => {
@@ -169,6 +177,7 @@ describe("setupGracefulShutdown", () => {
     setupGracefulShutdown(server, sqlite);
 
     emitSignal("SIGTERM");
+    await vi.runAllTimersAsync();
 
     expect(mockLoggerError).toHaveBeenCalledWith(
       { err: expect.any(Error) },
