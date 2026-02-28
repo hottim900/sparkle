@@ -1,5 +1,6 @@
 import type { Server } from "node:http";
 import type Database from "better-sqlite3";
+import * as Sentry from "@sentry/node";
 import { logger } from "./logger.js";
 
 const DEFAULT_TIMEOUT_MS = 25_000; // 25s, leaving 5s buffer for systemd's 30s
@@ -27,8 +28,15 @@ export function setupGracefulShutdown(
     // Allow process to exit even if timer is still pending
     forceTimer.unref();
 
-    server.close(() => {
+    server.close(async () => {
       logger.info("HTTP server closed");
+
+      try {
+        await Sentry.close(2000);
+        logger.info("Sentry flushed");
+      } catch (err) {
+        logger.warn({ err }, "Sentry flush failed");
+      }
 
       try {
         sqliteDb.pragma("wal_checkpoint(TRUNCATE)");

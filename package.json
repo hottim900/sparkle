@@ -37,6 +37,7 @@
   },
   "dependencies": {
     "@hono/node-server": "^1.13.8",
+    "@sentry/node": "^10.40.0",
     "better-sqlite3": "^11.8.1",
     "chrono-node": "^2.9.0",
     "class-variance-authority": "^0.7.1",

@@ -7,7 +7,7 @@ Self-hosted PWA for personal idea capture + task management with Zettelkasten no
 ## Tech Stack
 
 - **Frontend**: Vite + React 19 + TypeScript + Tailwind CSS + shadcn/ui (Radix) + code splitting (lazy-loaded routes)
-- **Backend**: Hono (Node.js) + Drizzle ORM + better-sqlite3 + FTS5 + hono-rate-limiter + marked (SSR Markdown)
+- **Backend**: Hono (Node.js) + Drizzle ORM + better-sqlite3 + FTS5 + hono-rate-limiter + marked (SSR Markdown) + @sentry/node (error tracking)
 - **PWA**: vite-plugin-pwa + Workbox + IndexedDB offline queue
 - **Validation**: Zod on all API endpoints
 - **Themes**: next-themes (dark/light)
@@ -18,6 +18,7 @@ Self-hosted PWA for personal idea capture + task management with Zettelkasten no
 
 ```
 server/
+  instrument.ts         # Sentry initialization (conditional on SENTRY_DSN, zodErrorsIntegration)
   index.ts              # Hono app, route registration, compress + cache-control + CSP middleware, HTTPS/TLS support, startup validation, graceful shutdown, health endpoint
   middleware/
     auth.ts             # Bearer token auth (skips /api/webhook/, /api/public/, /api/health)
@@ -36,7 +37,7 @@ server/
     stats.ts            # Stats (Zettelkasten + GTD) + focus query functions
     export.ts           # Obsidian .md export (frontmatter, sanitize filename, write to vault)
     logger.ts           # Pino logger instance (JSON in prod, pino-pretty in dev)
-    shutdown.ts         # Graceful shutdown (SIGTERM/SIGINT, WAL checkpoint, DB close)
+    shutdown.ts         # Graceful shutdown (SIGTERM/SIGINT, Sentry flush, WAL checkpoint, DB close)
     safe-compare.ts     # Timing-safe string comparison (crypto.timingSafeEqual)
     settings.ts         # Settings CRUD (getSetting, getSettings, getObsidianSettings, updateSettings)
     line.ts             # LINE message/command parser
@@ -138,7 +139,8 @@ eslint.config.js        # ESLint 9 flat config (typescript-eslint, react-hooks, 
   pre-commit            # CLAUDE.md update warning + lint-staged
 .github/
   workflows/
-    ci.yml              # GitHub Actions CI (lint, format, type-check, build, test on Node 22)
+    ci.yml              # GitHub Actions CI (lint, format, type-check, build, unit test, E2E Playwright on Node 22)
+    deploy.yml          # Auto-deploy on main push (workflow_run after CI, self-hosted runner)
 
 certs/                  # mkcert TLS certificates (gitignored)
 data/                   # SQLite database (gitignored)
@@ -180,6 +182,14 @@ npm run build        # Production frontend → dist/
 
 Self-hosted on WSL2 (mirrored networking mode) with WireGuard VPN. Managed by systemd. See `docs/self-hosting.md` for full setup instructions.
 
+### Auto-Deploy (GitHub Actions)
+
+- `deploy.yml` triggers via `workflow_run` after CI passes on `main`
+- Runs on a **self-hosted runner** inside WSL2 (same machine as production)
+- Steps: `git pull` → `npm ci` → `npm run build` → `systemctl restart sparkle` → health check
+- **One-time setup required**: install self-hosted runner (`~/actions-runner/`), configure sudoers for passwordless `systemctl restart sparkle`
+- Rollback: `git revert` + push triggers a new deploy
+
 ### Quick Reference
 
 ```bash
@@ -197,7 +207,7 @@ journalctl -u sparkle -f
 
 ### Environment Variables (.env)
 
-Copy `.env.example` to `.env` and fill in your values. See `.env.example` for all available variables.
+Copy `.env.example` to `.env` and fill in your values. See `.env.example` for all available variables. Key optional variables: `SENTRY_DSN` (error tracking), `TLS_CERT`/`TLS_KEY` (HTTPS), `LINE_CHANNEL_SECRET`/`LINE_CHANNEL_ACCESS_TOKEN` (LINE Bot).
 
 ### HTTPS (mkcert) — Optional
 
@@ -326,7 +336,7 @@ Schema version tracked in `schema_version` table (version 0→11). Each step is 
 - UI language: 繁體中文
 - API: REST, JSON, Bearer token auth on /api/* (except /api/webhook/, /api/public/, /api/health), rate-limited (hono-rate-limiter)
 - Startup validation: AUTH_TOKEN strength (length >= 32, Shannon entropy >= 3.0), LINE secrets (warn only)
-- Graceful shutdown: SIGTERM/SIGINT → server.close() → WAL checkpoint → sqlite.close() (25s timeout)
+- Graceful shutdown: SIGTERM/SIGINT → server.close() → Sentry.close() → WAL checkpoint → sqlite.close() (25s timeout)
 - Node version: engines in package.json (>=22, <24), enforced by .npmrc engine-strict=true
 - Tags stored as JSON array string in SQLite
 - Aliases stored as JSON array string in SQLite
@@ -338,11 +348,13 @@ Schema version tracked in `schema_version` table (version 0→11). Each step is 
 - Public sharing: Notes can be shared via token-based URLs (`/s/:token`). SSR HTML pages with marked for Markdown, OpenGraph meta tags, dark mode CSS. Two visibility modes: `unlisted` (link-only) and `public` (listed in `/api/public`). Auth bypass on `/api/public/*` and `/s/*` paths. Share management via authenticated API (`/api/items/:id/share`, `/api/shares`)
 - Performance: gzip/deflate compression via `hono/compress` on all responses with `Vary: Accept-Encoding` for CDN cache correctness. Static assets (`/assets/*`) served with `Cache-Control: immutable` (Vite content-hashed filenames). Frontend uses code splitting — heavy components (ItemDetail, Settings, Dashboard, FleetingTriage, MarkdownPreview) are lazy-loaded via `React.lazy()` with `ErrorBoundary` wrappers for chunk load failure recovery. Vendor chunks split: `ui` (radix + cva), `markdown` (react-markdown + remark-gfm)
 - Logging: pino structured logger (`server/lib/logger.ts`). JSON output in production, pino-pretty in dev. Custom HTTP request logger middleware replaces hono's built-in. Health check requests logged at debug level. All server `console.log/error/warn` replaced with `logger.info/error/warn`.
+- Error tracking: Sentry via `@sentry/node` with official Hono integration. `server/instrument.ts` initializes conditionally (only when `SENTRY_DSN` is set). `Sentry.setupHonoErrorHandler(app)` auto-captures server errors (skips 3xx/4xx). `zodErrorsIntegration` captures structured Zod validation errors. Graceful shutdown flushes pending events via `Sentry.close(2000)`.
 - Security: Content-Security-Policy header on all responses (self-only scripts/fonts/connect, unsafe-inline styles for Tailwind, HTTPS images, frame-ancestors none). Health endpoint (`GET /api/health`) unauthenticated for Docker/orchestrator monitoring.
 - State management: AppContext (`src/lib/app-context.ts`) provides view state, navigation, config, and refresh to child components via `useAppContext()`. Sidebar, BottomNav use context only (0 props). ItemDetail split into sub-components: ItemDetailHeader, ItemContentEditor, LinkedItemsSection.
 - Linting: ESLint 9 flat config with typescript-eslint (recommended), react-hooks plugin, eslint-config-prettier. Test files relaxed (`no-explicit-any` warn, `no-require-imports` off). Unused vars allowed with `_` prefix.
 - Formatting: Prettier (double quotes, trailing commas, 100 char width). Enforced via lint-staged + Husky pre-commit hook. `.prettierignore` excludes dist, mcp-server, data, certs.
-- CI: GitHub Actions on push/PR to main — npm audit → lint → format:check → tsc (frontend + server) → build → test. Node 22 pinned. Job timeout: 15 minutes.
+- CI: GitHub Actions on push/PR to main — npm audit → lint → format:check → tsc (frontend + server) → build → unit test → E2E (Playwright Chromium). Artifacts: playwright-report + test-results (7 days). Node 22 pinned. Job timeout: 15 minutes.
+- CD: Auto-deploy on main push via `deploy.yml` (workflow_run trigger, self-hosted runner in WSL2). Steps: git pull → npm ci → build → restart → health check (retry loop, 5 attempts).
 - Commit conventions: commitlint with `@commitlint/config-conventional`. Enforced via `.husky/commit-msg` hook. Allowed types: feat, fix, docs, chore, refactor, test, perf, ci, build, style, revert.
 - MCP server tests: Vitest in `mcp-server/`, 43 tests (format helpers + API client + tool handlers). Run with `cd mcp-server && npm test`.
 
