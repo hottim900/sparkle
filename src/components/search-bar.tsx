@@ -14,6 +14,7 @@ import {
   PlayCircle,
   Check,
   Archive,
+  FileText,
 } from "lucide-react";
 
 interface SearchBarProps {
@@ -45,6 +46,11 @@ const STATUS_CONFIG: Record<ItemStatus, { label: string; color: string; icon: Re
     label: "進行中",
     color: "text-sky-600 dark:text-sky-400",
     icon: <PlayCircle className="h-3 w-3" />,
+  },
+  draft: {
+    label: "草稿",
+    color: "text-slate-600 dark:text-slate-400",
+    icon: <FileText className="h-3 w-3" />,
   },
   done: {
     label: "已完成",
