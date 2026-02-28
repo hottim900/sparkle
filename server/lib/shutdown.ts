@@ -1,5 +1,6 @@
 import type { Server } from "node:http";
 import type Database from "better-sqlite3";
+import { logger } from "./logger.js";
 
 const DEFAULT_TIMEOUT_MS = 25_000; // 25s, leaving 5s buffer for systemd's 30s
 
@@ -13,34 +14,34 @@ export function setupGracefulShutdown(
 
   const shutdown = (signal: string) => {
     if (shuttingDown) {
-      console.log(`Shutdown already in progress, ignoring ${signal}`);
+      logger.info("Shutdown already in progress, ignoring %s", signal);
       return;
     }
     shuttingDown = true;
-    console.log(`${signal} received, starting graceful shutdown...`);
+    logger.info("%s received, starting graceful shutdown...", signal);
 
     const forceTimer = setTimeout(() => {
-      console.error("Graceful shutdown timed out, forcing exit");
+      logger.error("Graceful shutdown timed out, forcing exit");
       process.exit(1);
     }, timeoutMs);
     // Allow process to exit even if timer is still pending
     forceTimer.unref();
 
     server.close(() => {
-      console.log("HTTP server closed");
+      logger.info("HTTP server closed");
 
       try {
         sqliteDb.pragma("wal_checkpoint(TRUNCATE)");
-        console.log("WAL checkpoint completed");
+        logger.info("WAL checkpoint completed");
       } catch (err) {
-        console.error("WAL checkpoint failed:", err);
+        logger.error({ err }, "WAL checkpoint failed");
       }
 
       try {
         sqliteDb.close();
-        console.log("Database connection closed");
+        logger.info("Database connection closed");
       } catch (err) {
-        console.error("Database close failed:", err);
+        logger.error({ err }, "Database close failed");
       }
 
       clearTimeout(forceTimer);

@@ -1,31 +1,14 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import Database from "better-sqlite3";
+import { createTestDb } from "../../test-utils.js";
 import { getSetting, getSettings, getObsidianSettings, updateSettings } from "../settings.js";
-
-function createTestDb() {
-  const sqlite = new Database(":memory:");
-  sqlite.pragma("journal_mode = WAL");
-
-  sqlite.exec(`
-    CREATE TABLE settings (
-      key TEXT PRIMARY KEY,
-      value TEXT NOT NULL
-    );
-    INSERT INTO settings (key, value) VALUES
-      ('obsidian_enabled', 'false'),
-      ('obsidian_vault_path', ''),
-      ('obsidian_inbox_folder', '0_Inbox'),
-      ('obsidian_export_mode', 'overwrite');
-  `);
-
-  return sqlite;
-}
 
 describe("Settings", () => {
   let sqlite: Database.Database;
 
   beforeEach(() => {
-    sqlite = createTestDb();
+    const testDb = createTestDb();
+    sqlite = testDb.sqlite;
   });
 
   // ============================================================

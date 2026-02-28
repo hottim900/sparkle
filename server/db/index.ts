@@ -4,6 +4,7 @@ import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import * as schema from "./schema.js";
 import { setupFTS } from "./fts.js";
+import { logger } from "../lib/logger.js";
 
 const DB_PATH = process.env.DATABASE_URL || "./data/todo.db";
 
@@ -256,10 +257,10 @@ function createDb() {
   try {
     const result = sqlite.pragma("wal_checkpoint(TRUNCATE)");
     if (Array.isArray(result) && result[0]?.busy) {
-      console.warn("WAL checkpoint blocked by another connection (busy=1), skipping");
+      logger.warn("WAL checkpoint blocked by another connection (busy=1), skipping");
     }
   } catch (e) {
-    console.error("WAL checkpoint failed (non-fatal):", (e as Error).message);
+    logger.error({ err: e }, "WAL checkpoint failed (non-fatal)");
   }
 
   return { db, sqlite };

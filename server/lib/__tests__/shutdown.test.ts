@@ -3,6 +3,21 @@ import { setupGracefulShutdown } from "../shutdown.js";
 import type { Server } from "node:http";
 import type Database from "better-sqlite3";
 
+vi.mock("../logger.js", () => ({
+  logger: {
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    fatal: vi.fn(),
+    debug: vi.fn(),
+  },
+}));
+
+import { logger } from "../logger.js";
+
+const mockLoggerInfo = logger.info as ReturnType<typeof vi.fn>;
+const mockLoggerError = logger.error as ReturnType<typeof vi.fn>;
+
 function createMockServer() {
   const mock = {
     close: vi.fn<(cb?: () => void) => Server>(),
@@ -26,8 +41,6 @@ describe("setupGracefulShutdown", () => {
   let signalHandlers: Map<string, (() => void)[]>;
   let processOnSpy: ReturnType<typeof vi.spyOn>;
   let processExitSpy: ReturnType<typeof vi.spyOn>;
-  let consoleLogSpy: ReturnType<typeof vi.spyOn>;
-  let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     vi.useFakeTimers();
@@ -46,8 +59,8 @@ describe("setupGracefulShutdown", () => {
       .spyOn(process, "exit")
       .mockImplementation((() => {}) as unknown as (code?: number) => never);
 
-    consoleLogSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-    consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    mockLoggerInfo.mockClear();
+    mockLoggerError.mockClear();
   });
 
   afterEach(() => {
@@ -126,7 +139,7 @@ describe("setupGracefulShutdown", () => {
     vi.advanceTimersByTime(5000);
 
     expect(processExitSpy).toHaveBeenCalledWith(1);
-    expect(consoleErrorSpy).toHaveBeenCalledWith("Graceful shutdown timed out, forcing exit");
+    expect(mockLoggerError).toHaveBeenCalledWith("Graceful shutdown timed out, forcing exit");
   });
 
   it("still closes DB and exits even if WAL checkpoint fails", () => {
@@ -139,7 +152,10 @@ describe("setupGracefulShutdown", () => {
 
     emitSignal("SIGTERM");
 
-    expect(consoleErrorSpy).toHaveBeenCalledWith("WAL checkpoint failed:", expect.any(Error));
+    expect(mockLoggerError).toHaveBeenCalledWith(
+      { err: expect.any(Error) },
+      "WAL checkpoint failed",
+    );
     expect(sqlite.close).toHaveBeenCalledOnce();
     expect(processExitSpy).toHaveBeenCalledWith(0);
   });
@@ -154,7 +170,10 @@ describe("setupGracefulShutdown", () => {
 
     emitSignal("SIGTERM");
 
-    expect(consoleErrorSpy).toHaveBeenCalledWith("Database close failed:", expect.any(Error));
+    expect(mockLoggerError).toHaveBeenCalledWith(
+      { err: expect.any(Error) },
+      "Database close failed",
+    );
     expect(processExitSpy).toHaveBeenCalledWith(0);
   });
 });

@@ -1,8 +1,7 @@
 import { describe, it, expect, beforeEach, afterAll } from "vitest";
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
-import * as schema from "../../db/schema.js";
-import { setupFTS } from "../../db/fts.js";
+import { createTestDb } from "../../test-utils.js";
 import {
   createItem,
   getItem,
@@ -14,49 +13,6 @@ import {
   isValidTypeStatus,
   getAutoMappedStatus,
 } from "../items.js";
-
-function createTestDb() {
-  const sqlite = new Database(":memory:");
-  sqlite.pragma("journal_mode = WAL");
-
-  sqlite.exec(`
-    CREATE TABLE items (
-      id TEXT PRIMARY KEY,
-      type TEXT NOT NULL DEFAULT 'note',
-      title TEXT NOT NULL,
-      content TEXT DEFAULT '',
-      status TEXT NOT NULL DEFAULT 'fleeting',
-      priority TEXT,
-      due TEXT,
-      tags TEXT NOT NULL DEFAULT '[]',
-      origin TEXT DEFAULT '',
-      source TEXT DEFAULT NULL,
-      aliases TEXT NOT NULL DEFAULT '[]',
-      linked_note_id TEXT DEFAULT NULL,
-      created TEXT NOT NULL,
-      modified TEXT NOT NULL
-    );
-    CREATE INDEX idx_items_status ON items(status);
-    CREATE INDEX idx_items_type ON items(type);
-    CREATE INDEX idx_items_created ON items(created DESC);
-
-    CREATE TABLE share_tokens (
-      id TEXT PRIMARY KEY,
-      item_id TEXT NOT NULL,
-      token TEXT NOT NULL UNIQUE,
-      visibility TEXT NOT NULL DEFAULT 'unlisted',
-      created TEXT NOT NULL,
-      FOREIGN KEY (item_id) REFERENCES items(id) ON DELETE CASCADE
-    );
-    CREATE INDEX idx_share_tokens_token ON share_tokens(token);
-    CREATE INDEX idx_share_tokens_item_id ON share_tokens(item_id);
-  `);
-
-  setupFTS(sqlite);
-
-  const db = drizzle(sqlite, { schema });
-  return { db, sqlite };
-}
 
 describe("Data Access Layer", () => {
   let db: ReturnType<typeof drizzle>;

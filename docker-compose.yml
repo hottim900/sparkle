@@ -18,6 +18,12 @@ services:
       - app-data:/app/data
       # TLS certificates (optional)
       # - ./certs:/app/certs:ro
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/api/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1))"]
+      interval: 30s
+      timeout: 10s
+      start_period: 5s
+      retries: 3
     restart: unless-stopped
 
 volumes:
