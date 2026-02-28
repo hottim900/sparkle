@@ -46,6 +46,7 @@ server/
     line-date.ts        # Natural language date parser (chrono-node zh.hant)
     shares.ts           # Share token CRUD (create, query by token/item, list, revoke)
     render-public-page.ts # SSR HTML rendering (marked, OpenGraph tags, dark mode CSS)
+    health.ts           # Health check (DB ping + disk space via statfs)
   schemas/
     items.ts            # Zod validation schemas (statusEnum, excludeStatus, batch actions)
     shares.ts           # Zod schema for share creation (visibility enum)
@@ -94,6 +95,8 @@ scripts/
   setup-cloudflared.sh  # Cloudflare Tunnel setup (interactive, plain HTTP default)
   setup-backup.sh       # Restic backup one-time setup (interactive)
   backup.sh             # Automated DB backup (cron-compatible)
+  health-monitor.sh     # Health check + LINE alert (cron-compatible, dedup via flag file)
+  error-summary.sh      # Hourly error log summary + LINE alert (journalctl + jq)
   firewall.sh           # iptables setup (atomic all-or-nothing, graceful skip if unavailable)
   firewall-cleanup.sh   # iptables cleanup on service stop
   cloudflared-config.yml.template  # Tunnel config template (plain HTTP default, HTTPS optional)
@@ -156,7 +159,7 @@ npm run dev:server   # Hono on :3000 with tsx watch
 # IMPORTANT: Tests require node v22 (better-sqlite3 native module is incompatible with v24)
 nvm use 22
 
-# Tests (504 tests, 19 files — server 463 + frontend 41)
+# Tests (511 tests, 20 files — server 470 + frontend 41)
 npx vitest run                # Run all tests
 npx vitest run --coverage     # With coverage (needs @vitest/coverage-v8)
 npx vitest                    # Watch mode
@@ -207,7 +210,7 @@ journalctl -u sparkle -f
 
 ### Environment Variables (.env)
 
-Copy `.env.example` to `.env` and fill in your values. See `.env.example` for all available variables. Key optional variables: `SENTRY_DSN` (error tracking), `TLS_CERT`/`TLS_KEY` (HTTPS), `LINE_CHANNEL_SECRET`/`LINE_CHANNEL_ACCESS_TOKEN` (LINE Bot).
+Copy `.env.example` to `.env` and fill in your values. See `.env.example` for all available variables. Key optional variables: `SENTRY_DSN` (error tracking), `TLS_CERT`/`TLS_KEY` (HTTPS), `LINE_CHANNEL_SECRET`/`LINE_CHANNEL_ACCESS_TOKEN` (LINE Bot), `LINE_ADMIN_USER_ID` (monitoring alerts).
 
 ### HTTPS (mkcert) — Optional
 
@@ -241,6 +244,16 @@ Requires `iptables` package: `sudo apt install -y iptables`
 - Env vars: `RESTIC_REPOSITORY` (default `~/sparkle-backups`), `RESTIC_PASSWORD_FILE` (required), `HEALTHCHECK_URL` (optional)
 - Suggested cron: `0 3 * * *` (daily at 3 AM)
 - Restore: `restic restore latest --tag sparkle --target /tmp/sparkle-restore` → `gunzip` → stop service → copy DB → remove stale WAL/SHM → `chown` → start service
+
+### Monitoring (LINE Push Alerts)
+
+- `scripts/health-monitor.sh`: Health check via `curl /api/health`. First failure sends LINE alert, subsequent failures suppressed via `/tmp/sparkle-health-alert-sent` flag file. Recovery clears flag and sends recovery notification.
+- `scripts/error-summary.sh`: Scans `journalctl -u sparkle` for pino ERROR (level 50) and FATAL (level 60) in the past hour. Sends LINE push summary if count > 0. Requires `jq`.
+- Both scripts read `LINE_CHANNEL_ACCESS_TOKEN` and `LINE_ADMIN_USER_ID` from `.env`. Missing vars = silent exit.
+- LINE Push Message API: `POST https://api.line.me/v2/bot/message/push` with Bearer token auth
+- Suggested cron:
+  - `*/5 * * * * /home/tim/sparkle/scripts/health-monitor.sh 2>&1 | logger -t sparkle-health`
+  - `0 * * * * /home/tim/sparkle/scripts/error-summary.sh 2>&1 | logger -t sparkle-errors`
 
 ### Cloudflare Tunnel + Access
 
@@ -349,7 +362,7 @@ Schema version tracked in `schema_version` table (version 0→11). Each step is 
 - Performance: gzip/deflate compression via `hono/compress` on all responses with `Vary: Accept-Encoding` for CDN cache correctness. Static assets (`/assets/*`) served with `Cache-Control: immutable` (Vite content-hashed filenames). Frontend uses code splitting — heavy components (ItemDetail, Settings, Dashboard, FleetingTriage, MarkdownPreview) are lazy-loaded via `React.lazy()` with `ErrorBoundary` wrappers for chunk load failure recovery. Vendor chunks split: `ui` (radix + cva), `markdown` (react-markdown + remark-gfm)
 - Logging: pino structured logger (`server/lib/logger.ts`). JSON output in production, pino-pretty in dev. Custom HTTP request logger middleware replaces hono's built-in. Health check requests logged at debug level. All server `console.log/error/warn` replaced with `logger.info/error/warn`.
 - Error tracking: Sentry via `@sentry/node` with official Hono integration. `server/instrument.ts` initializes conditionally (only when `SENTRY_DSN` is set). `Sentry.setupHonoErrorHandler(app)` auto-captures server errors (skips 3xx/4xx). `zodErrorsIntegration` captures structured Zod validation errors. Graceful shutdown flushes pending events via `Sentry.close(2000)`.
-- Security: Content-Security-Policy header on all responses (self-only scripts/fonts/connect, unsafe-inline styles for Tailwind, HTTPS images, frame-ancestors none). Health endpoint (`GET /api/health`) unauthenticated for Docker/orchestrator monitoring.
+- Security: Content-Security-Policy header on all responses (self-only scripts/fonts/connect, unsafe-inline styles for Tailwind, HTTPS images, frame-ancestors none). Health endpoint (`GET /api/health`) unauthenticated for Docker/orchestrator monitoring. Returns `{ status, checks: { db, disk }, uptime }` — HTTP 200 when ok, 503 when degraded (DB unreachable or disk < 100MB).
 - State management: AppContext (`src/lib/app-context.ts`) provides view state, navigation, config, and refresh to child components via `useAppContext()`. Sidebar, BottomNav use context only (0 props). ItemDetail split into sub-components: ItemDetailHeader, ItemContentEditor, LinkedItemsSection.
 - Linting: ESLint 9 flat config with typescript-eslint (recommended), react-hooks plugin, eslint-config-prettier. Test files relaxed (`no-explicit-any` warn, `no-require-imports` off). Unused vars allowed with `_` prefix.
 - Formatting: Prettier (double quotes, trailing commas, 100 char width). Enforced via lint-staged + Husky pre-commit hook. `.prettierignore` excludes dist, mcp-server, data, certs.

@@ -24,8 +24,10 @@ import { webhookRouter } from "./routes/webhook.js";
 import { settingsRouter } from "./routes/settings.js";
 import { sharesRouter } from "./routes/shares.js";
 import { publicRouter } from "./routes/public.js";
-import { db, sqlite } from "./db/index.js";
+import { db, sqlite, DB_PATH } from "./db/index.js";
 import { items } from "./db/schema.js";
+import { checkHealth } from "./lib/health.js";
+import { dirname } from "node:path";
 import { eq } from "drizzle-orm";
 import { getAllTags } from "./lib/items.js";
 import { getObsidianSettings } from "./lib/settings.js";
@@ -151,8 +153,9 @@ app.route("/api/settings", settingsRouter);
 app.route("/api", sharesRouter);
 
 // Health check endpoint (unauthenticated — skipped in auth middleware)
-app.get("/api/health", (c) => {
-  return c.json({ status: "ok" });
+app.get("/api/health", async (c) => {
+  const result = await checkHealth(sqlite, dirname(DB_PATH));
+  return c.json(result, result.status === "ok" ? 200 : 503);
 });
 
 // Tags endpoint (separate from items CRUD to avoid /:id conflict)
