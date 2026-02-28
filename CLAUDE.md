@@ -115,6 +115,15 @@ mcp-server/
       meta.ts             # sparkle_get_stats, sparkle_list_tags
       guide.ts            # sparkle_guide (documentation query by topic)
 
+eslint.config.js        # ESLint 9 flat config (typescript-eslint, react-hooks, prettier compat)
+.prettierrc             # Prettier config (double quotes, trailing commas, 100 char width)
+.prettierignore         # Prettier ignore (dist, node_modules, coverage, data, certs, mcp-server)
+.husky/
+  pre-commit            # CLAUDE.md update warning + lint-staged
+.github/
+  workflows/
+    ci.yml              # GitHub Actions CI (lint, format, type-check, build, test on Node 22)
+
 certs/                  # mkcert TLS certificates (gitignored)
 data/                   # SQLite database (gitignored)
 ```
@@ -134,6 +143,12 @@ npx vitest run                # Run all tests
 npx vitest run --coverage     # With coverage (needs @vitest/coverage-v8)
 npx vitest                    # Watch mode
 # Coverage: server/lib ~97%, server/routes ~94%, frontend 0%
+
+# Linting & formatting
+npm run lint         # ESLint check (src/ + server/)
+npm run lint:fix     # ESLint auto-fix
+npm run format       # Prettier write
+npm run format:check # Prettier check (CI uses this)
 
 # Build — ALWAYS build after frontend changes before committing
 npm run build        # Production frontend → dist/
@@ -302,6 +317,9 @@ Schema version tracked in `schema_version` table (version 0→11). Each step is 
 - Settings API: `GET /api/settings` returns all settings; `PUT /api/settings` accepts partial updates with Zod validation (key whitelist, vault path writability check when enabling)
 - Public sharing: Notes can be shared via token-based URLs (`/s/:token`). SSR HTML pages with marked for Markdown, OpenGraph meta tags, dark mode CSS. Two visibility modes: `unlisted` (link-only) and `public` (listed in `/api/public`). Auth bypass on `/api/public/*` and `/s/*` paths. Share management via authenticated API (`/api/items/:id/share`, `/api/shares`)
 - Performance: gzip/deflate compression via `hono/compress` on all responses with `Vary: Accept-Encoding` for CDN cache correctness. Static assets (`/assets/*`) served with `Cache-Control: immutable` (Vite content-hashed filenames). Frontend uses code splitting — heavy components (ItemDetail, Settings, Dashboard, FleetingTriage, MarkdownPreview) are lazy-loaded via `React.lazy()` with `ErrorBoundary` wrappers for chunk load failure recovery. Vendor chunks split: `ui` (radix + cva), `markdown` (react-markdown + remark-gfm)
+- Linting: ESLint 9 flat config with typescript-eslint (recommended), react-hooks plugin, eslint-config-prettier. Test files relaxed (`no-explicit-any` warn, `no-require-imports` off). Unused vars allowed with `_` prefix.
+- Formatting: Prettier (double quotes, trailing commas, 100 char width). Enforced via lint-staged + Husky pre-commit hook. `.prettierignore` excludes dist, mcp-server, data, certs.
+- CI: GitHub Actions on push/PR to main — lint → format:check → tsc (frontend + server) → build → test. Node 22 pinned.
 
 ## CLAUDE.md Maintenance
 
