@@ -1,4 +1,5 @@
 import type { Stats } from "./stats.js";
+import { logger } from "./logger.js";
 
 export interface ItemLike {
   id: string;
@@ -125,9 +126,9 @@ export async function replyLine(
     });
     if (!res.ok) {
       const body = await res.text();
-      console.error("LINE reply API error:", res.status, body);
+      logger.error({ status: res.status, body }, "LINE reply API error");
     }
   } catch (err) {
-    console.error("Failed to reply LINE message:", err);
+    logger.error({ err }, "Failed to reply LINE message");
   }
 }

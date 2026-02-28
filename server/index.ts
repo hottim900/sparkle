@@ -1,7 +1,8 @@
 import { serve, getRequestListener } from "@hono/node-server";
 import { Hono } from "hono";
 import { serveStatic } from "@hono/node-server/serve-static";
-import { logger } from "hono/logger";
+import { logger } from "./lib/logger.js";
+import { requestLogger } from "./middleware/logger.js";
 import { bodyLimit } from "hono/body-limit";
 import { compress } from "hono/compress";
 import { readFileSync } from "node:fs";
@@ -43,18 +44,22 @@ function shannonEntropy(s: string): number {
 
 const authToken = process.env.AUTH_TOKEN;
 if (!authToken) {
-  console.error("FATAL: AUTH_TOKEN environment variable is not set.");
-  console.error("Generate one with: openssl rand -base64 32");
+  logger.fatal(
+    "AUTH_TOKEN environment variable is not set. Generate one with: openssl rand -base64 32",
+  );
   process.exit(1);
 }
 if (authToken.length < 32) {
-  console.error(`FATAL: AUTH_TOKEN is too short (${authToken.length} chars, minimum 32).`);
-  console.error("Generate one with: openssl rand -base64 32");
+  logger.fatal(
+    "AUTH_TOKEN is too short (%d chars, minimum 32). Generate one with: openssl rand -base64 32",
+    authToken.length,
+  );
   process.exit(1);
 }
 if (shannonEntropy(authToken) < 3.0) {
-  console.error("FATAL: AUTH_TOKEN has insufficient entropy (too predictable).");
-  console.error("Generate one with: openssl rand -base64 32");
+  logger.fatal(
+    "AUTH_TOKEN has insufficient entropy (too predictable). Generate one with: openssl rand -base64 32",
+  );
   process.exit(1);
 }
 
@@ -63,34 +68,45 @@ const lineSecret = process.env.LINE_CHANNEL_SECRET;
 const lineToken = process.env.LINE_CHANNEL_ACCESS_TOKEN;
 if (lineSecret || lineToken) {
   if (!lineSecret) {
-    console.warn(
-      "WARN: LINE_CHANNEL_SECRET is not set (LINE_CHANNEL_ACCESS_TOKEN is set). LINE Bot will not work.",
+    logger.warn(
+      "LINE_CHANNEL_SECRET is not set (LINE_CHANNEL_ACCESS_TOKEN is set). LINE Bot will not work.",
     );
   } else if (lineSecret.length < 20) {
-    console.warn(
-      `WARN: LINE_CHANNEL_SECRET looks too short (${lineSecret.length} chars). Verify your LINE configuration.`,
+    logger.warn(
+      "LINE_CHANNEL_SECRET looks too short (%d chars). Verify your LINE configuration.",
+      lineSecret.length,
     );
   }
   if (!lineToken) {
-    console.warn(
-      "WARN: LINE_CHANNEL_ACCESS_TOKEN is not set (LINE_CHANNEL_SECRET is set). LINE Bot will not work.",
+    logger.warn(
+      "LINE_CHANNEL_ACCESS_TOKEN is not set (LINE_CHANNEL_SECRET is set). LINE Bot will not work.",
     );
   } else if (lineToken.length < 50) {
-    console.warn(
-      `WARN: LINE_CHANNEL_ACCESS_TOKEN looks too short (${lineToken.length} chars). Verify your LINE configuration.`,
+    logger.warn(
+      "LINE_CHANNEL_ACCESS_TOKEN looks too short (%d chars). Verify your LINE configuration.",
+      lineToken.length,
     );
   }
 }
 
 const app = new Hono();
 
-app.use("*", logger());
+app.use("*", requestLogger);
 app.use("*", compress());
 app.use("*", async (c, next) => {
   await next();
   if (!c.res.headers.has("Vary")) {
     c.res.headers.set("Vary", "Accept-Encoding");
   }
+});
+
+// Content-Security-Policy
+app.use("*", async (c, next) => {
+  await next();
+  c.res.headers.set(
+    "Content-Security-Policy",
+    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; connect-src 'self'; worker-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
+  );
 });
 
 // Rate limiting — webhook has its own limiter, applied before auth (webhook skips auth)
@@ -130,6 +146,11 @@ app.route("/api/stats", statsRouter);
 app.route("/api/webhook", webhookRouter);
 app.route("/api/settings", settingsRouter);
 app.route("/api", sharesRouter);
+
+// Health check endpoint (unauthenticated — skipped in auth middleware)
+app.get("/api/health", (c) => {
+  return c.json({ status: "ok" });
+});
 
 // Tags endpoint (separate from items CRUD to avoid /:id conflict)
 app.get("/api/tags", (c) => {
@@ -252,7 +273,7 @@ app.route("/", publicRouter);
 
 // Global error handler
 app.onError((err, c) => {
-  console.error("Unhandled error:", err);
+  logger.error({ err }, "Unhandled error");
   return c.json({ error: "Internal server error" }, 500);
 });
 
@@ -288,11 +309,11 @@ if (process.env.TLS_CERT && process.env.TLS_KEY) {
   const key = readFileSync(process.env.TLS_KEY);
   httpServer = createServer({ cert, key }, getRequestListener(app.fetch));
   httpServer.listen(port, host, () => {
-    console.log(`Server running on https://${host}:${port}`);
+    logger.info(`Server running on https://${host}:${port}`);
   });
 } else {
   httpServer = serve({ fetch: app.fetch, port, hostname: host }, (info) => {
-    console.log(`Server running on http://${info.address}:${info.port}`);
+    logger.info(`Server running on http://${info.address}:${info.port}`);
   });
 }
 

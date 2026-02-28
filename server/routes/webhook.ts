@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import crypto from "node:crypto";
 import { safeCompare } from "../lib/safe-compare.js";
+import { logger } from "../lib/logger.js";
 import { db, sqlite } from "../db/index.js";
 import {
   createItem,
@@ -44,7 +45,7 @@ webhookRouter.post("/line", async (c) => {
   const channelToken = process.env.LINE_CHANNEL_ACCESS_TOKEN;
 
   if (!channelSecret || !channelToken) {
-    console.error("LINE credentials not configured");
+    logger.error("LINE credentials not configured");
     return c.json({ error: "LINE not configured" }, 500);
   }
 
@@ -530,7 +531,7 @@ webhookRouter.post("/line", async (c) => {
           const priorityLabel = cmd.parsed.priority === "high" ? " [高優先]" : "";
           reply = `✅ 已存入（${typeLabel}${priorityLabel}）\n${item.title}`;
         } catch (err) {
-          console.error("Failed to create item from LINE:", err);
+          logger.error({ err }, "Failed to create item from LINE");
           await replyLine(channelToken, event.replyToken, "❌ 儲存失敗，請稍後再試");
           continue;
         }

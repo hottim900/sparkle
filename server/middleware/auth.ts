@@ -1,12 +1,14 @@
 import type { Context, Next } from "hono";
 import { safeCompare } from "../lib/safe-compare.js";
+import { logger } from "../lib/logger.js";
 
 export async function authMiddleware(c: Context, next: Next) {
   const pathname = c.req.path;
   if (
     pathname.startsWith("/api/webhook/") ||
     pathname === "/api/public" ||
-    pathname.startsWith("/api/public/")
+    pathname.startsWith("/api/public/") ||
+    pathname === "/api/health"
   ) {
     return next();
   }
@@ -14,7 +16,7 @@ export async function authMiddleware(c: Context, next: Next) {
   const authToken = process.env.AUTH_TOKEN;
 
   if (!authToken) {
-    console.warn("AUTH_TOKEN not set — all requests will be rejected");
+    logger.warn("AUTH_TOKEN not set — all requests will be rejected");
     return c.json({ error: "Server misconfigured: no auth token set" }, 500);
   }
 
