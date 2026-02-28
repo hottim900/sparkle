@@ -78,13 +78,14 @@ src/
     fleeting-triage.tsx  # Fleeting note triage mode (發展/進行/封存/保留)
     offline-indicator.tsx
     install-prompt.tsx   # PWA install banner
-    __tests__/           # Frontend component tests (Testing Library + jsdom)
+    __tests__/           # Frontend component tests (20 files, Testing Library + jsdom)
   lib/
     api.ts              # API client (auto-logout on 401, shares API)
     app-context.ts      # AppContext + useAppContext hook (view, nav, config state)
     types.ts            # TypeScript interfaces + ViewType + ShareToken types
   hooks/
     use-keyboard-shortcuts.ts  # N=new, /=search, Esc=close
+    __tests__/           # Hook tests
   test-setup.ts         # Testing Library jest-dom setup
   test-utils.tsx        # renderWithContext helper for component tests
   sw.ts                 # Service worker (offline capture queue)
@@ -357,7 +358,7 @@ Schema version tracked in `schema_version` table (version 0→11). Each step is 
 - Aliases stored as JSON array string in SQLite
 - Timestamps: ISO 8601 strings
 - Database: SQLite WAL mode, FTS5 trigram tokenizer for search (supports Chinese)
-- Tests: Vitest with projects config (server=node, frontend=jsdom). Server: in-memory SQLite, mock db module with vi.mock, shared `createTestDb()` in `server/test-utils.ts`. Frontend: Testing Library + jest-dom, `renderWithContext()` helper in `src/test-utils.tsx` for components using AppContext. E2E: Playwright (Chromium-only) against production build (`dist/`), Hono server on port 3456 with temp SQLite DB (`/tmp/sparkle-e2e-test.db`), auth via storageState. 7 tests covering login, note/todo creation, search, item detail. Test files excluded from tsconfig (both `tsconfig.json` and `tsconfig.server.json`) — Vitest handles test file type-checking via its own config.
+- Tests: Vitest with projects config (server=node, frontend=jsdom). Server: in-memory SQLite, mock db module with vi.mock, shared `createTestDb()` in `server/test-utils.ts`. Frontend: Testing Library + jest-dom + userEvent, `renderWithContext()` helper in `src/test-utils.tsx` for components using AppContext. All frontend components and hooks tested (20 test files, 190 tests). Coverage: ~84% statements, ~85% branches; thresholds enforced in CI (80% statements, 75% branches). Coverage excludes: shadcn/ui, api.ts (always mocked), App.tsx, sw.ts. E2E: Playwright (Chromium-only) against production build (`dist/`), Hono server on port 3456 with temp SQLite DB (`/tmp/sparkle-e2e-test.db`), auth via storageState. 7 tests covering login, note/todo creation, search, item detail. Test files excluded from tsconfig (both `tsconfig.json` and `tsconfig.server.json`) — Vitest handles test file type-checking via its own config.
 - Obsidian export: .md with YAML frontmatter, local time (no TZ suffix), written to vault path. Config stored in `settings` table, read via `getObsidianSettings()`. `exportToObsidian(item, config)` is a pure function (no env dependency).
 - Settings API: `GET /api/settings` returns all settings; `PUT /api/settings` accepts partial updates with Zod validation (key whitelist, vault path writability check when enabling)
 - Public sharing: Notes can be shared via token-based URLs (`/s/:token`). SSR HTML pages with marked for Markdown, OpenGraph meta tags, dark mode CSS. Two visibility modes: `unlisted` (link-only) and `public` (listed in `/api/public`). Auth bypass on `/api/public/*` and `/s/*` paths. Share management via authenticated API (`/api/items/:id/share`, `/api/shares`)
@@ -368,7 +369,7 @@ Schema version tracked in `schema_version` table (version 0→11). Each step is 
 - State management: AppContext (`src/lib/app-context.ts`) provides view state, navigation, config, and refresh to child components via `useAppContext()`. Sidebar, BottomNav use context only (0 props). ItemDetail split into sub-components: ItemDetailHeader, ItemContentEditor, LinkedItemsSection.
 - Linting: ESLint 9 flat config with typescript-eslint (recommended), react-hooks plugin, eslint-config-prettier. Test files relaxed (`no-explicit-any` warn, `no-require-imports` off). Unused vars allowed with `_` prefix.
 - Formatting: Prettier (double quotes, trailing commas, 100 char width). Enforced via lint-staged + Husky pre-commit hook. `.prettierignore` excludes dist, mcp-server, data, certs.
-- CI: GitHub Actions on push/PR to main — npm audit → lint → format:check → tsc (frontend + server) → build → unit test → E2E (Playwright Chromium). Artifacts: playwright-report + test-results (7 days). Node 22 pinned. Job timeout: 15 minutes.
+- CI: GitHub Actions on push/PR to main — npm audit → lint → format:check → tsc (frontend + server) → build → unit test with coverage (thresholds enforced) → E2E (Playwright Chromium). Artifacts: playwright-report + test-results (7 days). Node 22 pinned. Job timeout: 15 minutes.
 - CD: Auto-deploy on main push via `deploy.yml` (workflow_run trigger, self-hosted runner in WSL2). Steps: git pull → npm ci → build → restart → health check (retry loop, 5 attempts).
 - Dependabot: weekly npm updates (root + mcp-server) + GitHub Actions version updates. Dev dependency minor/patch grouped, production patch-only grouped. Config at `.github/dependabot.yml`.
 - Commit conventions: commitlint with `@commitlint/config-conventional`. Enforced via `.husky/commit-msg` hook. Allowed types: feat, fix, docs, chore, refactor, test, perf, ci, build, style, revert.
