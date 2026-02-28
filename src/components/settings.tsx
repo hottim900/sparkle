@@ -1,7 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { useTheme } from "next-themes";
 import { toast } from "sonner";
-import { getSettings, updateSettings, exportData, importData, listShares, revokeShare } from "@/lib/api";
+import {
+  getSettings,
+  updateSettings,
+  exportData,
+  importData,
+  listShares,
+  revokeShare,
+} from "@/lib/api";
 import type { SettingsResponse, ShareToken } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -57,10 +64,7 @@ export function Settings({ onSettingsChanged }: SettingsProps) {
 
     async function load() {
       try {
-        const [settingsData, sharesData] = await Promise.all([
-          getSettings(),
-          listShares(),
-        ]);
+        const [settingsData, sharesData] = await Promise.all([getSettings(), listShares()]);
         if (cancelled) return;
         setSettings(settingsData);
         setEnabled(settingsData.obsidian_enabled === "true");
@@ -191,9 +195,7 @@ export function Settings({ onSettingsChanged }: SettingsProps) {
         <section className="space-y-4">
           <div className="flex items-center gap-2">
             <ExternalLink className="h-4 w-4 text-muted-foreground" />
-            <h2 className="text-sm font-semibold text-muted-foreground">
-              Obsidian 匯出
-            </h2>
+            <h2 className="text-sm font-semibold text-muted-foreground">Obsidian 匯出</h2>
           </div>
 
           <div className="border rounded-lg p-4 space-y-4">
@@ -201,9 +203,7 @@ export function Settings({ onSettingsChanged }: SettingsProps) {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium">啟用 Obsidian 匯出</p>
-                <p className="text-xs text-muted-foreground">
-                  允許將永久筆記匯出到 Obsidian vault
-                </p>
+                <p className="text-xs text-muted-foreground">允許將永久筆記匯出到 Obsidian vault</p>
               </div>
               <Button
                 variant={enabled ? "default" : "outline"}
@@ -216,25 +216,19 @@ export function Settings({ onSettingsChanged }: SettingsProps) {
 
             {/* Vault path */}
             <div>
-              <label className="text-sm text-muted-foreground block mb-1">
-                Vault 路徑
-              </label>
+              <label className="text-sm text-muted-foreground block mb-1">Vault 路徑</label>
               <Input
                 value={vaultPath}
                 onChange={(e) => setVaultPath(e.target.value)}
                 placeholder="/home/user/obsidian-vault"
                 disabled={!enabled}
               />
-              <p className="text-xs text-muted-foreground mt-1">
-                伺服器端檔案路徑
-              </p>
+              <p className="text-xs text-muted-foreground mt-1">伺服器端檔案路徑</p>
             </div>
 
             {/* Inbox folder */}
             <div>
-              <label className="text-sm text-muted-foreground block mb-1">
-                收件匣資料夾
-              </label>
+              <label className="text-sm text-muted-foreground block mb-1">收件匣資料夾</label>
               <Input
                 value={inboxFolder}
                 onChange={(e) => setInboxFolder(e.target.value)}
@@ -245,14 +239,8 @@ export function Settings({ onSettingsChanged }: SettingsProps) {
 
             {/* Export mode */}
             <div>
-              <label className="text-sm text-muted-foreground block mb-1">
-                匯出模式
-              </label>
-              <Select
-                value={exportMode}
-                onValueChange={setExportMode}
-                disabled={!enabled}
-              >
+              <label className="text-sm text-muted-foreground block mb-1">匯出模式</label>
+              <Select value={exportMode} onValueChange={setExportMode} disabled={!enabled}>
                 <SelectTrigger className="w-full">
                   <SelectValue />
                 </SelectTrigger>
@@ -265,11 +253,7 @@ export function Settings({ onSettingsChanged }: SettingsProps) {
 
             {/* Save button */}
             <div className="flex justify-end">
-              <Button
-                onClick={handleSave}
-                disabled={saving || !hasChanges}
-                className="gap-1.5"
-              >
+              <Button onClick={handleSave} disabled={saving || !hasChanges} className="gap-1.5">
                 {saving ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
@@ -285,9 +269,7 @@ export function Settings({ onSettingsChanged }: SettingsProps) {
         <section className="space-y-4">
           <div className="flex items-center gap-2">
             <Share2 className="h-4 w-4 text-muted-foreground" />
-            <h2 className="text-sm font-semibold text-muted-foreground">
-              分享管理
-            </h2>
+            <h2 className="text-sm font-semibold text-muted-foreground">分享管理</h2>
           </div>
 
           <div className="border rounded-lg p-4">
@@ -296,25 +278,18 @@ export function Settings({ onSettingsChanged }: SettingsProps) {
                 <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
               </div>
             ) : shares.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-4">
-                尚無分享的筆記
-              </p>
+              <p className="text-sm text-muted-foreground text-center py-4">尚無分享的筆記</p>
             ) : (
               <div className="space-y-2">
                 {shares.map((share) => (
-                  <div
-                    key={share.id}
-                    className="flex items-center gap-2 rounded-md border p-2"
-                  >
+                  <div key={share.id} className="flex items-center gap-2 rounded-md border p-2">
                     {share.visibility === "public" ? (
                       <Globe className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                     ) : (
                       <EyeOff className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                     )}
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm truncate">
-                        {share.item_title ?? "未知筆記"}
-                      </p>
+                      <p className="text-sm truncate">{share.item_title ?? "未知筆記"}</p>
                       <div className="flex items-center gap-1.5 mt-0.5">
                         <Badge variant="secondary" className="text-xs">
                           {share.visibility === "public" ? "公開" : "僅限連結"}
@@ -358,9 +333,7 @@ export function Settings({ onSettingsChanged }: SettingsProps) {
         <section className="space-y-4">
           <div className="flex items-center gap-2">
             <SettingsIcon className="h-4 w-4 text-muted-foreground" />
-            <h2 className="text-sm font-semibold text-muted-foreground">
-              一般
-            </h2>
+            <h2 className="text-sm font-semibold text-muted-foreground">一般</h2>
           </div>
 
           <div className="border rounded-lg p-4 space-y-2">
@@ -407,7 +380,6 @@ export function Settings({ onSettingsChanged }: SettingsProps) {
                 }
               }}
             />
-
           </div>
         </section>
       </div>

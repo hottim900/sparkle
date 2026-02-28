@@ -28,7 +28,9 @@ export function MarkdownPreview({ content }: MarkdownPreviewProps) {
           );
         },
         blockquote: ({ children }) => (
-          <blockquote className="border-l-4 border-muted-foreground/30 pl-4 my-2 italic text-muted-foreground">{children}</blockquote>
+          <blockquote className="border-l-4 border-muted-foreground/30 pl-4 my-2 italic text-muted-foreground">
+            {children}
+          </blockquote>
         ),
         table: ({ children }) => (
           <div className="overflow-x-auto my-2">
@@ -39,12 +41,17 @@ export function MarkdownPreview({ content }: MarkdownPreviewProps) {
         th: ({ children }) => <th className="text-left p-2 font-semibold">{children}</th>,
         td: ({ children }) => <td className="p-2 border-b border-border">{children}</td>,
         a: ({ href, children }) => (
-          <a href={href} target="_blank" rel="noopener noreferrer" className="text-primary underline hover:no-underline">{children}</a>
+          <a
+            href={href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-primary underline hover:no-underline"
+          >
+            {children}
+          </a>
         ),
         hr: () => <hr className="my-4 border-border" />,
-        img: ({ src, alt }) => (
-          <img src={src} alt={alt} className="max-w-full rounded-md my-2" />
-        ),
+        img: ({ src, alt }) => <img src={src} alt={alt} className="max-w-full rounded-md my-2" />,
       }}
     >
       {content}

@@ -17,7 +17,21 @@
     "build": "vite build",
     "start": "NODE_ENV=production node --env-file=.env --import tsx server/index.ts",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "lint": "eslint 'src/**/*.{ts,tsx}' 'server/**/*.ts'",
+    "lint:fix": "eslint --fix 'src/**/*.{ts,tsx}' 'server/**/*.ts'",
+    "format": "prettier --write 'src/**/*.{ts,tsx}' 'server/**/*.ts' '*.{js,json}'",
+    "format:check": "prettier --check 'src/**/*.{ts,tsx}' 'server/**/*.ts' '*.{js,json}'",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "*.{ts,tsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{js,json,css}": [
+      "prettier --write"
+    ]
   },
   "dependencies": {
     "@hono/node-server": "^1.13.8",
@@ -43,6 +57,7 @@
     "zod": "^3.24.2"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.3",
     "@tailwindcss/vite": "^4.0.0",
     "@types/better-sqlite3": "^7.6.12",
     "@types/node": "^22.10.7",
@@ -52,12 +67,23 @@
     "@vitejs/plugin-react": "^4.3.4",
     "@vitest/coverage-v8": "^3.2.4",
     "autoprefixer": "^10.4.20",
-    "drizzle-kit": "^0.30.4",
+    "drizzle-kit": "^0.31.9",
+    "eslint": "^9.39.3",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.2.7",
     "postcss": "^8.5.1",
+    "prettier": "^3.8.1",
     "tailwindcss": "^4.0.0",
     "typescript": "^5.7.3",
+    "typescript-eslint": "^8.56.1",
     "vite": "^6.0.7",
     "vite-plugin-pwa": "^1.2.0",
     "vitest": "^3.0.4"
+  },
+  "overrides": {
+    "serialize-javascript": "^7.0.3",
+    "esbuild": ">=0.25.0"
   }
 }

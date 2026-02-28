@@ -3,7 +3,15 @@ export interface Item {
   type: "note" | "todo" | "scratch";
   title: string;
   content: string;
-  status: "fleeting" | "developing" | "permanent" | "exported" | "active" | "done" | "draft" | "archived";
+  status:
+    | "fleeting"
+    | "developing"
+    | "permanent"
+    | "exported"
+    | "active"
+    | "done"
+    | "draft"
+    | "archived";
   priority: "low" | "medium" | "high" | null;
   due: string | null;
   tags: string; // JSON array string from server

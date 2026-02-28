@@ -13,20 +13,20 @@ function escapeHtml(str: string): string {
 // Strip markdown syntax for plain text description (OpenGraph)
 function stripMarkdown(md: string, maxLen: number): string {
   return md
-    .replace(/#{1,6}\s+/g, "")        // headings
-    .replace(/\*\*(.+?)\*\*/g, "$1")  // bold
-    .replace(/\*(.+?)\*/g, "$1")      // italic
-    .replace(/__(.+?)__/g, "$1")      // bold
-    .replace(/_(.+?)_/g, "$1")        // italic
-    .replace(/`(.+?)`/g, "$1")        // inline code
-    .replace(/```[\s\S]*?```/g, "")   // code blocks
+    .replace(/#{1,6}\s+/g, "") // headings
+    .replace(/\*\*(.+?)\*\*/g, "$1") // bold
+    .replace(/\*(.+?)\*/g, "$1") // italic
+    .replace(/__(.+?)__/g, "$1") // bold
+    .replace(/_(.+?)_/g, "$1") // italic
+    .replace(/`(.+?)`/g, "$1") // inline code
+    .replace(/```[\s\S]*?```/g, "") // code blocks
     .replace(/\[(.+?)\]\(.+?\)/g, "$1") // links
-    .replace(/!\[.*?\]\(.+?\)/g, "")  // images
-    .replace(/>\s+/g, "")             // blockquotes
-    .replace(/[-*+]\s+/g, "")         // list items
-    .replace(/\d+\.\s+/g, "")         // ordered list items
-    .replace(/\n{2,}/g, " ")          // multiple newlines
-    .replace(/\n/g, " ")              // single newlines
+    .replace(/!\[.*?\]\(.+?\)/g, "") // images
+    .replace(/>\s+/g, "") // blockquotes
+    .replace(/[-*+]\s+/g, "") // list items
+    .replace(/\d+\.\s+/g, "") // ordered list items
+    .replace(/\n{2,}/g, " ") // multiple newlines
+    .replace(/\n/g, " ") // single newlines
     .trim()
     .slice(0, maxLen);
 }
@@ -47,7 +47,6 @@ function formatDate(iso: string): string {
 
 // Configure marked: disable raw HTML in output for XSS safety
 const renderer = new marked.Renderer();
-const originalHtml = renderer.html.bind(renderer);
 renderer.html = function ({ text }: { text: string }) {
   return `<p>${escapeHtml(text)}</p>`;
 };
@@ -71,9 +70,10 @@ export function renderPublicPage(data: PublicPageData): string {
   const renderedContent = marked.parse(data.content) as string;
   const dateFormatted = formatDate(data.created);
 
-  const tagsHtml = data.tags.length > 0
-    ? `<div class="tags">${data.tags.map((t) => `<span class="tag">${escapeHtml(t)}</span>`).join("")}</div>`
-    : "";
+  const tagsHtml =
+    data.tags.length > 0
+      ? `<div class="tags">${data.tags.map((t) => `<span class="tag">${escapeHtml(t)}</span>`).join("")}</div>`
+      : "";
 
   return `<!DOCTYPE html>
 <html lang="zh-TW">

@@ -63,11 +63,19 @@ describe("parseCommand", () => {
   });
 
   it("parses '!due 2 2026-03-15' as due command", () => {
-    expect(parseCommand("!due 2 2026-03-15")).toEqual({ type: "due", index: 2, dateInput: "2026-03-15" });
+    expect(parseCommand("!due 2 2026-03-15")).toEqual({
+      type: "due",
+      index: 2,
+      dateInput: "2026-03-15",
+    });
   });
 
   it("parses '!tag 1 工作 重要' as tag command", () => {
-    expect(parseCommand("!tag 1 工作 重要")).toEqual({ type: "tag", index: 1, tags: ["工作", "重要"] });
+    expect(parseCommand("!tag 1 工作 重要")).toEqual({
+      type: "tag",
+      index: 1,
+      tags: ["工作", "重要"],
+    });
   });
 
   it("parses '!tag 2 個人' as tag command with single tag", () => {
@@ -142,20 +150,40 @@ describe("parseCommand", () => {
   // Priority command
   describe("priority command", () => {
     it("parses !priority N high", () => {
-      expect(parseCommand("!priority 1 high")).toEqual({ type: "priority", index: 1, priority: "high" });
+      expect(parseCommand("!priority 1 high")).toEqual({
+        type: "priority",
+        index: 1,
+        priority: "high",
+      });
     });
 
     it("parses !priority N medium", () => {
-      expect(parseCommand("!priority 2 medium")).toEqual({ type: "priority", index: 2, priority: "medium" });
+      expect(parseCommand("!priority 2 medium")).toEqual({
+        type: "priority",
+        index: 2,
+        priority: "medium",
+      });
     });
 
     it("parses !priority N low", () => {
-      expect(parseCommand("!priority 3 low")).toEqual({ type: "priority", index: 3, priority: "low" });
+      expect(parseCommand("!priority 3 low")).toEqual({
+        type: "priority",
+        index: 3,
+        priority: "low",
+      });
     });
 
     it("parses !priority N none to clear", () => {
-      expect(parseCommand("!priority 1 none")).toEqual({ type: "priority", index: 1, priority: null });
-      expect(parseCommand("!priority 1 清除")).toEqual({ type: "priority", index: 1, priority: null });
+      expect(parseCommand("!priority 1 none")).toEqual({
+        type: "priority",
+        index: 1,
+        priority: null,
+      });
+      expect(parseCommand("!priority 1 清除")).toEqual({
+        type: "priority",
+        index: 1,
+        priority: null,
+      });
     });
 
     it("rejects invalid priority level", () => {
@@ -175,7 +203,11 @@ describe("parseCommand", () => {
     });
 
     it("parses !untag N with multiple tags", () => {
-      expect(parseCommand("!untag 2 work urgent")).toEqual({ type: "untag", index: 2, tags: ["work", "urgent"] });
+      expect(parseCommand("!untag 2 work urgent")).toEqual({
+        type: "untag",
+        index: 2,
+        tags: ["work", "urgent"],
+      });
     });
 
     it("rejects missing parameters", () => {
@@ -195,7 +227,11 @@ describe("parseCommand", () => {
     });
 
     it("parses '!track 2 2026-03-15' as track with date string", () => {
-      expect(parseCommand("!track 2 2026-03-15")).toEqual({ type: "track", index: 2, dateInput: "2026-03-15" });
+      expect(parseCommand("!track 2 2026-03-15")).toEqual({
+        type: "track",
+        index: 2,
+        dateInput: "2026-03-15",
+      });
     });
 
     it("parses '!track' without number as unknown", () => {

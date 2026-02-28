@@ -16,9 +16,7 @@ import {
 // ============================================================
 describe("sanitizeFilename", () => {
   it("replaces forbidden chars with dash", () => {
-    expect(sanitizeFilename('a/b\\c:d*e?"f<g>h|i[j]k#l^m')).toBe(
-      "a-b-c-d-e-f-g-h-i-j-k-l-m",
-    );
+    expect(sanitizeFilename('a/b\\c:d*e?"f<g>h|i[j]k#l^m')).toBe("a-b-c-d-e-f-g-h-i-j-k-l-m");
   });
 
   it("collapses consecutive dashes", () => {
@@ -96,9 +94,7 @@ describe("generateFrontmatter", () => {
   });
 
   it("includes non-empty tags", () => {
-    const fm = generateFrontmatter(
-      makeItem({ tags: '["work","urgent"]' }),
-    );
+    const fm = generateFrontmatter(makeItem({ tags: '["work","urgent"]' }));
     expect(fm).toContain("tags:");
     expect(fm).toContain("  - work");
     expect(fm).toContain("  - urgent");
@@ -110,9 +106,7 @@ describe("generateFrontmatter", () => {
   });
 
   it("includes non-empty aliases", () => {
-    const fm = generateFrontmatter(
-      makeItem({ aliases: '["Alias One","Alias Two"]' }),
-    );
+    const fm = generateFrontmatter(makeItem({ aliases: '["Alias One","Alias Two"]' }));
     expect(fm).toContain("aliases:");
     expect(fm).toContain('  - "Alias One"');
     expect(fm).toContain('  - "Alias Two"');
@@ -124,9 +118,7 @@ describe("generateFrontmatter", () => {
   });
 
   it("includes non-null source", () => {
-    const fm = generateFrontmatter(
-      makeItem({ source: "https://example.com" }),
-    );
+    const fm = generateFrontmatter(makeItem({ source: "https://example.com" }));
     expect(fm).toContain('source: "https://example.com"');
   });
 
@@ -224,10 +216,7 @@ describe("exportToObsidian", () => {
     const result = exportToObsidian(item, config);
 
     expect(result.path).toBe("nested/deep/folder/Nested.md");
-    const content = readFileSync(
-      join(tempDir, "nested/deep/folder", "Nested.md"),
-      "utf-8",
-    );
+    const content = readFileSync(join(tempDir, "nested/deep/folder", "Nested.md"), "utf-8");
     expect(content).toContain("# Nested");
   });
 
@@ -259,10 +248,7 @@ describe("exportToObsidian", () => {
     const result = exportToObsidian(item, config);
 
     expect(result.path).toBe("0_Inbox/Overwrite Me.md");
-    const content = readFileSync(
-      join(inboxDir, "Overwrite Me.md"),
-      "utf-8",
-    );
+    const content = readFileSync(join(inboxDir, "Overwrite Me.md"), "utf-8");
     expect(content).toContain("# Overwrite Me");
     expect(content).not.toContain("old content");
   });
@@ -276,8 +262,6 @@ describe("exportToObsidian", () => {
   it("throws when vaultPath is empty", () => {
     config.vaultPath = "";
     const item = makeItem({ title: "No Vault" });
-    expect(() => exportToObsidian(item, config)).toThrow(
-      "Obsidian vault path is not configured",
-    );
+    expect(() => exportToObsidian(item, config)).toThrow("Obsidian vault path is not configured");
   });
 });

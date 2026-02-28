@@ -41,10 +41,7 @@ class ApiClientError extends Error {
   }
 }
 
-async function request<T>(
-  path: string,
-  options: RequestInit = {},
-): Promise<T> {
+async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = getToken();
   const headers: Record<string, string> = {
     ...((options.headers as Record<string, string>) ?? {}),
@@ -69,10 +66,7 @@ async function request<T>(
       window.location.reload();
     }
     const body = await res.json().catch(() => ({ error: "Request failed" }));
-    throw new ApiClientError(
-      (body as { error?: string }).error ?? "Request failed",
-      res.status,
-    );
+    throw new ApiClientError((body as { error?: string }).error ?? "Request failed", res.status);
   }
 
   return res.json() as Promise<T>;
@@ -90,8 +84,13 @@ export async function listItems(params?: {
   excludeStatus?: string[];
 }): Promise<ListItemsResponse> {
   const validStatuses = new Set([
-    "fleeting", "developing", "permanent", "exported",
-    "active", "done", "archived",
+    "fleeting",
+    "developing",
+    "permanent",
+    "exported",
+    "active",
+    "done",
+    "archived",
   ]);
   const search = new URLSearchParams();
   if (params?.status && validStatuses.has(params.status)) search.set("status", params.status);
@@ -162,10 +161,13 @@ export async function batchAction(
   ids: string[],
   action: string,
 ): Promise<{ affected: number; skipped: number; errors?: { id: string; error: string }[] }> {
-  return request<{ affected: number; skipped: number; errors?: { id: string; error: string }[] }>("/items/batch", {
-    method: "POST",
-    body: JSON.stringify({ ids, action }),
-  });
+  return request<{ affected: number; skipped: number; errors?: { id: string; error: string }[] }>(
+    "/items/batch",
+    {
+      method: "POST",
+      body: JSON.stringify({ ids, action }),
+    },
+  );
 }
 
 // Export to Obsidian API
@@ -181,10 +183,7 @@ export async function getLinkedTodos(noteId: string): Promise<ListItemsResponse>
 }
 
 // Search API
-export async function searchItemsApi(
-  q: string,
-  limit?: number,
-): Promise<SearchResponse> {
+export async function searchItemsApi(q: string, limit?: number): Promise<SearchResponse> {
   const search = new URLSearchParams({ q });
   if (limit) search.set("limit", String(limit));
   return request<SearchResponse>(`/search?${search}`);
@@ -200,9 +199,7 @@ export async function exportData(): Promise<ExportResponse> {
   return request<ExportResponse>("/export");
 }
 
-export async function importData(data: {
-  items: Item[];
-}): Promise<ImportResponse> {
+export async function importData(data: { items: Item[] }): Promise<ImportResponse> {
   return request<ImportResponse>("/import", {
     method: "POST",
     body: JSON.stringify(data),
@@ -228,9 +225,7 @@ export async function getSettings(): Promise<SettingsResponse> {
   return request<SettingsResponse>("/settings");
 }
 
-export async function updateSettings(
-  data: Partial<SettingsResponse>,
-): Promise<SettingsResponse> {
+export async function updateSettings(data: Partial<SettingsResponse>): Promise<SettingsResponse> {
   return request<SettingsResponse>("/settings", {
     method: "PUT",
     body: JSON.stringify(data),

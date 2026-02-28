@@ -10,25 +10,21 @@ export interface ObsidianSettings {
 /**
  * Get a single setting value by key.
  */
-export function getSetting(
-  sqlite: Database.Database,
-  key: string,
-): string | null {
-  const row = sqlite
-    .prepare("SELECT value FROM settings WHERE key = ?")
-    .get(key) as { value: string } | undefined;
+export function getSetting(sqlite: Database.Database, key: string): string | null {
+  const row = sqlite.prepare("SELECT value FROM settings WHERE key = ?").get(key) as
+    | { value: string }
+    | undefined;
   return row ? row.value : null;
 }
 
 /**
  * Get all settings as a key-value object.
  */
-export function getSettings(
-  sqlite: Database.Database,
-): Record<string, string> {
-  const rows = sqlite
-    .prepare("SELECT key, value FROM settings")
-    .all() as { key: string; value: string }[];
+export function getSettings(sqlite: Database.Database): Record<string, string> {
+  const rows = sqlite.prepare("SELECT key, value FROM settings").all() as {
+    key: string;
+    value: string;
+  }[];
   const result: Record<string, string> = {};
   for (const row of rows) {
     result[row.key] = row.value;
@@ -39,9 +35,7 @@ export function getSettings(
 /**
  * Get Obsidian-specific settings with typed conversions.
  */
-export function getObsidianSettings(
-  sqlite: Database.Database,
-): ObsidianSettings {
+export function getObsidianSettings(sqlite: Database.Database): ObsidianSettings {
   const all = getSettings(sqlite);
   return {
     obsidian_enabled: all.obsidian_enabled === "true",
@@ -54,13 +48,8 @@ export function getObsidianSettings(
 /**
  * Update one or more settings. Uses upsert (INSERT OR REPLACE).
  */
-export function updateSettings(
-  sqlite: Database.Database,
-  updates: Record<string, string>,
-): void {
-  const stmt = sqlite.prepare(
-    "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
-  );
+export function updateSettings(sqlite: Database.Database, updates: Record<string, string>): void {
+  const stmt = sqlite.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)");
   const runAll = sqlite.transaction(() => {
     for (const [key, value] of Object.entries(updates)) {
       stmt.run(key, value);

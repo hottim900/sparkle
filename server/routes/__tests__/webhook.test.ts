@@ -885,7 +885,9 @@ describe("POST /api/webhook/line", () => {
       expect(replyText).toContain("已完成");
 
       // Verify at least one item is now done
-      const doneItems = testSqlite.prepare("SELECT * FROM items WHERE status = 'done'").all() as any[];
+      const doneItems = testSqlite
+        .prepare("SELECT * FROM items WHERE status = 'done'")
+        .all() as any[];
       expect(doneItems.length).toBeGreaterThanOrEqual(1);
     });
 
@@ -923,7 +925,9 @@ describe("POST /api/webhook/line", () => {
       expect(replyText).toContain("已封存");
 
       // Verify at least one inbox item is now archived
-      const archivedItems = testSqlite.prepare("SELECT * FROM items WHERE status = 'archived'").all() as any[];
+      const archivedItems = testSqlite
+        .prepare("SELECT * FROM items WHERE status = 'archived'")
+        .all() as any[];
       expect(archivedItems.length).toBeGreaterThanOrEqual(1);
     });
 
@@ -959,7 +963,9 @@ describe("POST /api/webhook/line", () => {
       expect(replyText).toContain("high");
 
       // Verify at least one item now has high priority
-      const highItems = testSqlite.prepare("SELECT * FROM items WHERE priority = 'high' AND status = 'fleeting'").all() as any[];
+      const highItems = testSqlite
+        .prepare("SELECT * FROM items WHERE priority = 'high' AND status = 'fleeting'")
+        .all() as any[];
       expect(highItems.length).toBeGreaterThanOrEqual(1);
     });
 
@@ -1577,7 +1583,9 @@ describe("POST /api/webhook/line", () => {
       expect(replyText).toContain("upgrade me");
 
       // Verify DB: type changed to note, status auto-mapped to fleeting
-      const item = testSqlite.prepare("SELECT type, status FROM items WHERE id = ?").get("id-u1") as any;
+      const item = testSqlite
+        .prepare("SELECT type, status FROM items WHERE id = ?")
+        .get("id-u1") as any;
       expect(item.type).toBe("note");
       expect(item.status).toBe("fleeting");
     });

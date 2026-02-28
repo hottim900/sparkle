@@ -67,10 +67,7 @@ self.addEventListener("fetch", (event: FetchEvent) => {
   const url = new URL(event.request.url);
 
   // Only intercept POST /api/items for offline queue
-  if (
-    event.request.method === "POST" &&
-    url.pathname === "/api/items"
-  ) {
+  if (event.request.method === "POST" && url.pathname === "/api/items") {
     event.respondWith(
       fetch(event.request.clone()).catch(async () => {
         // Network failed — queue the request

@@ -24,11 +24,7 @@ export class ErrorBoundary extends Component<Props, State> {
       return (
         <div className="flex flex-col items-center justify-center h-full gap-3">
           <p className="text-sm text-muted-foreground">載入元件時發生錯誤</p>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => this.setState({ hasError: false })}
-          >
+          <Button variant="outline" size="sm" onClick={() => this.setState({ hasError: false })}>
             重新載入
           </Button>
         </div>

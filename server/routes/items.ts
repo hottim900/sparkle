@@ -6,7 +6,6 @@ import {
   listItems,
   updateItem,
   deleteItem,
-  getAllTags,
   isValidTypeStatus,
   getAutoMappedStatus,
 } from "../lib/items.js";

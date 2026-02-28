@@ -126,9 +126,7 @@ describe("setupGracefulShutdown", () => {
     vi.advanceTimersByTime(5000);
 
     expect(processExitSpy).toHaveBeenCalledWith(1);
-    expect(consoleErrorSpy).toHaveBeenCalledWith(
-      "Graceful shutdown timed out, forcing exit",
-    );
+    expect(consoleErrorSpy).toHaveBeenCalledWith("Graceful shutdown timed out, forcing exit");
   });
 
   it("still closes DB and exits even if WAL checkpoint fails", () => {
@@ -141,10 +139,7 @@ describe("setupGracefulShutdown", () => {
 
     emitSignal("SIGTERM");
 
-    expect(consoleErrorSpy).toHaveBeenCalledWith(
-      "WAL checkpoint failed:",
-      expect.any(Error),
-    );
+    expect(consoleErrorSpy).toHaveBeenCalledWith("WAL checkpoint failed:", expect.any(Error));
     expect(sqlite.close).toHaveBeenCalledOnce();
     expect(processExitSpy).toHaveBeenCalledWith(0);
   });
@@ -159,10 +154,7 @@ describe("setupGracefulShutdown", () => {
 
     emitSignal("SIGTERM");
 
-    expect(consoleErrorSpy).toHaveBeenCalledWith(
-      "Database close failed:",
-      expect.any(Error),
-    );
+    expect(consoleErrorSpy).toHaveBeenCalledWith("Database close failed:", expect.any(Error));
     expect(processExitSpy).toHaveBeenCalledWith(0);
   });
 });

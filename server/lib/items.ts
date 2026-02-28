@@ -76,14 +76,9 @@ export type ItemWithLinkedInfo = typeof items.$inferSelect & {
   share_visibility: "public" | "unlisted" | null;
 };
 
-function resolveLinkedInfo(
-  db: DB,
-  rows: (typeof items.$inferSelect)[],
-): ItemWithLinkedInfo[] {
+function resolveLinkedInfo(db: DB, rows: (typeof items.$inferSelect)[]): ItemWithLinkedInfo[] {
   // Resolve linked_note_title for todos
-  const linkedIds = rows
-    .map((r) => r.linked_note_id)
-    .filter((id): id is string => id != null);
+  const linkedIds = rows.map((r) => r.linked_note_id).filter((id): id is string => id != null);
 
   const titleMap = new Map<string, string>();
   if (linkedIds.length > 0) {
@@ -99,9 +94,7 @@ function resolveLinkedInfo(
   }
 
   // Resolve linked_todo_count for notes
-  const noteIds = rows
-    .filter((r) => r.type === "note")
-    .map((r) => r.id);
+  const noteIds = rows.filter((r) => r.type === "note").map((r) => r.id);
 
   const countMap = new Map<string, number>();
   if (noteIds.length > 0) {
@@ -112,12 +105,7 @@ function resolveLinkedInfo(
         count: sql<number>`count(*)`,
       })
       .from(items)
-      .where(
-        and(
-          inArray(items.linked_note_id, uniqueNoteIds),
-          sql`${items.status} != 'archived'`,
-        ),
-      )
+      .where(and(inArray(items.linked_note_id, uniqueNoteIds), sql`${items.status} != 'archived'`))
       .groupBy(items.linked_note_id)
       .all();
     for (const c of counts) {
@@ -148,18 +136,13 @@ function resolveLinkedInfo(
 
   return rows.map((row) => ({
     ...row,
-    linked_note_title: row.linked_note_id
-      ? (titleMap.get(row.linked_note_id) ?? null)
-      : null,
+    linked_note_title: row.linked_note_id ? (titleMap.get(row.linked_note_id) ?? null) : null,
     linked_todo_count: row.type === "note" ? (countMap.get(row.id) ?? 0) : 0,
     share_visibility: shareMap.get(row.id) ?? null,
   }));
 }
 
-export function createItem(
-  db: DB,
-  input: Partial<CreateItemInput> & { title: string },
-) {
+export function createItem(db: DB, input: Partial<CreateItemInput> & { title: string }) {
   const now = new Date().toISOString();
   const id = uuidv4();
   const type = input.type ?? "note";
@@ -212,9 +195,7 @@ export function listItems(
     conditions.push(eq(items.status, filters.status as "fleeting"));
   }
   if (filters?.excludeStatus && filters.excludeStatus.length > 0) {
-    conditions.push(
-      notInArray(items.status, filters.excludeStatus as ["fleeting"]),
-    );
+    conditions.push(notInArray(items.status, filters.excludeStatus as ["fleeting"]));
   }
   if (filters?.type) {
     conditions.push(eq(items.type, filters.type as "note"));
@@ -223,9 +204,7 @@ export function listItems(
     conditions.push(eq(items.linked_note_id, filters.linked_note_id));
   }
   if (filters?.tag) {
-    conditions.push(
-      sql`json_each.value = ${filters.tag}`,
-    );
+    conditions.push(sql`json_each.value = ${filters.tag}`);
   }
 
   const limit = filters?.limit ?? 50;
@@ -233,25 +212,28 @@ export function listItems(
   const sortField = filters?.sort ?? "created";
   const sortOrder = filters?.order ?? "desc";
 
-  const sortColumn = sortField === "priority" ? items.priority
-    : sortField === "due" ? items.due
-    : sortField === "modified" ? items.modified
-    : items.created;
+  const sortColumn =
+    sortField === "priority"
+      ? items.priority
+      : sortField === "due"
+        ? items.due
+        : sortField === "modified"
+          ? items.modified
+          : items.created;
   const orderFn = sortOrder === "asc" ? asc : desc;
 
   if (filters?.tag) {
-    const whereClause = conditions.length > 0
-      ? sql`WHERE ${and(...conditions)}`
-      : sql``;
+    const whereClause = conditions.length > 0 ? sql`WHERE ${and(...conditions)}` : sql``;
 
     const countResult = db.all<{ count: number }>(
       sql`SELECT COUNT(DISTINCT items.id) as count FROM items, json_each(items.tags) ${whereClause}`,
     );
     const total = countResult[0]?.count ?? 0;
 
-    const orderSql = sortOrder === "asc"
-      ? sql`ORDER BY items.${sql.raw(sortField)} ASC`
-      : sql`ORDER BY items.${sql.raw(sortField)} DESC`;
+    const orderSql =
+      sortOrder === "asc"
+        ? sql`ORDER BY items.${sql.raw(sortField)} ASC`
+        : sql`ORDER BY items.${sql.raw(sortField)} DESC`;
 
     const rows = db.all<typeof items.$inferSelect>(
       sql`SELECT DISTINCT items.* FROM items, json_each(items.tags) ${whereClause} ${orderSql} LIMIT ${limit} OFFSET ${offset}`,
@@ -359,10 +341,7 @@ export function updateItem(db: DB, id: string, input: UpdateItemInput) {
     }
   }
 
-  db.update(items)
-    .set(updates)
-    .where(eq(items.id, id))
-    .run();
+  db.update(items).set(updates).where(eq(items.id, id)).run();
 
   return getItem(db, id);
 }

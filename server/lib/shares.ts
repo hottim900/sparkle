@@ -35,9 +35,9 @@ export function createShareToken(
   visibility: "unlisted" | "public" = "unlisted",
 ): ShareTokenRow | null {
   // Verify item exists and is a note
-  const item = sqlite
-    .prepare("SELECT id, type FROM items WHERE id = ?")
-    .get(itemId) as { id: string; type: string } | undefined;
+  const item = sqlite.prepare("SELECT id, type FROM items WHERE id = ?").get(itemId) as
+    | { id: string; type: string }
+    | undefined;
 
   if (!item) return null;
   if (item.type !== "note") return null;
@@ -52,15 +52,10 @@ export function createShareToken(
     )
     .run(id, itemId, token, visibility, now);
 
-  return sqlite
-    .prepare("SELECT * FROM share_tokens WHERE id = ?")
-    .get(id) as ShareTokenRow;
+  return sqlite.prepare("SELECT * FROM share_tokens WHERE id = ?").get(id) as ShareTokenRow;
 }
 
-export function getShareByToken(
-  sqlite: Database.Database,
-  token: string,
-): ShareWithItem | null {
+export function getShareByToken(sqlite: Database.Database, token: string): ShareWithItem | null {
   const row = sqlite
     .prepare(
       `SELECT
@@ -109,23 +104,13 @@ export function listPublicShares(sqlite: Database.Database): ShareListItem[] {
     .all() as ShareListItem[];
 }
 
-export function revokeShare(
-  sqlite: Database.Database,
-  shareId: string,
-): boolean {
-  const result = sqlite
-    .prepare("DELETE FROM share_tokens WHERE id = ?")
-    .run(shareId);
+export function revokeShare(sqlite: Database.Database, shareId: string): boolean {
+  const result = sqlite.prepare("DELETE FROM share_tokens WHERE id = ?").run(shareId);
   return result.changes > 0;
 }
 
-export function getSharesByItemId(
-  sqlite: Database.Database,
-  itemId: string,
-): ShareTokenRow[] {
+export function getSharesByItemId(sqlite: Database.Database, itemId: string): ShareTokenRow[] {
   return sqlite
-    .prepare(
-      "SELECT * FROM share_tokens WHERE item_id = ? ORDER BY created DESC",
-    )
+    .prepare("SELECT * FROM share_tokens WHERE item_id = ? ORDER BY created DESC")
     .all(itemId) as ShareTokenRow[];
 }

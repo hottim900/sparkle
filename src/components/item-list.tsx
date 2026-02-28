@@ -1,6 +1,12 @@
 import { useEffect, useState, useCallback } from "react";
 import { listItems, batchAction } from "@/lib/api";
-import { parseItems, type ParsedItem, type ItemStatus, type ItemType, type ViewType } from "@/lib/types";
+import {
+  parseItems,
+  type ParsedItem,
+  type ItemStatus,
+  type ItemType,
+  type ViewType,
+} from "@/lib/types";
 import { ItemCard } from "./item-card";
 import { Button } from "@/components/ui/button";
 import {
@@ -66,11 +72,21 @@ type BatchActionConfig = {
   confirm?: string;
 };
 
-function getBatchActions(view: ViewType, subView?: string, obsidianEnabled?: boolean): BatchActionConfig[] {
+function getBatchActions(
+  view: ViewType,
+  subView?: string,
+  obsidianEnabled?: boolean,
+): BatchActionConfig[] {
   const effectiveView = subView ?? view;
   const universal: BatchActionConfig[] = [
     { action: "archive", label: "封存", icon: <Archive className="h-3.5 w-3.5" /> },
-    { action: "delete", label: "刪除", icon: <Trash2 className="h-3.5 w-3.5" />, variant: "destructive", confirm: "確定要刪除所選項目嗎？此操作無法復原。" },
+    {
+      action: "delete",
+      label: "刪除",
+      icon: <Trash2 className="h-3.5 w-3.5" />,
+      variant: "destructive",
+      confirm: "確定要刪除所選項目嗎？此操作無法復原。",
+    },
   ];
 
   switch (effectiveView) {
@@ -87,7 +103,11 @@ function getBatchActions(view: ViewType, subView?: string, obsidianEnabled?: boo
     case "permanent": {
       const actions: BatchActionConfig[] = [];
       if (obsidianEnabled) {
-        actions.push({ action: "export", label: "匯出", icon: <ExternalLink className="h-3.5 w-3.5" /> });
+        actions.push({
+          action: "export",
+          label: "匯出",
+          icon: <ExternalLink className="h-3.5 w-3.5" />,
+        });
       }
       return [...actions, ...universal];
     }
@@ -98,7 +118,13 @@ function getBatchActions(view: ViewType, subView?: string, obsidianEnabled?: boo
       ];
     case "draft":
       return [
-        { action: "delete", label: "刪除", icon: <Trash2 className="h-3.5 w-3.5" />, variant: "destructive", confirm: "確定要刪除所選項目嗎？此操作無法復原。" },
+        {
+          action: "delete",
+          label: "刪除",
+          icon: <Trash2 className="h-3.5 w-3.5" />,
+          variant: "destructive",
+          confirm: "確定要刪除所選項目嗎？此操作無法復原。",
+        },
         { action: "archive", label: "封存", icon: <Archive className="h-3.5 w-3.5" /> },
       ];
     default:
@@ -152,7 +178,8 @@ export function ItemList({
   const isNoteView = currentView ? noteViews.includes(currentView) : false;
   const isTodoView = currentView ? todoViews.includes(currentView) : false;
   const isScratchView = currentView ? scratchViews.includes(currentView) : false;
-  const sortOptions = (isNoteView || isScratchView) ? baseSortOptions : [...baseSortOptions, dueSortOption];
+  const sortOptions =
+    isNoteView || isScratchView ? baseSortOptions : [...baseSortOptions, dueSortOption];
   const defaultSortIdx = isTodoView ? sortOptions.length - 1 : 0; // todos default to due date
   const safeSortIdx = sortIdx < sortOptions.length ? sortIdx : defaultSortIdx;
   const currentSort = sortOptions[safeSortIdx];
@@ -249,7 +276,9 @@ export function ItemList({
     if (selectedIds.size === 0) return;
 
     if (config.confirm) {
-      const confirmed = window.confirm(config.confirm.replace("所選項目", `所選的 ${selectedIds.size} 個項目`));
+      const confirmed = window.confirm(
+        config.confirm.replace("所選項目", `所選的 ${selectedIds.size} 個項目`),
+      );
       if (!confirmed) return;
     }
 
@@ -258,7 +287,9 @@ export function ItemList({
       const skippedMsg = result.skipped > 0 ? `，跳過 ${result.skipped} 筆` : "";
 
       if (config.action === "export" && result.errors && result.errors.length > 0) {
-        toast.warning(`匯出 ${result.affected} 筆成功，${result.errors.length} 筆失敗${skippedMsg}`);
+        toast.warning(
+          `匯出 ${result.affected} 筆成功，${result.errors.length} 筆失敗${skippedMsg}`,
+        );
       } else {
         toast.success(`已${config.label} ${result.affected} 個項目${skippedMsg}`);
       }
@@ -269,7 +300,8 @@ export function ItemList({
     }
   };
 
-  const activeSubView = currentView === "notes" ? noteSubView : currentView === "todos" ? todoSubView : undefined;
+  const activeSubView =
+    currentView === "notes" ? noteSubView : currentView === "todos" ? todoSubView : undefined;
   const batchActions = getBatchActions(currentView ?? "all", activeSubView, obsidianEnabled);
 
   if (loading && items.length === 0) {
@@ -338,9 +370,7 @@ export function ItemList({
       {renderSubNav()}
       {selectionMode ? (
         <div className="flex items-center gap-2 px-3 py-2 border-b flex-wrap">
-          <span className="text-sm text-muted-foreground">
-            已選 {selectedIds.size} 項
-          </span>
+          <span className="text-sm text-muted-foreground">已選 {selectedIds.size} 項</span>
           <div className="flex-1" />
           <Button variant="ghost" size="xs" onClick={toggleSelectAll}>
             {selectedIds.size === items.length ? "取消全選" : "全選"}
@@ -362,10 +392,7 @@ export function ItemList({
         </div>
       ) : (
         <div className="flex items-center gap-2 px-3 py-2 border-b">
-          <Select
-            value={String(safeSortIdx)}
-            onValueChange={(v) => setSortIdx(Number(v))}
-          >
+          <Select value={String(safeSortIdx)} onValueChange={(v) => setSortIdx(Number(v))}>
             <SelectTrigger className="h-7 w-auto gap-1.5 border-none shadow-none text-muted-foreground text-xs px-2 hover:text-foreground">
               <ArrowUpDown className="h-3 w-3" />
               <SelectValue />
@@ -390,95 +417,95 @@ export function ItemList({
         </div>
       )}
       <div className="divide-y">
-        {(currentView === "all" || currentView === "archived") ? (() => {
-          const notes = items.filter((i) => i.type === "note");
-          const todos = items.filter((i) => i.type === "todo");
-          const scratches = items.filter((i) => i.type === "scratch");
-          return (
-            <>
-              {notes.length > 0 && (
+        {currentView === "all" || currentView === "archived"
+          ? (() => {
+              const notes = items.filter((i) => i.type === "note");
+              const todos = items.filter((i) => i.type === "todo");
+              const scratches = items.filter((i) => i.type === "scratch");
+              return (
                 <>
-                  <div className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-muted-foreground bg-muted/50 sticky top-0 z-10">
-                    <FileText className="h-3.5 w-3.5" />
-                    筆記
-                    <span className="text-muted-foreground/60">({notes.length})</span>
-                  </div>
-                  {notes.map((item) => (
-                    <ItemCard
-                      key={item.id}
-                      item={item}
-                      selected={item.id === selectedId}
-                      onSelect={onSelect}
-                      onNavigate={onNavigate}
-                      onUpdated={fetchItems}
-                      selectionMode={selectionMode}
-                      checked={selectedIds.has(item.id)}
-                      onToggle={toggleSelection}
-                    />
-                  ))}
+                  {notes.length > 0 && (
+                    <>
+                      <div className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-muted-foreground bg-muted/50 sticky top-0 z-10">
+                        <FileText className="h-3.5 w-3.5" />
+                        筆記
+                        <span className="text-muted-foreground/60">({notes.length})</span>
+                      </div>
+                      {notes.map((item) => (
+                        <ItemCard
+                          key={item.id}
+                          item={item}
+                          selected={item.id === selectedId}
+                          onSelect={onSelect}
+                          onNavigate={onNavigate}
+                          onUpdated={fetchItems}
+                          selectionMode={selectionMode}
+                          checked={selectedIds.has(item.id)}
+                          onToggle={toggleSelection}
+                        />
+                      ))}
+                    </>
+                  )}
+                  {todos.length > 0 && (
+                    <>
+                      <div className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-muted-foreground bg-muted/50 sticky top-0 z-10">
+                        <ListTodo className="h-3.5 w-3.5" />
+                        待辦
+                        <span className="text-muted-foreground/60">({todos.length})</span>
+                      </div>
+                      {todos.map((item) => (
+                        <ItemCard
+                          key={item.id}
+                          item={item}
+                          selected={item.id === selectedId}
+                          onSelect={onSelect}
+                          onNavigate={onNavigate}
+                          onUpdated={fetchItems}
+                          selectionMode={selectionMode}
+                          checked={selectedIds.has(item.id)}
+                          onToggle={toggleSelection}
+                        />
+                      ))}
+                    </>
+                  )}
+                  {scratches.length > 0 && (
+                    <>
+                      <div className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-muted-foreground bg-muted/50 sticky top-0 z-10">
+                        <StickyNote className="h-3.5 w-3.5" />
+                        暫存
+                        <span className="text-muted-foreground/60">({scratches.length})</span>
+                      </div>
+                      {scratches.map((item) => (
+                        <ItemCard
+                          key={item.id}
+                          item={item}
+                          selected={item.id === selectedId}
+                          onSelect={onSelect}
+                          onNavigate={onNavigate}
+                          onUpdated={fetchItems}
+                          selectionMode={selectionMode}
+                          checked={selectedIds.has(item.id)}
+                          onToggle={toggleSelection}
+                        />
+                      ))}
+                    </>
+                  )}
                 </>
-              )}
-              {todos.length > 0 && (
-                <>
-                  <div className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-muted-foreground bg-muted/50 sticky top-0 z-10">
-                    <ListTodo className="h-3.5 w-3.5" />
-                    待辦
-                    <span className="text-muted-foreground/60">({todos.length})</span>
-                  </div>
-                  {todos.map((item) => (
-                    <ItemCard
-                      key={item.id}
-                      item={item}
-                      selected={item.id === selectedId}
-                      onSelect={onSelect}
-                      onNavigate={onNavigate}
-                      onUpdated={fetchItems}
-                      selectionMode={selectionMode}
-                      checked={selectedIds.has(item.id)}
-                      onToggle={toggleSelection}
-                    />
-                  ))}
-                </>
-              )}
-              {scratches.length > 0 && (
-                <>
-                  <div className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-muted-foreground bg-muted/50 sticky top-0 z-10">
-                    <StickyNote className="h-3.5 w-3.5" />
-                    暫存
-                    <span className="text-muted-foreground/60">({scratches.length})</span>
-                  </div>
-                  {scratches.map((item) => (
-                    <ItemCard
-                      key={item.id}
-                      item={item}
-                      selected={item.id === selectedId}
-                      onSelect={onSelect}
-                      onNavigate={onNavigate}
-                      onUpdated={fetchItems}
-                      selectionMode={selectionMode}
-                      checked={selectedIds.has(item.id)}
-                      onToggle={toggleSelection}
-                    />
-                  ))}
-                </>
-              )}
-            </>
-          );
-        })() : (
-          items.map((item) => (
-            <ItemCard
-              key={item.id}
-              item={item}
-              selected={item.id === selectedId}
-              onSelect={onSelect}
-              onNavigate={onNavigate}
-              onUpdated={fetchItems}
-              selectionMode={selectionMode}
-              checked={selectedIds.has(item.id)}
-              onToggle={toggleSelection}
-            />
-          ))
-        )}
+              );
+            })()
+          : items.map((item) => (
+              <ItemCard
+                key={item.id}
+                item={item}
+                selected={item.id === selectedId}
+                onSelect={onSelect}
+                onNavigate={onNavigate}
+                onUpdated={fetchItems}
+                selectionMode={selectionMode}
+                checked={selectedIds.has(item.id)}
+                onToggle={toggleSelection}
+              />
+            ))}
         {total > offset + limit && (
           <button
             className="w-full py-3 text-sm text-muted-foreground hover:text-foreground"

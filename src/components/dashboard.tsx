@@ -78,10 +78,7 @@ export function Dashboard({ onViewChange, onSelectItem }: DashboardProps) {
 
     async function load() {
       try {
-        const [statsRes, focusRes] = await Promise.all([
-          getStats(),
-          getFocus(),
-        ]);
+        const [statsRes, focusRes] = await Promise.all([getStats(), getFocus()]);
 
         if (cancelled) return;
 
@@ -127,23 +124,17 @@ export function Dashboard({ onViewChange, onSelectItem }: DashboardProps) {
         <section className="space-y-3">
           <div className="flex items-center gap-2">
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
-            <h2 className="text-sm font-semibold text-muted-foreground">
-              知識庫進度
-            </h2>
+            <h2 className="text-sm font-semibold text-muted-foreground">知識庫進度</h2>
           </div>
 
           {/* Number cards */}
           <div className="grid grid-cols-2 gap-3">
             <div className="border rounded-lg p-4 text-center">
-              <p className="text-2xl font-bold">
-                {stats.exported_this_week}
-              </p>
+              <p className="text-2xl font-bold">{stats.exported_this_week}</p>
               <p className="text-xs text-muted-foreground">本週匯出</p>
             </div>
             <div className="border rounded-lg p-4 text-center">
-              <p className="text-2xl font-bold">
-                {stats.exported_this_month}
-              </p>
+              <p className="text-2xl font-bold">{stats.exported_this_month}</p>
               <p className="text-xs text-muted-foreground">本月匯出</p>
             </div>
           </div>
@@ -178,9 +169,7 @@ export function Dashboard({ onViewChange, onSelectItem }: DashboardProps) {
         <section className="space-y-3">
           <div className="flex items-center gap-2">
             <Target className="h-4 w-4 text-muted-foreground" />
-            <h2 className="text-sm font-semibold text-muted-foreground">
-              今日焦點
-            </h2>
+            <h2 className="text-sm font-semibold text-muted-foreground">今日焦點</h2>
           </div>
 
           {focusItems.length === 0 ? (
@@ -195,16 +184,12 @@ export function Dashboard({ onViewChange, onSelectItem }: DashboardProps) {
                   <button
                     key={item.id}
                     className={`w-full border rounded-lg p-3 text-left hover:bg-accent transition-colors ${
-                      overdue
-                        ? "border-red-300 dark:border-red-800"
-                        : ""
+                      overdue ? "border-red-300 dark:border-red-800" : ""
                     }`}
                     onClick={() => onSelectItem(item)}
                   >
                     <div className="flex items-start justify-between gap-2">
-                      <span className="text-sm font-medium truncate flex-1">
-                        {item.title}
-                      </span>
+                      <span className="text-sm font-medium truncate flex-1">{item.title}</span>
                       <div className="flex items-center gap-1 flex-shrink-0">
                         {item.priority && (
                           <Badge variant={priorityVariant(item.priority)}>
@@ -222,9 +207,7 @@ export function Dashboard({ onViewChange, onSelectItem }: DashboardProps) {
                     {item.due && (
                       <p
                         className={`text-xs mt-1 ${
-                          overdue
-                            ? "text-red-500"
-                            : "text-muted-foreground"
+                          overdue ? "text-red-500" : "text-muted-foreground"
                         }`}
                       >
                         {overdue ? "已逾期 - " : "到期日 "}
@@ -242,9 +225,7 @@ export function Dashboard({ onViewChange, onSelectItem }: DashboardProps) {
         <section className="space-y-3">
           <div className="flex items-center gap-2">
             <Sparkles className="h-4 w-4 text-muted-foreground" />
-            <h2 className="text-sm font-semibold text-muted-foreground">
-              閃念健康度
-            </h2>
+            <h2 className="text-sm font-semibold text-muted-foreground">閃念健康度</h2>
           </div>
 
           <div

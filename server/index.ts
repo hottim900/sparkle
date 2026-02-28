@@ -7,7 +7,11 @@ import { compress } from "hono/compress";
 import { readFileSync } from "node:fs";
 import { createServer } from "node:https";
 import { authMiddleware } from "./middleware/auth.js";
-import { apiRateLimiter, authFailRateLimiter, webhookRateLimiter } from "./middleware/rate-limit.js";
+import {
+  apiRateLimiter,
+  authFailRateLimiter,
+  webhookRateLimiter,
+} from "./middleware/rate-limit.js";
 import { setupGracefulShutdown } from "./lib/shutdown.js";
 import { itemsRouter } from "./routes/items.js";
 import { searchRouter } from "./routes/search.js";
@@ -59,14 +63,22 @@ const lineSecret = process.env.LINE_CHANNEL_SECRET;
 const lineToken = process.env.LINE_CHANNEL_ACCESS_TOKEN;
 if (lineSecret || lineToken) {
   if (!lineSecret) {
-    console.warn("WARN: LINE_CHANNEL_SECRET is not set (LINE_CHANNEL_ACCESS_TOKEN is set). LINE Bot will not work.");
+    console.warn(
+      "WARN: LINE_CHANNEL_SECRET is not set (LINE_CHANNEL_ACCESS_TOKEN is set). LINE Bot will not work.",
+    );
   } else if (lineSecret.length < 20) {
-    console.warn(`WARN: LINE_CHANNEL_SECRET looks too short (${lineSecret.length} chars). Verify your LINE configuration.`);
+    console.warn(
+      `WARN: LINE_CHANNEL_SECRET looks too short (${lineSecret.length} chars). Verify your LINE configuration.`,
+    );
   }
   if (!lineToken) {
-    console.warn("WARN: LINE_CHANNEL_ACCESS_TOKEN is not set (LINE_CHANNEL_SECRET is set). LINE Bot will not work.");
+    console.warn(
+      "WARN: LINE_CHANNEL_ACCESS_TOKEN is not set (LINE_CHANNEL_SECRET is set). LINE Bot will not work.",
+    );
   } else if (lineToken.length < 50) {
-    console.warn(`WARN: LINE_CHANNEL_ACCESS_TOKEN looks too short (${lineToken.length} chars). Verify your LINE configuration.`);
+    console.warn(
+      `WARN: LINE_CHANNEL_ACCESS_TOKEN looks too short (${lineToken.length} chars). Verify your LINE configuration.`,
+    );
   }
 }
 
@@ -198,11 +210,7 @@ app.post("/api/import", async (c) => {
     let updated = 0;
 
     for (const item of importItems) {
-      const existing = db
-        .select()
-        .from(items)
-        .where(eq(items.id, item.id))
-        .get();
+      const existing = db.select().from(items).where(eq(items.id, item.id)).get();
 
       if (existing) {
         db.update(items)
@@ -233,10 +241,7 @@ app.post("/api/import", async (c) => {
     return c.json({ imported, updated });
   } catch (e) {
     if (e instanceof ZodError) {
-      return c.json(
-        { error: e.errors[0]?.message ?? "Validation error" },
-        400,
-      );
+      return c.json({ error: e.errors[0]?.message ?? "Validation error" }, 400);
     }
     throw e;
   }

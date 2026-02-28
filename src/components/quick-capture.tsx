@@ -132,9 +132,7 @@ export function QuickCapture({ currentView, onCreated }: QuickCaptureProps) {
       <form onSubmit={handleSubmit} className="flex gap-2">
         <Input
           placeholder={
-            type === "todo" ? "新增待辦..." :
-            type === "scratch" ? "暫存筆記..." :
-            "快速記錄..."
+            type === "todo" ? "新增待辦..." : type === "scratch" ? "暫存筆記..." : "快速記錄..."
           }
           value={title}
           onChange={(e) => setTitle(e.target.value)}
@@ -149,11 +147,7 @@ export function QuickCapture({ currentView, onCreated }: QuickCaptureProps) {
           onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
           className="shrink-0 md:hidden"
         >
-          {resolvedTheme === "dark" ? (
-            <Sun className="h-4 w-4" />
-          ) : (
-            <Moon className="h-4 w-4" />
-          )}
+          {resolvedTheme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
         </Button>
         <Button
           type="button"
@@ -162,11 +156,7 @@ export function QuickCapture({ currentView, onCreated }: QuickCaptureProps) {
           onClick={() => setExpanded(!expanded)}
           className="shrink-0"
         >
-          {expanded ? (
-            <ChevronUp className="h-4 w-4" />
-          ) : (
-            <ChevronDown className="h-4 w-4" />
-          )}
+          {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
         </Button>
         <Button
           type="submit"
@@ -226,12 +216,7 @@ export function QuickCapture({ currentView, onCreated }: QuickCaptureProps) {
           )}
 
           {type !== "scratch" && (
-            <TagInput
-              tags={selectedTags}
-              allTags={allTags}
-              onAdd={addTag}
-              onRemove={removeTag}
-            />
+            <TagInput tags={selectedTags} allTags={allTags} onAdd={addTag} onRemove={removeTag} />
           )}
         </>
       )}

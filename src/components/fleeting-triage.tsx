@@ -46,7 +46,9 @@ export function FleetingTriage({ onDone }: FleetingTriageProps) {
 
   useEffect(() => {
     fetchFleeting();
-    getTags().then((res) => setAllTags(res.tags)).catch(() => {});
+    getTags()
+      .then((res) => setAllTags(res.tags))
+      .catch(() => {});
   }, [fetchFleeting]);
 
   const current = items[currentIndex];
@@ -140,9 +142,7 @@ export function FleetingTriage({ onDone }: FleetingTriageProps) {
   return (
     <div className="max-w-lg mx-auto p-4 space-y-4">
       {/* Progress */}
-      <div className="text-center text-sm text-muted-foreground">
-        剩餘 {remaining} 項
-      </div>
+      <div className="text-center text-sm text-muted-foreground">剩餘 {remaining} 項</div>
 
       {/* Card */}
       <div className="border rounded-lg p-5 space-y-3">
@@ -198,7 +198,6 @@ export function FleetingTriage({ onDone }: FleetingTriageProps) {
             />
           </div>
         </div>
-
       </div>
 
       {/* Actions */}
@@ -216,11 +215,7 @@ export function FleetingTriage({ onDone }: FleetingTriageProps) {
             </>
           )}
         </Button>
-        <Button
-          variant="outline"
-          onClick={handleArchive}
-          className="gap-1"
-        >
+        <Button variant="outline" onClick={handleArchive} className="gap-1">
           <Archive className="h-4 w-4" />
           封存
         </Button>
