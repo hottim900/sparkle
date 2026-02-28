@@ -172,11 +172,11 @@ npm run lint:fix     # ESLint auto-fix
 npm run format       # Prettier write
 npm run format:check # Prettier check (CI uses this)
 
-# Build — ALWAYS build after frontend changes before committing
+# Build
 npm run build        # Production frontend → dist/
 ```
 
-**Important:** After any frontend code change, run `npm run build` before committing. The production deployment serves from `dist/`, so forgetting to build means changes won't be visible in production.
+**Note:** Auto-deploy (`deploy.yml`) runs `npm run build` on the self-hosted runner, so you no longer need to build locally before committing. Build locally only when testing production mode.
 
 ## Production Deployment
 
@@ -187,7 +187,7 @@ Self-hosted on WSL2 (mirrored networking mode) with WireGuard VPN. Managed by sy
 - `deploy.yml` triggers via `workflow_run` after CI passes on `main`
 - Runs on a **self-hosted runner** inside WSL2 (same machine as production)
 - Steps: `git pull` → `npm ci` → `npm run build` → `systemctl restart sparkle` → health check
-- **One-time setup required**: install self-hosted runner (`~/actions-runner/`), configure sudoers for passwordless `systemctl restart sparkle`
+- **One-time setup required**: install self-hosted runner (`~/actions-runner/`), service name `actions.runner.hottim900-sparkle.sparkle-wsl`, configure sudoers (`/etc/sudoers.d/github-runner`) for passwordless `systemctl restart sparkle`
 - Rollback: `git revert` + push triggers a new deploy
 
 ### Quick Reference
@@ -342,7 +342,7 @@ Schema version tracked in `schema_version` table (version 0→11). Each step is 
 - Aliases stored as JSON array string in SQLite
 - Timestamps: ISO 8601 strings
 - Database: SQLite WAL mode, FTS5 trigram tokenizer for search (supports Chinese)
-- Tests: Vitest with projects config (server=node, frontend=jsdom). Server: in-memory SQLite, mock db module with vi.mock, shared `createTestDb()` in `server/test-utils.ts`. Frontend: Testing Library + jest-dom, `renderWithContext()` helper in `src/test-utils.tsx` for components using AppContext. E2E: Playwright (Chromium-only) against production build (`dist/`), Hono server on port 3456 with temp SQLite DB (`/tmp/sparkle-e2e-test.db`), auth via storageState. 7 tests covering login, note/todo creation, search, item detail.
+- Tests: Vitest with projects config (server=node, frontend=jsdom). Server: in-memory SQLite, mock db module with vi.mock, shared `createTestDb()` in `server/test-utils.ts`. Frontend: Testing Library + jest-dom, `renderWithContext()` helper in `src/test-utils.tsx` for components using AppContext. E2E: Playwright (Chromium-only) against production build (`dist/`), Hono server on port 3456 with temp SQLite DB (`/tmp/sparkle-e2e-test.db`), auth via storageState. 7 tests covering login, note/todo creation, search, item detail. Test files excluded from tsconfig (both `tsconfig.json` and `tsconfig.server.json`) — Vitest handles test file type-checking via its own config.
 - Obsidian export: .md with YAML frontmatter, local time (no TZ suffix), written to vault path. Config stored in `settings` table, read via `getObsidianSettings()`. `exportToObsidian(item, config)` is a pure function (no env dependency).
 - Settings API: `GET /api/settings` returns all settings; `PUT /api/settings` accepts partial updates with Zod validation (key whitelist, vault path writability check when enabling)
 - Public sharing: Notes can be shared via token-based URLs (`/s/:token`). SSR HTML pages with marked for Markdown, OpenGraph meta tags, dark mode CSS. Two visibility modes: `unlisted` (link-only) and `public` (listed in `/api/public`). Auth bypass on `/api/public/*` and `/s/*` paths. Share management via authenticated API (`/api/items/:id/share`, `/api/shares`)
