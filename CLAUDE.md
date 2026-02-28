@@ -161,11 +161,11 @@ npm run dev:server   # Hono on :3000 with tsx watch
 # IMPORTANT: Tests require node v22 (better-sqlite3 native module is incompatible with v24)
 nvm use 22
 
-# Tests (583 tests, 25 files — server 470 + frontend 113)
+# Tests (660 tests, 35 files — server 470 + frontend 190)
 npx vitest run                # Run all tests
-npx vitest run --coverage     # With coverage (needs @vitest/coverage-v8)
+npm run test:coverage         # With coverage report (thresholds: 80% statements, 75% branches)
 npx vitest                    # Watch mode
-# Coverage: server/lib ~97%, server/routes ~94%, frontend: ErrorBoundary, ItemCard, QuickCapture, SearchBar, Dashboard, ItemList, ItemDetail, LinkedItemsSection, Settings, FleetingTriage
+# Coverage: ~84% statements, ~85% branches. server/lib ~97%, server/routes ~94%. All frontend components tested. Thresholds enforced in CI (statements 80%, branches 75%).
 
 # E2E tests (Playwright, Chromium-only, requires dist/ build)
 npm run test:e2e     # Run E2E tests (auto-starts server on :3456 with temp DB)

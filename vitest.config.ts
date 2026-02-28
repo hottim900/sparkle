@@ -8,6 +8,27 @@ export default defineConfig({
     },
   },
   test: {
+    coverage: {
+      provider: "v8",
+      include: ["server/**/*.ts", "src/**/*.{ts,tsx}"],
+      exclude: [
+        "**/*.test.{ts,tsx}",
+        "**/test-utils.{ts,tsx}",
+        "**/test-setup.ts",
+        "src/main.tsx",
+        "src/sw.ts",
+        "src/App.tsx",
+        "src/vite-env.d.ts",
+        "src/lib/api.ts",
+        "src/components/ui/**",
+        "server/instrument.ts",
+        "server/test-utils.ts",
+      ],
+      thresholds: {
+        statements: 80,
+        branches: 75,
+      },
+    },
     projects: [
       {
         test: {
