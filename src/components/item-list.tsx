@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { listItems, batchAction } from "@/lib/api";
+import { useAppContext } from "@/lib/app-context";
 import {
   parseItems,
   type ParsedItem,
@@ -135,34 +136,30 @@ function getBatchActions(
 interface ItemListProps {
   status?: ItemStatus;
   type?: ItemType;
-  tag?: string;
   selectedId?: string;
-  onSelect?: (item: ParsedItem) => void;
-  onNavigate?: (itemId: string) => void;
-  refreshKey?: number;
-  currentView?: ViewType;
   noteSubView?: NoteSubView;
   todoSubView?: TodoSubView;
   onNoteSubViewChange?: (v: NoteSubView) => void;
   onTodoSubViewChange?: (v: TodoSubView) => void;
-  obsidianEnabled?: boolean;
 }
 
 export function ItemList({
   status,
   type,
-  tag,
   selectedId,
-  onSelect,
-  onNavigate,
-  refreshKey,
-  currentView,
   noteSubView,
   todoSubView,
   onNoteSubViewChange,
   onTodoSubViewChange,
-  obsidianEnabled,
 }: ItemListProps) {
+  const {
+    currentView,
+    selectedTag: tag,
+    onSelectItem: onSelect,
+    onNavigate,
+    refreshKey,
+    obsidianEnabled,
+  } = useAppContext();
   const [items, setItems] = useState<ParsedItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [total, setTotal] = useState(0);

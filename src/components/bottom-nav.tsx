@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useAppContext } from "@/lib/app-context";
 import type { ViewType } from "@/lib/types";
 import {
   FileText,
@@ -10,11 +11,6 @@ import {
   Settings,
   StickyNote,
 } from "lucide-react";
-
-interface BottomNavProps {
-  currentView: ViewType;
-  onViewChange: (view: ViewType) => void;
-}
 
 const mainNavItems: { id: ViewType; label: string; icon: React.ReactNode }[] = [
   { id: "notes", label: "筆記", icon: <FileText className="h-5 w-5" /> },
@@ -30,7 +26,8 @@ const moreItems: { id: ViewType; label: string; icon: React.ReactNode }[] = [
   { id: "settings", label: "設定", icon: <Settings className="h-4 w-4" /> },
 ];
 
-export function BottomNav({ currentView, onViewChange }: BottomNavProps) {
+export function BottomNav() {
+  const { currentView, onViewChange } = useAppContext();
   const [moreOpen, setMoreOpen] = useState(false);
 
   const isMoreActive = moreItems.some((item) => item.id === currentView);
