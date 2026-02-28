@@ -55,14 +55,17 @@ server/
   test-utils.ts         # Shared test DB setup (createTestDb: in-memory SQLite + all tables + FTS)
 
 src/
-  App.tsx               # Main layout, view routing, keyboard shortcuts, lazy-loaded components
+  App.tsx               # Main layout, AppContext provider, view routing, keyboard shortcuts, lazy-loaded components
   components/
     auth-gate.tsx        # Login screen
     error-boundary.tsx   # ErrorBoundary class component for lazy-loaded chunks (retry on failure)
     dashboard.tsx        # Review dashboard (Zettelkasten progress, focus, fleeting health, scratch count)
     quick-capture.tsx    # New item form (GTD quick-select tags for todos)
     item-list.tsx        # Item list + filter chips + contextual batch actions + type grouping
-    item-detail.tsx      # Editor + export button + aliases + linked items + share button (lazy-loaded)
+    item-detail.tsx      # Editor orchestrator + metadata (lazy-loaded, uses sub-components below)
+    item-detail-header.tsx  # Header bar, nav, save status, action buttons, delete dialog
+    item-content-editor.tsx # Content textarea + markdown preview toggle
+    linked-items-section.tsx # Linked note/todo management (self-contained state)
     markdown-preview.tsx # ReactMarkdown + remarkGfm rendering (lazy-loaded, extracted from item-detail)
     item-card.tsx        # List item display with tags, linked indicators, due date, share indicators
     search-bar.tsx       # FTS search with keyword highlighting
@@ -73,11 +76,15 @@ src/
     fleeting-triage.tsx  # Fleeting note triage mode (發展/進行/封存/保留)
     offline-indicator.tsx
     install-prompt.tsx   # PWA install banner
+    __tests__/           # Frontend component tests (Testing Library + jsdom)
   lib/
     api.ts              # API client (auto-logout on 401, shares API)
+    app-context.ts      # AppContext + useAppContext hook (view, nav, config state)
     types.ts            # TypeScript interfaces + ViewType + ShareToken types
   hooks/
     use-keyboard-shortcuts.ts  # N=new, /=search, Esc=close
+  test-setup.ts         # Testing Library jest-dom setup
+  test-utils.tsx        # renderWithContext helper for component tests
   sw.ts                 # Service worker (offline capture queue)
 
 scripts/
@@ -141,11 +148,11 @@ npm run dev:server   # Hono on :3000 with tsx watch
 # IMPORTANT: Tests require node v22 (better-sqlite3 native module is incompatible with v24)
 nvm use 22
 
-# Tests (463 tests, 14 files — server only, no frontend tests)
+# Tests (504 tests, 19 files — server 463 + frontend 41)
 npx vitest run                # Run all tests
 npx vitest run --coverage     # With coverage (needs @vitest/coverage-v8)
 npx vitest                    # Watch mode
-# Coverage: server/lib ~97%, server/routes ~94%, frontend 0%
+# Coverage: server/lib ~97%, server/routes ~94%, frontend: ErrorBoundary, ItemCard, QuickCapture, SearchBar, Dashboard
 
 # Linting & formatting
 npm run lint         # ESLint check (src/ + server/)
@@ -315,13 +322,14 @@ Schema version tracked in `schema_version` table (version 0→11). Each step is 
 - Aliases stored as JSON array string in SQLite
 - Timestamps: ISO 8601 strings
 - Database: SQLite WAL mode, FTS5 trigram tokenizer for search (supports Chinese)
-- Tests: Vitest, in-memory SQLite, mock db module with vi.mock, shared `createTestDb()` in `server/test-utils.ts`
+- Tests: Vitest with projects config (server=node, frontend=jsdom). Server: in-memory SQLite, mock db module with vi.mock, shared `createTestDb()` in `server/test-utils.ts`. Frontend: Testing Library + jest-dom, `renderWithContext()` helper in `src/test-utils.tsx` for components using AppContext.
 - Obsidian export: .md with YAML frontmatter, local time (no TZ suffix), written to vault path. Config stored in `settings` table, read via `getObsidianSettings()`. `exportToObsidian(item, config)` is a pure function (no env dependency).
 - Settings API: `GET /api/settings` returns all settings; `PUT /api/settings` accepts partial updates with Zod validation (key whitelist, vault path writability check when enabling)
 - Public sharing: Notes can be shared via token-based URLs (`/s/:token`). SSR HTML pages with marked for Markdown, OpenGraph meta tags, dark mode CSS. Two visibility modes: `unlisted` (link-only) and `public` (listed in `/api/public`). Auth bypass on `/api/public/*` and `/s/*` paths. Share management via authenticated API (`/api/items/:id/share`, `/api/shares`)
 - Performance: gzip/deflate compression via `hono/compress` on all responses with `Vary: Accept-Encoding` for CDN cache correctness. Static assets (`/assets/*`) served with `Cache-Control: immutable` (Vite content-hashed filenames). Frontend uses code splitting — heavy components (ItemDetail, Settings, Dashboard, FleetingTriage, MarkdownPreview) are lazy-loaded via `React.lazy()` with `ErrorBoundary` wrappers for chunk load failure recovery. Vendor chunks split: `ui` (radix + cva), `markdown` (react-markdown + remark-gfm)
 - Logging: pino structured logger (`server/lib/logger.ts`). JSON output in production, pino-pretty in dev. Custom HTTP request logger middleware replaces hono's built-in. Health check requests logged at debug level. All server `console.log/error/warn` replaced with `logger.info/error/warn`.
 - Security: Content-Security-Policy header on all responses (self-only scripts/fonts/connect, unsafe-inline styles for Tailwind, HTTPS images, frame-ancestors none). Health endpoint (`GET /api/health`) unauthenticated for Docker/orchestrator monitoring.
+- State management: AppContext (`src/lib/app-context.ts`) provides view state, navigation, config, and refresh to child components via `useAppContext()`. Sidebar, BottomNav use context only (0 props). ItemDetail split into sub-components: ItemDetailHeader, ItemContentEditor, LinkedItemsSection.
 - Linting: ESLint 9 flat config with typescript-eslint (recommended), react-hooks plugin, eslint-config-prettier. Test files relaxed (`no-explicit-any` warn, `no-require-imports` off). Unused vars allowed with `_` prefix.
 - Formatting: Prettier (double quotes, trailing commas, 100 char width). Enforced via lint-staged + Husky pre-commit hook. `.prettierignore` excludes dist, mcp-server, data, certs.
 - CI: GitHub Actions on push/PR to main — lint → format:check → tsc (frontend + server) → build → test. Node 22 pinned.
