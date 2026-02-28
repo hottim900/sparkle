@@ -7,10 +7,10 @@ function getClientIp(c: Context): string {
   );
 }
 
-// General API rate limit: 60 req/min per IP
+// General API rate limit: 200 req/min per IP
 export const apiRateLimiter = rateLimiter({
   windowMs: 60 * 1000,
-  limit: 60,
+  limit: 200,
   keyGenerator: getClientIp,
   standardHeaders: "draft-7",
   message: { error: "Too many requests, please try again later" },
