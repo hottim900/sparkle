@@ -11,6 +11,7 @@ import { InstallPrompt } from "@/components/install-prompt";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
 import { getConfig, getItem } from "@/lib/api";
+import { AppContext } from "@/lib/app-context";
 import { Button } from "@/components/ui/button";
 import { List, ListTodo, Loader2 } from "lucide-react";
 import {
@@ -72,17 +73,17 @@ function MainApp() {
     setRefreshKey((k) => k + 1);
   }, []);
 
-  const handleSelect = (item: ParsedItem) => {
+  const handleSelect = useCallback((item: ParsedItem) => {
     setSelectedItem(item);
-  };
+  }, []);
 
-  const handleViewChange = (view: ViewType) => {
+  const handleViewChange = useCallback((view: ViewType) => {
     setCurrentView(view);
     setSelectedItem(null);
     setSelectedTag(undefined);
     setTriageMode(false);
     setNavStack([]);
-  };
+  }, []);
 
   const handleNavigate = useCallback(
     async (itemId: string) => {
@@ -146,6 +147,38 @@ function MainApp() {
 
   useKeyboardShortcuts(keyboardHandlers);
 
+  const appContextValue = useMemo(
+    () => ({
+      currentView,
+      onViewChange: handleViewChange,
+      selectedItem,
+      onSelectItem: handleSelect,
+      selectedTag,
+      onTagSelect: setSelectedTag,
+      onNavigate: handleNavigate,
+      onBack: handleBack,
+      onClearDetail: handleClearDetail,
+      canGoBack: navStack.length > 0,
+      obsidianEnabled,
+      refreshKey,
+      refresh,
+    }),
+    [
+      currentView,
+      handleViewChange,
+      selectedItem,
+      handleSelect,
+      selectedTag,
+      handleNavigate,
+      handleBack,
+      handleClearDetail,
+      navStack.length,
+      obsidianEnabled,
+      refreshKey,
+      refresh,
+    ],
+  );
+
   // Map view to status filter (for direct status views)
   const statusFilter: ItemStatus | undefined = (() => {
     const directStatusViews: ViewType[] = [
@@ -181,147 +214,130 @@ function MainApp() {
   const isTriageActive = isFleetingView && triageMode;
 
   return (
-    <div className="h-screen flex flex-col md:flex-row overflow-hidden">
-      <OfflineIndicator />
-      <InstallPrompt />
+    <AppContext.Provider value={appContextValue}>
+      <div className="h-screen flex flex-col md:flex-row overflow-hidden">
+        <OfflineIndicator />
+        <InstallPrompt />
 
-      {/* Desktop Sidebar */}
-      <div className="hidden md:flex">
-        <Sidebar
-          currentView={currentView}
-          onViewChange={handleViewChange}
-          selectedTag={selectedTag}
-          onTagSelect={setSelectedTag}
-          onSearchSelect={handleSelect}
-          refreshKey={refreshKey}
-        />
-      </div>
+        {/* Desktop Sidebar */}
+        <div className="hidden md:flex">
+          <Sidebar />
+        </div>
 
-      {/* Main content area */}
-      <div className="flex-1 flex flex-col md:flex-row min-w-0 overflow-hidden">
-        {currentView === "dashboard" ? (
-          /* Dashboard takes full width */
-          <ErrorBoundary>
-            <Suspense fallback={<LoadingFallback />}>
-              <Dashboard
-                onViewChange={handleViewChange}
-                onSelectItem={(item) => {
-                  setNavStack((prev) => [...prev, { view: "dashboard", itemId: null }]);
-                  setCurrentView("all");
-                  setSelectedItem(item);
-                }}
-              />
-            </Suspense>
-          </ErrorBoundary>
-        ) : currentView === "settings" ? (
-          /* Settings takes full width */
-          <ErrorBoundary>
-            <Suspense fallback={<LoadingFallback />}>
-              <Settings onSettingsChanged={refreshConfig} />
-            </Suspense>
-          </ErrorBoundary>
-        ) : (
-          <>
-            {/* List panel */}
-            <div
-              className={`flex-1 flex flex-col min-w-0 overflow-hidden ${
-                selectedItem ? "hidden md:flex" : "flex"
-              } md:w-96 md:max-w-none md:flex-none md:border-r`}
-            >
-              <QuickCapture currentView={currentView} onCreated={refresh} />
+        {/* Main content area */}
+        <div className="flex-1 flex flex-col md:flex-row min-w-0 overflow-hidden">
+          {currentView === "dashboard" ? (
+            /* Dashboard takes full width */
+            <ErrorBoundary>
+              <Suspense fallback={<LoadingFallback />}>
+                <Dashboard
+                  onSelectItem={(item) => {
+                    setNavStack((prev) => [...prev, { view: "dashboard", itemId: null }]);
+                    setCurrentView("all");
+                    setSelectedItem(item);
+                  }}
+                />
+              </Suspense>
+            </ErrorBoundary>
+          ) : currentView === "settings" ? (
+            /* Settings takes full width */
+            <ErrorBoundary>
+              <Suspense fallback={<LoadingFallback />}>
+                <Settings onSettingsChanged={refreshConfig} />
+              </Suspense>
+            </ErrorBoundary>
+          ) : (
+            <>
+              {/* List panel */}
+              <div
+                className={`flex-1 flex flex-col min-w-0 overflow-hidden ${
+                  selectedItem ? "hidden md:flex" : "flex"
+                } md:w-96 md:max-w-none md:flex-none md:border-r`}
+              >
+                <QuickCapture onCreated={refresh} />
 
-              {/* Triage toggle for fleeting view */}
-              {isFleetingView && (
-                <div className="flex border-b">
-                  <Button
-                    variant="ghost"
-                    className={`flex-1 rounded-none gap-1.5 ${!triageMode ? "border-b-2 border-primary text-primary" : "text-muted-foreground"}`}
-                    onClick={() => setTriageMode(false)}
-                  >
-                    <List className="h-4 w-4" />
-                    列表
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    className={`flex-1 rounded-none gap-1.5 ${triageMode ? "border-b-2 border-primary text-primary" : "text-muted-foreground"}`}
-                    onClick={() => setTriageMode(true)}
-                  >
-                    <ListTodo className="h-4 w-4" />
-                    整理
-                  </Button>
-                </div>
-              )}
+                {/* Triage toggle for fleeting view */}
+                {isFleetingView && (
+                  <div className="flex border-b">
+                    <Button
+                      variant="ghost"
+                      className={`flex-1 rounded-none gap-1.5 ${!triageMode ? "border-b-2 border-primary text-primary" : "text-muted-foreground"}`}
+                      onClick={() => setTriageMode(false)}
+                    >
+                      <List className="h-4 w-4" />
+                      列表
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      className={`flex-1 rounded-none gap-1.5 ${triageMode ? "border-b-2 border-primary text-primary" : "text-muted-foreground"}`}
+                      onClick={() => setTriageMode(true)}
+                    >
+                      <ListTodo className="h-4 w-4" />
+                      整理
+                    </Button>
+                  </div>
+                )}
 
-              {isTriageActive ? (
-                <div className="flex-1 overflow-y-auto">
+                {isTriageActive ? (
+                  <div className="flex-1 overflow-y-auto">
+                    <ErrorBoundary>
+                      <Suspense fallback={<LoadingFallback />}>
+                        <FleetingTriage onDone={() => setTriageMode(false)} />
+                      </Suspense>
+                    </ErrorBoundary>
+                  </div>
+                ) : currentView === "search" ? (
+                  <div className="flex-1 overflow-y-auto p-3 md:hidden">
+                    <SearchBar onSelect={handleSelect} />
+                  </div>
+                ) : (
+                  <div className="flex-1 overflow-y-auto">
+                    <ItemList
+                      status={statusFilter}
+                      type={typeFilter}
+                      selectedId={selectedItem?.id}
+                      noteSubView={noteSubView}
+                      todoSubView={todoSubView}
+                      onNoteSubViewChange={setNoteSubView}
+                      onTodoSubViewChange={setTodoSubView}
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Detail panel */}
+              {selectedItem && (
+                <div className="fixed inset-0 z-50 bg-background md:static md:z-auto md:flex-1 md:min-w-0 md:border-l">
                   <ErrorBoundary>
                     <Suspense fallback={<LoadingFallback />}>
-                      <FleetingTriage onDone={() => setTriageMode(false)} />
+                      <ItemDetail
+                        itemId={selectedItem.id}
+                        onUpdated={refresh}
+                        onDeleted={() => {
+                          setSelectedItem(null);
+                          setNavStack([]);
+                          refresh();
+                        }}
+                      />
                     </Suspense>
                   </ErrorBoundary>
                 </div>
-              ) : currentView === "search" ? (
-                <div className="flex-1 overflow-y-auto p-3 md:hidden">
-                  <SearchBar onSelect={handleSelect} />
-                </div>
-              ) : (
-                <div className="flex-1 overflow-y-auto">
-                  <ItemList
-                    status={statusFilter}
-                    type={typeFilter}
-                    tag={selectedTag}
-                    selectedId={selectedItem?.id}
-                    onSelect={handleSelect}
-                    onNavigate={handleNavigate}
-                    refreshKey={refreshKey}
-                    currentView={currentView}
-                    noteSubView={noteSubView}
-                    todoSubView={todoSubView}
-                    onNoteSubViewChange={setNoteSubView}
-                    onTodoSubViewChange={setTodoSubView}
-                    obsidianEnabled={obsidianEnabled}
-                  />
+              )}
+
+              {/* Empty state for desktop when no item selected */}
+              {!selectedItem && !isTriageActive && currentView !== "search" && (
+                <div className="hidden md:flex flex-1 items-center justify-center text-muted-foreground">
+                  <p>選擇一個項目以查看詳情</p>
                 </div>
               )}
-            </div>
+            </>
+          )}
+        </div>
 
-            {/* Detail panel */}
-            {selectedItem && (
-              <div className="fixed inset-0 z-50 bg-background md:static md:z-auto md:flex-1 md:min-w-0 md:border-l">
-                <ErrorBoundary>
-                  <Suspense fallback={<LoadingFallback />}>
-                    <ItemDetail
-                      itemId={selectedItem.id}
-                      obsidianEnabled={obsidianEnabled}
-                      onBack={handleBack}
-                      onClose={handleClearDetail}
-                      canGoBack={navStack.length > 0}
-                      onUpdated={refresh}
-                      onDeleted={() => {
-                        setSelectedItem(null);
-                        setNavStack([]);
-                        refresh();
-                      }}
-                      onNavigate={handleNavigate}
-                    />
-                  </Suspense>
-                </ErrorBoundary>
-              </div>
-            )}
-
-            {/* Empty state for desktop when no item selected */}
-            {!selectedItem && !isTriageActive && currentView !== "search" && (
-              <div className="hidden md:flex flex-1 items-center justify-center text-muted-foreground">
-                <p>選擇一個項目以查看詳情</p>
-              </div>
-            )}
-          </>
-        )}
+        {/* Mobile Bottom Nav - hidden when detail panel is open */}
+        {!selectedItem && <BottomNav />}
       </div>
-
-      {/* Mobile Bottom Nav - hidden when detail panel is open */}
-      {!selectedItem && <BottomNav currentView={currentView} onViewChange={handleViewChange} />}
-    </div>
+    </AppContext.Provider>
   );
 }
 

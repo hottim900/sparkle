@@ -4,7 +4,8 @@ import { Badge } from "@/components/ui/badge";
 import { SearchBar } from "./search-bar";
 import { getTags } from "@/lib/api";
 import { clearToken } from "@/lib/api";
-import type { ViewType, ParsedItem } from "@/lib/types";
+import { useAppContext } from "@/lib/app-context";
+import type { ViewType } from "@/lib/types";
 import {
   Sparkles,
   Pencil,
@@ -19,15 +20,6 @@ import {
   Settings,
   StickyNote,
 } from "lucide-react";
-
-interface SidebarProps {
-  currentView: ViewType;
-  onViewChange: (view: ViewType) => void;
-  selectedTag?: string;
-  onTagSelect: (tag: string | undefined) => void;
-  onSearchSelect?: (item: ParsedItem) => void;
-  refreshKey?: number;
-}
 
 type NavItem = { id: ViewType; label: string; icon: React.ReactNode };
 type NavGroup = { label?: string; items: NavItem[] };
@@ -65,14 +57,9 @@ const navGroups: NavGroup[] = [
   },
 ];
 
-export function Sidebar({
-  currentView,
-  onViewChange,
-  selectedTag,
-  onTagSelect,
-  onSearchSelect,
-  refreshKey,
-}: SidebarProps) {
+export function Sidebar() {
+  const { currentView, onViewChange, selectedTag, onTagSelect, onSelectItem, refreshKey } =
+    useAppContext();
   const [tags, setTags] = useState<string[]>([]);
 
   useEffect(() => {
@@ -85,7 +72,7 @@ export function Sidebar({
     <div className="w-64 border-r h-full flex flex-col bg-card">
       {/* Search */}
       <div className="p-3 border-b">
-        <SearchBar onSelect={onSearchSelect} />
+        <SearchBar onSelect={onSelectItem} />
       </div>
 
       {/* Views */}

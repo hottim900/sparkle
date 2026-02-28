@@ -11,12 +11,12 @@ import {
 } from "@/components/ui/select";
 import { createItem, getTags } from "@/lib/api";
 import { TagInput } from "@/components/tag-input";
+import { useAppContext } from "@/lib/app-context";
 import { toast } from "sonner";
 import type { ItemType, ItemPriority, ViewType } from "@/lib/types";
 import { ChevronDown, ChevronUp, Send, Sun, Moon, StickyNote, Pin, Paperclip } from "lucide-react";
 
 interface QuickCaptureProps {
-  currentView: ViewType;
   onCreated?: () => void;
 }
 
@@ -38,7 +38,8 @@ function viewToDefaultType(view: ViewType): ItemType {
   return "note";
 }
 
-export function QuickCapture({ currentView, onCreated }: QuickCaptureProps) {
+export function QuickCapture({ onCreated }: QuickCaptureProps) {
+  const { currentView } = useAppContext();
   const { resolvedTheme, setTheme } = useTheme();
   const [title, setTitle] = useState("");
   const [expanded, setExpanded] = useState(false);

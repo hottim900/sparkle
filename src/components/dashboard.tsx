@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { getStats, getFocus } from "@/lib/api";
-import { parseItems, type ParsedItem, type StatsResponse, type ViewType } from "@/lib/types";
+import { parseItems, type ParsedItem, type StatsResponse } from "@/lib/types";
+import { useAppContext } from "@/lib/app-context";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -19,7 +20,6 @@ import {
 } from "lucide-react";
 
 interface DashboardProps {
-  onViewChange: (view: ViewType) => void;
   onSelectItem: (item: ParsedItem) => void;
 }
 
@@ -68,7 +68,8 @@ function priorityVariant(
   }
 }
 
-export function Dashboard({ onViewChange, onSelectItem }: DashboardProps) {
+export function Dashboard({ onSelectItem }: DashboardProps) {
+  const { onViewChange } = useAppContext();
   const [stats, setStats] = useState<StatsResponse | null>(null);
   const [focusItems, setFocusItems] = useState<ParsedItem[]>([]);
   const [loading, setLoading] = useState(true);
