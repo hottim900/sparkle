@@ -10,6 +10,7 @@ import {
   listItems,
   searchItems,
   updateItem,
+  type ItemWithLinkedInfo,
 } from "../lib/items.js";
 import { getStats, getFocusItems } from "../lib/stats.js";
 import { exportToObsidian } from "../lib/export.js";
@@ -32,12 +33,16 @@ function verifySignature(body: string, signature: string, secret: string): boole
   return safeCompare(hash, signature);
 }
 
-function resolveSessionItem(userId: string, index: number) {
+type SessionResult =
+  | { ok: false; error: string }
+  | { ok: true; itemId: string; item: ItemWithLinkedInfo };
+
+function resolveSessionItem(userId: string, index: number): SessionResult {
   const itemId = getItemId(userId, index);
-  if (!itemId) return { error: `❌ 編號 ${index} 不存在，請重新查詢` } as const;
+  if (!itemId) return { ok: false, error: `❌ 編號 ${index} 不存在，請重新查詢` };
   const item = getItem(db, itemId);
-  if (!item) return { error: "❌ 項目不存在" } as const;
-  return { itemId, item } as const;
+  if (!item) return { ok: false, error: "❌ 項目不存在" };
+  return { ok: true, itemId, item };
 }
 
 webhookRouter.post("/line", async (c) => {
@@ -255,7 +260,7 @@ webhookRouter.post("/line", async (c) => {
 
       case "detail": {
         const resolved = resolveSessionItem(userId, cmd.index);
-        if ("error" in resolved) {
+        if (!resolved.ok) {
           reply = resolved.error;
           break;
         }
@@ -265,7 +270,7 @@ webhookRouter.post("/line", async (c) => {
 
       case "due": {
         const resolved = resolveSessionItem(userId, cmd.index);
-        if ("error" in resolved) {
+        if (!resolved.ok) {
           reply = resolved.error;
           break;
         }
@@ -289,7 +294,7 @@ webhookRouter.post("/line", async (c) => {
 
       case "tag": {
         const resolved = resolveSessionItem(userId, cmd.index);
-        if ("error" in resolved) {
+        if (!resolved.ok) {
           reply = resolved.error;
           break;
         }
@@ -302,7 +307,7 @@ webhookRouter.post("/line", async (c) => {
 
       case "done": {
         const resolved = resolveSessionItem(userId, cmd.index);
-        if ("error" in resolved) {
+        if (!resolved.ok) {
           reply = resolved.error;
           break;
         }
@@ -317,7 +322,7 @@ webhookRouter.post("/line", async (c) => {
 
       case "develop": {
         const resolved = resolveSessionItem(userId, cmd.index);
-        if ("error" in resolved) {
+        if (!resolved.ok) {
           reply = resolved.error;
           break;
         }
@@ -340,7 +345,7 @@ webhookRouter.post("/line", async (c) => {
 
       case "mature": {
         const resolved = resolveSessionItem(userId, cmd.index);
-        if ("error" in resolved) {
+        if (!resolved.ok) {
           reply = resolved.error;
           break;
         }
@@ -363,7 +368,7 @@ webhookRouter.post("/line", async (c) => {
 
       case "export": {
         const resolved = resolveSessionItem(userId, cmd.index);
-        if ("error" in resolved) {
+        if (!resolved.ok) {
           reply = resolved.error;
           break;
         }
@@ -398,7 +403,7 @@ webhookRouter.post("/line", async (c) => {
 
       case "archive": {
         const resolved = resolveSessionItem(userId, cmd.index);
-        if ("error" in resolved) {
+        if (!resolved.ok) {
           reply = resolved.error;
           break;
         }
@@ -409,7 +414,7 @@ webhookRouter.post("/line", async (c) => {
 
       case "priority": {
         const resolved = resolveSessionItem(userId, cmd.index);
-        if ("error" in resolved) {
+        if (!resolved.ok) {
           reply = resolved.error;
           break;
         }
@@ -423,7 +428,7 @@ webhookRouter.post("/line", async (c) => {
 
       case "untag": {
         const resolved = resolveSessionItem(userId, cmd.index);
-        if ("error" in resolved) {
+        if (!resolved.ok) {
           reply = resolved.error;
           break;
         }
@@ -436,7 +441,7 @@ webhookRouter.post("/line", async (c) => {
 
       case "track": {
         const resolved = resolveSessionItem(userId, cmd.index);
-        if ("error" in resolved) {
+        if (!resolved.ok) {
           reply = resolved.error;
           break;
         }
@@ -492,7 +497,7 @@ webhookRouter.post("/line", async (c) => {
 
       case "delete": {
         const resolved = resolveSessionItem(userId, cmd.index);
-        if ("error" in resolved) {
+        if (!resolved.ok) {
           reply = resolved.error;
           break;
         }
@@ -503,7 +508,7 @@ webhookRouter.post("/line", async (c) => {
 
       case "upgrade": {
         const resolved = resolveSessionItem(userId, cmd.index);
-        if ("error" in resolved) {
+        if (!resolved.ok) {
           reply = resolved.error;
           break;
         }

@@ -243,7 +243,7 @@ itemsRouter.patch("/:id", async (c) => {
     if (input.type !== undefined && input.type !== existing.type) {
       const mappedStatus = getAutoMappedStatus(existing.type, input.type, existing.status);
       if (mappedStatus) {
-        effectiveStatus = mappedStatus;
+        effectiveStatus = mappedStatus as typeof effectiveStatus;
         input.status = effectiveStatus as typeof input.status;
       }
     }
