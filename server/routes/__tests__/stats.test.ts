@@ -91,7 +91,7 @@ function daysFromNow(days: number): string {
 }
 
 // Helper: get the Monday of the current ISO week
-function getThisWeekMonday(): Date {
+function _getThisWeekMonday(): Date {
   const now = new Date();
   const day = now.getDay(); // 0=Sun, 1=Mon, ...
   const diff = day === 0 ? -6 : 1 - day;

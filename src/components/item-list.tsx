@@ -202,6 +202,7 @@ export function ItemList({
     if (currentView === "todos" && !todoSubView) return ["archived"];
     return undefined;
   })();
+  const excludeStatusKey = excludeStatus?.join() ?? "";
 
   const fetchItems = useCallback(async () => {
     setLoading(true);
@@ -223,7 +224,17 @@ export function ItemList({
     } finally {
       setLoading(false);
     }
-  }, [effectiveStatus, effectiveType, tag, offset, refreshKey, safeSortIdx, excludeStatus?.join()]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- excludeStatus is a new array each render; excludeStatusKey captures its value stably
+  }, [
+    effectiveStatus,
+    effectiveType,
+    tag,
+    offset,
+    refreshKey,
+    currentSort?.sort,
+    currentSort?.order,
+    excludeStatusKey,
+  ]);
 
   // Reset sort to view-appropriate default when switching views
   useEffect(() => {
@@ -234,7 +245,7 @@ export function ItemList({
     } else {
       setSortIdx(0);
     }
-  }, [currentView]);
+  }, [currentView, isScratchView, isTodoView, sortOptions.length]);
 
   useEffect(() => {
     setOffset(0);

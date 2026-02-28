@@ -39,14 +39,14 @@ function createMockSqlite() {
 
 describe("setupGracefulShutdown", () => {
   let signalHandlers: Map<string, (() => void)[]>;
-  let processOnSpy: ReturnType<typeof vi.spyOn>;
+  let _processOnSpy: ReturnType<typeof vi.spyOn>;
   let processExitSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     vi.useFakeTimers();
     signalHandlers = new Map();
 
-    processOnSpy = vi.spyOn(process, "on").mockImplementation(((
+    _processOnSpy = vi.spyOn(process, "on").mockImplementation(((
       event: string,
       handler: () => void,
     ) => {
