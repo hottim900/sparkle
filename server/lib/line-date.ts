@@ -61,8 +61,8 @@ export function parseDate(input: string, refDate?: Date): DateParseResult {
   // 5. Try M/D format
   const mdMatch = trimmed.match(/^(\d{1,2})\/(\d{1,2})$/);
   if (mdMatch) {
-    const month = mdMatch[1].padStart(2, "0");
-    const day = mdMatch[2].padStart(2, "0");
+    const month = mdMatch[1]!.padStart(2, "0");
+    const day = mdMatch[2]!.padStart(2, "0");
     const year = ref.getFullYear();
     return { success: true, date: `${year}-${month}-${day}`, clear: false };
   }

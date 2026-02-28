@@ -8,6 +8,7 @@ import { requestLogger } from "./middleware/logger.js";
 import { bodyLimit } from "hono/body-limit";
 import { compress } from "hono/compress";
 import { readFileSync } from "node:fs";
+import type { Server } from "node:http";
 import { createServer } from "node:https";
 import { authMiddleware } from "./middleware/auth.js";
 import {
@@ -322,6 +323,6 @@ if (process.env.TLS_CERT && process.env.TLS_KEY) {
   });
 }
 
-setupGracefulShutdown(httpServer, sqlite);
+setupGracefulShutdown(httpServer as Server, sqlite);
 
 export default app;

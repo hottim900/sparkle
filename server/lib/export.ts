@@ -39,13 +39,13 @@ function toLocalDateTime(isoString: string): string {
 export interface ExportableItem {
   id: string;
   title: string;
-  content: string;
+  content: string | null;
   tags: string; // JSON array string
   aliases: string; // JSON array string
   source: string | null;
   created: string;
   modified: string;
-  origin: string;
+  origin: string | null;
   priority: string | null;
   due: string | null;
 }
@@ -88,7 +88,7 @@ export function generateFrontmatter(item: ExportableItem): string {
   lines.push(`modified: ${toLocalDateTime(item.modified)}`);
 
   // Always present
-  lines.push(`origin: ${item.origin}`);
+  lines.push(`origin: ${item.origin || ""}`);
 
   // Priority — include when non-null
   if (item.priority) {

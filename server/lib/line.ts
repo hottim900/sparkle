@@ -201,7 +201,7 @@ export function parseCommand(text: string): LineCommand {
       const rest = trimmed.slice(7).trim();
       const parts = rest.split(/\s+/);
       if (parts.length < 2) return { type: "unknown" };
-      const num = parseInt(parts[0], 10);
+      const num = parseInt(parts[0]!, 10);
       if (isNaN(num) || num <= 0) return { type: "unknown" };
       const tags = parts.slice(1);
       return { type: "untag", index: num, tags };
@@ -212,7 +212,7 @@ export function parseCommand(text: string): LineCommand {
       const rest = trimmed.slice(5).trim();
       const parts = rest.split(/\s+/);
       if (parts.length < 2) return { type: "unknown" };
-      const num = parseInt(parts[0], 10);
+      const num = parseInt(parts[0]!, 10);
       if (isNaN(num) || num <= 0) return { type: "unknown" };
       const tags = parts.slice(1);
       return { type: "tag", index: num, tags };
