@@ -140,10 +140,10 @@ export function getFocusItems(sqlite: Database.Database): FocusItem[] {
       LIMIT 5`,
     )
     .all({ today }) as (FocusItem & {
-      focus_rank: number;
-      focus_sort: string;
-    })[];
+    focus_rank: number;
+    focus_sort: string;
+  })[];
 
   // Strip the computed columns before returning
-  return rows.map(({ focus_rank, focus_sort, ...item }) => item);
+  return rows.map(({ focus_rank: _, focus_sort: __, ...item }) => item);
 }

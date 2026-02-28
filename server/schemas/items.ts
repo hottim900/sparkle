@@ -24,11 +24,7 @@ export const createItemSchema = z.object({
     .default(null),
   tags: z.array(z.string().max(50)).max(20).default([]),
   origin: z.string().max(200).default(""),
-  source: z
-    .string()
-    .max(2000)
-    .nullable()
-    .default(null),
+  source: z.string().max(2000).nullable().default(null),
   aliases: z.array(z.string().max(200)).max(10).default([]),
   linked_note_id: z.string().uuid().nullable().default(null),
 });
@@ -46,11 +42,7 @@ export const updateItemSchema = z.object({
     .optional(),
   tags: z.array(z.string().max(50)).max(20).optional(),
   origin: z.string().max(200).optional(),
-  source: z
-    .string()
-    .max(2000)
-    .nullable()
-    .optional(),
+  source: z.string().max(2000).nullable().optional(),
   aliases: z.array(z.string().max(200)).max(10).optional(),
   linked_note_id: z.string().uuid().nullable().optional(),
 });
@@ -64,24 +56,13 @@ export const listItemsSchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(50),
   offset: z.coerce.number().int().min(0).default(0),
   excludeStatus: z
-    .union([
-      z.string().transform((s) => s.split(",").filter(Boolean)),
-      z.array(z.string()),
-    ])
+    .union([z.string().transform((s) => s.split(",").filter(Boolean)), z.array(z.string())])
     .optional(),
 });
 
 export const batchSchema = z.object({
   ids: z.array(z.string().uuid()).min(1, "At least one id is required"),
-  action: z.enum([
-    "archive",
-    "done",
-    "active",
-    "delete",
-    "develop",
-    "mature",
-    "export",
-  ]),
+  action: z.enum(["archive", "done", "active", "delete", "develop", "mature", "export"]),
 });
 
 export const searchSchema = z.object({

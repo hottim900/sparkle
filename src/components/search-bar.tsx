@@ -176,16 +176,12 @@ export function SearchBar({ onSelect }: SearchBarProps) {
       )}
 
       {!loading && searched && results.length === 0 && (
-        <p className="text-sm text-muted-foreground text-center py-4">
-          找不到結果
-        </p>
+        <p className="text-sm text-muted-foreground text-center py-4">找不到結果</p>
       )}
 
       {!loading && results.length > 0 && (
         <div className="space-y-2">
-          <p className="text-xs text-muted-foreground">
-            找到 {results.length} 個結果
-          </p>
+          <p className="text-xs text-muted-foreground">找到 {results.length} 個結果</p>
           <div className="divide-y border rounded-md">
             {results.map((item) => (
               <div
@@ -194,9 +190,7 @@ export function SearchBar({ onSelect }: SearchBarProps) {
                 onClick={() => onSelect?.(item)}
               >
                 <div className="flex items-start justify-between gap-2">
-                  <p className="text-sm font-medium min-w-0">
-                    {highlightText(item.title, query)}
-                  </p>
+                  <p className="text-sm font-medium min-w-0">{highlightText(item.title, query)}</p>
                   <StatusBadge status={item.status} />
                 </div>
                 {item.content && (
@@ -210,11 +204,7 @@ export function SearchBar({ onSelect }: SearchBarProps) {
                       {tag}
                     </Badge>
                   ))}
-                  {item.due && (
-                    <span className="text-xs text-muted-foreground">
-                      {item.due}
-                    </span>
-                  )}
+                  {item.due && <span className="text-xs text-muted-foreground">{item.due}</span>}
                   {item.origin && (
                     <span className="text-[10px] text-muted-foreground/70">
                       來源：{item.origin}

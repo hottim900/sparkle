@@ -95,9 +95,7 @@ export function ShareDialog({ itemId, itemTitle, open, onOpenChange }: ShareDial
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>分享筆記</DialogTitle>
-          <DialogDescription className="truncate">
-            {itemTitle}
-          </DialogDescription>
+          <DialogDescription className="truncate">{itemTitle}</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
@@ -110,10 +108,7 @@ export function ShareDialog({ itemId, itemTitle, open, onOpenChange }: ShareDial
             <div className="space-y-2">
               <p className="text-sm text-muted-foreground">目前分享</p>
               {shares.map((share) => (
-                <div
-                  key={share.id}
-                  className="flex items-center gap-2 rounded-md border p-2"
-                >
+                <div key={share.id} className="flex items-center gap-2 rounded-md border p-2">
                   {share.visibility === "public" ? (
                     <Globe className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                   ) : (
@@ -162,9 +157,7 @@ export function ShareDialog({ itemId, itemTitle, open, onOpenChange }: ShareDial
 
           {/* Create new share */}
           <div className="space-y-2">
-            {shares.length > 0 && (
-              <p className="text-sm text-muted-foreground">新增分享</p>
-            )}
+            {shares.length > 0 && <p className="text-sm text-muted-foreground">新增分享</p>}
             <div className="flex items-center gap-2">
               <Select
                 value={visibility}
@@ -188,11 +181,7 @@ export function ShareDialog({ itemId, itemTitle, open, onOpenChange }: ShareDial
                   </SelectItem>
                 </SelectContent>
               </Select>
-              <Button
-                onClick={handleCreate}
-                disabled={creating}
-                className="gap-1.5"
-              >
+              <Button onClick={handleCreate} disabled={creating} className="gap-1.5">
                 {creating ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
@@ -202,9 +191,7 @@ export function ShareDialog({ itemId, itemTitle, open, onOpenChange }: ShareDial
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
-              {visibility === "unlisted"
-                ? "僅知道連結的人可以查看"
-                : "會出現在公開列表中"}
+              {visibility === "unlisted" ? "僅知道連結的人可以查看" : "會出現在公開列表中"}
             </p>
           </div>
 

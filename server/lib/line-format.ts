@@ -57,9 +57,10 @@ export function formatDetail(item: {
     const header = lines.join("\n");
     const remaining = LINE_TEXT_MAX - header.length - 2; // 2 for \n\n
     if (remaining > 50) {
-      const content = item.content.length > remaining
-        ? item.content.slice(0, remaining - 10) + "\n⋯（已截斷）"
-        : item.content;
+      const content =
+        item.content.length > remaining
+          ? item.content.slice(0, remaining - 10) + "\n⋯（已截斷）"
+          : item.content;
       lines.push(`\n${content}`);
     }
   }
@@ -81,14 +82,31 @@ export function formatStats(stats: Stats): string {
 }
 
 const QUICK_REPLY_ITEMS = [
-  { type: "action" as const, action: { type: "message" as const, label: "✨ 閃念", text: "!fleeting" } },
-  { type: "action" as const, action: { type: "message" as const, label: "🔵 進行中", text: "!active" } },
-  { type: "action" as const, action: { type: "message" as const, label: "📌 暫存", text: "!scratch" } },
-  { type: "action" as const, action: { type: "message" as const, label: "📅 今日", text: "!today" } },
+  {
+    type: "action" as const,
+    action: { type: "message" as const, label: "✨ 閃念", text: "!fleeting" },
+  },
+  {
+    type: "action" as const,
+    action: { type: "message" as const, label: "🔵 進行中", text: "!active" },
+  },
+  {
+    type: "action" as const,
+    action: { type: "message" as const, label: "📌 暫存", text: "!scratch" },
+  },
+  {
+    type: "action" as const,
+    action: { type: "message" as const, label: "📅 今日", text: "!today" },
+  },
   { type: "action" as const, action: { type: "message" as const, label: "❓ 說明", text: "?" } },
 ];
 
-export async function replyLine(token: string, replyToken: string, text: string, withQuickReply = false) {
+export async function replyLine(
+  token: string,
+  replyToken: string,
+  text: string,
+  withQuickReply = false,
+) {
   try {
     const message: Record<string, unknown> = { type: "text", text };
     if (withQuickReply) {

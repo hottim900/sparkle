@@ -2,9 +2,9 @@ import type Database from "better-sqlite3";
 
 export function setupFTS(sqlite: Database.Database) {
   // Check if existing FTS table uses trigram tokenizer; rebuild if not
-  const ftsExists = sqlite.prepare(
-    "SELECT sql FROM sqlite_master WHERE type='table' AND name='items_fts'"
-  ).get() as { sql: string } | undefined;
+  const ftsExists = sqlite
+    .prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='items_fts'")
+    .get() as { sql: string } | undefined;
 
   if (ftsExists && !ftsExists.sql.includes("trigram")) {
     sqlite.exec("DROP TABLE IF EXISTS items_fts");

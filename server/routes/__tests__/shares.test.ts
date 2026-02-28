@@ -512,9 +512,9 @@ describe("SSR Public Page", () => {
 
     const res = await app.request(`/s/${share.token}`);
     const html = await res.text();
-    expect(html).toContain('og:title');
+    expect(html).toContain("og:title");
     expect(html).toContain("OG Test Note");
-    expect(html).toContain('og:description');
+    expect(html).toContain("og:description");
     expect(html).toContain("This is the description content.");
   });
 
@@ -603,6 +603,6 @@ describe("SSR Public Page", () => {
     const html = await res.text();
     // Should not reference any JS bundle
     expect(html).not.toMatch(/src=.*\.js/);
-    expect(html).not.toContain("type=\"module\"");
+    expect(html).not.toContain('type="module"');
   });
 });

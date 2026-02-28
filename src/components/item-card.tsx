@@ -2,15 +2,7 @@ import { Badge } from "@/components/ui/badge";
 import { updateItem, deleteItem } from "@/lib/api";
 import type { ParsedItem } from "@/lib/types";
 import { toast } from "sonner";
-import {
-  Square,
-  CheckSquare,
-  FileText,
-  ListTodo,
-  Trash2,
-  Link,
-  Globe,
-} from "lucide-react";
+import { Square, CheckSquare, FileText, ListTodo, Trash2, Link, Globe } from "lucide-react";
 
 const priorityColors: Record<string, string> = {
   high: "border-l-red-500",
@@ -20,9 +12,7 @@ const priorityColors: Record<string, string> = {
 
 function getDueDateInfo(dueDate: string): { label: string; className: string } {
   const today = new Date().toISOString().split("T")[0]!;
-  const diffDays = Math.ceil(
-    (new Date(dueDate).getTime() - new Date(today).getTime()) / 86400000
-  );
+  const diffDays = Math.ceil((new Date(dueDate).getTime() - new Date(today).getTime()) / 86400000);
 
   if (diffDays < 0) {
     return {
@@ -66,13 +56,10 @@ export function ItemCard({
   checked,
   onToggle,
 }: ItemCardProps) {
-  const borderColor = item.priority
-    ? priorityColors[item.priority] ?? ""
-    : "";
+  const borderColor = item.priority ? (priorityColors[item.priority] ?? "") : "";
 
   const dueDateInfo = item.type === "todo" && item.due ? getDueDateInfo(item.due) : null;
-  const isOverdue =
-    dueDateInfo?.className === "text-red-500" && item.status !== "done";
+  const isOverdue = dueDateInfo?.className === "text-red-500" && item.status !== "done";
 
   const handleScratchDelete = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -125,11 +112,7 @@ export function ItemCard({
               onToggle?.(item.id);
             }}
           >
-            {checked ? (
-              <CheckSquare className="h-4 w-4" />
-            ) : (
-              <Square className="h-4 w-4" />
-            )}
+            {checked ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
           </button>
         )}
         {!selectionMode && item.type === "todo" && (
@@ -200,9 +183,7 @@ export function ItemCard({
               </span>
             )}
             {dueDateInfo && (
-              <span className={`text-xs ${dueDateInfo.className}`}>
-                {dueDateInfo.label}
-              </span>
+              <span className={`text-xs ${dueDateInfo.className}`}>{dueDateInfo.label}</span>
             )}
           </div>
         </div>

@@ -34,9 +34,7 @@ type NavGroup = { label?: string; items: NavItem[] };
 
 const navGroups: NavGroup[] = [
   {
-    items: [
-      { id: "dashboard", label: "總覽", icon: <LayoutDashboard className="h-4 w-4" /> },
-    ],
+    items: [{ id: "dashboard", label: "總覽", icon: <LayoutDashboard className="h-4 w-4" /> }],
   },
   {
     label: "筆記",
@@ -56,9 +54,7 @@ const navGroups: NavGroup[] = [
   },
   {
     label: "暫存",
-    items: [
-      { id: "draft", label: "暫存區", icon: <StickyNote className="h-4 w-4" /> },
-    ],
+    items: [{ id: "draft", label: "暫存區", icon: <StickyNote className="h-4 w-4" /> }],
   },
   {
     label: "共用",
@@ -122,18 +118,14 @@ export function Sidebar({
       {/* Tags */}
       {tags.length > 0 && (
         <div className="px-3 py-2 border-t flex-1 overflow-y-auto">
-          <p className="text-xs text-muted-foreground mb-2 font-medium">
-            標籤
-          </p>
+          <p className="text-xs text-muted-foreground mb-2 font-medium">標籤</p>
           <div className="flex flex-wrap gap-1">
             {tags.map((tag) => (
               <Badge
                 key={tag}
                 variant={selectedTag === tag ? "default" : "secondary"}
                 className="cursor-pointer"
-                onClick={() =>
-                  onTagSelect(selectedTag === tag ? undefined : tag)
-                }
+                onClick={() => onTagSelect(selectedTag === tag ? undefined : tag)}
               >
                 {tag}
               </Badge>

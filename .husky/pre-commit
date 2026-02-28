@@ -1,0 +1,14 @@
+# === CLAUDE.md update warning ===
+has_code_change=$(git diff --cached --name-only | grep -qE '^(mcp-server|server|src|scripts|docs)/' && echo true || echo false)
+has_claude_md=$(git diff --cached --name-only | grep -q '^CLAUDE.md$' && echo true || echo false)
+
+if [ "$has_code_change" = "true" ] && [ "$has_claude_md" = "false" ]; then
+  echo ""
+  echo "  Source directories changed but CLAUDE.md was not updated."
+  echo "   If this change affects CLAUDE.md content, update it now."
+  echo "   Committing anyway (this is a warning, not a block)."
+  echo ""
+fi
+
+# === lint-staged ===
+npx lint-staged

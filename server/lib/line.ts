@@ -6,10 +6,7 @@ export interface ParsedLineMessage {
   source: string;
 }
 
-export function parseLineMessage(
-  text: string,
-  isForwarded?: boolean,
-): ParsedLineMessage {
+export function parseLineMessage(text: string, isForwarded?: boolean): ParsedLineMessage {
   const source = isForwarded ? "LINE 轉傳" : "LINE";
   const trimmed = text.trim();
 
@@ -162,9 +159,13 @@ export function parseCommand(text: string): LineCommand {
       const spaceIdx = rest.indexOf(" ");
       if (spaceIdx === -1) return { type: "unknown" };
       const num = parseInt(rest.slice(0, spaceIdx), 10);
-      const level = rest.slice(spaceIdx + 1).trim().toLowerCase();
+      const level = rest
+        .slice(spaceIdx + 1)
+        .trim()
+        .toLowerCase();
       if (isNaN(num) || num <= 0) return { type: "unknown" };
-      if (level === "none" || level === "清除") return { type: "priority", index: num, priority: null };
+      if (level === "none" || level === "清除")
+        return { type: "priority", index: num, priority: null };
       if (["high", "medium", "low"].includes(level)) {
         return { type: "priority", index: num, priority: level as "high" | "medium" | "low" };
       }
@@ -242,7 +243,13 @@ export function parseCommand(text: string): LineCommand {
       if (!content) return { type: "unknown" };
       return {
         type: "save",
-        parsed: { title: content, content: "", type: "scratch" as const, priority: null, source: "LINE" },
+        parsed: {
+          title: content,
+          content: "",
+          type: "scratch" as const,
+          priority: null,
+          source: "LINE",
+        },
       };
     }
     if (lower === "!tmp") return { type: "unknown" };

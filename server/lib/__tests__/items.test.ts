@@ -157,7 +157,10 @@ describe("Data Access Layer", () => {
       createItem(db, { title: "Archived", status: "archived" });
       const result = listItems(db, { excludeStatus: ["archived"] });
       expect(result.items).toHaveLength(2);
-      expect(result.items.map((i: { title: string }) => i.title).sort()).toEqual(["Developing", "Fleeting"]);
+      expect(result.items.map((i: { title: string }) => i.title).sort()).toEqual([
+        "Developing",
+        "Fleeting",
+      ]);
     });
 
     it("filters by type", () => {
@@ -196,9 +199,11 @@ describe("Data Access Layer", () => {
         ["MidModified", "2026-01-02T00:00:00.000Z", "2026-01-05T00:00:00.000Z"],
         ["NewModified", "2026-01-03T00:00:00.000Z", "2026-01-10T00:00:00.000Z"],
       ] as const) {
-        sqlite.prepare(
-          "INSERT INTO items (id, title, type, status, tags, origin, aliases, created, modified) VALUES (?, ?, 'note', 'fleeting', '[]', '', '[]', ?, ?)",
-        ).run(uuidv4(), title, created, modified);
+        sqlite
+          .prepare(
+            "INSERT INTO items (id, title, type, status, tags, origin, aliases, created, modified) VALUES (?, ?, 'note', 'fleeting', '[]', '', '[]', ?, ?)",
+          )
+          .run(uuidv4(), title, created, modified);
       }
       const result = listItems(db, { sort: "modified", order: "desc" });
       expect(result.items[0]!.title).toBe("NewModified");
@@ -212,9 +217,11 @@ describe("Data Access Layer", () => {
         ["MidModified", "2026-01-02T00:00:00.000Z", "2026-01-05T00:00:00.000Z"],
         ["NewModified", "2026-01-03T00:00:00.000Z", "2026-01-10T00:00:00.000Z"],
       ] as const) {
-        sqlite.prepare(
-          "INSERT INTO items (id, title, type, status, tags, origin, aliases, created, modified) VALUES (?, ?, 'note', 'fleeting', '[]', '', '[]', ?, ?)",
-        ).run(uuidv4(), title, created, modified);
+        sqlite
+          .prepare(
+            "INSERT INTO items (id, title, type, status, tags, origin, aliases, created, modified) VALUES (?, ?, 'note', 'fleeting', '[]', '', '[]', ?, ?)",
+          )
+          .run(uuidv4(), title, created, modified);
       }
       const result = listItems(db, { sort: "modified", order: "asc" });
       expect(result.items[0]!.title).toBe("OldModified");
@@ -229,9 +236,11 @@ describe("Data Access Layer", () => {
         ["Second", "2026-01-02T00:00:00.000Z"],
         ["Third", "2026-01-03T00:00:00.000Z"],
       ] as const) {
-        sqlite.prepare(
-          "INSERT INTO items (id, title, type, status, tags, origin, aliases, created, modified) VALUES (?, ?, 'note', 'fleeting', '[]', '', '[]', ?, ?)",
-        ).run(uuidv4(), title, ts, ts);
+        sqlite
+          .prepare(
+            "INSERT INTO items (id, title, type, status, tags, origin, aliases, created, modified) VALUES (?, ?, 'note', 'fleeting', '[]', '', '[]', ?, ?)",
+          )
+          .run(uuidv4(), title, ts, ts);
       }
       const result = listItems(db);
       expect(result.items[0]!.title).toBe("Third");
@@ -355,9 +364,11 @@ describe("Data Access Layer", () => {
       // Create a share for the note
       const shareId = crypto.randomUUID();
       const token = crypto.randomUUID().slice(0, 12);
-      sqlite.prepare(
-        "INSERT INTO share_tokens (id, item_id, token, visibility, created) VALUES (?, ?, ?, ?, ?)",
-      ).run(shareId, note.id, token, "public", new Date().toISOString());
+      sqlite
+        .prepare(
+          "INSERT INTO share_tokens (id, item_id, token, visibility, created) VALUES (?, ?, ?, ?, ?)",
+        )
+        .run(shareId, note.id, token, "public", new Date().toISOString());
       // Create a linked todo
       createItem(db, { title: "Linked todo for search", type: "todo", linked_note_id: note.id });
 
@@ -644,7 +655,12 @@ describe("Data Access Layer", () => {
     it("linked_todo_count excludes archived todos", () => {
       const note = createItem(db, { title: "My note", type: "note" });
       createItem(db, { title: "Active todo", type: "todo", linked_note_id: note.id });
-      createItem(db, { title: "Archived todo", type: "todo", status: "archived", linked_note_id: note.id });
+      createItem(db, {
+        title: "Archived todo",
+        type: "todo",
+        status: "archived",
+        linked_note_id: note.id,
+      });
       const fetched = getItem(db, note.id);
       expect(fetched!.linked_todo_count).toBe(1);
     });
@@ -703,7 +719,12 @@ describe("Data Access Layer", () => {
 
   describe("updateItem — exported auto-reversion edge cases", () => {
     it("reverts exported to permanent when content changes", () => {
-      const item = createItem(db, { title: "Note", content: "original", type: "note", status: "exported" });
+      const item = createItem(db, {
+        title: "Note",
+        content: "original",
+        type: "note",
+        status: "exported",
+      });
       const updated = updateItem(db, item.id, { content: "changed content" });
       expect(updated!.status).toBe("permanent");
     });
@@ -715,7 +736,12 @@ describe("Data Access Layer", () => {
     });
 
     it("does NOT revert exported when same content is set", () => {
-      const item = createItem(db, { title: "Note", content: "original", type: "note", status: "exported" });
+      const item = createItem(db, {
+        title: "Note",
+        content: "original",
+        type: "note",
+        status: "exported",
+      });
       const updated = updateItem(db, item.id, { content: "original" });
       expect(updated!.status).toBe("exported");
     });
@@ -726,9 +752,11 @@ describe("Data Access Layer", () => {
       const id = crypto.randomUUID();
       const token = crypto.randomUUID().slice(0, 12);
       const now = new Date().toISOString();
-      sqlite.prepare(
-        "INSERT INTO share_tokens (id, item_id, token, visibility, created) VALUES (?, ?, ?, ?, ?)",
-      ).run(id, itemId, token, visibility, now);
+      sqlite
+        .prepare(
+          "INSERT INTO share_tokens (id, item_id, token, visibility, created) VALUES (?, ?, ?, ?, ?)",
+        )
+        .run(id, itemId, token, visibility, now);
     }
 
     it("getItem returns null share_visibility when no shares", () => {

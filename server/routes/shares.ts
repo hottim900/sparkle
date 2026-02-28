@@ -1,11 +1,6 @@
 import { Hono } from "hono";
 import { sqlite } from "../db/index.js";
-import {
-  createShareToken,
-  listShares,
-  revokeShare,
-  getSharesByItemId,
-} from "../lib/shares.js";
+import { createShareToken, listShares, revokeShare, getSharesByItemId } from "../lib/shares.js";
 import { createShareSchema } from "../schemas/shares.js";
 import { ZodError } from "zod";
 
@@ -21,9 +16,9 @@ sharesRouter.post("/items/:id/share", async (c) => {
     const share = createShareToken(sqlite, itemId, visibility);
     if (!share) {
       // Check why it failed — item not found or not a note
-      const item = sqlite
-        .prepare("SELECT id, type FROM items WHERE id = ?")
-        .get(itemId) as { id: string; type: string } | undefined;
+      const item = sqlite.prepare("SELECT id, type FROM items WHERE id = ?").get(itemId) as
+        | { id: string; type: string }
+        | undefined;
 
       if (!item) {
         return c.json({ error: "Item not found" }, 404);
@@ -34,10 +29,7 @@ sharesRouter.post("/items/:id/share", async (c) => {
     return c.json({ share, url: `/s/${share.token}` }, 201);
   } catch (e) {
     if (e instanceof ZodError) {
-      return c.json(
-        { error: e.errors[0]?.message ?? "Validation error" },
-        400,
-      );
+      return c.json({ error: e.errors[0]?.message ?? "Validation error" }, 400);
     }
     throw e;
   }

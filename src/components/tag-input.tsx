@@ -11,18 +11,20 @@ interface TagInputProps {
   placeholder?: string;
 }
 
-export function TagInput({ tags, allTags, onAdd, onRemove, placeholder = "新增標籤..." }: TagInputProps) {
+export function TagInput({
+  tags,
+  allTags,
+  onAdd,
+  onRemove,
+  placeholder = "新增標籤...",
+}: TagInputProps) {
   const [input, setInput] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
   const listboxRef = useRef<HTMLDivElement>(null);
 
   const suggestions = input.trim()
-    ? allTags.filter(
-        (t) =>
-          t.toLowerCase().includes(input.toLowerCase()) &&
-          !tags.includes(t),
-      )
+    ? allTags.filter((t) => t.toLowerCase().includes(input.toLowerCase()) && !tags.includes(t))
     : [];
 
   const visibleSuggestions = suggestions.slice(0, 5);
@@ -47,9 +49,7 @@ export function TagInput({ tags, allTags, onAdd, onRemove, placeholder = "新增
   };
 
   const activeDescendant =
-    suggestionsVisible && highlightedIndex >= 0
-      ? `tag-suggestion-${highlightedIndex}`
-      : undefined;
+    suggestionsVisible && highlightedIndex >= 0 ? `tag-suggestion-${highlightedIndex}` : undefined;
 
   return (
     <div>
@@ -73,14 +73,10 @@ export function TagInput({ tags, allTags, onAdd, onRemove, placeholder = "新增
           onKeyDown={(e) => {
             if (e.key === "ArrowDown" && suggestionsVisible) {
               e.preventDefault();
-              setHighlightedIndex((prev) =>
-                prev < visibleSuggestions.length - 1 ? prev + 1 : 0,
-              );
+              setHighlightedIndex((prev) => (prev < visibleSuggestions.length - 1 ? prev + 1 : 0));
             } else if (e.key === "ArrowUp" && suggestionsVisible) {
               e.preventDefault();
-              setHighlightedIndex((prev) =>
-                prev > 0 ? prev - 1 : visibleSuggestions.length - 1,
-              );
+              setHighlightedIndex((prev) => (prev > 0 ? prev - 1 : visibleSuggestions.length - 1));
             } else if (e.key === "Tab" && suggestionsVisible && highlightedIndex >= 0) {
               e.preventDefault();
               handleAdd(visibleSuggestions[highlightedIndex]!);

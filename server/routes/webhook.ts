@@ -2,14 +2,27 @@ import { Hono } from "hono";
 import crypto from "node:crypto";
 import { safeCompare } from "../lib/safe-compare.js";
 import { db, sqlite } from "../db/index.js";
-import { createItem, deleteItem, getItem, listItems, searchItems, updateItem } from "../lib/items.js";
+import {
+  createItem,
+  deleteItem,
+  getItem,
+  listItems,
+  searchItems,
+  updateItem,
+} from "../lib/items.js";
 import { getStats, getFocusItems } from "../lib/stats.js";
 import { exportToObsidian } from "../lib/export.js";
 import { getObsidianSettings } from "../lib/settings.js";
 import { parseCommand } from "../lib/line.js";
 import { setSession, getItemId } from "../lib/line-session.js";
 import { parseDate } from "../lib/line-date.js";
-import { formatNumberedList, formatDetail, formatStats, replyLine, STATUS_LABELS } from "../lib/line-format.js";
+import {
+  formatNumberedList,
+  formatDetail,
+  formatStats,
+  replyLine,
+  STATUS_LABELS,
+} from "../lib/line-format.js";
 
 export const webhookRouter = new Hono();
 
@@ -73,7 +86,10 @@ webhookRouter.post("/line", async (c) => {
           if (results.length === 0) {
             reply = `🔍 找不到「${cmd.keyword}」相關的項目`;
           } else {
-            setSession(userId, results.map((r) => r.id));
+            setSession(
+              userId,
+              results.map((r) => r.id),
+            );
             reply = formatNumberedList(`🔍 搜尋「${cmd.keyword}」`, results, results.length);
           }
         } catch {
@@ -92,7 +108,10 @@ webhookRouter.post("/line", async (c) => {
         if (total === 0) {
           reply = "✨ 沒有閃念筆記";
         } else {
-          setSession(userId, fleetingItems.map((r) => r.id));
+          setSession(
+            userId,
+            fleetingItems.map((r) => r.id),
+          );
           reply = formatNumberedList("✨ 閃念筆記", fleetingItems, total);
         }
         break;
@@ -103,7 +122,10 @@ webhookRouter.post("/line", async (c) => {
         if (focusItems.length === 0) {
           reply = "📅 今天沒有待處理的項目！";
         } else {
-          setSession(userId, focusItems.map((r) => r.id));
+          setSession(
+            userId,
+            focusItems.map((r) => r.id),
+          );
           reply = formatNumberedList("📅 今日焦點", focusItems, focusItems.length);
         }
         break;
@@ -126,7 +148,10 @@ webhookRouter.post("/line", async (c) => {
         if (total === 0) {
           reply = "🔵 沒有進行中的待辦";
         } else {
-          setSession(userId, activeItems.map((r) => r.id));
+          setSession(
+            userId,
+            activeItems.map((r) => r.id),
+          );
           reply = formatNumberedList("🔵 進行中", activeItems, total);
         }
         break;
@@ -142,7 +167,10 @@ webhookRouter.post("/line", async (c) => {
         if (total === 0) {
           reply = "📝 沒有發展中的筆記";
         } else {
-          setSession(userId, devItems.map((r) => r.id));
+          setSession(
+            userId,
+            devItems.map((r) => r.id),
+          );
           reply = formatNumberedList("📝 發展中", devItems, total);
         }
         break;
@@ -158,7 +186,10 @@ webhookRouter.post("/line", async (c) => {
         if (total === 0) {
           reply = "💎 沒有永久筆記";
         } else {
-          setSession(userId, permItems.map((r) => r.id));
+          setSession(
+            userId,
+            permItems.map((r) => r.id),
+          );
           reply = formatNumberedList("💎 永久筆記", permItems, total);
         }
         break;
@@ -175,7 +206,10 @@ webhookRouter.post("/line", async (c) => {
         if (total === 0) {
           reply = "📝 沒有筆記";
         } else {
-          setSession(userId, noteItems.map((r) => r.id));
+          setSession(
+            userId,
+            noteItems.map((r) => r.id),
+          );
           reply = formatNumberedList("📝 筆記", noteItems, total);
         }
         break;
@@ -192,7 +226,10 @@ webhookRouter.post("/line", async (c) => {
         if (total === 0) {
           reply = "☑️ 沒有待辦事項";
         } else {
-          setSession(userId, todoItems.map((r) => r.id));
+          setSession(
+            userId,
+            todoItems.map((r) => r.id),
+          );
           reply = formatNumberedList("☑️ 待辦事項", todoItems, total);
         }
         break;
@@ -206,7 +243,10 @@ webhookRouter.post("/line", async (c) => {
         if (total === 0) {
           reply = `🏷️ 找不到標籤「${cmd.tag}」的項目`;
         } else {
-          setSession(userId, tagItems.map((r) => r.id));
+          setSession(
+            userId,
+            tagItems.map((r) => r.id),
+          );
           reply = formatNumberedList(`🏷️ 標籤「${cmd.tag}」`, tagItems, total);
         }
         break;
@@ -214,14 +254,20 @@ webhookRouter.post("/line", async (c) => {
 
       case "detail": {
         const resolved = resolveSessionItem(userId, cmd.index);
-        if ("error" in resolved) { reply = resolved.error; break; }
+        if ("error" in resolved) {
+          reply = resolved.error;
+          break;
+        }
         reply = formatDetail(resolved.item);
         break;
       }
 
       case "due": {
         const resolved = resolveSessionItem(userId, cmd.index);
-        if ("error" in resolved) { reply = resolved.error; break; }
+        if ("error" in resolved) {
+          reply = resolved.error;
+          break;
+        }
         if (resolved.item.type !== "todo") {
           reply = "❌ 到期日只適用於待辦";
           break;
@@ -242,7 +288,10 @@ webhookRouter.post("/line", async (c) => {
 
       case "tag": {
         const resolved = resolveSessionItem(userId, cmd.index);
-        if ("error" in resolved) { reply = resolved.error; break; }
+        if ("error" in resolved) {
+          reply = resolved.error;
+          break;
+        }
         const existingTags: string[] = JSON.parse(resolved.item.tags || "[]");
         const newTags = [...new Set([...existingTags, ...cmd.tags])];
         updateItem(db, resolved.itemId, { tags: newTags });
@@ -252,7 +301,10 @@ webhookRouter.post("/line", async (c) => {
 
       case "done": {
         const resolved = resolveSessionItem(userId, cmd.index);
-        if ("error" in resolved) { reply = resolved.error; break; }
+        if ("error" in resolved) {
+          reply = resolved.error;
+          break;
+        }
         if (resolved.item.type !== "todo") {
           reply = "❌ 此指令只適用於待辦";
           break;
@@ -264,7 +316,10 @@ webhookRouter.post("/line", async (c) => {
 
       case "develop": {
         const resolved = resolveSessionItem(userId, cmd.index);
-        if ("error" in resolved) { reply = resolved.error; break; }
+        if ("error" in resolved) {
+          reply = resolved.error;
+          break;
+        }
         if (resolved.item.type !== "note") {
           reply = "❌ 此指令只適用於筆記";
           break;
@@ -284,7 +339,10 @@ webhookRouter.post("/line", async (c) => {
 
       case "mature": {
         const resolved = resolveSessionItem(userId, cmd.index);
-        if ("error" in resolved) { reply = resolved.error; break; }
+        if ("error" in resolved) {
+          reply = resolved.error;
+          break;
+        }
         if (resolved.item.type !== "note") {
           reply = "❌ 此指令只適用於筆記";
           break;
@@ -304,7 +362,10 @@ webhookRouter.post("/line", async (c) => {
 
       case "export": {
         const resolved = resolveSessionItem(userId, cmd.index);
-        if ("error" in resolved) { reply = resolved.error; break; }
+        if ("error" in resolved) {
+          reply = resolved.error;
+          break;
+        }
         if (resolved.item.type !== "note") {
           reply = "❌ 此指令只適用於筆記";
           break;
@@ -336,7 +397,10 @@ webhookRouter.post("/line", async (c) => {
 
       case "archive": {
         const resolved = resolveSessionItem(userId, cmd.index);
-        if ("error" in resolved) { reply = resolved.error; break; }
+        if ("error" in resolved) {
+          reply = resolved.error;
+          break;
+        }
         updateItem(db, resolved.itemId, { status: "archived" });
         reply = `✅ 已封存「${resolved.item.title}」`;
         break;
@@ -344,17 +408,24 @@ webhookRouter.post("/line", async (c) => {
 
       case "priority": {
         const resolved = resolveSessionItem(userId, cmd.index);
-        if ("error" in resolved) { reply = resolved.error; break; }
+        if ("error" in resolved) {
+          reply = resolved.error;
+          break;
+        }
         updateItem(db, resolved.itemId, { priority: cmd.priority });
-        reply = cmd.priority === null
-          ? `✅ 已清除「${resolved.item.title}」的優先度`
-          : `✅ 已將「${resolved.item.title}」優先度設為 ${cmd.priority}`;
+        reply =
+          cmd.priority === null
+            ? `✅ 已清除「${resolved.item.title}」的優先度`
+            : `✅ 已將「${resolved.item.title}」優先度設為 ${cmd.priority}`;
         break;
       }
 
       case "untag": {
         const resolved = resolveSessionItem(userId, cmd.index);
-        if ("error" in resolved) { reply = resolved.error; break; }
+        if ("error" in resolved) {
+          reply = resolved.error;
+          break;
+        }
         const currentTags: string[] = JSON.parse(resolved.item.tags || "[]");
         const remaining = currentTags.filter((t) => !cmd.tags.includes(t));
         updateItem(db, resolved.itemId, { tags: remaining });
@@ -364,7 +435,10 @@ webhookRouter.post("/line", async (c) => {
 
       case "track": {
         const resolved = resolveSessionItem(userId, cmd.index);
-        if ("error" in resolved) { reply = resolved.error; break; }
+        if ("error" in resolved) {
+          reply = resolved.error;
+          break;
+        }
         if (resolved.item.type !== "note") {
           reply = "❌ 此指令只適用於筆記";
           break;
@@ -406,7 +480,10 @@ webhookRouter.post("/line", async (c) => {
         if (total === 0) {
           reply = "📌 沒有暫存項目";
         } else {
-          setSession(userId, scratchItems.map((r) => r.id));
+          setSession(
+            userId,
+            scratchItems.map((r) => r.id),
+          );
           reply = formatNumberedList("📌 暫存", scratchItems, total);
         }
         break;
@@ -414,7 +491,10 @@ webhookRouter.post("/line", async (c) => {
 
       case "delete": {
         const resolved = resolveSessionItem(userId, cmd.index);
-        if ("error" in resolved) { reply = resolved.error; break; }
+        if ("error" in resolved) {
+          reply = resolved.error;
+          break;
+        }
         deleteItem(db, resolved.itemId);
         reply = `🗑️ 已刪除「${resolved.item.title}」`;
         break;
@@ -422,7 +502,10 @@ webhookRouter.post("/line", async (c) => {
 
       case "upgrade": {
         const resolved = resolveSessionItem(userId, cmd.index);
-        if ("error" in resolved) { reply = resolved.error; break; }
+        if ("error" in resolved) {
+          reply = resolved.error;
+          break;
+        }
         if (resolved.item.type !== "scratch") {
           reply = "❌ 此指令只適用於暫存項目";
           break;
@@ -442,7 +525,8 @@ webhookRouter.post("/line", async (c) => {
             priority: cmd.parsed.priority,
             origin: cmd.parsed.source,
           });
-          const typeLabel = item.type === "todo" ? "待辦" : item.type === "scratch" ? "暫存" : "閃念筆記";
+          const typeLabel =
+            item.type === "todo" ? "待辦" : item.type === "scratch" ? "暫存" : "閃念筆記";
           const priorityLabel = cmd.parsed.priority === "high" ? " [高優先]" : "";
           reply = `✅ 已存入（${typeLabel}${priorityLabel}）\n${item.title}`;
         } catch (err) {

@@ -1,6 +1,15 @@
 import { useState } from "react";
 import type { ViewType } from "@/lib/types";
-import { FileText, ListTodo, LayoutDashboard, Search, Menu, Archive, Settings, StickyNote } from "lucide-react";
+import {
+  FileText,
+  ListTodo,
+  LayoutDashboard,
+  Search,
+  Menu,
+  Archive,
+  Settings,
+  StickyNote,
+} from "lucide-react";
 
 interface BottomNavProps {
   currentView: ViewType;
@@ -30,10 +39,7 @@ export function BottomNav({ currentView, onViewChange }: BottomNavProps) {
     <>
       {/* More sheet overlay */}
       {moreOpen && (
-        <div
-          className="fixed inset-0 z-40 md:hidden"
-          onClick={() => setMoreOpen(false)}
-        >
+        <div className="fixed inset-0 z-40 md:hidden" onClick={() => setMoreOpen(false)}>
           <div
             className="absolute bottom-14 right-2 bg-popover border rounded-lg shadow-lg p-2 min-w-[120px]"
             onClick={(e) => e.stopPropagation()}
@@ -65,9 +71,7 @@ export function BottomNav({ currentView, onViewChange }: BottomNavProps) {
             <button
               key={item.id}
               className={`flex flex-col items-center py-2 px-3 flex-1 ${
-                currentView === item.id
-                  ? "text-primary"
-                  : "text-muted-foreground"
+                currentView === item.id ? "text-primary" : "text-muted-foreground"
               }`}
               onClick={() => onViewChange(item.id)}
             >
@@ -77,9 +81,7 @@ export function BottomNav({ currentView, onViewChange }: BottomNavProps) {
           ))}
           <button
             className={`flex flex-col items-center py-2 px-3 flex-1 ${
-              isMoreActive || moreOpen
-                ? "text-primary"
-                : "text-muted-foreground"
+              isMoreActive || moreOpen ? "text-primary" : "text-muted-foreground"
             }`}
             onClick={() => setMoreOpen(!moreOpen)}
           >

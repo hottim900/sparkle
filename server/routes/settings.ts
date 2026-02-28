@@ -15,27 +15,34 @@ const ALLOWED_KEYS = [
 
 const updateSettingsSchema = z
   .record(z.string(), z.string())
-  .refine(
-    (obj) => Object.keys(obj).every((k) => (ALLOWED_KEYS as readonly string[]).includes(k)),
-    { message: "Unknown settings key" },
-  )
+  .refine((obj) => Object.keys(obj).every((k) => (ALLOWED_KEYS as readonly string[]).includes(k)), {
+    message: "Unknown settings key",
+  })
   .refine(
     (obj) => {
-      if ("obsidian_enabled" in obj && obj.obsidian_enabled !== "true" && obj.obsidian_enabled !== "false") {
+      if (
+        "obsidian_enabled" in obj &&
+        obj.obsidian_enabled !== "true" &&
+        obj.obsidian_enabled !== "false"
+      ) {
         return false;
       }
       return true;
     },
-    { message: "obsidian_enabled must be \"true\" or \"false\"" },
+    { message: 'obsidian_enabled must be "true" or "false"' },
   )
   .refine(
     (obj) => {
-      if ("obsidian_export_mode" in obj && obj.obsidian_export_mode !== "overwrite" && obj.obsidian_export_mode !== "new") {
+      if (
+        "obsidian_export_mode" in obj &&
+        obj.obsidian_export_mode !== "overwrite" &&
+        obj.obsidian_export_mode !== "new"
+      ) {
         return false;
       }
       return true;
     },
-    { message: "obsidian_export_mode must be \"overwrite\" or \"new\"" },
+    { message: 'obsidian_export_mode must be "overwrite" or "new"' },
   );
 
 // GET /api/settings — return all settings
@@ -60,7 +67,10 @@ settingsRouter.put("/", async (c) => {
       // Use provided vault_path or fall back to current DB value
       const vaultPath = updates.obsidian_vault_path ?? getSettings(sqlite).obsidian_vault_path;
       if (!vaultPath) {
-        return c.json({ error: "obsidian_vault_path must be non-empty when enabling Obsidian" }, 400);
+        return c.json(
+          { error: "obsidian_vault_path must be non-empty when enabling Obsidian" },
+          400,
+        );
       }
       try {
         accessSync(vaultPath, constants.W_OK);

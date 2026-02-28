@@ -184,11 +184,7 @@ function createApp() {
       let updated = 0;
 
       for (const item of importItems) {
-        const existing = testDb
-          .select()
-          .from(items)
-          .where(eq(items.id, item.id))
-          .get();
+        const existing = testDb.select().from(items).where(eq(items.id, item.id)).get();
 
         if (existing) {
           testDb
@@ -219,10 +215,7 @@ function createApp() {
       return c.json({ imported, updated });
     } catch (e) {
       if (e instanceof ZodError) {
-        return c.json(
-          { error: e.errors[0]?.message ?? "Validation error" },
-          400,
-        );
+        return c.json({ error: e.errors[0]?.message ?? "Validation error" }, 400);
       }
       throw e;
     }
@@ -429,10 +422,9 @@ describe("Items CRUD", () => {
         body: JSON.stringify({ title: "High", priority: "high" }),
       });
 
-      const res = await app.request(
-        "/api/items?sort=priority&order=desc",
-        { headers: authHeaders() },
-      );
+      const res = await app.request("/api/items?sort=priority&order=desc", {
+        headers: authHeaders(),
+      });
       expect(res.status).toBe(200);
       const body = await res.json();
       expect(body.items).toHaveLength(2);
@@ -464,10 +456,9 @@ describe("Items CRUD", () => {
         body: JSON.stringify({ title: "First Updated" }),
       });
 
-      const res = await app.request(
-        "/api/items?sort=modified&order=desc",
-        { headers: authHeaders() },
-      );
+      const res = await app.request("/api/items?sort=modified&order=desc", {
+        headers: authHeaders(),
+      });
       expect(res.status).toBe(200);
       const body = await res.json();
       expect(body.items).toHaveLength(2);
@@ -550,7 +541,9 @@ describe("Items CRUD", () => {
       expect(res.status).toBe(200);
       const body = await res.json();
       const withTodos = body.items.find((i: { title: string }) => i.title === "Note With Todos");
-      const withoutTodos = body.items.find((i: { title: string }) => i.title === "Note Without Todos");
+      const withoutTodos = body.items.find(
+        (i: { title: string }) => i.title === "Note Without Todos",
+      );
       expect(withTodos.linked_todo_count).toBe(2);
       expect(withoutTodos.linked_todo_count).toBe(0);
     });
@@ -816,7 +809,10 @@ describe("Linked Todos", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.items).toHaveLength(2);
-    expect(body.items.map((i: { title: string }) => i.title).sort()).toEqual(["Track 1", "Track 2"]);
+    expect(body.items.map((i: { title: string }) => i.title).sort()).toEqual([
+      "Track 1",
+      "Track 2",
+    ]);
   });
 
   it("GET /api/items/:id/linked-todos returns empty when no linked todos", async () => {
@@ -1394,10 +1390,9 @@ describe("POST /api/import", () => {
     expect(body.updated).toBe(0);
 
     // Verify items exist
-    const getRes = await app.request(
-      "/api/items/550e8400-e29b-41d4-a716-446655440001",
-      { headers: authHeaders() },
-    );
+    const getRes = await app.request("/api/items/550e8400-e29b-41d4-a716-446655440001", {
+      headers: authHeaders(),
+    });
     expect(getRes.status).toBe(200);
     const item = await getRes.json();
     expect(item.title).toBe("Imported item 1");
@@ -1461,10 +1456,9 @@ describe("POST /api/import", () => {
     expect(body.updated).toBe(1);
 
     // Verify item was updated
-    const getRes = await app.request(
-      "/api/items/550e8400-e29b-41d4-a716-446655440003",
-      { headers: authHeaders() },
-    );
+    const getRes = await app.request("/api/items/550e8400-e29b-41d4-a716-446655440003", {
+      headers: authHeaders(),
+    });
     const item = await getRes.json();
     expect(item.title).toBe("Updated title");
     expect(item.status).toBe("active");

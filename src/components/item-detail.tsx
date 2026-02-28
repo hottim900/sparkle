@@ -30,7 +30,14 @@ import {
   getLinkedTodos,
   searchItemsApi,
 } from "@/lib/api";
-import { parseItem, parseItems, type ParsedItem, type ItemStatus, type ItemPriority, type Item } from "@/lib/types";
+import {
+  parseItem,
+  parseItems,
+  type ParsedItem,
+  type ItemStatus,
+  type ItemPriority,
+  type Item,
+} from "@/lib/types";
 import { TagInput } from "@/components/tag-input";
 import { toast } from "sonner";
 import {
@@ -54,7 +61,9 @@ import {
 } from "lucide-react";
 import { ShareDialog } from "@/components/share-dialog";
 
-const MarkdownPreview = lazy(() => import("@/components/markdown-preview").then(m => ({ default: m.MarkdownPreview })));
+const MarkdownPreview = lazy(() =>
+  import("@/components/markdown-preview").then((m) => ({ default: m.MarkdownPreview })),
+);
 
 interface ItemDetailProps {
   itemId: string;
@@ -281,28 +290,25 @@ export function ItemDetail({
     setShowCreateTodo(true);
   };
 
-  const handleNoteSearch = useCallback(
-    (query: string) => {
-      setNoteSearchQuery(query);
-      if (noteSearchTimeoutRef.current) clearTimeout(noteSearchTimeoutRef.current);
-      if (!query.trim()) {
+  const handleNoteSearch = useCallback((query: string) => {
+    setNoteSearchQuery(query);
+    if (noteSearchTimeoutRef.current) clearTimeout(noteSearchTimeoutRef.current);
+    if (!query.trim()) {
+      setNoteSearchResults([]);
+      return;
+    }
+    noteSearchTimeoutRef.current = setTimeout(async () => {
+      setNoteSearching(true);
+      try {
+        const res = await searchItemsApi(query, 10);
+        setNoteSearchResults(res.results.filter((r) => r.type === "note"));
+      } catch {
         setNoteSearchResults([]);
-        return;
+      } finally {
+        setNoteSearching(false);
       }
-      noteSearchTimeoutRef.current = setTimeout(async () => {
-        setNoteSearching(true);
-        try {
-          const res = await searchItemsApi(query, 10);
-          setNoteSearchResults(res.results.filter((r) => r.type === "note"));
-        } catch {
-          setNoteSearchResults([]);
-        } finally {
-          setNoteSearching(false);
-        }
-      }, 300);
-    },
-    [],
-  );
+    }, 300);
+  }, []);
 
   const handleLinkNote = async (noteId: string) => {
     if (!item) return;
@@ -390,16 +396,21 @@ export function ItemDetail({
     );
   }
 
-  const statusOptions = item.type === "note" ? noteStatuses : item.type === "todo" ? todoStatuses : scratchStatuses;
-  const showExportButton =
-    obsidianEnabled && item.type === "note" && item.status === "permanent";
+  const statusOptions =
+    item.type === "note" ? noteStatuses : item.type === "todo" ? todoStatuses : scratchStatuses;
+  const showExportButton = obsidianEnabled && item.type === "note" && item.status === "permanent";
 
   return (
     <div className="h-full flex flex-col min-w-0">
       {/* Header */}
       <div className="flex items-center justify-between p-3 border-b">
         <div className="flex items-center gap-0.5">
-          <Button variant="ghost" size="icon" onClick={onBack ?? onClose} title={canGoBack ? "返回上一頁" : "關閉"}>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onBack ?? onClose}
+            title={canGoBack ? "返回上一頁" : "關閉"}
+          >
             <ArrowLeft className="h-4 w-4" />
           </Button>
           {canGoBack && (
@@ -503,8 +514,8 @@ export function ItemDetail({
           item.type === "note"
             ? "bg-purple-50 text-purple-700 dark:bg-purple-950 dark:text-purple-300"
             : item.type === "todo"
-            ? "bg-sky-50 text-sky-700 dark:bg-sky-950 dark:text-sky-300"
-            : "bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300"
+              ? "bg-sky-50 text-sky-700 dark:bg-sky-950 dark:text-sky-300"
+              : "bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300"
         }`}
       >
         {item.type === "note" ? (
@@ -604,9 +615,7 @@ export function ItemDetail({
         {/* Due date (todo only) */}
         {item.type === "todo" && (
           <div>
-            <label className="text-sm text-muted-foreground block mb-1">
-              到期日
-            </label>
+            <label className="text-sm text-muted-foreground block mb-1">到期日</label>
             <Input
               type="date"
               value={item.due ?? ""}
@@ -622,9 +631,7 @@ export function ItemDetail({
         {/* Linked note section (todo only) */}
         {item.type === "todo" && (
           <div>
-            <label className="text-sm text-muted-foreground block mb-1">
-              關聯筆記
-            </label>
+            <label className="text-sm text-muted-foreground block mb-1">關聯筆記</label>
             {item.linked_note_id && linkedNoteTitle ? (
               <div className="space-y-1">
                 <button
@@ -673,9 +680,7 @@ export function ItemDetail({
                         <X className="h-3.5 w-3.5" />
                       </Button>
                     </div>
-                    {noteSearching && (
-                      <p className="text-xs text-muted-foreground">搜尋中...</p>
-                    )}
+                    {noteSearching && <p className="text-xs text-muted-foreground">搜尋中...</p>}
                     {noteSearchResults.length > 0 && (
                       <div className="space-y-1 max-h-40 overflow-y-auto">
                         {noteSearchResults.map((note) => (
@@ -768,11 +773,7 @@ export function ItemDetail({
               onRemove={(tag) => setLinkedTodoTags((prev) => prev.filter((t) => t !== tag))}
             />
             <div className="flex justify-end gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowCreateTodo(false)}
-              >
+              <Button variant="outline" size="sm" onClick={() => setShowCreateTodo(false)}>
                 取消
               </Button>
               <Button
@@ -780,9 +781,7 @@ export function ItemDetail({
                 onClick={handleCreateLinkedTodo}
                 disabled={!linkedTodoTitle.trim() || creatingTodo}
               >
-                {creatingTodo ? (
-                  <Loader2 className="h-3 w-3 animate-spin mr-1" />
-                ) : null}
+                {creatingTodo ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
                 建立
               </Button>
             </div>
@@ -792,9 +791,7 @@ export function ItemDetail({
         {/* Linked todos section (note only) */}
         {item.type === "note" && (linkedTodos.length > 0 || linkedTodosLoading) && (
           <div>
-            <label className="text-sm text-muted-foreground block mb-2">
-              關聯待辦
-            </label>
+            <label className="text-sm text-muted-foreground block mb-2">關聯待辦</label>
             {linkedTodosLoading ? (
               <p className="text-xs text-muted-foreground">載入中...</p>
             ) : (
@@ -807,13 +804,13 @@ export function ItemDetail({
                     onClick={() => onNavigate?.(todo.id)}
                   >
                     <ListTodo className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                    <span className={`text-sm truncate flex-1 ${todo.status === "done" ? "line-through text-muted-foreground" : ""}`}>
+                    <span
+                      className={`text-sm truncate flex-1 ${todo.status === "done" ? "line-through text-muted-foreground" : ""}`}
+                    >
                       {todo.title}
                     </span>
                     {todo.due && (
-                      <span className="text-xs text-muted-foreground shrink-0">
-                        {todo.due}
-                      </span>
+                      <span className="text-xs text-muted-foreground shrink-0">{todo.due}</span>
                     )}
                   </button>
                 ))}
@@ -824,9 +821,7 @@ export function ItemDetail({
 
         {/* Source URL */}
         <div>
-          <label className="text-sm text-muted-foreground block mb-1">
-            參考連結
-          </label>
+          <label className="text-sm text-muted-foreground block mb-1">參考連結</label>
           <Input
             type="url"
             value={item.source ?? ""}
@@ -848,9 +843,7 @@ export function ItemDetail({
         {/* Origin (read-only) */}
         {item.origin && (
           <div>
-            <label className="text-sm text-muted-foreground block mb-1">
-              捕捉來源
-            </label>
+            <label className="text-sm text-muted-foreground block mb-1">捕捉來源</label>
             <p className="text-sm px-3 py-2 bg-muted rounded-md">{item.origin}</p>
           </div>
         )}
@@ -858,9 +851,7 @@ export function ItemDetail({
         {/* Tags */}
         {item.type !== "scratch" && (
           <div>
-            <label className="text-sm text-muted-foreground block mb-1">
-              標籤
-            </label>
+            <label className="text-sm text-muted-foreground block mb-1">標籤</label>
             {/* GTD quick-select buttons for todos */}
             {item.type === "todo" && (
               <div className="flex gap-1 mb-2">
@@ -886,21 +877,14 @@ export function ItemDetail({
                 })}
               </div>
             )}
-            <TagInput
-              tags={item.tags}
-              allTags={allTags}
-              onAdd={addTag}
-              onRemove={removeTag}
-            />
+            <TagInput tags={item.tags} allTags={allTags} onAdd={addTag} onRemove={removeTag} />
           </div>
         )}
 
         {/* Aliases */}
         {item.type !== "scratch" && (
           <div>
-            <label className="text-sm text-muted-foreground block mb-1">
-              別名
-            </label>
+            <label className="text-sm text-muted-foreground block mb-1">別名</label>
             <div className="flex flex-wrap gap-1 mb-2">
               {item.aliases.map((alias) => (
                 <Badge key={alias} variant="secondary" className="gap-1">
@@ -928,9 +912,7 @@ export function ItemDetail({
         {/* Content / Markdown */}
         <div>
           <div className="flex items-center justify-between mb-1">
-            <label className="text-sm text-muted-foreground">
-              內容
-            </label>
+            <label className="text-sm text-muted-foreground">內容</label>
             <div className="flex gap-1">
               <Button
                 variant={previewMode ? "ghost" : "secondary"}
@@ -956,7 +938,13 @@ export function ItemDetail({
             <div className="min-h-[240px] rounded-md border p-3 text-sm break-words">
               {item.content ? (
                 <ErrorBoundary>
-                  <Suspense fallback={<div className="flex items-center justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>}>
+                  <Suspense
+                    fallback={
+                      <div className="flex items-center justify-center py-8">
+                        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                      </div>
+                    }
+                  >
                     <MarkdownPreview content={item.content} />
                   </Suspense>
                 </ErrorBoundary>

@@ -1,11 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import Database from "better-sqlite3";
-import {
-  getSetting,
-  getSettings,
-  getObsidianSettings,
-  updateSettings,
-} from "../settings.js";
+import { getSetting, getSettings, getObsidianSettings, updateSettings } from "../settings.js";
 
 function createTestDb() {
   const sqlite = new Database(":memory:");

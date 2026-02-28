@@ -13,12 +13,24 @@ import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
 import { getConfig, getItem } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { List, ListTodo, Loader2 } from "lucide-react";
-import { parseItem, type ViewType, type ParsedItem, type ItemStatus, type ItemType } from "@/lib/types";
+import {
+  parseItem,
+  type ViewType,
+  type ParsedItem,
+  type ItemStatus,
+  type ItemType,
+} from "@/lib/types";
 
-const ItemDetail = lazy(() => import("@/components/item-detail").then(m => ({ default: m.ItemDetail })));
-const Settings = lazy(() => import("@/components/settings").then(m => ({ default: m.Settings })));
-const FleetingTriage = lazy(() => import("@/components/fleeting-triage").then(m => ({ default: m.FleetingTriage })));
-const Dashboard = lazy(() => import("@/components/dashboard").then(m => ({ default: m.Dashboard })));
+const ItemDetail = lazy(() =>
+  import("@/components/item-detail").then((m) => ({ default: m.ItemDetail })),
+);
+const Settings = lazy(() => import("@/components/settings").then((m) => ({ default: m.Settings })));
+const FleetingTriage = lazy(() =>
+  import("@/components/fleeting-triage").then((m) => ({ default: m.FleetingTriage })),
+);
+const Dashboard = lazy(() =>
+  import("@/components/dashboard").then((m) => ({ default: m.Dashboard })),
+);
 
 const LoadingFallback = () => (
   <div className="flex items-center justify-center h-full">
@@ -29,9 +41,7 @@ const LoadingFallback = () => (
 const isMobile = () => window.innerWidth < 768;
 
 function MainApp() {
-  const [currentView, setCurrentView] = useState<ViewType>(
-    isMobile() ? "notes" : "dashboard"
-  );
+  const [currentView, setCurrentView] = useState<ViewType>(isMobile() ? "notes" : "dashboard");
   const [selectedItem, setSelectedItem] = useState<ParsedItem | null>(null);
   const [selectedTag, setSelectedTag] = useState<string | undefined>();
   const [refreshKey, setRefreshKey] = useState(0);
@@ -42,7 +52,9 @@ function MainApp() {
   const [navStack, setNavStack] = useState<{ view: ViewType; itemId: string | null }[]>([]);
 
   // Sub-navigation state for notes and todos views
-  const [noteSubView, setNoteSubView] = useState<"fleeting" | "developing" | "permanent" | "exported">("fleeting");
+  const [noteSubView, setNoteSubView] = useState<
+    "fleeting" | "developing" | "permanent" | "exported"
+  >("fleeting");
   const [todoSubView, setTodoSubView] = useState<"active" | "done">("active");
 
   // Load config on mount
@@ -72,19 +84,19 @@ function MainApp() {
     setNavStack([]);
   };
 
-  const handleNavigate = useCallback(async (itemId: string) => {
-    try {
-      // Push current state onto nav stack before navigating
-      setNavStack((prev) => [
-        ...prev,
-        { view: currentView, itemId: selectedItem?.id ?? null },
-      ]);
-      const itemData = await getItem(itemId);
-      setSelectedItem(parseItem(itemData));
-    } catch {
-      // item may have been deleted
-    }
-  }, [currentView, selectedItem?.id]);
+  const handleNavigate = useCallback(
+    async (itemId: string) => {
+      try {
+        // Push current state onto nav stack before navigating
+        setNavStack((prev) => [...prev, { view: currentView, itemId: selectedItem?.id ?? null }]);
+        const itemData = await getItem(itemId);
+        setSelectedItem(parseItem(itemData));
+      } catch {
+        // item may have been deleted
+      }
+    },
+    [currentView, selectedItem?.id],
+  );
 
   const handleBack = useCallback(() => {
     if (navStack.length === 0) {
@@ -118,22 +130,18 @@ function MainApp() {
   const keyboardHandlers = useMemo(
     () => ({
       onNewItem: () => {
-        const input = document.querySelector<HTMLInputElement>(
-          'input[placeholder="快速記錄..."]'
-        );
+        const input = document.querySelector<HTMLInputElement>('input[placeholder="快速記錄..."]');
         input?.focus();
       },
       onSearch: () => {
-        const input = document.querySelector<HTMLInputElement>(
-          'input[placeholder="搜尋..."]'
-        );
+        const input = document.querySelector<HTMLInputElement>('input[placeholder="搜尋..."]');
         input?.focus();
       },
       onClose: () => {
         handleClearDetail();
       },
     }),
-    [handleClearDetail]
+    [handleClearDetail],
   );
 
   useKeyboardShortcuts(keyboardHandlers);
@@ -141,8 +149,14 @@ function MainApp() {
   // Map view to status filter (for direct status views)
   const statusFilter: ItemStatus | undefined = (() => {
     const directStatusViews: ViewType[] = [
-      "fleeting", "developing", "permanent", "exported",
-      "active", "done", "draft", "archived",
+      "fleeting",
+      "developing",
+      "permanent",
+      "exported",
+      "active",
+      "done",
+      "draft",
+      "archived",
     ];
     if (directStatusViews.includes(currentView)) {
       return currentView as ItemStatus;
@@ -163,8 +177,7 @@ function MainApp() {
 
   // Show triage toggle when viewing fleeting notes
   const isFleetingView =
-    (currentView === "fleeting") ||
-    (currentView === "notes" && noteSubView === "fleeting");
+    currentView === "fleeting" || (currentView === "notes" && noteSubView === "fleeting");
   const isTriageActive = isFleetingView && triageMode;
 
   return (
@@ -193,10 +206,7 @@ function MainApp() {
               <Dashboard
                 onViewChange={handleViewChange}
                 onSelectItem={(item) => {
-                  setNavStack((prev) => [
-                    ...prev,
-                    { view: "dashboard", itemId: null },
-                  ]);
+                  setNavStack((prev) => [...prev, { view: "dashboard", itemId: null }]);
                   setCurrentView("all");
                   setSelectedItem(item);
                 }}
@@ -310,9 +320,7 @@ function MainApp() {
       </div>
 
       {/* Mobile Bottom Nav - hidden when detail panel is open */}
-      {!selectedItem && (
-        <BottomNav currentView={currentView} onViewChange={handleViewChange} />
-      )}
+      {!selectedItem && <BottomNav currentView={currentView} onViewChange={handleViewChange} />}
     </div>
   );
 }
