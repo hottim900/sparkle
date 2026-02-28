@@ -108,7 +108,7 @@ export function ItemDetail({ itemId, onUpdated, onDeleted }: ItemDetailProps) {
   const debouncedSave = useCallback(
     (field: string, value: unknown) => {
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-      saveTimeoutRef.current = setTimeout(() => saveField(field, value), 500);
+      saveTimeoutRef.current = setTimeout(() => saveField(field, value), 1500);
     },
     [saveField],
   );

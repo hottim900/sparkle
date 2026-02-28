@@ -90,9 +90,9 @@ describe("ItemDetail auto-save", () => {
     fireEvent.change(titleInput, { target: { value: "New Ti" } });
     expect(titleInput).toHaveValue("New Ti");
 
-    // Step 2: Debounce fires after 500ms — saveField("title", "New Ti") starts
+    // Step 2: Debounce fires after 1500ms — saveField("title", "New Ti") starts
     act(() => {
-      vi.advanceTimersByTime(500);
+      vi.advanceTimersByTime(1500);
     });
     expect(api.updateItem).toHaveBeenCalledWith("test-1", { title: "New Ti" });
 
