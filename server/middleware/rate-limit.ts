@@ -7,10 +7,11 @@ function getClientIp(c: Context): string {
   );
 }
 
-// General API rate limit: 200 req/min per IP
+// General API rate limit: 200 req/min per IP (configurable via env for E2E tests)
+const apiRateLimit = Number(process.env.RATE_LIMIT_MAX) || 200;
 export const apiRateLimiter = rateLimiter({
   windowMs: 60 * 1000,
-  limit: 200,
+  limit: apiRateLimit,
   keyGenerator: getClientIp,
   standardHeaders: "draft-7",
   message: { error: "Too many requests, please try again later" },
