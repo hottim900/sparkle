@@ -145,6 +145,7 @@ eslint.config.js        # ESLint 9 flat config (typescript-eslint, react-hooks, 
   workflows/
     ci.yml              # GitHub Actions CI (lint, format, type-check, build, unit test, E2E Playwright on Node 22)
     deploy.yml          # Auto-deploy on main push (workflow_run after CI, self-hosted runner)
+    release.yml         # Release-Please (auto CHANGELOG + GitHub Release on conventional commits)
 
 certs/                  # mkcert TLS certificates (gitignored)
 data/                   # SQLite database (gitignored)
@@ -371,6 +372,7 @@ Schema version tracked in `schema_version` table (version 0→11). Each step is 
 - CD: Auto-deploy on main push via `deploy.yml` (workflow_run trigger, self-hosted runner in WSL2). Steps: git pull → npm ci → build → restart → health check (retry loop, 5 attempts).
 - Dependabot: weekly npm updates (root + mcp-server) + GitHub Actions version updates. Dev dependency minor/patch grouped, production patch-only grouped. Config at `.github/dependabot.yml`.
 - Commit conventions: commitlint with `@commitlint/config-conventional`. Enforced via `.husky/commit-msg` hook. Allowed types: feat, fix, docs, chore, refactor, test, perf, ci, build, style, revert.
+- Release: Release-Please (`release.yml`) auto-creates Release PR on push to main when feat/fix commits are detected. Merging the PR bumps `package.json` version, updates `CHANGELOG.md`, and publishes a GitHub Release with semantic version tag.
 - MCP server tests: Vitest in `mcp-server/`, 43 tests (format helpers + API client + tool handlers). Run with `cd mcp-server && npm test`.
 
 ## CLAUDE.md Maintenance
