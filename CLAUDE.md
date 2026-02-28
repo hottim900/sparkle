@@ -18,10 +18,11 @@ Self-hosted PWA for personal idea capture + task management with Zettelkasten no
 
 ```
 server/
-  index.ts              # Hono app, route registration, compress + cache-control middleware, HTTPS/TLS support, startup validation, graceful shutdown
+  index.ts              # Hono app, route registration, compress + cache-control + CSP middleware, HTTPS/TLS support, startup validation, graceful shutdown, health endpoint
   middleware/
-    auth.ts             # Bearer token auth (skips /api/webhook/ and /api/public/)
+    auth.ts             # Bearer token auth (skips /api/webhook/, /api/public/, /api/health)
     rate-limit.ts       # Rate limiting (API general, auth failure, webhook)
+    logger.ts           # Pino HTTP request logger middleware (replaces hono's built-in)
   routes/
     items.ts            # CRUD + batch operations + GET /:id/linked-todos + POST /:id/export
     search.ts           # FTS5 full-text search
@@ -34,6 +35,7 @@ server/
     items.ts            # DB query functions (Drizzle), type-status validation, auto-mapping, linked_note_id filter
     stats.ts            # Stats (Zettelkasten + GTD) + focus query functions
     export.ts           # Obsidian .md export (frontmatter, sanitize filename, write to vault)
+    logger.ts           # Pino logger instance (JSON in prod, pino-pretty in dev)
     shutdown.ts         # Graceful shutdown (SIGTERM/SIGINT, WAL checkpoint, DB close)
     safe-compare.ts     # Timing-safe string comparison (crypto.timingSafeEqual)
     settings.ts         # Settings CRUD (getSetting, getSettings, getObsidianSettings, updateSettings)
@@ -50,6 +52,7 @@ server/
     index.ts            # DB connection + schema migration (version 0→11)
     schema.ts           # Drizzle table schema (items + settings + share_tokens)
     fts.ts              # FTS5 virtual table + sync triggers
+  test-utils.ts         # Shared test DB setup (createTestDb: in-memory SQLite + all tables + FTS)
 
 src/
   App.tsx               # Main layout, view routing, keyboard shortcuts, lazy-loaded components
@@ -304,7 +307,7 @@ Schema version tracked in `schema_version` table (version 0→11). Each step is 
 ## Conventions
 
 - UI language: 繁體中文
-- API: REST, JSON, Bearer token auth on /api/* (except /api/webhook/), rate-limited (hono-rate-limiter)
+- API: REST, JSON, Bearer token auth on /api/* (except /api/webhook/, /api/public/, /api/health), rate-limited (hono-rate-limiter)
 - Startup validation: AUTH_TOKEN strength (length >= 32, Shannon entropy >= 3.0), LINE secrets (warn only)
 - Graceful shutdown: SIGTERM/SIGINT → server.close() → WAL checkpoint → sqlite.close() (25s timeout)
 - Node version: engines in package.json (>=22, <24), enforced by .npmrc engine-strict=true
@@ -312,11 +315,13 @@ Schema version tracked in `schema_version` table (version 0→11). Each step is 
 - Aliases stored as JSON array string in SQLite
 - Timestamps: ISO 8601 strings
 - Database: SQLite WAL mode, FTS5 trigram tokenizer for search (supports Chinese)
-- Tests: Vitest, in-memory SQLite, mock db module with vi.mock
+- Tests: Vitest, in-memory SQLite, mock db module with vi.mock, shared `createTestDb()` in `server/test-utils.ts`
 - Obsidian export: .md with YAML frontmatter, local time (no TZ suffix), written to vault path. Config stored in `settings` table, read via `getObsidianSettings()`. `exportToObsidian(item, config)` is a pure function (no env dependency).
 - Settings API: `GET /api/settings` returns all settings; `PUT /api/settings` accepts partial updates with Zod validation (key whitelist, vault path writability check when enabling)
 - Public sharing: Notes can be shared via token-based URLs (`/s/:token`). SSR HTML pages with marked for Markdown, OpenGraph meta tags, dark mode CSS. Two visibility modes: `unlisted` (link-only) and `public` (listed in `/api/public`). Auth bypass on `/api/public/*` and `/s/*` paths. Share management via authenticated API (`/api/items/:id/share`, `/api/shares`)
 - Performance: gzip/deflate compression via `hono/compress` on all responses with `Vary: Accept-Encoding` for CDN cache correctness. Static assets (`/assets/*`) served with `Cache-Control: immutable` (Vite content-hashed filenames). Frontend uses code splitting — heavy components (ItemDetail, Settings, Dashboard, FleetingTriage, MarkdownPreview) are lazy-loaded via `React.lazy()` with `ErrorBoundary` wrappers for chunk load failure recovery. Vendor chunks split: `ui` (radix + cva), `markdown` (react-markdown + remark-gfm)
+- Logging: pino structured logger (`server/lib/logger.ts`). JSON output in production, pino-pretty in dev. Custom HTTP request logger middleware replaces hono's built-in. Health check requests logged at debug level. All server `console.log/error/warn` replaced with `logger.info/error/warn`.
+- Security: Content-Security-Policy header on all responses (self-only scripts/fonts/connect, unsafe-inline styles for Tailwind, HTTPS images, frame-ancestors none). Health endpoint (`GET /api/health`) unauthenticated for Docker/orchestrator monitoring.
 - Linting: ESLint 9 flat config with typescript-eslint (recommended), react-hooks plugin, eslint-config-prettier. Test files relaxed (`no-explicit-any` warn, `no-require-imports` off). Unused vars allowed with `_` prefix.
 - Formatting: Prettier (double quotes, trailing commas, 100 char width). Enforced via lint-staged + Husky pre-commit hook. `.prettierignore` excludes dist, mcp-server, data, certs.
 - CI: GitHub Actions on push/PR to main — lint → format:check → tsc (frontend + server) → build → test. Node 22 pinned.
