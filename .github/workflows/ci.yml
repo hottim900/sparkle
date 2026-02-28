@@ -39,8 +39,8 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Test
-        run: npx vitest run
+      - name: Test with coverage
+        run: npx vitest run --coverage
 
       - name: Install Playwright browsers
         run: npx playwright install chromium --with-deps
