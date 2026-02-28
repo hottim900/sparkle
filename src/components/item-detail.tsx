@@ -90,7 +90,10 @@ export function ItemDetail({ itemId, onUpdated, onDeleted }: ItemDetailProps) {
       if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
       try {
         const updated = await updateItem(item.id, { [field]: value });
-        setItem(parseItem(updated));
+        // Only update modified timestamp — don't overwrite local state
+        // to avoid resetting cursor position during typing
+        const serverModified = updated.modified;
+        setItem((prev) => (prev ? { ...prev, modified: serverModified } : prev));
         onUpdated?.();
         setSaveStatus("saved");
         savedTimerRef.current = setTimeout(() => setSaveStatus("idle"), 2000);
