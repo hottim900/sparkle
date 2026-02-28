@@ -141,6 +141,7 @@ eslint.config.js        # ESLint 9 flat config (typescript-eslint, react-hooks, 
 .husky/
   pre-commit            # CLAUDE.md update warning + lint-staged
 .github/
+  dependabot.yml        # Dependabot config (weekly npm + GitHub Actions updates)
   workflows/
     ci.yml              # GitHub Actions CI (lint, format, type-check, build, unit test, E2E Playwright on Node 22)
     deploy.yml          # Auto-deploy on main push (workflow_run after CI, self-hosted runner)
@@ -368,6 +369,7 @@ Schema version tracked in `schema_version` table (version 0→11). Each step is 
 - Formatting: Prettier (double quotes, trailing commas, 100 char width). Enforced via lint-staged + Husky pre-commit hook. `.prettierignore` excludes dist, mcp-server, data, certs.
 - CI: GitHub Actions on push/PR to main — npm audit → lint → format:check → tsc (frontend + server) → build → unit test → E2E (Playwright Chromium). Artifacts: playwright-report + test-results (7 days). Node 22 pinned. Job timeout: 15 minutes.
 - CD: Auto-deploy on main push via `deploy.yml` (workflow_run trigger, self-hosted runner in WSL2). Steps: git pull → npm ci → build → restart → health check (retry loop, 5 attempts).
+- Dependabot: weekly npm updates (root + mcp-server) + GitHub Actions version updates. Dev dependency minor/patch grouped, production patch-only grouped. Config at `.github/dependabot.yml`.
 - Commit conventions: commitlint with `@commitlint/config-conventional`. Enforced via `.husky/commit-msg` hook. Allowed types: feat, fix, docs, chore, refactor, test, perf, ci, build, style, revert.
 - MCP server tests: Vitest in `mcp-server/`, 43 tests (format helpers + API client + tool handlers). Run with `cd mcp-server && npm test`.
 
