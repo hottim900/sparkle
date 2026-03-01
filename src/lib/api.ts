@@ -106,6 +106,9 @@ export async function fetchWithRetry(url: string, options: RequestInit = {}): Pr
         if (isTimeoutError(error)) {
           throw new ApiClientError("Request timed out", 0);
         }
+        if (isNetworkError(error) && navigator.onLine) {
+          throw new ApiClientError("連線已過期，請重新整理頁面以重新驗證", 0);
+        }
         throw error;
       }
 

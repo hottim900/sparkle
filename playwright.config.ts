@@ -1,4 +1,4 @@
-import { defineConfig } from "@playwright/test";
+import { defineConfig, devices } from "@playwright/test";
 import { unlinkSync } from "node:fs";
 
 const TEST_DB = "/tmp/sparkle-e2e-test.db";
@@ -44,6 +44,17 @@ export default defineConfig({
         storageState: "e2e/.auth/user.json",
       },
       dependencies: ["setup"],
+      testIgnore: "e2e/mobile.spec.ts",
+    },
+    {
+      name: "mobile",
+      use: {
+        ...devices["iPhone 14"],
+        defaultBrowserType: "chromium",
+        storageState: "e2e/.auth/user.json",
+      },
+      dependencies: ["setup"],
+      testMatch: "e2e/mobile.spec.ts",
     },
   ],
   webServer: {
