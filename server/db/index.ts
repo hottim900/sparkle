@@ -185,6 +185,14 @@ function runMigrations(sqlite: Database.Database) {
         AND linked_note_id NOT IN (SELECT id FROM items)
       `);
 
+      // Fix legacy NULL values in NOT NULL columns before table recreation
+      sqlite.exec(`
+        UPDATE items SET modified = created WHERE modified IS NULL;
+        UPDATE items SET modified = datetime('now') WHERE modified IS NULL AND created IS NULL;
+        UPDATE items SET created = modified WHERE created IS NULL;
+        UPDATE items SET created = datetime('now') WHERE created IS NULL;
+      `);
+
       // Recreate table with FK (SQLite can't ALTER TABLE to add FK)
       sqlite.exec(`
         CREATE TABLE items_new (
