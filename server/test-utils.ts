@@ -23,7 +23,8 @@ export function createTestDb() {
       aliases TEXT NOT NULL DEFAULT '[]',
       linked_note_id TEXT DEFAULT NULL,
       created TEXT NOT NULL,
-      modified TEXT NOT NULL
+      modified TEXT NOT NULL,
+      FOREIGN KEY (linked_note_id) REFERENCES items(id) ON DELETE SET NULL
     );
     CREATE INDEX idx_items_status ON items(status);
     CREATE INDEX idx_items_type ON items(type);
