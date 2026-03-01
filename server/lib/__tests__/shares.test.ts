@@ -29,7 +29,8 @@ function createTestDb() {
       aliases TEXT NOT NULL DEFAULT '[]',
       linked_note_id TEXT DEFAULT NULL,
       created TEXT NOT NULL,
-      modified TEXT NOT NULL
+      modified TEXT NOT NULL,
+      FOREIGN KEY (linked_note_id) REFERENCES items(id) ON DELETE SET NULL
     );
 
     CREATE TABLE share_tokens (

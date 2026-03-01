@@ -564,16 +564,17 @@ describe("Data Access Layer", () => {
       expect(fetched!.linked_note_title).toBeNull();
     });
 
-    it("getItem returns null linked_note_title when linked note is deleted", () => {
+    it("ON DELETE SET NULL: deleting linked note nullifies linked_note_id", () => {
       const note = createItem(db, { title: "Will be deleted", type: "note" });
       const todo = createItem(db, {
         title: "Track note",
         type: "todo",
         linked_note_id: note.id,
       });
+      expect(todo.linked_note_id).toBe(note.id);
       deleteItem(db, note.id);
       const fetched = getItem(db, todo.id);
-      expect(fetched!.linked_note_id).toBe(note.id);
+      expect(fetched!.linked_note_id).toBeNull();
       expect(fetched!.linked_note_title).toBeNull();
     });
 
