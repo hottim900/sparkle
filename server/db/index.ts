@@ -213,7 +213,8 @@ function runMigrations(sqlite: Database.Database) {
           FOREIGN KEY (linked_note_id) REFERENCES items(id) ON DELETE SET NULL
         );
 
-        INSERT INTO items_new SELECT * FROM items;
+        INSERT INTO items_new (id, type, title, content, status, priority, due, tags, origin, source, aliases, linked_note_id, created, modified)
+        SELECT id, type, title, content, status, priority, due, tags, origin, source, aliases, linked_note_id, created, modified FROM items;
         DROP TABLE items;
         ALTER TABLE items_new RENAME TO items;
 
