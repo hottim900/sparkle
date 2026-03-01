@@ -41,6 +41,85 @@ class ApiClientError extends Error {
   }
 }
 
+// --- Retry + Timeout ---
+
+const REQUEST_TIMEOUT_MS = 15_000;
+const MAX_ATTEMPTS = 3;
+const BASE_DELAY_MS = 1_000;
+const MAX_DELAY_MS = 5_000;
+
+const IDEMPOTENT_METHODS = new Set(["GET", "HEAD", "DELETE", "OPTIONS"]);
+
+function isNetworkError(error: unknown): boolean {
+  return error instanceof TypeError && /fetch|network/i.test(error.message);
+}
+
+function isTimeoutError(error: unknown): boolean {
+  return error instanceof DOMException && error.name === "AbortError";
+}
+
+function getRetryDelay(attempt: number): number {
+  const exponential = BASE_DELAY_MS * Math.pow(2, attempt);
+  const capped = Math.min(exponential, MAX_DELAY_MS);
+  const jitter = Math.random() * 500;
+  return capped + jitter;
+}
+
+function shouldRetry(error: unknown, status: number | null, method: string): boolean {
+  if (status !== null && status >= 400 && status < 500) return false;
+  if (isNetworkError(error) || isTimeoutError(error)) return true;
+  if (status !== null && status >= 500) return IDEMPOTENT_METHODS.has(method.toUpperCase());
+  return false;
+}
+
+export async function fetchWithRetry(url: string, options: RequestInit = {}): Promise<Response> {
+  const method = (options.method ?? "GET").toUpperCase();
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+    try {
+      const response = await fetch(url, {
+        ...options,
+        signal: controller.signal,
+        cache: "no-store",
+      });
+      clearTimeout(timeoutId);
+
+      if (response.ok || (response.status >= 400 && response.status < 500)) {
+        return response;
+      }
+
+      // 5xx — check if retryable
+      if (!shouldRetry(null, response.status, method) || attempt === MAX_ATTEMPTS - 1) {
+        return response;
+      }
+
+      lastError = new Error(`HTTP ${response.status}`);
+      await new Promise((resolve) => setTimeout(resolve, getRetryDelay(attempt)));
+    } catch (error) {
+      clearTimeout(timeoutId);
+
+      if (!shouldRetry(error, null, method) || attempt === MAX_ATTEMPTS - 1) {
+        if (isTimeoutError(error)) {
+          throw new ApiClientError("Request timed out", 0);
+        }
+        throw error;
+      }
+
+      lastError = error;
+      await new Promise((resolve) => setTimeout(resolve, getRetryDelay(attempt)));
+    }
+  }
+
+  if (isTimeoutError(lastError)) {
+    throw new ApiClientError("Request timed out", 0);
+  }
+  throw lastError;
+}
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = getToken();
   const headers: Record<string, string> = {
@@ -55,7 +134,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     headers["Content-Type"] = "application/json";
   }
 
-  const res = await fetch(`${API_BASE}${path}`, {
+  const res = await fetchWithRetry(`${API_BASE}${path}`, {
     ...options,
     headers,
   });
