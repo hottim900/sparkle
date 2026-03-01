@@ -112,9 +112,9 @@ test.describe("Item Lifecycle", () => {
     await page.keyboard.type(tagName);
     await page.keyboard.press("Enter");
 
-    // Scope badge locator to the TagInput component (parent of parent of input)
-    // TagInput structure: <div>(root) > <div>(badges) + <div>(input container) > <input>
-    const tagInputRoot = tagInput.locator("../..");
+    // Scope badge locator to the TagInput component root
+    // TagInput structure: <div>(root) > <div>(badges) + <div>(relative) > <div>(flex) > <input>
+    const tagInputRoot = tagInput.locator("../../..");
     const tagBadge = tagInputRoot.locator('[data-slot="badge"]', { hasText: tagName });
 
     // Verify tag badge appears (saves immediately via saveField)
