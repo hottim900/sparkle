@@ -159,6 +159,7 @@ export function ItemList({
     onNavigate,
     refreshKey,
     obsidianEnabled,
+    isOnline,
   } = useAppContext();
   const [items, setItems] = useState<ParsedItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -419,6 +420,7 @@ export function ItemList({
             size="icon-xs"
             onClick={() => setSelectionMode(true)}
             title="多選模式"
+            disabled={!isOnline}
           >
             <CheckSquare className="h-3.5 w-3.5" />
           </Button>

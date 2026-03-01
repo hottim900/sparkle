@@ -39,7 +39,7 @@ function viewToDefaultType(view: ViewType): ItemType {
 }
 
 export function QuickCapture({ onCreated }: QuickCaptureProps) {
-  const { currentView } = useAppContext();
+  const { currentView, isOnline } = useAppContext();
   const { resolvedTheme, setTheme } = useTheme();
   const [title, setTitle] = useState("");
   const [expanded, setExpanded] = useState(false);
@@ -168,6 +168,12 @@ export function QuickCapture({ onCreated }: QuickCaptureProps) {
           <Send className="h-4 w-4" />
         </Button>
       </form>
+
+      {!isOnline && (
+        <p className="text-xs text-yellow-600 dark:text-yellow-400 px-1">
+          離線模式 — 提交後將在連線時自動同步
+        </p>
+      )}
 
       {expanded && (
         <>

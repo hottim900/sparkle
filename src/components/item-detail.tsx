@@ -53,6 +53,7 @@ const gtdTags = [
 export function ItemDetail({ itemId, onUpdated, onDeleted }: ItemDetailProps) {
   const {
     obsidianEnabled,
+    isOnline,
     onBack,
     onClearDetail: onClose,
     canGoBack,
@@ -86,6 +87,10 @@ export function ItemDetail({ itemId, onUpdated, onDeleted }: ItemDetailProps) {
   const saveField = useCallback(
     async (field: string, value: unknown) => {
       if (!item) return;
+      if (!isOnline) {
+        toast.error("離線中，無法儲存變更");
+        return;
+      }
       setSaveStatus("saving");
       if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
       try {
@@ -102,7 +107,7 @@ export function ItemDetail({ itemId, onUpdated, onDeleted }: ItemDetailProps) {
         toast.error(err instanceof Error ? err.message : "儲存失敗");
       }
     },
-    [item, onUpdated],
+    [item, isOnline, onUpdated],
   );
 
   const debouncedSave = useCallback(
@@ -122,6 +127,10 @@ export function ItemDetail({ itemId, onUpdated, onDeleted }: ItemDetailProps) {
 
   const handleDelete = async () => {
     if (!item) return;
+    if (!isOnline) {
+      toast.error("離線中，無法刪除");
+      return;
+    }
     try {
       await deleteItem(item.id);
       toast.success("已刪除");
@@ -133,6 +142,10 @@ export function ItemDetail({ itemId, onUpdated, onDeleted }: ItemDetailProps) {
 
   const handleExport = async () => {
     if (!item) return;
+    if (!isOnline) {
+      toast.error("離線中，無法匯出");
+      return;
+    }
     setExporting(true);
     try {
       const result = await exportItem(item.id);
@@ -207,6 +220,7 @@ export function ItemDetail({ itemId, onUpdated, onDeleted }: ItemDetailProps) {
         canGoBack={canGoBack}
         saveStatus={saveStatus}
         exporting={exporting}
+        isOnline={isOnline}
         onBack={onBack}
         onClose={onClose}
         onExport={handleExport}
@@ -320,6 +334,7 @@ export function ItemDetail({ itemId, onUpdated, onDeleted }: ItemDetailProps) {
           allTags={allTags}
           createTodoRequested={createTodoRequested}
           onCreateTodoDismiss={dismissCreateTodo}
+          isOnline={isOnline}
           onNavigate={onNavigate}
           onUpdated={onUpdated}
           onItemChange={setItem}
@@ -418,6 +433,7 @@ export function ItemDetail({ itemId, onUpdated, onDeleted }: ItemDetailProps) {
         {/* Content / Markdown */}
         <ItemContentEditor
           content={item.content}
+          offlineWarning={!isOnline}
           onChange={(content) => {
             setItem({ ...item, content });
             debouncedSave("content", content);
@@ -444,6 +460,7 @@ export function ItemDetail({ itemId, onUpdated, onDeleted }: ItemDetailProps) {
           itemTitle={item.title}
           open={shareOpen}
           onOpenChange={setShareOpen}
+          isOnline={isOnline}
         />
       )}
     </div>

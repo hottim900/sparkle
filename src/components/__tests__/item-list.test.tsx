@@ -279,4 +279,16 @@ describe("ItemList", () => {
       expect(toast.error).toHaveBeenCalledWith("Network error");
     });
   });
+
+  it("disables selection mode button when offline", async () => {
+    mockListItems.mockResolvedValue({ items: [makeItem()], total: 1 });
+    renderWithContext(<ItemList />, { currentView: "notes", isOnline: false });
+
+    await waitFor(() => {
+      expect(screen.getByText("Test Note")).toBeInTheDocument();
+    });
+
+    const selectionBtn = screen.getByTitle("多選模式");
+    expect(selectionBtn).toBeDisabled();
+  });
 });

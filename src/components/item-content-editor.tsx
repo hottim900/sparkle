@@ -12,9 +12,15 @@ interface ItemContentEditorProps {
   content: string;
   onChange: (content: string) => void;
   onBlur: () => void;
+  offlineWarning?: boolean;
 }
 
-export function ItemContentEditor({ content, onChange, onBlur }: ItemContentEditorProps) {
+export function ItemContentEditor({
+  content,
+  onChange,
+  onBlur,
+  offlineWarning,
+}: ItemContentEditorProps) {
   const [previewMode, setPreviewMode] = useState(false);
 
   return (
@@ -42,6 +48,11 @@ export function ItemContentEditor({ content, onChange, onBlur }: ItemContentEdit
           </Button>
         </div>
       </div>
+      {offlineWarning && !previewMode && (
+        <p className="text-xs text-yellow-600 dark:text-yellow-400 mb-1">
+          離線中 — 編輯內容將不會自動儲存
+        </p>
+      )}
       {previewMode ? (
         <div className="min-h-[240px] rounded-md border p-3 text-sm break-words">
           {content ? (

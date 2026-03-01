@@ -3,6 +3,7 @@ import { listItems, updateItem, getTags } from "@/lib/api";
 import { parseItems, type ParsedItem } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { TagInput } from "@/components/tag-input";
+import { useOnlineStatus } from "@/hooks/use-online-status";
 import { toast } from "sonner";
 import {
   Pencil,
@@ -30,6 +31,7 @@ export function FleetingTriage({ onDone }: FleetingTriageProps) {
   const [loading, setLoading] = useState(true);
   const [pending, setPending] = useState<PendingChanges>({});
   const [allTags, setAllTags] = useState<string[]>([]);
+  const isOnline = useOnlineStatus();
 
   const fetchFleeting = useCallback(async () => {
     setLoading(true);
@@ -202,7 +204,7 @@ export function FleetingTriage({ onDone }: FleetingTriageProps) {
 
       {/* Actions */}
       <div className="flex gap-2 justify-center">
-        <Button onClick={handlePrimaryAction} className="gap-1">
+        <Button onClick={handlePrimaryAction} disabled={!isOnline} className="gap-1">
           {resolvedType === "note" ? (
             <>
               <Pencil className="h-4 w-4" />
@@ -215,7 +217,7 @@ export function FleetingTriage({ onDone }: FleetingTriageProps) {
             </>
           )}
         </Button>
-        <Button variant="outline" onClick={handleArchive} className="gap-1">
+        <Button variant="outline" onClick={handleArchive} disabled={!isOnline} className="gap-1">
           <Archive className="h-4 w-4" />
           封存
         </Button>

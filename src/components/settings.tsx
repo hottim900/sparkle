@@ -19,6 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useOnlineStatus } from "@/hooks/use-online-status";
 import {
   Settings as SettingsIcon,
   Loader2,
@@ -57,6 +58,7 @@ export function Settings({ onSettingsChanged }: SettingsProps) {
   const [revokingId, setRevokingId] = useState<string | null>(null);
 
   const { resolvedTheme, setTheme } = useTheme();
+  const isOnline = useOnlineStatus();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -253,7 +255,11 @@ export function Settings({ onSettingsChanged }: SettingsProps) {
 
             {/* Save button */}
             <div className="flex justify-end">
-              <Button onClick={handleSave} disabled={saving || !hasChanges} className="gap-1.5">
+              <Button
+                onClick={handleSave}
+                disabled={saving || !hasChanges || !isOnline}
+                className="gap-1.5"
+              >
                 {saving ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
@@ -313,7 +319,7 @@ export function Settings({ onSettingsChanged }: SettingsProps) {
                       size="icon"
                       className="h-7 w-7 shrink-0 text-destructive"
                       onClick={() => handleRevokeShare(share.id)}
-                      disabled={revokingId === share.id}
+                      disabled={revokingId === share.id || !isOnline}
                       title="撤銷分享"
                     >
                       {revokingId === share.id ? (
@@ -363,6 +369,7 @@ export function Settings({ onSettingsChanged }: SettingsProps) {
               variant="ghost"
               className="w-full justify-start gap-2 text-muted-foreground"
               onClick={() => fileInputRef.current?.click()}
+              disabled={!isOnline}
             >
               <Upload className="h-4 w-4" />
               匯入資料
