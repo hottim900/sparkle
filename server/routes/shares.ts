@@ -29,7 +29,7 @@ sharesRouter.post("/items/:id/share", async (c) => {
     return c.json({ share, url: `/s/${share.token}` }, 201);
   } catch (e) {
     if (e instanceof ZodError) {
-      return c.json({ error: e.errors[0]?.message ?? "Validation error" }, 400);
+      return c.json({ error: e.issues[0]?.message ?? "Validation error" }, 400);
     }
     throw e;
   }

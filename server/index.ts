@@ -274,7 +274,7 @@ app.post("/api/import", async (c) => {
     return c.json({ imported, updated });
   } catch (e) {
     if (e instanceof ZodError) {
-      return c.json({ error: e.errors[0]?.message ?? "Validation error" }, 400);
+      return c.json({ error: e.issues[0]?.message ?? "Validation error" }, 400);
     }
     throw e;
   }
