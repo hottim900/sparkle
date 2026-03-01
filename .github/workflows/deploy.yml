@@ -22,6 +22,18 @@ jobs:
       - name: Build frontend
         run: cd /home/tim/sparkle && npm run build
 
+      - name: Validate migrations against production DB
+        run: |
+          cd /home/tim/sparkle
+          timeout 10 node --env-file=.env --import tsx -e "
+            import './server/db/index.js';
+            console.log('Migration validation passed');
+            process.exit(0);
+          " || {
+            echo '❌ Migration validation failed — aborting deploy (old service still running)'
+            exit 1
+          }
+
       - name: Restart service
         run: sudo systemctl restart sparkle
 
