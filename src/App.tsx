@@ -10,6 +10,7 @@ import { OfflineIndicator } from "@/components/offline-indicator";
 import { InstallPrompt } from "@/components/install-prompt";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
+import { useOnlineStatus } from "@/hooks/use-online-status";
 import { getConfig, getItem } from "@/lib/api";
 import { AppContext } from "@/lib/app-context";
 import { Button } from "@/components/ui/button";
@@ -48,6 +49,7 @@ function MainApp() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [triageMode, setTriageMode] = useState(false);
   const [obsidianEnabled, setObsidianEnabled] = useState(false);
+  const isOnline = useOnlineStatus();
 
   // Navigation stack for back button
   const [navStack, setNavStack] = useState<{ view: ViewType; itemId: string | null }[]>([]);
@@ -160,6 +162,7 @@ function MainApp() {
       onClearDetail: handleClearDetail,
       canGoBack: navStack.length > 0,
       obsidianEnabled,
+      isOnline,
       refreshKey,
       refresh,
     }),
@@ -174,6 +177,7 @@ function MainApp() {
       handleClearDetail,
       navStack.length,
       obsidianEnabled,
+      isOnline,
       refreshKey,
       refresh,
     ],

@@ -156,4 +156,20 @@ describe("QuickCapture", () => {
     expect(screen.getByText("等待中")).toBeInTheDocument();
     expect(screen.getByText("有一天")).toBeInTheDocument();
   });
+
+  it("shows offline hint when offline", () => {
+    renderWithContext(<QuickCapture />, { currentView: "notes", isOnline: false });
+    expect(screen.getByText(/離線模式/)).toBeInTheDocument();
+  });
+
+  it("keeps submit button enabled when offline with input", async () => {
+    const user = userEvent.setup();
+    renderWithContext(<QuickCapture />, { currentView: "notes", isOnline: false });
+
+    const input = screen.getByPlaceholderText("快速記錄...");
+    await user.type(input, "Offline note");
+
+    const submitButton = document.querySelector('button[type="submit"]') as HTMLButtonElement;
+    expect(submitButton).not.toBeDisabled();
+  });
 });

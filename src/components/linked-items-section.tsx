@@ -19,6 +19,7 @@ interface LinkedItemsSectionProps {
   allTags: string[];
   createTodoRequested: boolean;
   onCreateTodoDismiss: () => void;
+  isOnline?: boolean;
   onNavigate?: (itemId: string) => void;
   onUpdated?: () => void;
   onItemChange: (item: ParsedItem) => void;
@@ -30,6 +31,7 @@ export function LinkedItemsSection({
   allTags,
   createTodoRequested,
   onCreateTodoDismiss,
+  isOnline = true,
   onNavigate,
   onUpdated,
   onItemChange,
@@ -218,6 +220,7 @@ export function LinkedItemsSection({
                 size="sm"
                 className="h-6 px-2 text-xs gap-1 text-muted-foreground hover:text-destructive"
                 onClick={handleUnlinkNote}
+                disabled={!isOnline}
               >
                 <Unlink className="h-3 w-3" />
                 解除關聯
@@ -277,6 +280,7 @@ export function LinkedItemsSection({
                   size="sm"
                   className="gap-1 text-xs"
                   onClick={() => setShowNoteSearch(true)}
+                  disabled={!isOnline}
                 >
                   <Search className="h-3 w-3" />
                   搜尋並關聯筆記
@@ -350,7 +354,7 @@ export function LinkedItemsSection({
             <Button
               size="sm"
               onClick={handleCreateLinkedTodo}
-              disabled={!linkedTodoTitle.trim() || creatingTodo}
+              disabled={!linkedTodoTitle.trim() || creatingTodo || !isOnline}
             >
               {creatingTodo ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
               建立
