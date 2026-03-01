@@ -136,13 +136,19 @@ eslint.config.js        # ESLint 9 flat config (typescript-eslint, react-hooks, 
 .prettierrc             # Prettier config (double quotes, trailing commas, 100 char width)
 .prettierignore         # Prettier ignore (dist, node_modules, coverage, data, certs, mcp-server)
 .husky/
-  pre-commit            # CLAUDE.md update warning + lint-staged
+  pre-commit            # CLAUDE.md / skills update warning + lint-staged
 .github/
   dependabot.yml        # Dependabot config (weekly npm + GitHub Actions updates)
   workflows/
     ci.yml              # GitHub Actions CI (lint, format, type-check, build, unit test, E2E Playwright on Node 22)
     deploy.yml          # Auto-deploy on main push (workflow_run after CI, self-hosted runner)
     release.yml         # Release-Please (auto CHANGELOG + GitHub Release on conventional commits)
+
+.claude/
+  hooks/
+    migration-safety.sh   # PostToolUse hook: blocks SELECT * in migrations, enforces FK rules
+  settings.json           # Claude Code project settings (hooks config)
+  skills/                 # On-demand documentation skills (6 files)
 
 certs/                  # mkcert TLS certificates (gitignored)
 data/                   # SQLite database (gitignored)
