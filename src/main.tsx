@@ -53,6 +53,9 @@ if ("serviceWorker" in navigator) {
     if (event.data?.type === "OFFLINE_SYNC") {
       toast.success(`已同步 ${event.data.count} 個離線項目`);
     }
+    if (event.data?.type === "CACHE_FALLBACK") {
+      toast.info("離線模式：顯示的是快取資料", { id: "offline-fallback" });
+    }
     if (event.data?.type === "GET_AUTH_TOKEN") {
       const token = localStorage.getItem("auth_token") || "";
       event.ports[0]?.postMessage({ token });
@@ -61,6 +64,7 @@ if ("serviceWorker" in navigator) {
 
   // Replay offline queue when back online
   window.addEventListener("online", () => {
+    toast.dismiss("offline-fallback");
     navigator.serviceWorker.controller?.postMessage({ type: "REPLAY_QUEUE" });
   });
 }

@@ -17,6 +17,8 @@ precacheAndRoute(self.__WB_MANIFEST);
 // Runtime caching: GET /api/* with NetworkFirst strategy
 // Online → always fetch from network (fresh data)
 // Offline → fall back to last cached response
+const failedFetches = new Set<string>();
+
 registerRoute(
   ({ url, request }) => url.pathname.startsWith("/api/") && request.method === "GET",
   new NetworkFirst({
@@ -26,6 +28,22 @@ registerRoute(
       {
         cacheWillUpdate: async ({ response }) => {
           return response && response.status === 200 ? response : null;
+        },
+        fetchDidFail: async ({ request }) => {
+          failedFetches.add(request.url);
+        },
+        handlerDidRespond: async ({ request, response }) => {
+          const url = request.url;
+          if (failedFetches.has(url) && response) {
+            failedFetches.delete(url);
+            // Network failed but got a cached response — notify clients
+            const clients = await self.clients.matchAll({ type: "window" });
+            for (const client of clients) {
+              client.postMessage({ type: "CACHE_FALLBACK" });
+            }
+          } else {
+            failedFetches.delete(url);
+          }
         },
       },
     ],
