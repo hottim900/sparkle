@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { X, Plus } from "lucide-react";
 
 interface TagInputProps {
   tags: string[];
@@ -64,43 +65,65 @@ export function TagInput({
         ))}
       </div>
       <div className="relative">
-        <Input
-          value={input}
-          onChange={(e) => {
-            setInput(e.target.value);
-            setShowSuggestions(true);
-          }}
-          onKeyDown={(e) => {
-            if (e.key === "ArrowDown" && suggestionsVisible) {
-              e.preventDefault();
-              setHighlightedIndex((prev) => (prev < visibleSuggestions.length - 1 ? prev + 1 : 0));
-            } else if (e.key === "ArrowUp" && suggestionsVisible) {
-              e.preventDefault();
-              setHighlightedIndex((prev) => (prev > 0 ? prev - 1 : visibleSuggestions.length - 1));
-            } else if (e.key === "Tab" && suggestionsVisible && highlightedIndex >= 0) {
-              e.preventDefault();
-              handleAdd(visibleSuggestions[highlightedIndex]!);
-            } else if (e.key === "Enter") {
-              e.preventDefault();
-              if (suggestionsVisible && highlightedIndex >= 0) {
+        <div className="flex gap-1">
+          <Input
+            className="flex-1"
+            value={input}
+            onChange={(e) => {
+              setInput(e.target.value);
+              setShowSuggestions(true);
+            }}
+            onKeyDown={(e) => {
+              // Skip keyboard shortcuts during IME composition (e.g. Chinese input)
+              if (e.nativeEvent.isComposing) return;
+              if (e.key === "ArrowDown" && suggestionsVisible) {
+                e.preventDefault();
+                setHighlightedIndex((prev) =>
+                  prev < visibleSuggestions.length - 1 ? prev + 1 : 0,
+                );
+              } else if (e.key === "ArrowUp" && suggestionsVisible) {
+                e.preventDefault();
+                setHighlightedIndex((prev) =>
+                  prev > 0 ? prev - 1 : visibleSuggestions.length - 1,
+                );
+              } else if (e.key === "Tab" && suggestionsVisible && highlightedIndex >= 0) {
+                e.preventDefault();
                 handleAdd(visibleSuggestions[highlightedIndex]!);
-              } else {
-                handleAdd(input);
+              } else if (e.key === "Enter") {
+                e.preventDefault();
+                if (suggestionsVisible && highlightedIndex >= 0) {
+                  handleAdd(visibleSuggestions[highlightedIndex]!);
+                } else {
+                  handleAdd(input);
+                }
+              } else if (e.key === "Escape") {
+                setShowSuggestions(false);
+                setHighlightedIndex(-1);
               }
-            } else if (e.key === "Escape") {
-              setShowSuggestions(false);
-              setHighlightedIndex(-1);
-            }
-          }}
-          onFocus={() => setShowSuggestions(true)}
-          onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
-          placeholder={placeholder}
-          role="combobox"
-          aria-expanded={suggestionsVisible}
-          aria-activedescendant={activeDescendant}
-          aria-controls={suggestionsVisible ? "tag-suggestions-listbox" : undefined}
-          aria-autocomplete="list"
-        />
+            }}
+            onFocus={() => setShowSuggestions(true)}
+            onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+            placeholder={placeholder}
+            enterKeyHint="done"
+            role="combobox"
+            aria-expanded={suggestionsVisible}
+            aria-activedescendant={activeDescendant}
+            aria-controls={suggestionsVisible ? "tag-suggestions-listbox" : undefined}
+            aria-autocomplete="list"
+          />
+          {input.trim() && (
+            <Button
+              type="button"
+              size="icon-sm"
+              variant="outline"
+              aria-label="新增標籤"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => handleAdd(input)}
+            >
+              <Plus className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
         {suggestionsVisible && (
           <div
             ref={listboxRef}

@@ -158,4 +158,29 @@ describe("TagInput", () => {
     await user.click(screen.getByText("suggestion1"));
     expect(defaultProps.onAdd).toHaveBeenCalledWith("suggestion1");
   });
+
+  it("clicking add button adds the typed tag", async () => {
+    const user = userEvent.setup();
+    render(<TagInput {...defaultProps} />);
+
+    const input = screen.getByPlaceholderText("新增標籤...");
+    await user.type(input, "newtag");
+
+    const addBtn = screen.getByRole("button", { name: "新增標籤" });
+    await user.click(addBtn);
+
+    expect(defaultProps.onAdd).toHaveBeenCalledWith("newtag");
+    expect(input).toHaveValue("");
+  });
+
+  it("add button is hidden when input is empty", () => {
+    render(<TagInput {...defaultProps} />);
+    expect(screen.queryByRole("button", { name: "新增標籤" })).not.toBeInTheDocument();
+  });
+
+  it("has enterKeyHint=done for mobile keyboards", () => {
+    render(<TagInput {...defaultProps} />);
+    const input = screen.getByPlaceholderText("新增標籤...");
+    expect(input).toHaveAttribute("enterkeyhint", "done");
+  });
 });
