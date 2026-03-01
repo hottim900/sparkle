@@ -257,4 +257,63 @@ describe("Settings", () => {
     await user.click(screen.getByText("深色模式"));
     expect(mockSetTheme).toHaveBeenCalledWith("dark");
   });
+
+  describe("offline behavior", () => {
+    let originalOnLine: boolean;
+
+    beforeEach(() => {
+      originalOnLine = navigator.onLine;
+      Object.defineProperty(navigator, "onLine", {
+        value: false,
+        writable: true,
+        configurable: true,
+      });
+    });
+
+    afterEach(() => {
+      Object.defineProperty(navigator, "onLine", {
+        value: originalOnLine,
+        writable: true,
+        configurable: true,
+      });
+    });
+
+    it("disables save button when offline", async () => {
+      setupDefaults();
+      const user = userEvent.setup();
+      render(<Settings onSettingsChanged={onSettingsChanged} />);
+
+      await waitFor(() => {
+        expect(screen.getByText("已停用")).toBeInTheDocument();
+      });
+
+      // Toggle to create a change
+      await user.click(screen.getByText("已停用"));
+
+      const saveBtn = screen.getByRole("button", { name: /儲存設定/ });
+      expect(saveBtn).toBeDisabled();
+    });
+
+    it("keeps export button enabled when offline", async () => {
+      setupDefaults();
+      render(<Settings onSettingsChanged={onSettingsChanged} />);
+
+      await waitFor(() => {
+        expect(screen.getByText("匯出資料")).toBeInTheDocument();
+      });
+
+      expect(screen.getByText("匯出資料").closest("button")).not.toBeDisabled();
+    });
+
+    it("disables import button when offline", async () => {
+      setupDefaults();
+      render(<Settings onSettingsChanged={onSettingsChanged} />);
+
+      await waitFor(() => {
+        expect(screen.getByText("匯入資料")).toBeInTheDocument();
+      });
+
+      expect(screen.getByText("匯入資料").closest("button")).toBeDisabled();
+    });
+  });
 });

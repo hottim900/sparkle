@@ -23,6 +23,9 @@ export interface AppContextValue {
   // Config
   obsidianEnabled: boolean;
 
+  // Online status
+  isOnline: boolean;
+
   // Refresh
   refreshKey: number;
   refresh: () => void;

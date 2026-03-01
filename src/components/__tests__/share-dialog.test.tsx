@@ -180,4 +180,26 @@ describe("ShareDialog", () => {
 
     expect(mockGetItemShares).not.toHaveBeenCalled();
   });
+
+  it("disables create share button when offline", async () => {
+    mockGetItemShares.mockResolvedValue({ shares: [] });
+    render(<ShareDialog {...defaultProps} isOnline={false} />);
+
+    await waitFor(() => {
+      expect(screen.getByText("建立分享")).toBeInTheDocument();
+    });
+
+    expect(screen.getByRole("button", { name: /建立分享/ })).toBeDisabled();
+  });
+
+  it("disables revoke button when offline", async () => {
+    mockGetItemShares.mockResolvedValue({ shares: [makeShare()] });
+    render(<ShareDialog {...defaultProps} isOnline={false} />);
+
+    await waitFor(() => {
+      expect(screen.getByTitle("撤銷分享")).toBeInTheDocument();
+    });
+
+    expect(screen.getByTitle("撤銷分享")).toBeDisabled();
+  });
 });

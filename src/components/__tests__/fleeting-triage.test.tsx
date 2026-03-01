@@ -244,4 +244,58 @@ describe("FleetingTriage", () => {
       expect(toast.error).toHaveBeenCalledWith("Network error");
     });
   });
+
+  describe("offline behavior", () => {
+    let originalOnLine: boolean;
+
+    beforeEach(() => {
+      originalOnLine = navigator.onLine;
+      Object.defineProperty(navigator, "onLine", {
+        value: false,
+        writable: true,
+        configurable: true,
+      });
+    });
+
+    afterEach(() => {
+      Object.defineProperty(navigator, "onLine", {
+        value: originalOnLine,
+        writable: true,
+        configurable: true,
+      });
+    });
+
+    it("disables primary action button when offline", async () => {
+      setupWithItems([makeFleetingItem()]);
+      render(<FleetingTriage />);
+
+      await waitFor(() => {
+        expect(screen.getByText("發展")).toBeInTheDocument();
+      });
+
+      expect(screen.getByRole("button", { name: /發展/ })).toBeDisabled();
+    });
+
+    it("disables archive button when offline", async () => {
+      setupWithItems([makeFleetingItem()]);
+      render(<FleetingTriage />);
+
+      await waitFor(() => {
+        expect(screen.getByText("封存")).toBeInTheDocument();
+      });
+
+      expect(screen.getByRole("button", { name: /封存/ })).toBeDisabled();
+    });
+
+    it("keeps skip button enabled when offline", async () => {
+      setupWithItems([makeFleetingItem()]);
+      render(<FleetingTriage />);
+
+      await waitFor(() => {
+        expect(screen.getByText("保留")).toBeInTheDocument();
+      });
+
+      expect(screen.getByRole("button", { name: /保留/ })).not.toBeDisabled();
+    });
+  });
 });

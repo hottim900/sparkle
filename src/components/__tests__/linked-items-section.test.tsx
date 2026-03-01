@@ -411,3 +411,48 @@ describe("LinkedItemsSection (todo mode)", () => {
     vi.useRealTimers();
   });
 });
+
+describe("LinkedItemsSection offline behavior", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("disables create todo button when offline", async () => {
+    const noteItem = makeNoteItem();
+    vi.mocked(api.getLinkedTodos).mockResolvedValue({ items: [], total: 0 });
+
+    render(
+      <LinkedItemsSection item={noteItem} {...defaultProps} createTodoRequested isOnline={false} />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("建立")).toBeInTheDocument();
+    });
+
+    expect(screen.getByRole("button", { name: "建立" })).toBeDisabled();
+  });
+
+  it("disables search-and-link button when offline", async () => {
+    const todoItem = makeTodoItem();
+    render(<LinkedItemsSection item={todoItem} {...defaultProps} isOnline={false} />);
+
+    const linkBtn = screen.getByRole("button", { name: /搜尋並關聯筆記/ });
+    expect(linkBtn).toBeDisabled();
+  });
+
+  it("disables unlink button when offline", async () => {
+    const todoItem = makeTodoItem({ linked_note_id: "note-1" });
+    vi.mocked(api.getItem).mockResolvedValue(
+      makeRawItem({ id: "note-1", type: "note", title: "Linked Note" }),
+    );
+
+    render(<LinkedItemsSection item={todoItem} {...defaultProps} isOnline={false} />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Linked Note")).toBeInTheDocument();
+    });
+
+    const unlinkBtn = screen.getByRole("button", { name: /解除關聯/ });
+    expect(unlinkBtn).toBeDisabled();
+  });
+});
