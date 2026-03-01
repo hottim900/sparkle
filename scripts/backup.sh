@@ -6,11 +6,13 @@
 # 進行版本化備份。設計為 cron 排程使用，無需互動。
 #
 # 環境變數:
-#   RESTIC_REPOSITORY    restic 儲存庫路徑 (預設: ~/sparkle-backups)
-#   RESTIC_PASSWORD_FILE restic 密碼檔路徑 (必要)
-#   SPARKLE_DIR          專案根目錄 (預設: 腳本上層目錄)
-#   DATABASE_URL         SQLite 資料庫路徑 (預設: $SPARKLE_DIR/data/todo.db)
-#   HEALTHCHECK_URL      備份成功後 ping 的 URL (選填, e.g. healthchecks.io)
+#   RESTIC_REPOSITORY              restic 儲存庫路徑 (預設: ~/sparkle-backups)
+#   RESTIC_PASSWORD_FILE           restic 密碼檔路徑 (必要)
+#   RESTIC_OFFSITE_REPOSITORY      異地儲存庫路徑 (選填, e.g. /mnt/d/sparkle-backups)
+#   RESTIC_OFFSITE_PASSWORD_FILE   異地密碼檔路徑 (選填, 預設同 RESTIC_PASSWORD_FILE)
+#   SPARKLE_DIR                    專案根目錄 (預設: 腳本上層目錄)
+#   DATABASE_URL                   SQLite 資料庫路徑 (預設: $SPARKLE_DIR/data/todo.db)
+#   HEALTHCHECK_URL                備份成功後 ping 的 URL (選填, e.g. healthchecks.io)
 #
 # 還原方式:
 #   # 列出可用快照
@@ -119,7 +121,40 @@ if ! restic forget --prune \
     log "WARN: 保留策略清理失敗，備份已完成但舊快照未清理"
 fi
 
-# ── Step 6: Health check ping (optional) ────────────────────────────────────
+# ── Step 6: Offsite copy (optional, non-fatal) ──────────────────────────────
+if [[ -n "${RESTIC_OFFSITE_REPOSITORY:-}" ]]; then
+    OFFSITE_PW="${RESTIC_OFFSITE_PASSWORD_FILE:-$RESTIC_PASSWORD_FILE}"
+    offsite_parent="$(dirname "$RESTIC_OFFSITE_REPOSITORY")"
+
+    if [[ ! -d "$offsite_parent" ]]; then
+        log "WARN: 異地儲存庫掛載點不存在: $offsite_parent — 跳過異地備份"
+    else
+        log "複製快照至異地儲存庫: $RESTIC_OFFSITE_REPOSITORY"
+        if restic copy --tag sparkle \
+            --repo2 "$RESTIC_OFFSITE_REPOSITORY" \
+            --password-file2 "$OFFSITE_PW" \
+            --quiet; then
+            log "異地備份複製完成"
+
+            log "套用異地保留策略 (7日/4週/3月)..."
+            if ! RESTIC_REPOSITORY="$RESTIC_OFFSITE_REPOSITORY" \
+                RESTIC_PASSWORD_FILE="$OFFSITE_PW" \
+                restic forget --prune \
+                    --group-by host,tags \
+                    --keep-daily 7 \
+                    --keep-weekly 4 \
+                    --keep-monthly 3 \
+                    --tag sparkle \
+                    --quiet; then
+                log "WARN: 異地保留策略清理失敗"
+            fi
+        else
+            log "WARN: 異地備份複製失敗 — 本地備份已完成"
+        fi
+    fi
+fi
+
+# ── Step 7: Health check ping (optional) ────────────────────────────────────
 if [[ -n "${HEALTHCHECK_URL:-}" ]]; then
     if ! curl -fsS --max-time 10 "$HEALTHCHECK_URL" >/dev/null 2>&1; then
         log "WARN: Health check ping 失敗 ($HEALTHCHECK_URL)，備份本身已成功"
