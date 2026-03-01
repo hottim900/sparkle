@@ -1,11 +1,36 @@
 /// <reference lib="webworker" />
 
+import { clientsClaim } from "workbox-core";
 import { precacheAndRoute } from "workbox-precaching";
+import { registerRoute } from "workbox-routing";
+import { NetworkFirst } from "workbox-strategies";
 
 declare let self: ServiceWorkerGlobalScope;
 
+// Take control immediately on install/activate (no waiting for old SW clients to close)
+self.skipWaiting();
+clientsClaim();
+
 // Precache Vite build assets
 precacheAndRoute(self.__WB_MANIFEST);
+
+// Runtime caching: GET /api/* with NetworkFirst strategy
+// Online → always fetch from network (fresh data)
+// Offline → fall back to last cached response
+registerRoute(
+  ({ url, request }) => url.pathname.startsWith("/api/") && request.method === "GET",
+  new NetworkFirst({
+    cacheName: "api-cache",
+    networkTimeoutSeconds: 10,
+    plugins: [
+      {
+        cacheWillUpdate: async ({ response }) => {
+          return response && response.status === 200 ? response : null;
+        },
+      },
+    ],
+  }),
+);
 
 const DB_NAME = "offline-queue";
 const STORE_NAME = "requests";
