@@ -25,9 +25,16 @@ interface ShareDialogProps {
   itemTitle: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  isOnline?: boolean;
 }
 
-export function ShareDialog({ itemId, itemTitle, open, onOpenChange }: ShareDialogProps) {
+export function ShareDialog({
+  itemId,
+  itemTitle,
+  open,
+  onOpenChange,
+  isOnline = true,
+}: ShareDialogProps) {
   const [shares, setShares] = useState<ShareToken[]>([]);
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -141,7 +148,7 @@ export function ShareDialog({ itemId, itemTitle, open, onOpenChange }: ShareDial
                     size="icon"
                     className="h-7 w-7 shrink-0 text-destructive"
                     onClick={() => handleRevoke(share.id)}
-                    disabled={revokingId === share.id}
+                    disabled={revokingId === share.id || !isOnline}
                     title="撤銷分享"
                   >
                     {revokingId === share.id ? (
@@ -181,7 +188,7 @@ export function ShareDialog({ itemId, itemTitle, open, onOpenChange }: ShareDial
                   </SelectItem>
                 </SelectContent>
               </Select>
-              <Button onClick={handleCreate} disabled={creating} className="gap-1.5">
+              <Button onClick={handleCreate} disabled={creating || !isOnline} className="gap-1.5">
                 {creating ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (

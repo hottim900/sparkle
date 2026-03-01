@@ -14,6 +14,7 @@ const defaultContext: AppContextValue = {
   onClearDetail: vi.fn(),
   canGoBack: false,
   obsidianEnabled: false,
+  isOnline: true,
   refreshKey: 0,
   refresh: vi.fn(),
 };

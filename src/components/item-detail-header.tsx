@@ -31,6 +31,7 @@ interface ItemDetailHeaderProps {
   canGoBack?: boolean;
   saveStatus: "idle" | "saving" | "saved";
   exporting: boolean;
+  isOnline?: boolean;
   onBack?: () => void;
   onClose?: () => void;
   onExport: () => void;
@@ -50,6 +51,7 @@ export function ItemDetailHeader({
   onExport,
   onDelete,
   onOpenCreateTodo,
+  isOnline = true,
   onOpenShare,
 }: ItemDetailHeaderProps) {
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -95,6 +97,7 @@ export function ItemDetailHeader({
               size="sm"
               className="gap-1 text-xs"
               onClick={onOpenCreateTodo}
+              disabled={!isOnline}
             >
               <ListTodo className="h-3 w-3" />
               建立追蹤待辦
@@ -106,7 +109,7 @@ export function ItemDetailHeader({
               size="sm"
               className="gap-1 text-xs"
               onClick={onExport}
-              disabled={exporting}
+              disabled={exporting || !isOnline}
             >
               {exporting ? (
                 <Loader2 className="h-3 w-3 animate-spin" />
@@ -122,6 +125,7 @@ export function ItemDetailHeader({
               size="sm"
               className={`gap-1 text-xs ${item.share_visibility === "public" ? "text-blue-600 dark:text-blue-400" : ""}`}
               onClick={onOpenShare}
+              disabled={!isOnline}
             >
               {item.share_visibility === "public" ? (
                 <Globe className="h-3 w-3" />
@@ -139,7 +143,7 @@ export function ItemDetailHeader({
           )}
           <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
             <DialogTrigger asChild>
-              <Button variant="ghost" size="icon">
+              <Button variant="ghost" size="icon" disabled={!isOnline}>
                 <Trash2 className="h-4 w-4 text-destructive" />
               </Button>
             </DialogTrigger>

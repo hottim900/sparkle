@@ -23,6 +23,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SPARKLE_DIR="$(dirname "$SCRIPT_DIR")"
 DEFAULT_REPO="$HOME/sparkle-backups"
 DEFAULT_PASSWORD_FILE="$HOME/.sparkle-backup-password"
+OFFSITE_REPO=""
+OFFSITE_PASSWORD_FILE=""
 
 # ── Step 1: Check sqlite3 ───────────────────────────────────────────────────
 check_sqlite3() {
@@ -129,10 +131,76 @@ test_backup() {
     fi
 }
 
-# ── Step 7: Print summary ───────────────────────────────────────────────────
+# ── Step 7: Configure offsite backup (optional) ─────────────────────────────
+configure_offsite() {
+    echo ""
+    info "=========================================="
+    info " 異地備份設定 (選填)"
+    info "=========================================="
+    echo ""
+    info "異地備份會將快照複製到第二個 restic 儲存庫 (例如 D:\\ 磁碟)，"
+    info "提供實體磁碟層級的冗餘保護。"
+    echo ""
+
+    read -rp "是否要設定異地備份？ [y/N] " setup_offsite
+    setup_offsite="${setup_offsite:-N}"
+    if [[ ! "$setup_offsite" =~ ^[Yy]$ ]]; then
+        return 0
+    fi
+
+    local default_offsite="/mnt/d/sparkle-backups"
+    read -rp "異地儲存庫路徑 [$default_offsite]: " offsite_path
+    offsite_path="${offsite_path:-$default_offsite}"
+    OFFSITE_REPO="$offsite_path"
+
+    # Check mount point
+    local mount_dir
+    mount_dir="$(dirname "$offsite_path")"
+    if [[ ! -d "$mount_dir" ]]; then
+        warn "掛載點 $mount_dir 不存在 — 請確認磁碟已掛載後再初始化異地儲存庫"
+        warn "掛載後可重新執行此腳本，或手動執行:"
+        echo ""
+        echo "  restic init --repo $offsite_path --password-file $PASSWORD_FILE \\"
+        echo "    --copy-chunker-params --repo2 $BACKUP_REPO --password-file2 $PASSWORD_FILE"
+        echo ""
+        OFFSITE_REPO=""
+        return 0
+    fi
+
+    # Password file (default: reuse primary)
+    read -rp "異地密碼檔路徑 [$PASSWORD_FILE]: " offsite_pw
+    offsite_pw="${offsite_pw:-$PASSWORD_FILE}"
+    OFFSITE_PASSWORD_FILE="$offsite_pw"
+
+    # Initialize offsite repo with --copy-chunker-params for dedup efficiency
+    if RESTIC_REPOSITORY="$OFFSITE_REPO" RESTIC_PASSWORD_FILE="$OFFSITE_PASSWORD_FILE" \
+        restic snapshots &>/dev/null; then
+        success "異地儲存庫已存在且可存取"
+    else
+        info "初始化異地儲存庫 (使用相同分塊參數以優化去重效率)..."
+        restic init \
+            --repo "$OFFSITE_REPO" \
+            --password-file "$OFFSITE_PASSWORD_FILE" \
+            --copy-chunker-params \
+            --repo2 "$BACKUP_REPO" \
+            --password-file2 "$PASSWORD_FILE"
+        success "異地儲存庫初始化完成: $OFFSITE_REPO"
+    fi
+}
+
+# ── Step 8: Print summary ───────────────────────────────────────────────────
 print_summary() {
     local backup_script="$SCRIPT_DIR/backup.sh"
-    local cron_line="0 3 * * * RESTIC_REPOSITORY=$BACKUP_REPO RESTIC_PASSWORD_FILE=$PASSWORD_FILE $backup_script >> \$HOME/sparkle-backup.log 2>&1"
+    local cron_env="RESTIC_REPOSITORY=$BACKUP_REPO RESTIC_PASSWORD_FILE=$PASSWORD_FILE"
+
+    if [[ -n "$OFFSITE_REPO" ]]; then
+        cron_env="$cron_env RESTIC_OFFSITE_REPOSITORY=$OFFSITE_REPO"
+        if [[ -n "$OFFSITE_PASSWORD_FILE" && "$OFFSITE_PASSWORD_FILE" != "$PASSWORD_FILE" ]]; then
+            cron_env="$cron_env RESTIC_OFFSITE_PASSWORD_FILE=$OFFSITE_PASSWORD_FILE"
+        fi
+    fi
+
+    local cron_line="0 3 * * * $cron_env $backup_script >> \$HOME/sparkle-backup.log 2>&1"
 
     echo ""
     echo "=========================================================="
@@ -142,6 +210,14 @@ print_summary() {
     info "儲存庫:     $BACKUP_REPO"
     info "密碼檔:     $PASSWORD_FILE"
     info "備份腳本:   $backup_script"
+    if [[ -n "$OFFSITE_REPO" ]]; then
+        info "異地儲存庫: $OFFSITE_REPO"
+        if [[ -n "$OFFSITE_PASSWORD_FILE" && "$OFFSITE_PASSWORD_FILE" != "$PASSWORD_FILE" ]]; then
+            info "異地密碼檔: $OFFSITE_PASSWORD_FILE"
+        else
+            info "異地密碼檔: (同主要密碼檔)"
+        fi
+    fi
     echo ""
     echo -e "${GREEN}=========================================================="
     echo -e " 建議 cron 排程 (每日凌晨 3 點)"
@@ -193,6 +269,7 @@ main() {
     setup_password
     init_repo
     test_backup
+    configure_offsite
     print_summary
 }
 

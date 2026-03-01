@@ -67,6 +67,7 @@ const defaultContext: AppContextValue = {
   onClearDetail: vi.fn(),
   canGoBack: false,
   obsidianEnabled: false,
+  isOnline: true,
   refreshKey: 0,
   refresh: vi.fn(),
 };
@@ -487,5 +488,78 @@ describe("ItemDetail export", () => {
       expect(toast.success).toHaveBeenCalledWith("已匯出到 Obsidian: /vault/test.md");
     });
     expect(onUpdated).toHaveBeenCalled();
+  });
+});
+
+describe("ItemDetail offline behavior", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    setupDefaultMocks();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("suppresses auto-save and shows toast when offline", async () => {
+    renderItemDetail({ isOnline: false });
+    await act(async () => {});
+
+    // Clear any calls from initial load
+    vi.mocked(api.updateItem).mockClear();
+    vi.mocked(toast.error).mockClear();
+
+    const titleInput = screen.getByPlaceholderText("標題");
+    fireEvent.change(titleInput, { target: { value: "New Title" } });
+
+    act(() => {
+      vi.advanceTimersByTime(1500);
+    });
+    // Flush microtasks for the async saveField
+    await act(async () => {});
+
+    expect(api.updateItem).not.toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalledWith("離線中，無法儲存變更");
+  });
+
+  it("disables delete button when offline", async () => {
+    renderItemDetail({ isOnline: false });
+    await act(async () => {});
+
+    // Find the delete button (has Trash2 icon with text-destructive class)
+    const buttons = screen.getAllByRole("button");
+    const deleteBtn = buttons.find(
+      (btn) => btn.querySelector("svg.text-destructive") || btn.querySelector(".text-destructive"),
+    );
+    expect(deleteBtn).toBeDisabled();
+  });
+
+  it("disables header action buttons when offline", async () => {
+    renderItemDetail({ isOnline: false });
+    await act(async () => {});
+
+    // Share button should be disabled
+    const shareBtn = screen.getByRole("button", { name: /分享/ });
+    expect(shareBtn).toBeDisabled();
+
+    // Create todo button should be disabled
+    const todoBtn = screen.getByRole("button", { name: /建立追蹤待辦/ });
+    expect(todoBtn).toBeDisabled();
+  });
+
+  it("disables export button when offline", async () => {
+    setupDefaultMocks(mockPermanentNote);
+    renderItemDetail({ isOnline: false, obsidianEnabled: true });
+    await act(async () => {});
+
+    const exportBtn = screen.getByRole("button", { name: /匯出到 Obsidian/ });
+    expect(exportBtn).toBeDisabled();
+  });
+
+  it("shows offline warning in content editor", async () => {
+    renderItemDetail({ isOnline: false });
+    await act(async () => {});
+
+    expect(screen.getByText("離線中 — 編輯內容將不會自動儲存")).toBeInTheDocument();
   });
 });

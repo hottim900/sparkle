@@ -80,4 +80,26 @@ describe("ItemContentEditor", () => {
       expect(screen.getByText("無內容")).toBeInTheDocument();
     });
   });
+
+  it("shows offline warning when offlineWarning is true", () => {
+    render(<ItemContentEditor {...defaultProps} offlineWarning />);
+    expect(screen.getByText("離線中 — 編輯內容將不會自動儲存")).toBeInTheDocument();
+  });
+
+  it("does not show offline warning when offlineWarning is false", () => {
+    render(<ItemContentEditor {...defaultProps} offlineWarning={false} />);
+    expect(screen.queryByText("離線中 — 編輯內容將不會自動儲存")).not.toBeInTheDocument();
+  });
+
+  it("hides offline warning in preview mode", async () => {
+    const user = userEvent.setup();
+    render(<ItemContentEditor {...defaultProps} offlineWarning />);
+
+    expect(screen.getByText("離線中 — 編輯內容將不會自動儲存")).toBeInTheDocument();
+
+    await user.click(screen.getByText("預覽"));
+    await waitFor(() => {
+      expect(screen.queryByText("離線中 — 編輯內容將不會自動儲存")).not.toBeInTheDocument();
+    });
+  });
 });

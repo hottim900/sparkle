@@ -8,7 +8,7 @@ import { logger } from "../lib/logger.js";
 
 const DB_PATH = process.env.DATABASE_URL || "./data/todo.db";
 
-const TARGET_VERSION = 11;
+const TARGET_VERSION = 12;
 
 function getSchemaVersion(sqlite: Database.Database): number {
   // Check if schema_version table exists
@@ -172,6 +172,63 @@ function runMigrations(sqlite: Database.Database) {
     `);
     setSchemaVersion(sqlite, 11);
   }
+
+  // Step 11→12: Add FK constraint on linked_note_id (table recreation required)
+  if (version < 12) {
+    sqlite.pragma("foreign_keys = OFF");
+
+    const migrate = sqlite.transaction(() => {
+      // Clean up orphan linked_note_id references
+      sqlite.exec(`
+        UPDATE items SET linked_note_id = NULL
+        WHERE linked_note_id IS NOT NULL
+        AND linked_note_id NOT IN (SELECT id FROM items)
+      `);
+
+      // Recreate table with FK (SQLite can't ALTER TABLE to add FK)
+      sqlite.exec(`
+        CREATE TABLE items_new (
+          id TEXT PRIMARY KEY,
+          type TEXT NOT NULL DEFAULT 'note',
+          title TEXT NOT NULL,
+          content TEXT DEFAULT '',
+          status TEXT NOT NULL DEFAULT 'fleeting',
+          priority TEXT,
+          due TEXT,
+          tags TEXT NOT NULL DEFAULT '[]',
+          origin TEXT DEFAULT '',
+          source TEXT DEFAULT NULL,
+          aliases TEXT NOT NULL DEFAULT '[]',
+          linked_note_id TEXT DEFAULT NULL,
+          created TEXT NOT NULL,
+          modified TEXT NOT NULL,
+          FOREIGN KEY (linked_note_id) REFERENCES items(id) ON DELETE SET NULL
+        );
+
+        INSERT INTO items_new SELECT * FROM items;
+        DROP TABLE items;
+        ALTER TABLE items_new RENAME TO items;
+
+        CREATE INDEX idx_items_status ON items(status);
+        CREATE INDEX idx_items_type ON items(type);
+        CREATE INDEX idx_items_created ON items(created DESC);
+      `);
+    });
+
+    migrate();
+
+    sqlite.pragma("foreign_keys = ON");
+
+    // Verify FK integrity after migration
+    const violations = sqlite.pragma("foreign_key_check(items)");
+    if (Array.isArray(violations) && violations.length > 0) {
+      throw new Error(
+        `FK integrity check failed after migration 11→12: ${JSON.stringify(violations)}`,
+      );
+    }
+
+    setSchemaVersion(sqlite, 12);
+  }
 }
 
 function createDb() {
@@ -206,7 +263,8 @@ function createDb() {
         aliases TEXT NOT NULL DEFAULT '[]',
         linked_note_id TEXT DEFAULT NULL,
         created TEXT NOT NULL,
-        modified TEXT NOT NULL
+        modified TEXT NOT NULL,
+        FOREIGN KEY (linked_note_id) REFERENCES items(id) ON DELETE SET NULL
       );
 
       CREATE INDEX idx_items_status ON items(status);

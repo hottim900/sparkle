@@ -51,7 +51,7 @@ server/
     items.ts            # Zod validation schemas (statusEnum, excludeStatus, batch actions)
     shares.ts           # Zod schema for share creation (visibility enum)
   db/
-    index.ts            # DB connection + schema migration (version 0→11)
+    index.ts            # DB connection + schema migration (version 0→12)
     schema.ts           # Drizzle table schema (items + settings + share_tokens)
     fts.ts              # FTS5 virtual table + sync triggers
   test-utils.ts         # Shared test DB setup (createTestDb: in-memory SQLite + all tables + FTS)
@@ -76,16 +76,17 @@ src/
     sidebar.tsx          # Desktop nav (筆記/待辦/暫存/共用 sections + settings)
     bottom-nav.tsx       # Mobile nav (Notes, Todos, Scratch, Dashboard, Search + settings)
     fleeting-triage.tsx  # Fleeting note triage mode (發展/進行/封存/保留)
-    offline-indicator.tsx
+    offline-indicator.tsx # Offline banner (uses shared useOnlineStatus hook)
     install-prompt.tsx   # PWA install banner
-    __tests__/           # Frontend component tests (20 files, Testing Library + jsdom)
+    __tests__/           # Frontend component tests (21 files, Testing Library + jsdom)
   lib/
     api.ts              # API client (auto-logout on 401, shares API, fetchWithRetry with timeout + exponential backoff)
-    app-context.ts      # AppContext + useAppContext hook (view, nav, config state)
+    app-context.ts      # AppContext + useAppContext hook (view, nav, config, isOnline state)
     types.ts            # TypeScript interfaces + ViewType + ShareToken types
     __tests__/           # Lib unit tests (fetchWithRetry)
   hooks/
     use-keyboard-shortcuts.ts  # N=new, /=search, Esc=close
+    use-online-status.ts       # Shared navigator.onLine + event hook (used by AppContext + OfflineIndicator)
     __tests__/           # Hook tests
   test-setup.ts         # Testing Library jest-dom setup
   test-utils.tsx        # renderWithContext helper for component tests
@@ -163,7 +164,7 @@ npm run dev:server   # Hono on :3000 with tsx watch
 # IMPORTANT: Tests require node v22 (better-sqlite3 native module is incompatible with v24)
 nvm use 22
 
-# Tests (680 tests, 36 files — server 470 + frontend 210)
+# Tests (707 tests, 37 files — server 475 + frontend 232)
 npx vitest run                # Run all tests
 npm run test:coverage         # With coverage report (thresholds: 75% statements, 70% branches)
 npx vitest                    # Watch mode
@@ -239,13 +240,16 @@ Requires `iptables` package: `sudo apt install -y iptables`
 
 ### Backup (restic + sqlite3)
 
-- Run `scripts/setup-backup.sh` for interactive first-time setup (installs restic, inits repo, generates password)
-- `scripts/backup.sh` runs unattended: `VACUUM INTO` snapshot → `gzip --rsyncable` → `restic backup` → retention prune
+- Run `scripts/setup-backup.sh` for interactive first-time setup (installs restic, inits repo, generates password, optionally configures offsite backup)
+- `scripts/backup.sh` runs unattended: `VACUUM INTO` snapshot → `gzip --rsyncable` → `restic backup` → retention prune → offsite copy (optional)
 - `VACUUM INTO` creates compacted, consistent hot snapshot (safe with WAL mode)
 - `gzip --rsyncable` produces dedup-friendly output for restic incremental backups
 - Retention: 7 daily, 4 weekly, 3 monthly (`--group-by host,tags`)
 - Tags: `--tag db,sqlite,sparkle`
 - Env vars: `RESTIC_REPOSITORY` (default `~/sparkle-backups`), `RESTIC_PASSWORD_FILE` (required), `HEALTHCHECK_URL` (optional)
+- **Offsite backup**: `restic copy --tag sparkle` replicates snapshots to a second repo on a separate physical disk (e.g. `/mnt/d/sparkle-backups`). Non-fatal — warns and continues if mount point not available. Same retention policy applied to offsite repo.
+- Offsite env vars: `RESTIC_OFFSITE_REPOSITORY` (e.g. `/mnt/d/sparkle-backups`), `RESTIC_OFFSITE_PASSWORD_FILE` (optional, defaults to `RESTIC_PASSWORD_FILE`)
+- Offsite init: `restic init --repo /mnt/d/sparkle-backups --copy-chunker-params --repo2 ~/sparkle-backups` (shared chunker params for dedup efficiency)
 - Suggested cron: `0 3 * * *` (daily at 3 AM)
 - Restore: `restic restore latest --tag sparkle --target /tmp/sparkle-restore` → `gunzip` → stop service → copy DB → remove stale WAL/SHM → `chown` → start service
 
@@ -334,7 +338,7 @@ id, type, title, content, status, priority, due, tags, origin, source, aliases, 
 - `source`: reference URL (nullable)
 - `aliases`: alternative names for Obsidian linking (JSON array)
 - `due`: YYYY-MM-DD format, **todo-only** (notes ignore due; todo→note conversion clears due)
-- `linked_note_id`: todo→note reference (nullable, todo-only; cleared on todo→note conversion)
+- `linked_note_id`: todo→note reference (nullable, todo-only; cleared on todo→note conversion; FK with ON DELETE SET NULL — deleting the referenced note auto-nullifies)
 - `linked_todo_count`: computed field in API responses — number of non-archived todos linked to a note (0 for todos)
 - `linked_note_title`: computed field in API responses — title of linked note for todos (null if none)
 - `share_visibility`: computed field in API responses — share status of the item ("public", "unlisted", or null if not shared)
@@ -346,7 +350,7 @@ When type changes (note ↔ todo ↔ scratch), status auto-maps server-side. Aut
 
 ### DB Migration
 
-Schema version tracked in `schema_version` table (version 0→11). Each step is idempotent. Fresh install creates new schema directly at version 11. Migration 8→9 creates the `settings` table with Obsidian export defaults. Migration 9→10 is a no-op version bump for scratch type support (SQLite text columns need no schema change). Migration 10→11 creates the `share_tokens` table with CASCADE foreign key to items.
+Schema version tracked in `schema_version` table (version 0→12). Each step is idempotent. Fresh install creates new schema directly at version 12. Migration 8→9 creates the `settings` table with Obsidian export defaults. Migration 9→10 is a no-op version bump for scratch type support (SQLite text columns need no schema change). Migration 10→11 creates the `share_tokens` table with CASCADE foreign key to items. Migration 11→12 adds FK constraint on `linked_note_id` with ON DELETE SET NULL (requires table recreation; cleans up orphan references, recreates indexes, FTS triggers rebuilt by setupFTS).
 
 ## Conventions
 
@@ -359,7 +363,7 @@ Schema version tracked in `schema_version` table (version 0→11). Each step is 
 - Aliases stored as JSON array string in SQLite
 - Timestamps: ISO 8601 strings
 - Database: SQLite WAL mode, FTS5 trigram tokenizer for search (supports Chinese)
-- Tests: Vitest with projects config (server=node, frontend=jsdom). Server: in-memory SQLite, mock db module with vi.mock, shared `createTestDb()` in `server/test-utils.ts`. Frontend: Testing Library + jest-dom + userEvent, `renderWithContext()` helper in `src/test-utils.tsx` for components using AppContext. All frontend components and hooks tested (21 test files, 205 tests). Coverage: ~78% statements, ~74% branches (Vitest 4 V8 remapping); thresholds enforced in CI (75% statements, 70% branches). Coverage excludes: shadcn/ui, api.ts (always mocked), App.tsx, sw.ts. E2E: Playwright (Chromium desktop + iPhone 14 mobile, serial `workers: 1`) against production build (`dist/`), Hono server on port 3456 with temp SQLite DB (`/tmp/sparkle-e2e-test.db`), auth via storageState, `RATE_LIMIT_MAX=10000` for test server. 29 tests across 6 spec files (24 desktop + 5 mobile) covering login, quick capture, search, item detail, item lifecycle CRUD (edit title/content, status change, tags, delete, type conversion), note triage workflow (develop/archive/skip), note maturity progression, todo priority/due/done, linked todo create/navigate, settings page, theme toggle, data export. Mobile tests (`e2e/mobile.spec.ts`) cover bottom nav, quick capture, tag + button, item detail, search. Shared helpers in `e2e/helpers.ts`. Test files excluded from tsconfig (both `tsconfig.json` and `tsconfig.server.json`) — Vitest handles test file type-checking via its own config.
+- Tests: Vitest with projects config (server=node, frontend=jsdom). Server: in-memory SQLite, mock db module with vi.mock, shared `createTestDb()` in `server/test-utils.ts`. Frontend: Testing Library + jest-dom + userEvent, `renderWithContext()` helper in `src/test-utils.tsx` for components using AppContext. All frontend components and hooks tested (22 test files, 232 tests). Coverage: ~78% statements, ~74% branches (Vitest 4 V8 remapping); thresholds enforced in CI (75% statements, 70% branches). Coverage excludes: shadcn/ui, api.ts (always mocked), App.tsx, sw.ts. E2E: Playwright (Chromium desktop + iPhone 14 mobile, serial `workers: 1`) against production build (`dist/`), Hono server on port 3456 with temp SQLite DB (`/tmp/sparkle-e2e-test.db`), auth via storageState, `RATE_LIMIT_MAX=10000` for test server. 29 tests across 6 spec files (24 desktop + 5 mobile) covering login, quick capture, search, item detail, item lifecycle CRUD (edit title/content, status change, tags, delete, type conversion), note triage workflow (develop/archive/skip), note maturity progression, todo priority/due/done, linked todo create/navigate, settings page, theme toggle, data export. Mobile tests (`e2e/mobile.spec.ts`) cover bottom nav, quick capture, tag + button, item detail, search. Shared helpers in `e2e/helpers.ts`. Test files excluded from tsconfig (both `tsconfig.json` and `tsconfig.server.json`) — Vitest handles test file type-checking via its own config.
 - Obsidian export: .md with YAML frontmatter, local time (no TZ suffix), written to vault path. Config stored in `settings` table, read via `getObsidianSettings()`. `exportToObsidian(item, config)` is a pure function (no env dependency).
 - Settings API: `GET /api/settings` returns all settings; `PUT /api/settings` accepts partial updates with Zod validation (key whitelist, vault path writability check when enabling)
 - Public sharing: Notes can be shared via token-based URLs (`/s/:token`). SSR HTML pages with marked for Markdown, OpenGraph meta tags, dark mode CSS. Two visibility modes: `unlisted` (link-only) and `public` (listed in `/api/public`). Auth bypass on `/api/public/*` and `/s/*` paths. Share management via authenticated API (`/api/items/:id/share`, `/api/shares`)
@@ -368,7 +372,8 @@ Schema version tracked in `schema_version` table (version 0→11). Each step is 
 - Logging: pino structured logger (`server/lib/logger.ts`). JSON output in production, pino-pretty in dev. Custom HTTP request logger middleware replaces hono's built-in. Health check requests logged at debug level. All server `console.log/error/warn` replaced with `logger.info/error/warn`.
 - Error tracking: Sentry via `@sentry/node` with official Hono integration. `server/instrument.ts` initializes conditionally (only when `SENTRY_DSN` is set). `Sentry.setupHonoErrorHandler(app)` auto-captures server errors (skips 3xx/4xx). `zodErrorsIntegration` captures structured Zod validation errors. Graceful shutdown flushes pending events via `Sentry.close(2000)`.
 - Security: Content-Security-Policy header on all responses (self-only scripts/fonts/connect, unsafe-inline styles for Tailwind, HTTPS images, frame-ancestors none). Health endpoint (`GET /api/health`) unauthenticated for Docker/orchestrator monitoring. Returns `{ status, checks: { db, disk }, uptime }` — HTTP 200 when ok, 503 when degraded (DB unreachable or disk < 100MB).
-- State management: AppContext (`src/lib/app-context.ts`) provides view state, navigation, config, and refresh to child components via `useAppContext()`. Sidebar, BottomNav use context only (0 props). ItemDetail split into sub-components: ItemDetailHeader, ItemContentEditor, LinkedItemsSection.
+- Offline UI: "Honest about limitations" approach — when offline, all mutating operations (save, delete, status change, export, share) are disabled with clear feedback (disabled buttons + toast messages in 繁體中文). Quick capture stays functional via existing SW queue. `useOnlineStatus()` hook shared across components via AppContext (`isOnline`). Components read from context; standalone components (Settings, FleetingTriage) use the hook directly.
+- State management: AppContext (`src/lib/app-context.ts`) provides view state, navigation, config, isOnline, and refresh to child components via `useAppContext()`. Sidebar, BottomNav use context only (0 props). ItemDetail split into sub-components: ItemDetailHeader, ItemContentEditor, LinkedItemsSection.
 - Linting: ESLint 9 flat config with typescript-eslint (recommended), react-hooks plugin, eslint-config-prettier. Test files relaxed (`no-explicit-any` warn, `no-require-imports` off). Unused vars allowed with `_` prefix.
 - Formatting: Prettier (double quotes, trailing commas, 100 char width). Enforced via lint-staged + Husky pre-commit hook. `.prettierignore` excludes dist, mcp-server, data, certs.
 - CI: GitHub Actions on push/PR to main — npm audit → lint → format:check → tsc (frontend + server) → build → unit test with coverage (thresholds enforced) → E2E (Playwright Chromium). Artifacts: playwright-report + test-results (7 days). Node 22 pinned. Job timeout: 15 minutes.
