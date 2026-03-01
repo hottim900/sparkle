@@ -85,7 +85,8 @@ describe("fetchWithRetry", () => {
     expect(fetchSpy).toHaveBeenCalledTimes(2);
   });
 
-  it("gives up after MAX_ATTEMPTS network errors", async () => {
+  it("gives up after MAX_ATTEMPTS network errors (offline)", async () => {
+    vi.stubGlobal("navigator", { onLine: false });
     fetchSpy
       .mockRejectedValueOnce(new TypeError("Failed to fetch"))
       .mockRejectedValueOnce(new TypeError("Failed to fetch"))
@@ -192,6 +193,41 @@ describe("fetchWithRetry", () => {
 
     expect(res.status).toBe(404);
     expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  // --- CF Access JWT expiry detection ---
+
+  it("throws ApiClientError when all retries fail with network error while online (CF Access expired)", async () => {
+    vi.stubGlobal("navigator", { onLine: true });
+    fetchSpy
+      .mockRejectedValueOnce(new TypeError("Failed to fetch"))
+      .mockRejectedValueOnce(new TypeError("Failed to fetch"))
+      .mockRejectedValueOnce(new TypeError("Failed to fetch"));
+
+    const promise = fetchWithRetry("/api/test");
+    await vi.runAllTimersAsync();
+
+    const error = await promise.catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ApiClientError);
+    expect(error).toMatchObject({
+      message: "連線已過期，請重新整理頁面以重新驗證",
+      status: 0,
+    });
+  });
+
+  it("throws original TypeError when all retries fail with network error while offline", async () => {
+    vi.stubGlobal("navigator", { onLine: false });
+    fetchSpy
+      .mockRejectedValueOnce(new TypeError("Failed to fetch"))
+      .mockRejectedValueOnce(new TypeError("Failed to fetch"))
+      .mockRejectedValueOnce(new TypeError("Failed to fetch"));
+
+    const promise = fetchWithRetry("/api/test");
+    await vi.runAllTimersAsync();
+
+    const error = await promise.catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(TypeError);
+    expect((error as Error).message).toBe("Failed to fetch");
   });
 
   // --- Backoff ---
