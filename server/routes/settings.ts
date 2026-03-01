@@ -84,7 +84,7 @@ settingsRouter.put("/", async (c) => {
     return c.json(settings);
   } catch (e) {
     if (e instanceof ZodError) {
-      return c.json({ error: e.errors[0]?.message ?? "Validation error" }, 400);
+      return c.json({ error: e.issues[0]?.message ?? "Validation error" }, 400);
     }
     throw e;
   }

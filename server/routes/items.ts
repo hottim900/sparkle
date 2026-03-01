@@ -38,7 +38,7 @@ itemsRouter.get("/", (c) => {
     return c.json(result);
   } catch (e) {
     if (e instanceof ZodError) {
-      return c.json({ error: e.errors[0]?.message ?? "Validation error" }, 400);
+      return c.json({ error: e.issues[0]?.message ?? "Validation error" }, 400);
     }
     throw e;
   }
@@ -63,7 +63,7 @@ itemsRouter.post("/", async (c) => {
     return c.json(item, 201);
   } catch (e) {
     if (e instanceof ZodError) {
-      return c.json({ error: e.errors[0]?.message ?? "Validation error" }, 400);
+      return c.json({ error: e.issues[0]?.message ?? "Validation error" }, 400);
     }
     throw e;
   }
@@ -171,7 +171,7 @@ itemsRouter.post("/batch", async (c) => {
     return c.json({ affected, skipped });
   } catch (e) {
     if (e instanceof ZodError) {
-      return c.json({ error: e.errors[0]?.message ?? "Validation error" }, 400);
+      return c.json({ error: e.issues[0]?.message ?? "Validation error" }, 400);
     }
     throw e;
   }
@@ -263,7 +263,7 @@ itemsRouter.patch("/:id", async (c) => {
     return c.json(updated);
   } catch (e) {
     if (e instanceof ZodError) {
-      return c.json({ error: e.errors[0]?.message ?? "Validation error" }, 400);
+      return c.json({ error: e.issues[0]?.message ?? "Validation error" }, 400);
     }
     throw e;
   }
