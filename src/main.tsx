@@ -29,9 +29,20 @@ if ("serviceWorker" in navigator) {
         scope: "/",
       });
       console.log("SW registered:", reg.scope);
+
+      // Check for SW updates periodically (every 60 minutes)
+      setInterval(() => reg.update(), 60 * 60 * 1000);
     } catch (err) {
       console.log("SW registration failed:", err);
     }
+
+    // Auto-reload when new SW activates (works with skipWaiting + clientsClaim)
+    let refreshing = false;
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (refreshing) return;
+      refreshing = true;
+      window.location.reload();
+    });
   });
 
   // Listen for messages from SW

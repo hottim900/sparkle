@@ -80,15 +80,16 @@ src/
     install-prompt.tsx   # PWA install banner
     __tests__/           # Frontend component tests (20 files, Testing Library + jsdom)
   lib/
-    api.ts              # API client (auto-logout on 401, shares API)
+    api.ts              # API client (auto-logout on 401, shares API, fetchWithRetry with timeout + exponential backoff)
     app-context.ts      # AppContext + useAppContext hook (view, nav, config state)
     types.ts            # TypeScript interfaces + ViewType + ShareToken types
+    __tests__/           # Lib unit tests (fetchWithRetry)
   hooks/
     use-keyboard-shortcuts.ts  # N=new, /=search, Esc=close
     __tests__/           # Hook tests
   test-setup.ts         # Testing Library jest-dom setup
   test-utils.tsx        # renderWithContext helper for component tests
-  sw.ts                 # Service worker (offline capture queue)
+  sw.ts                 # Service worker (precache, NetworkFirst API cache, offline capture queue, skipWaiting)
 
 scripts/
   start.sh              # One-command restart (uses systemctl)
@@ -162,7 +163,7 @@ npm run dev:server   # Hono on :3000 with tsx watch
 # IMPORTANT: Tests require node v22 (better-sqlite3 native module is incompatible with v24)
 nvm use 22
 
-# Tests (660 tests, 35 files — server 470 + frontend 190)
+# Tests (675 tests, 36 files — server 470 + frontend 205)
 npx vitest run                # Run all tests
 npm run test:coverage         # With coverage report (thresholds: 80% statements, 75% branches)
 npx vitest                    # Watch mode
@@ -350,7 +351,7 @@ Schema version tracked in `schema_version` table (version 0→11). Each step is 
 ## Conventions
 
 - UI language: 繁體中文
-- API: REST, JSON, Bearer token auth on /api/* (except /api/webhook/, /api/public/, /api/health), rate-limited (hono-rate-limiter)
+- API: REST, JSON, Bearer token auth on /api/* (except /api/webhook/, /api/public/, /api/health), rate-limited (hono-rate-limiter). Frontend API client (`src/lib/api.ts`) includes 15s AbortController timeout and automatic retry (max 3 attempts) with exponential backoff + jitter. GET/DELETE retry on network errors and 5xx; POST/PATCH/PUT retry only on network errors (not 5xx). 4xx errors are never retried. Timeout errors throw `ApiClientError` with status 0.
 - Startup validation: AUTH_TOKEN strength (length >= 32, Shannon entropy >= 3.0), LINE secrets (warn only)
 - Graceful shutdown: SIGTERM/SIGINT → server.close() → Sentry.close() → WAL checkpoint → sqlite.close() (25s timeout)
 - Node version: engines in package.json (>=22, <24), enforced by .npmrc engine-strict=true
@@ -358,11 +359,12 @@ Schema version tracked in `schema_version` table (version 0→11). Each step is 
 - Aliases stored as JSON array string in SQLite
 - Timestamps: ISO 8601 strings
 - Database: SQLite WAL mode, FTS5 trigram tokenizer for search (supports Chinese)
-- Tests: Vitest with projects config (server=node, frontend=jsdom). Server: in-memory SQLite, mock db module with vi.mock, shared `createTestDb()` in `server/test-utils.ts`. Frontend: Testing Library + jest-dom + userEvent, `renderWithContext()` helper in `src/test-utils.tsx` for components using AppContext. All frontend components and hooks tested (20 test files, 190 tests). Coverage: ~84% statements, ~85% branches; thresholds enforced in CI (80% statements, 75% branches). Coverage excludes: shadcn/ui, api.ts (always mocked), App.tsx, sw.ts. E2E: Playwright (Chromium-only, serial `workers: 1`) against production build (`dist/`), Hono server on port 3456 with temp SQLite DB (`/tmp/sparkle-e2e-test.db`), auth via storageState, `RATE_LIMIT_MAX=10000` for test server. 24 tests across 5 spec files covering login, quick capture, search, item detail, item lifecycle CRUD (edit title/content, status change, tags, delete, type conversion), note triage workflow (develop/archive/skip), note maturity progression, todo priority/due/done, linked todo create/navigate, settings page, theme toggle, data export. Shared helpers in `e2e/helpers.ts`. Test files excluded from tsconfig (both `tsconfig.json` and `tsconfig.server.json`) — Vitest handles test file type-checking via its own config.
+- Tests: Vitest with projects config (server=node, frontend=jsdom). Server: in-memory SQLite, mock db module with vi.mock, shared `createTestDb()` in `server/test-utils.ts`. Frontend: Testing Library + jest-dom + userEvent, `renderWithContext()` helper in `src/test-utils.tsx` for components using AppContext. All frontend components and hooks tested (21 test files, 205 tests). Coverage: ~84% statements, ~85% branches; thresholds enforced in CI (80% statements, 75% branches). Coverage excludes: shadcn/ui, api.ts (always mocked), App.tsx, sw.ts. E2E: Playwright (Chromium-only, serial `workers: 1`) against production build (`dist/`), Hono server on port 3456 with temp SQLite DB (`/tmp/sparkle-e2e-test.db`), auth via storageState, `RATE_LIMIT_MAX=10000` for test server. 24 tests across 5 spec files covering login, quick capture, search, item detail, item lifecycle CRUD (edit title/content, status change, tags, delete, type conversion), note triage workflow (develop/archive/skip), note maturity progression, todo priority/due/done, linked todo create/navigate, settings page, theme toggle, data export. Shared helpers in `e2e/helpers.ts`. Test files excluded from tsconfig (both `tsconfig.json` and `tsconfig.server.json`) — Vitest handles test file type-checking via its own config.
 - Obsidian export: .md with YAML frontmatter, local time (no TZ suffix), written to vault path. Config stored in `settings` table, read via `getObsidianSettings()`. `exportToObsidian(item, config)` is a pure function (no env dependency).
 - Settings API: `GET /api/settings` returns all settings; `PUT /api/settings` accepts partial updates with Zod validation (key whitelist, vault path writability check when enabling)
 - Public sharing: Notes can be shared via token-based URLs (`/s/:token`). SSR HTML pages with marked for Markdown, OpenGraph meta tags, dark mode CSS. Two visibility modes: `unlisted` (link-only) and `public` (listed in `/api/public`). Auth bypass on `/api/public/*` and `/s/*` paths. Share management via authenticated API (`/api/items/:id/share`, `/api/shares`)
-- Performance: gzip/deflate compression via `hono/compress` on all responses with `Vary: Accept-Encoding` for CDN cache correctness. Static assets (`/assets/*`) served with `Cache-Control: immutable` (Vite content-hashed filenames). Frontend uses code splitting — heavy components (ItemDetail, Settings, Dashboard, FleetingTriage, MarkdownPreview) are lazy-loaded via `React.lazy()` with `ErrorBoundary` wrappers for chunk load failure recovery. Vendor chunks split: `ui` (radix + cva), `markdown` (react-markdown + remark-gfm)
+- Performance: gzip/deflate compression via `hono/compress` on all responses with `Vary: Accept-Encoding` for CDN cache correctness. Static assets (`/assets/*`) served with `Cache-Control: immutable` (Vite content-hashed filenames). API responses (`/api/*`) served with `Cache-Control: no-store` to prevent browser heuristic caching. Frontend `fetchWithRetry` also sets `cache: "no-store"` as double insurance. Frontend uses code splitting — heavy components (ItemDetail, Settings, Dashboard, FleetingTriage, MarkdownPreview) are lazy-loaded via `React.lazy()` with `ErrorBoundary` wrappers for chunk load failure recovery. Vendor chunks split: `ui` (radix + cva), `markdown` (react-markdown + remark-gfm)
+- PWA caching: Service Worker uses Workbox `injectManifest` strategy. Static assets precached via `precacheAndRoute(self.__WB_MANIFEST)`. GET `/api/*` requests use `NetworkFirst` strategy (cacheName: `api-cache`, 10s network timeout, only caches 200 responses) — online always fetches fresh data, offline falls back to last cached response. POST `/api/items` intercepted for offline queue (IndexedDB, replayed on reconnect). SW updates use `skipWaiting()` + `clientsClaim()` for immediate activation; main.tsx detects `controllerchange` and auto-reloads. Periodic update check every 60 minutes via `reg.update()`.
 - Logging: pino structured logger (`server/lib/logger.ts`). JSON output in production, pino-pretty in dev. Custom HTTP request logger middleware replaces hono's built-in. Health check requests logged at debug level. All server `console.log/error/warn` replaced with `logger.info/error/warn`.
 - Error tracking: Sentry via `@sentry/node` with official Hono integration. `server/instrument.ts` initializes conditionally (only when `SENTRY_DSN` is set). `Sentry.setupHonoErrorHandler(app)` auto-captures server errors (skips 3xx/4xx). `zodErrorsIntegration` captures structured Zod validation errors. Graceful shutdown flushes pending events via `Sentry.close(2000)`.
 - Security: Content-Security-Policy header on all responses (self-only scripts/fonts/connect, unsafe-inline styles for Tailwind, HTTPS images, frame-ancestors none). Health endpoint (`GET /api/health`) unauthenticated for Docker/orchestrator monitoring. Returns `{ status, checks: { db, disk }, uptime }` — HTTP 200 when ok, 503 when degraded (DB unreachable or disk < 100MB).

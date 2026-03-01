@@ -114,6 +114,12 @@ app.use("*", async (c, next) => {
   );
 });
 
+// Prevent browser heuristic caching of API responses
+app.use("/api/*", async (c, next) => {
+  await next();
+  c.res.headers.set("Cache-Control", "no-store");
+});
+
 // Rate limiting — webhook has its own limiter, applied before auth (webhook skips auth)
 app.use("/api/webhook/*", webhookRateLimiter);
 
