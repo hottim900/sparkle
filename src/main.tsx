@@ -36,10 +36,13 @@ if ("serviceWorker" in navigator) {
       console.log("SW registration failed:", err);
     }
 
-    // Auto-reload when new SW activates (works with skipWaiting + clientsClaim)
+    // Auto-reload when new SW activates (works with skipWaiting + clientsClaim).
+    // Only reload on SW *updates* (controller already existed), not on first
+    // install (controller was null), to avoid reload loops during E2E tests.
+    const hadController = !!navigator.serviceWorker.controller;
     let refreshing = false;
     navigator.serviceWorker.addEventListener("controllerchange", () => {
-      if (refreshing) return;
+      if (!hadController || refreshing) return;
       refreshing = true;
       window.location.reload();
     });
