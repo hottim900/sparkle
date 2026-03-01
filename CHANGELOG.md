@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.1.0](https://github.com/hottim900/sparkle/compare/v1.0.0...v1.1.0) (2026-03-01)
+
+
+### Features
+
+* add offsite backup to secondary disk via restic copy ([584196d](https://github.com/hottim900/sparkle/commit/584196db5875ac4470c1a36a77de727211bbcbeb))
+* honest offline UI — disable mutations when offline ([37443f9](https://github.com/hottim900/sparkle/commit/37443f93d6e21b77c3a5494c43fceb9dd448db17))
+* offline indicator, CF Access JWT handling, mobile E2E tests ([#22](https://github.com/hottim900/sparkle/issues/22)) ([4216446](https://github.com/hottim900/sparkle/commit/42164464aa25c38d8d9516b5f7a8943317f3d548))
+* project hardening — offsite backup, FK constraint, offline UI ([80721c8](https://github.com/hottim900/sparkle/commit/80721c8f65283fd88a29716faa0e6d34732ebfab))
+
+
+### Bug Fixes
+
+* add FK constraint on linked_note_id with ON DELETE SET NULL ([794178c](https://github.com/hottim900/sparkle/commit/794178c21a1dd8f8644e04893f77b056f4c26863))
+* handle NULL timestamps in migration 11→12 ([b28200d](https://github.com/hottim900/sparkle/commit/b28200db348e2092096e2f5400bf6953023316d0))
+* handle NULL timestamps in migration 11→12 to prevent crash ([65d94ec](https://github.com/hottim900/sparkle/commit/65d94ec7bfd0c71724c9a0755db385130f1762fc))
+* schedule periodic cleanup of expired LINE Bot sessions ([070378e](https://github.com/hottim900/sparkle/commit/070378e4ae5466b196e3436d88a9ac685b4f63bc))
+* schedule periodic cleanup of expired LINE Bot sessions ([626bd70](https://github.com/hottim900/sparkle/commit/626bd70bb0e13eec3000828315235d65de60817a))
+* use explicit column names in migration 11→12 INSERT ([5120c50](https://github.com/hottim900/sparkle/commit/5120c50d2f41d637aba82d9980a55e5a3e195d33))
+* use explicit column names in migration INSERT ([5b7d903](https://github.com/hottim900/sparkle/commit/5b7d903161282dac95ac1f3e265e316266918ac5))
+
 ## 1.0.0 (2026-03-01)
 
 
