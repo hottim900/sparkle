@@ -33,6 +33,7 @@ import { getAllTags } from "./lib/items.js";
 import { getObsidianSettings } from "./lib/settings.js";
 import { z, ZodError } from "zod";
 import { statusEnum } from "./schemas/items.js";
+import { clearExpiredSessions } from "./lib/line-session.js";
 
 // --- Startup validation ---
 function shannonEntropy(s: string): number {
@@ -333,5 +334,9 @@ if (process.env.TLS_CERT && process.env.TLS_KEY) {
 }
 
 setupGracefulShutdown(httpServer as Server, sqlite);
+
+// Periodically clean up expired LINE Bot sessions (in-memory, 10-min TTL)
+const sessionCleanupTimer = setInterval(clearExpiredSessions, 60_000);
+sessionCleanupTimer.unref();
 
 export default app;
