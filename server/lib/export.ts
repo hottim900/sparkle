@@ -1,5 +1,6 @@
 import { mkdirSync, writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
+import { logger } from "./logger";
 
 /**
  * Replace forbidden filename characters with '-', collapse consecutive dashes,
@@ -67,7 +68,12 @@ export function generateFrontmatter(item: ExportableItem): string {
   }
 
   // Tags — include when non-empty
-  const tags: string[] = JSON.parse(item.tags);
+  let tags: string[] = [];
+  try {
+    tags = JSON.parse(item.tags);
+  } catch {
+    logger.warn({ id: item.id, tags: item.tags }, "Failed to parse tags JSON during export");
+  }
   if (tags.length > 0) {
     lines.push("tags:");
     for (const tag of tags) {
@@ -76,7 +82,15 @@ export function generateFrontmatter(item: ExportableItem): string {
   }
 
   // Aliases — include when non-empty
-  const aliases: string[] = JSON.parse(item.aliases);
+  let aliases: string[] = [];
+  try {
+    aliases = JSON.parse(item.aliases);
+  } catch {
+    logger.warn(
+      { id: item.id, aliases: item.aliases },
+      "Failed to parse aliases JSON during export",
+    );
+  }
   if (aliases.length > 0) {
     lines.push("aliases:");
     for (const alias of aliases) {
