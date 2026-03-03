@@ -2,6 +2,7 @@ import { useState, useCallback, useMemo, lazy, Suspense } from "react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { AuthGate } from "@/components/auth-gate";
 import { Toaster } from "@/components/ui/sonner";
+import { toast } from "sonner";
 import { QuickCapture } from "@/components/quick-capture";
 import { ItemList } from "@/components/item-list";
 import { SearchBar } from "@/components/search-bar";
@@ -98,7 +99,8 @@ function MainApp() {
         const itemData = await getItem(itemId);
         setSelectedItem(parseItem(itemData));
       } catch {
-        // item may have been deleted
+        setNavStack((prev) => prev.slice(0, -1));
+        toast.error("項目不存在或已被刪除");
       }
     },
     [currentView, selectedItem?.id],

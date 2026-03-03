@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { sqlite } from "../db/index.js";
 import { getShareByToken, listPublicShares } from "../lib/shares.js";
 import { renderPublicPage, renderNotFoundPage } from "../lib/render-public-page.js";
+import { logger } from "../lib/logger.js";
 
 const publicRouter = new Hono();
 
@@ -18,7 +19,10 @@ publicRouter.get("/api/public/:token", (c) => {
   try {
     tags = JSON.parse(share.item_tags);
   } catch {
-    tags = [];
+    logger.warn(
+      { token: share.token, raw: share.item_tags },
+      "Failed to parse tags in shared item",
+    );
   }
 
   return c.json({
@@ -57,7 +61,10 @@ publicRouter.get("/s/:token", (c) => {
   try {
     tags = JSON.parse(share.item_tags);
   } catch {
-    tags = [];
+    logger.warn(
+      { token: share.token, raw: share.item_tags },
+      "Failed to parse tags in shared item",
+    );
   }
 
   const html = renderPublicPage({
