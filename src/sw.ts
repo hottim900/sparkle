@@ -13,7 +13,7 @@ clientsClaim();
 
 // Precache Vite build assets (disable navigation mapping so CF Access can check cookies)
 precacheAndRoute(self.__WB_MANIFEST, {
-  directoryIndex: null,
+  directoryIndex: undefined,
   cleanURLs: false,
 });
 
