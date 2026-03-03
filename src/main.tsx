@@ -53,6 +53,9 @@ if ("serviceWorker" in navigator) {
     if (event.data?.type === "OFFLINE_SYNC") {
       toast.success(`已同步 ${event.data.count} 個離線項目`);
     }
+    if (event.data?.type === "OFFLINE_SYNC_FAILED") {
+      toast.warning(`${event.data.count} 個離線項目同步失敗，將稍後重試`);
+    }
     if (event.data?.type === "CACHE_FALLBACK") {
       toast.info("離線模式：顯示的是快取資料", { id: "offline-fallback" });
     }
