@@ -15,7 +15,7 @@ test.describe("Login", () => {
     await page.getByRole("button", { name: "登入" }).click();
 
     // Main app loads — desktop default view is dashboard
-    await expect(page.getByText("總覽")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("heading", { name: "總覽" })).toBeVisible({ timeout: 10_000 });
   });
 
   test("shows error for invalid token", async ({ page }) => {
