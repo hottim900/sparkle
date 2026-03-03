@@ -175,6 +175,7 @@ export async function listItems(params?: {
     "exported",
     "active",
     "done",
+    "draft",
     "archived",
   ]);
   const search = new URLSearchParams();

@@ -61,8 +61,13 @@ webhookRouter.post("/line", async (c) => {
     return c.json({ error: "Invalid signature" }, 401);
   }
 
-  const body = JSON.parse(rawBody);
-  const events = body.events ?? [];
+  let body: Record<string, unknown>;
+  try {
+    body = JSON.parse(rawBody);
+  } catch {
+    return c.json({ error: "Invalid JSON body" }, 400);
+  }
+  const events = (body.events as unknown[]) ?? [];
 
   for (const event of events) {
     if (event.type !== "message" || event.message.type !== "text") {

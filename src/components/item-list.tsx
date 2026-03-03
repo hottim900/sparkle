@@ -362,10 +362,10 @@ export function ItemList({
       });
       const skippedMsg = result.skipped > 0 ? `，跳過 ${result.skipped} 筆` : "";
 
-      if (config.action === "export" && result.errors && result.errors.length > 0) {
-        toast.warning(
-          `匯出 ${result.affected} 筆成功，${result.errors.length} 筆失敗${skippedMsg}`,
-        );
+      if (config.action === "export" && result.skipped > 0) {
+        const errorCount = result.errors?.length ?? 0;
+        const failMsg = errorCount > 0 ? `${errorCount} 筆失敗` : `${result.skipped} 筆跳過`;
+        toast.warning(`匯出 ${result.affected} 筆成功，${failMsg}`);
       } else {
         toast.success(`已${config.label} ${result.affected} 個項目${skippedMsg}`);
       }
