@@ -1,6 +1,8 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { listItems, batchAction, listCategories } from "@/lib/api";
 import { useAppContext } from "@/lib/app-context";
+import { queryKeys, type ItemFilters } from "@/lib/query-keys";
 import {
   parseItems,
   type ParsedItem,
@@ -160,18 +162,14 @@ export function ItemList({
     selectedTag: tag,
     onSelectItem: onSelect,
     onNavigate,
-    refreshKey,
     obsidianEnabled,
     isOnline,
   } = useAppContext();
-  const [items, setItems] = useState<ParsedItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [total, setTotal] = useState(0);
+  const queryClient = useQueryClient();
   const [offset, setOffset] = useState(0);
   const [sortIdx, setSortIdx] = useState(0);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [categories, setCategories] = useState<Category[]>([]);
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
   const limit = 50;
 
@@ -208,39 +206,46 @@ export function ItemList({
     if (currentView === "todos" && !todoSubView) return ["archived"];
     return undefined;
   })();
-  const excludeStatusKey = excludeStatus?.join() ?? "";
 
-  const fetchItems = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await listItems({
-        status: effectiveStatus,
-        type: effectiveType,
-        tag,
-        sort: currentSort?.sort ?? "created",
-        order: currentSort?.order ?? "desc",
-        limit,
-        offset,
-        excludeStatus,
-      });
-      setItems(parseItems(res.items));
-      setTotal(res.total);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "載入失敗");
-    } finally {
-      setLoading(false);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- excludeStatus is a new array each render; excludeStatusKey captures its value stably
-  }, [
-    effectiveStatus,
-    effectiveType,
+  // Items query
+  const filters: ItemFilters = {
+    status: effectiveStatus,
+    type: effectiveType,
     tag,
+    sort: currentSort?.sort ?? "created",
+    order: currentSort?.order ?? "desc",
+    limit,
     offset,
-    refreshKey,
-    currentSort?.sort,
-    currentSort?.order,
-    excludeStatusKey,
-  ]);
+    excludeStatus,
+  };
+
+  const {
+    data: itemsData,
+    isPending,
+    error: itemsError,
+  } = useQuery({
+    queryKey: queryKeys.items.list(filters),
+    queryFn: () => listItems(filters),
+    placeholderData: keepPreviousData,
+  });
+
+  // Categories query
+  const { data: categoriesData } = useQuery({
+    queryKey: queryKeys.categories,
+    queryFn: () => listCategories().then((r) => r.categories),
+  });
+
+  // Derived data from queries
+  const items = useMemo(() => parseItems(itemsData?.items ?? []), [itemsData?.items]);
+  const total = itemsData?.total ?? 0;
+  const categories = useMemo(() => categoriesData ?? [], [categoriesData]);
+
+  // Error handling for items query
+  useEffect(() => {
+    if (itemsError) {
+      toast.error(itemsError instanceof Error ? itemsError.message : "載入失敗");
+    }
+  }, [itemsError]);
 
   // Reset sort to view-appropriate default when switching views
   useEffect(() => {
@@ -256,19 +261,6 @@ export function ItemList({
   useEffect(() => {
     setOffset(0);
   }, [effectiveStatus, effectiveType, tag, safeSortIdx]);
-
-  useEffect(() => {
-    fetchItems();
-  }, [fetchItems]);
-
-  // Fetch categories for grouping
-  useEffect(() => {
-    listCategories()
-      .then((res) => setCategories(res.categories))
-      .catch(() => {
-        // Categories are optional — fail silently
-      });
-  }, [refreshKey]);
 
   const categoriesMap = useMemo(() => {
     const map = new Map<string, Category>();
@@ -343,6 +335,16 @@ export function ItemList({
     }
   };
 
+  const batchMutation = useMutation({
+    mutationFn: ({ ids, action }: { ids: string[]; action: string }) => batchAction(ids, action),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.items.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.categories });
+      queryClient.invalidateQueries({ queryKey: queryKeys.tags });
+      queryClient.invalidateQueries({ queryKey: queryKeys.stats });
+    },
+  });
+
   const handleBatchAction = async (config: BatchActionConfig) => {
     if (selectedIds.size === 0) return;
 
@@ -354,7 +356,10 @@ export function ItemList({
     }
 
     try {
-      const result = await batchAction(Array.from(selectedIds), config.action);
+      const result = await batchMutation.mutateAsync({
+        ids: Array.from(selectedIds),
+        action: config.action,
+      });
       const skippedMsg = result.skipped > 0 ? `，跳過 ${result.skipped} 筆` : "";
 
       if (config.action === "export" && result.errors && result.errors.length > 0) {
@@ -365,17 +370,22 @@ export function ItemList({
         toast.success(`已${config.label} ${result.affected} 個項目${skippedMsg}`);
       }
       exitSelectionMode();
-      fetchItems();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "批次操作失敗");
     }
   };
 
+  const handleItemUpdated = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: queryKeys.items.all });
+    queryClient.invalidateQueries({ queryKey: queryKeys.tags });
+    queryClient.invalidateQueries({ queryKey: queryKeys.stats });
+  }, [queryClient]);
+
   const activeSubView =
     currentView === "notes" ? noteSubView : currentView === "todos" ? todoSubView : undefined;
   const batchActions = getBatchActions(currentView ?? "all", activeSubView, obsidianEnabled);
 
-  if (loading && items.length === 0) {
+  if (isPending) {
     return (
       <>
         {renderSubNav()}
@@ -510,7 +520,7 @@ export function ItemList({
                           selected={item.id === selectedId}
                           onSelect={onSelect}
                           onNavigate={onNavigate}
-                          onUpdated={fetchItems}
+                          onUpdated={handleItemUpdated}
                           selectionMode={selectionMode}
                           checked={selectedIds.has(item.id)}
                           onToggle={toggleSelection}
@@ -532,7 +542,7 @@ export function ItemList({
                           selected={item.id === selectedId}
                           onSelect={onSelect}
                           onNavigate={onNavigate}
-                          onUpdated={fetchItems}
+                          onUpdated={handleItemUpdated}
                           selectionMode={selectionMode}
                           checked={selectedIds.has(item.id)}
                           onToggle={toggleSelection}
@@ -554,7 +564,7 @@ export function ItemList({
                           selected={item.id === selectedId}
                           onSelect={onSelect}
                           onNavigate={onNavigate}
-                          onUpdated={fetchItems}
+                          onUpdated={handleItemUpdated}
                           selectionMode={selectionMode}
                           checked={selectedIds.has(item.id)}
                           onToggle={toggleSelection}
@@ -589,7 +599,7 @@ export function ItemList({
                         selected={item.id === selectedId}
                         onSelect={onSelect}
                         onNavigate={onNavigate}
-                        onUpdated={fetchItems}
+                        onUpdated={handleItemUpdated}
                         selectionMode={selectionMode}
                         checked={selectedIds.has(item.id)}
                         onToggle={toggleSelection}
@@ -604,7 +614,7 @@ export function ItemList({
                   selected={item.id === selectedId}
                   onSelect={onSelect}
                   onNavigate={onNavigate}
-                  onUpdated={fetchItems}
+                  onUpdated={handleItemUpdated}
                   selectionMode={selectionMode}
                   checked={selectedIds.has(item.id)}
                   onToggle={toggleSelection}

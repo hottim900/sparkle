@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -13,6 +14,7 @@ import { parseItem, parseItems, type ParsedItem, type ItemPriority, type Item } 
 import { TagInput } from "@/components/tag-input";
 import { toast } from "sonner";
 import { Loader2, X, ListTodo, FileText, Plus, Search, Unlink } from "lucide-react";
+import { queryKeys } from "@/lib/query-keys";
 
 interface LinkedItemsSectionProps {
   item: ParsedItem;
@@ -21,7 +23,6 @@ interface LinkedItemsSectionProps {
   onCreateTodoDismiss: () => void;
   isOnline?: boolean;
   onNavigate?: (itemId: string) => void;
-  onUpdated?: () => void;
   onItemChange: (item: ParsedItem) => void;
   onSaveStatusChange: (status: "idle" | "saving" | "saved") => void;
 }
@@ -33,10 +34,11 @@ export function LinkedItemsSection({
   onCreateTodoDismiss,
   isOnline = true,
   onNavigate,
-  onUpdated,
   onItemChange,
   onSaveStatusChange,
 }: LinkedItemsSectionProps) {
+  const queryClient = useQueryClient();
+
   // Linked todo state (for notes)
   const [showCreateTodo, setShowCreateTodo] = useState(false);
   const [linkedTodoTitle, setLinkedTodoTitle] = useState("");
@@ -44,11 +46,8 @@ export function LinkedItemsSection({
   const [linkedTodoPriority, setLinkedTodoPriority] = useState<ItemPriority | "none">("none");
   const [linkedTodoTags, setLinkedTodoTags] = useState<string[]>([]);
   const [creatingTodo, setCreatingTodo] = useState(false);
-  const [linkedTodos, setLinkedTodos] = useState<ParsedItem[]>([]);
-  const [linkedTodosLoading, setLinkedTodosLoading] = useState(false);
 
   // Linked note state (for todos)
-  const [linkedNoteTitle, setLinkedNoteTitle] = useState<string | null>(null);
   const [showNoteSearch, setShowNoteSearch] = useState(false);
   const [noteSearchQuery, setNoteSearchQuery] = useState("");
   const [noteSearchResults, setNoteSearchResults] = useState<Item[]>([]);
@@ -56,10 +55,25 @@ export function LinkedItemsSection({
   const noteSearchTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const savedTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
+  // Fetch linked todos for notes
+  const { data: linkedTodos = [], isLoading: linkedTodosLoading } = useQuery({
+    queryKey: queryKeys.items.linkedTodos(item.id),
+    queryFn: () => getLinkedTodos(item.id).then((r) => parseItems(r.items)),
+    enabled: item.type === "note",
+  });
+
+  // Fetch linked note title for backlink display on todos
+  // Must use same queryFn shape as ItemDetail (parseItem) to keep cache consistent
+  const { data: linkedNoteTitle } = useQuery({
+    queryKey: queryKeys.items.detail(item.linked_note_id ?? ""),
+    queryFn: () => getItem(item.linked_note_id!).then(parseItem),
+    select: (data) => data.title,
+    enabled: item.type === "todo" && !!item.linked_note_id,
+  });
+
   // Reset state when item changes
   useEffect(() => {
     setShowCreateTodo(false);
-    setLinkedNoteTitle(null);
     setShowNoteSearch(false);
     setNoteSearchQuery("");
     setNoteSearchResults([]);
@@ -76,35 +90,6 @@ export function LinkedItemsSection({
       onCreateTodoDismiss();
     }
   }, [createTodoRequested, item.type, item.title, item.tags, onCreateTodoDismiss]);
-
-  // Fetch linked todos for notes
-  const loadLinkedTodos = useCallback(async () => {
-    if (item.type !== "note") return;
-    setLinkedTodosLoading(true);
-    try {
-      const res = await getLinkedTodos(item.id);
-      setLinkedTodos(parseItems(res.items));
-    } catch {
-      // silently fail
-    } finally {
-      setLinkedTodosLoading(false);
-    }
-  }, [item.id, item.type]);
-
-  useEffect(() => {
-    if (item.type === "note") {
-      loadLinkedTodos();
-    }
-  }, [item.id, item.type, loadLinkedTodos]);
-
-  // Fetch linked note title for backlink display on todos
-  useEffect(() => {
-    if (item.type === "todo" && item.linked_note_id) {
-      getItem(item.linked_note_id)
-        .then((noteData) => setLinkedNoteTitle(noteData.title))
-        .catch(() => setLinkedNoteTitle(null));
-    }
-  }, [item.type, item.linked_note_id]);
 
   // Cleanup timeouts
   useEffect(() => {
@@ -134,8 +119,9 @@ export function LinkedItemsSection({
       setLinkedTodoDue("");
       setLinkedTodoPriority("none");
       setLinkedTodoTags([]);
-      loadLinkedTodos();
-      onUpdated?.();
+      queryClient.invalidateQueries({ queryKey: queryKeys.items.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.tags });
+      queryClient.invalidateQueries({ queryKey: queryKeys.stats });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "建立失敗");
     } finally {
@@ -171,9 +157,7 @@ export function LinkedItemsSection({
       setShowNoteSearch(false);
       setNoteSearchQuery("");
       setNoteSearchResults([]);
-      const noteData = await getItem(noteId);
-      setLinkedNoteTitle(noteData.title);
-      onUpdated?.();
+      queryClient.invalidateQueries({ queryKey: queryKeys.items.all });
       onSaveStatusChange("saved");
       if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
       savedTimerRef.current = setTimeout(() => onSaveStatusChange("idle"), 2000);
@@ -188,8 +172,7 @@ export function LinkedItemsSection({
     try {
       const updated = await updateItem(item.id, { linked_note_id: null });
       onItemChange(parseItem(updated));
-      setLinkedNoteTitle(null);
-      onUpdated?.();
+      queryClient.invalidateQueries({ queryKey: queryKeys.items.all });
       onSaveStatusChange("saved");
       if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
       savedTimerRef.current = setTimeout(() => onSaveStatusChange("idle"), 2000);

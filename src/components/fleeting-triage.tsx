@@ -1,6 +1,8 @@
-import { useEffect, useState, useCallback } from "react";
+import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { listItems, updateItem, getTags } from "@/lib/api";
-import { parseItems, type ParsedItem } from "@/lib/types";
+import { parseItems } from "@/lib/types";
+import { queryKeys } from "@/lib/query-keys";
 import { Button } from "@/components/ui/button";
 import { TagInput } from "@/components/tag-input";
 import { CategorySelect } from "@/components/category-select";
@@ -28,32 +30,32 @@ interface PendingChanges {
 }
 
 export function FleetingTriage({ onDone }: FleetingTriageProps) {
-  const [items, setItems] = useState<ParsedItem[]>([]);
+  const queryClient = useQueryClient();
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [loading, setLoading] = useState(true);
   const [pending, setPending] = useState<PendingChanges>({});
-  const [allTags, setAllTags] = useState<string[]>([]);
   const isOnline = useOnlineStatus();
 
-  const fetchFleeting = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await listItems({ status: "fleeting", limit: 100 });
-      setItems(parseItems(res.items));
-      setCurrentIndex(0);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "載入失敗");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const { data: items = [], isPending: loading } = useQuery({
+    queryKey: queryKeys.items.list({ status: "fleeting", limit: 100 }),
+    queryFn: () => listItems({ status: "fleeting", limit: 100 }).then((r) => parseItems(r.items)),
+    refetchOnWindowFocus: false,
+    staleTime: Infinity,
+  });
 
-  useEffect(() => {
-    fetchFleeting();
-    getTags()
-      .then((res) => setAllTags(res.tags))
-      .catch(() => {});
-  }, [fetchFleeting]);
+  const { data: allTags = [] } = useQuery({
+    queryKey: queryKeys.tags,
+    queryFn: () => getTags().then((r) => r.tags),
+  });
+
+  const triageMutation = useMutation({
+    mutationFn: ({ id, updates }: { id: string; updates: Record<string, unknown> }) =>
+      updateItem(id, updates),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.items.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.tags });
+      queryClient.invalidateQueries({ queryKey: queryKeys.stats });
+    },
+  });
 
   const current = items[currentIndex];
   const remaining = items.length - currentIndex;
@@ -63,6 +65,7 @@ export function FleetingTriage({ onDone }: FleetingTriageProps) {
   const resolvedTags = pending.tags ?? current?.tags ?? [];
   const resolvedCategoryId =
     pending.category_id !== undefined ? pending.category_id : (current?.category_id ?? null);
+
   const resetAndNext = () => {
     setPending({});
     if (currentIndex + 1 >= items.length) {
@@ -84,7 +87,7 @@ export function FleetingTriage({ onDone }: FleetingTriageProps) {
       if (pending.type !== undefined) updates.type = pending.type;
       if (pending.tags !== undefined) updates.tags = pending.tags;
       if (pending.category_id !== undefined) updates.category_id = pending.category_id;
-      await updateItem(current.id, updates);
+      await triageMutation.mutateAsync({ id: current.id, updates });
       toast.success(targetType === "note" ? "已設為發展中" : "已設為進行中");
       resetAndNext();
     } catch (err) {
@@ -99,7 +102,7 @@ export function FleetingTriage({ onDone }: FleetingTriageProps) {
       if (pending.type !== undefined) updates.type = pending.type;
       if (pending.tags !== undefined) updates.tags = pending.tags;
       if (pending.category_id !== undefined) updates.category_id = pending.category_id;
-      await updateItem(current.id, updates);
+      await triageMutation.mutateAsync({ id: current.id, updates });
       toast.success("已封存");
       resetAndNext();
     } catch (err) {

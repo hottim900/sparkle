@@ -25,10 +25,6 @@ export interface AppContextValue {
 
   // Online status
   isOnline: boolean;
-
-  // Refresh
-  refreshKey: number;
-  refresh: () => void;
 }
 
 export const AppContext = createContext<AppContextValue | null>(null);

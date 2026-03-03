@@ -1,5 +1,7 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { createTestQueryClient } from "@/test-utils";
 import { FleetingTriage } from "../fleeting-triage";
 import { toast } from "sonner";
 
@@ -46,6 +48,15 @@ function makeFleetingItem(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function renderFleetingTriage(props: { onDone?: ReturnType<typeof vi.fn> } = {}) {
+  const queryClient = createTestQueryClient();
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <FleetingTriage {...props} />
+    </QueryClientProvider>,
+  );
+}
+
 function setupWithItems(items: Record<string, unknown>[]) {
   mockListItems.mockResolvedValue({ items, total: items.length });
   mockGetTags.mockResolvedValue({ tags: ["existing-tag"] });
@@ -76,15 +87,16 @@ describe("FleetingTriage", () => {
   it("shows loading spinner initially", () => {
     mockListItems.mockReturnValue(new Promise(() => {}));
     mockGetTags.mockReturnValue(new Promise(() => {}));
+    mockListCategories.mockReturnValue(new Promise(() => {}));
 
-    render(<FleetingTriage />);
+    renderFleetingTriage();
     expect(document.querySelector(".animate-spin")).toBeInTheDocument();
   });
 
   it("shows completion message when no fleeting items", async () => {
     setupWithItems([]);
 
-    render(<FleetingTriage />);
+    renderFleetingTriage();
 
     await waitFor(() => {
       expect(screen.getByText("閃念筆記已處理完畢")).toBeInTheDocument();
@@ -97,7 +109,7 @@ describe("FleetingTriage", () => {
     const onDone = vi.fn();
 
     const user = userEvent.setup();
-    render(<FleetingTriage onDone={onDone} />);
+    renderFleetingTriage({ onDone });
 
     await waitFor(() => {
       expect(screen.getByText("返回")).toBeInTheDocument();
@@ -116,7 +128,7 @@ describe("FleetingTriage", () => {
       }),
     ]);
 
-    render(<FleetingTriage />);
+    renderFleetingTriage();
 
     await waitFor(() => {
       expect(screen.getByText("My Idea")).toBeInTheDocument();
@@ -131,7 +143,7 @@ describe("FleetingTriage", () => {
       makeFleetingItem({ id: "item-2", title: "Second" }),
     ]);
 
-    render(<FleetingTriage />);
+    renderFleetingTriage();
 
     await waitFor(() => {
       expect(screen.getByText("剩餘 2 項")).toBeInTheDocument();
@@ -142,7 +154,7 @@ describe("FleetingTriage", () => {
     setupWithItems([makeFleetingItem()]);
 
     const user = userEvent.setup();
-    render(<FleetingTriage />);
+    renderFleetingTriage();
 
     await waitFor(() => {
       expect(screen.getByText("發展")).toBeInTheDocument();
@@ -156,7 +168,7 @@ describe("FleetingTriage", () => {
     setupWithItems([makeFleetingItem({ id: "note-1" })]);
 
     const user = userEvent.setup();
-    render(<FleetingTriage />);
+    renderFleetingTriage();
 
     await waitFor(() => {
       expect(screen.getByText("發展")).toBeInTheDocument();
@@ -174,7 +186,7 @@ describe("FleetingTriage", () => {
     setupWithItems([makeFleetingItem({ id: "note-2" })]);
 
     const user = userEvent.setup();
-    render(<FleetingTriage />);
+    renderFleetingTriage();
 
     await waitFor(() => {
       expect(screen.getByText("發展")).toBeInTheDocument();
@@ -196,7 +208,7 @@ describe("FleetingTriage", () => {
     setupWithItems([makeFleetingItem({ id: "arch-1" })]);
 
     const user = userEvent.setup();
-    render(<FleetingTriage />);
+    renderFleetingTriage();
 
     await waitFor(() => {
       expect(screen.getByText("封存")).toBeInTheDocument();
@@ -217,7 +229,7 @@ describe("FleetingTriage", () => {
     ]);
 
     const user = userEvent.setup();
-    render(<FleetingTriage />);
+    renderFleetingTriage();
 
     await waitFor(() => {
       expect(screen.getByText("First Note")).toBeInTheDocument();
@@ -235,7 +247,7 @@ describe("FleetingTriage", () => {
     const onDone = vi.fn();
 
     const user = userEvent.setup();
-    render(<FleetingTriage onDone={onDone} />);
+    renderFleetingTriage({ onDone });
 
     await waitFor(() => {
       expect(screen.getByText("發展")).toBeInTheDocument();
@@ -254,7 +266,7 @@ describe("FleetingTriage", () => {
     mockUpdateItem.mockRejectedValue(new Error("Network error"));
 
     const user = userEvent.setup();
-    render(<FleetingTriage />);
+    renderFleetingTriage();
 
     await waitFor(() => {
       expect(screen.getByText("發展")).toBeInTheDocument();
@@ -280,7 +292,7 @@ describe("FleetingTriage", () => {
       setupWithItems([makeFleetingItem({ id: "cat-note-1" })]);
 
       const user = userEvent.setup();
-      render(<FleetingTriage />);
+      renderFleetingTriage();
 
       await waitFor(() => {
         expect(screen.getByText("Test Fleeting Note")).toBeInTheDocument();
@@ -305,7 +317,7 @@ describe("FleetingTriage", () => {
       setupWithItems([makeFleetingItem({ id: "cat-arch-1" })]);
 
       const user = userEvent.setup();
-      render(<FleetingTriage />);
+      renderFleetingTriage();
 
       await waitFor(() => {
         expect(screen.getByText("Test Fleeting Note")).toBeInTheDocument();
@@ -329,7 +341,7 @@ describe("FleetingTriage", () => {
       setupWithItems([makeFleetingItem({ id: "no-cat-1" })]);
 
       const user = userEvent.setup();
-      render(<FleetingTriage />);
+      renderFleetingTriage();
 
       await waitFor(() => {
         expect(screen.getByText("發展")).toBeInTheDocument();
@@ -349,7 +361,7 @@ describe("FleetingTriage", () => {
       ]);
 
       const user = userEvent.setup();
-      render(<FleetingTriage />);
+      renderFleetingTriage();
 
       await waitFor(() => {
         expect(screen.getByText("First")).toBeInTheDocument();
@@ -392,7 +404,7 @@ describe("FleetingTriage", () => {
 
     it("disables primary action button when offline", async () => {
       setupWithItems([makeFleetingItem()]);
-      render(<FleetingTriage />);
+      renderFleetingTriage();
 
       await waitFor(() => {
         expect(screen.getByText("發展")).toBeInTheDocument();
@@ -403,7 +415,7 @@ describe("FleetingTriage", () => {
 
     it("disables archive button when offline", async () => {
       setupWithItems([makeFleetingItem()]);
-      render(<FleetingTriage />);
+      renderFleetingTriage();
 
       await waitFor(() => {
         expect(screen.getByText("封存")).toBeInTheDocument();
@@ -414,7 +426,7 @@ describe("FleetingTriage", () => {
 
     it("keeps skip button enabled when offline", async () => {
       setupWithItems([makeFleetingItem()]);
-      render(<FleetingTriage />);
+      renderFleetingTriage();
 
       await waitFor(() => {
         expect(screen.getByText("保留")).toBeInTheDocument();

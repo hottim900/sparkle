@@ -1,10 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, act, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { LinkedItemsSection } from "@/components/linked-items-section";
 import type { ParsedItem, Item } from "@/lib/types";
 import * as api from "@/lib/api";
 import { toast } from "sonner";
+import { createTestQueryClient } from "@/test-utils";
 
 vi.mock("@/lib/api");
 
@@ -86,14 +88,18 @@ const defaultProps = {
   createTodoRequested: false,
   onCreateTodoDismiss: vi.fn(),
   onNavigate: vi.fn(),
-  onUpdated: vi.fn(),
   onItemChange: vi.fn(),
   onSaveStatusChange: vi.fn(),
 };
 
 function renderLinked(item: ParsedItem, propOverrides: Partial<typeof defaultProps> = {}) {
   const props = { ...defaultProps, ...propOverrides };
-  return render(<LinkedItemsSection item={item} {...props} />);
+  const queryClient = createTestQueryClient();
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <LinkedItemsSection item={item} {...props} />
+    </QueryClientProvider>,
+  );
 }
 
 describe("LinkedItemsSection (note mode)", () => {
@@ -149,11 +155,9 @@ describe("LinkedItemsSection (note mode)", () => {
     );
 
     const user = userEvent.setup();
-    const onUpdated = vi.fn();
 
     renderLinked(makeNoteItem({ id: "note-1", title: "My Note" }), {
       createTodoRequested: true,
-      onUpdated,
     });
 
     await waitFor(() => {
@@ -174,18 +178,16 @@ describe("LinkedItemsSection (note mode)", () => {
     });
   });
 
-  it("shows toast and calls onUpdated after creation", async () => {
+  it("shows toast after creation", async () => {
     vi.mocked(api.getLinkedTodos).mockResolvedValue({ items: [], total: 0 });
     vi.mocked(api.createItem).mockResolvedValue(
       makeRawItem({ id: "new-todo", title: "處理：My Note", type: "todo" }),
     );
 
     const user = userEvent.setup();
-    const onUpdated = vi.fn();
 
     renderLinked(makeNoteItem({ title: "My Note" }), {
       createTodoRequested: true,
-      onUpdated,
     });
 
     await waitFor(() => {
@@ -197,7 +199,6 @@ describe("LinkedItemsSection (note mode)", () => {
     await waitFor(() => {
       expect(toast.success).toHaveBeenCalledWith("已建立關聯待辦");
     });
-    expect(onUpdated).toHaveBeenCalled();
   });
 
   it("disables create button when title is empty", async () => {
@@ -420,9 +421,17 @@ describe("LinkedItemsSection offline behavior", () => {
   it("disables create todo button when offline", async () => {
     const noteItem = makeNoteItem();
     vi.mocked(api.getLinkedTodos).mockResolvedValue({ items: [], total: 0 });
+    const queryClient = createTestQueryClient();
 
     render(
-      <LinkedItemsSection item={noteItem} {...defaultProps} createTodoRequested isOnline={false} />,
+      <QueryClientProvider client={queryClient}>
+        <LinkedItemsSection
+          item={noteItem}
+          {...defaultProps}
+          createTodoRequested
+          isOnline={false}
+        />
+      </QueryClientProvider>,
     );
 
     await waitFor(() => {
@@ -434,7 +443,12 @@ describe("LinkedItemsSection offline behavior", () => {
 
   it("disables search-and-link button when offline", async () => {
     const todoItem = makeTodoItem();
-    render(<LinkedItemsSection item={todoItem} {...defaultProps} isOnline={false} />);
+    const queryClient = createTestQueryClient();
+    render(
+      <QueryClientProvider client={queryClient}>
+        <LinkedItemsSection item={todoItem} {...defaultProps} isOnline={false} />
+      </QueryClientProvider>,
+    );
 
     const linkBtn = screen.getByRole("button", { name: /搜尋並關聯筆記/ });
     expect(linkBtn).toBeDisabled();
@@ -445,8 +459,13 @@ describe("LinkedItemsSection offline behavior", () => {
     vi.mocked(api.getItem).mockResolvedValue(
       makeRawItem({ id: "note-1", type: "note", title: "Linked Note" }),
     );
+    const queryClient = createTestQueryClient();
 
-    render(<LinkedItemsSection item={todoItem} {...defaultProps} isOnline={false} />);
+    render(
+      <QueryClientProvider client={queryClient}>
+        <LinkedItemsSection item={todoItem} {...defaultProps} isOnline={false} />
+      </QueryClientProvider>,
+    );
 
     await waitFor(() => {
       expect(screen.getByText("Linked Note")).toBeInTheDocument();
