@@ -109,6 +109,18 @@ docs/
   self-hosting.md              # Self-hosting guide (English)
   self-hosting.zh-TW.md        # Self-hosting guide (繁體中文)
   cloudflare-access-setup.md   # Cloudflare Access setup guide (繁體中文)
+  plans/
+    quality/
+      README.md                # Quality dashboard (stats, Critical/High items, definitions)
+      defect-taxonomy.md       # Defect taxonomy — systematic search handbook
+      quality-system-design-notes.md  # Methodology design notes (portable)
+      TEMPLATE-DEFECT.md       # Defect item template
+      TEMPLATE-TECH-DEBT.md    # Tech Debt item template
+      TEMPLATE-FEATURE-GAP.md  # Feature Gap item template
+      defects/                 # DEF-NNN items
+      tech-debt/               # TD-NNN items
+      feature-gaps/            # FG-NNN items
+      gates/                   # Quality gate documents
 
 mcp-server/
   package.json            # MCP server dependencies
@@ -153,7 +165,7 @@ eslint.config.js        # ESLint 9 flat config (typescript-eslint, react-hooks, 
   hooks/
     migration-safety.sh   # PostToolUse hook: blocks SELECT * in migrations, enforces FK rules
   settings.json           # Claude Code project settings (hooks config)
-  skills/                 # On-demand documentation skills (6 files)
+  skills/                 # On-demand documentation skills (7 files, incl. quality.md)
 
 certs/                  # mkcert TLS certificates (gitignored)
 data/                   # SQLite database (gitignored)
