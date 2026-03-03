@@ -123,11 +123,11 @@ Available skills for this project (invoke with `/skill-name` or auto-loaded by C
 When making changes that affect documentation, **update the relevant file in the same commit or follow-up commit**:
 
 - **CLAUDE.md**: Core conventions, data model, dev commands, Skills Reference table
-- **`.claude/skills/project-structure.md`**: When files are added/removed/renamed
-- **`.claude/skills/testing.md`**: When tests are added/removed or test infra changes
-- **`.claude/skills/ops.md`**: When deployment/infra changes
-- **`.claude/skills/line-bot.md`**: When LINE Bot commands change
-- **`.claude/skills/mcp-server.md`**: When MCP server tools/config changes
-- **`.claude/skills/conventions-detail.md`**: When module-specific conventions change
-- **`.claude/skills/quality.md`**: When quality tracking system changes
+- **`.claude/skills/project-structure/SKILL.md`**: When files are added/removed/renamed
+- **`.claude/skills/testing/SKILL.md`**: When tests are added/removed or test infra changes
+- **`.claude/skills/ops/SKILL.md`**: When deployment/infra changes
+- **`.claude/skills/line-bot/SKILL.md`**: When LINE Bot commands change
+- **`.claude/skills/mcp-server/SKILL.md`**: When MCP server tools/config changes
+- **`.claude/skills/conventions-detail/SKILL.md`**: When module-specific conventions change
+- **`.claude/skills/quality/SKILL.md`**: When quality tracking system changes
 - **`docs/plans/quality/README.md`**: When quality items are created/completed/updated

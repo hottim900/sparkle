@@ -1,10 +1,6 @@
 ---
 name: mcp-server
-description: >
-  MCP server for Claude Code integration with Sparkle. stdio transport, 10 tools
-  (search, CRUD, workflow, stats, guide), knowledge layer, build/dev/test commands,
-  registration via claude mcp add. Use when working on mcp-server/ code or debugging
-  Claude Code integration.
+description: MCP server for Claude Code integration. Use when working on mcp-server/ code or debugging Claude Code tool integration.
 user-invocable: true
 ---
 

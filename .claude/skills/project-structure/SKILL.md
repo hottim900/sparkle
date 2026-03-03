@@ -1,10 +1,6 @@
 ---
 name: project-structure
-description: >
-  Complete annotated file tree for the Sparkle project. Maps every directory and file
-  to its purpose. Use when locating files, deciding where new code goes, tracing import
-  paths, or understanding relationships between server routes, lib modules, frontend
-  components, scripts, and config files.
+description: Complete annotated file tree. Use when locating files, deciding where new code goes, or tracing import paths.
 user-invocable: false
 ---
 
@@ -165,7 +161,14 @@ eslint.config.js        # ESLint 9 flat config (typescript-eslint, react-hooks, 
   hooks/
     migration-safety.sh   # PostToolUse hook: blocks SELECT * in migrations, enforces FK rules
   settings.json           # Claude Code project settings (hooks config)
-  skills/                 # On-demand documentation skills (7 files, incl. quality.md)
+  skills/                 # On-demand documentation skills (7 skill directories, each with SKILL.md)
+    ops/SKILL.md            # Production deployment & operations
+    testing/SKILL.md        # Test architecture & patterns
+    conventions-detail/SKILL.md  # Detailed module conventions
+    quality/SKILL.md        # Quality tracking system
+    mcp-server/SKILL.md     # MCP server for Claude Code
+    line-bot/SKILL.md       # LINE Bot integration
+    project-structure/SKILL.md   # This file — annotated file tree
 
 certs/                  # mkcert TLS certificates (gitignored)
 data/                   # SQLite database (gitignored)
