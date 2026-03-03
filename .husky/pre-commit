@@ -1,3 +1,20 @@
+# === Block commit on main ===
+branch=$(git branch --show-current)
+if [ "$branch" = "main" ]; then
+  echo ""
+  echo "  ERROR: 禁止在 main 上 commit。請先建立 feature branch："
+  echo ""
+  echo "    git checkout -b {type}/{short-description}"
+  echo ""
+  echo "  如果已經有 commit 在 main 上，用以下指令修復："
+  echo ""
+  echo "    git checkout -b feat/my-feature    # 帶著 commits 切到新 branch"
+  echo "    git push -u origin feat/my-feature  # push 新 branch"
+  echo "    git checkout main && git reset --hard origin/main  # 重置 local main"
+  echo ""
+  exit 1
+fi
+
 # === CLAUDE.md / skills update warning ===
 has_code_change=$(git diff --cached --name-only | grep -qE '^(mcp-server|server|src|scripts|docs)/' && echo true || echo false)
 has_doc_change=$(git diff --cached --name-only | grep -qE '^(CLAUDE\.md|\.claude/skills/)' && echo true || echo false)

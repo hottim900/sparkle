@@ -87,10 +87,11 @@ DB migration: version 0→12, idempotent steps. Claude auto-loads the convention
 - Linting: ESLint 9 flat config with typescript-eslint (recommended), react-hooks plugin, eslint-config-prettier. Test files relaxed (`no-explicit-any` warn, `no-require-imports` off). Unused vars allowed with `_` prefix.
 - Formatting: Prettier (double quotes, trailing commas, 100 char width). Enforced via lint-staged + Husky pre-commit. `.prettierignore` excludes dist, mcp-server, data, certs.
 - Commit conventions: commitlint with `@commitlint/config-conventional`. Enforced via `.husky/commit-msg` hook. Allowed types: feat, fix, docs, chore, refactor, test, perf, ci, build, style, revert
+- 分支策略：**所有 code 改動必須在 feature branch 上進行，禁止直接 commit 到 main。** GitHub ruleset 已啟用（main 要求 PR + `test` CI 通過才能 merge，squash merge only）。pre-commit hook 會阻擋在 main 上的 commit。不論是人、Claude Code session、或 agent/teammate，一律建立 feature branch 再開 PR。命名慣例：`{type}/{short-description}`（如 `feat/offline-queue`、`fix/migration-null`）。PR 標題必須符合 conventional commit 格式（如 `feat: add offline queue`），因為 squash merge 用 PR 標題作為 commit message。
 - PR 原則：按風險隔離切分。DB migration 永遠獨立 PR。不同風險等級（DB schema / 後端邏輯 / 純前端 / CI config）不混在同一個 PR。同風險等級的相關改動可以合併。
 - Merge 順序：高風險先行，驗證後再繼續。DB migration PR merge 後必須等 deploy + health check 通過才 merge 下一個。低風險 PR（純前端、CI config）可以連續 merge。不要在離開前 merge 高風險 PR。
 - Migration 安全：PostToolUse hook (`.claude/hooks/migration-safety.sh`) 在編輯 `server/db/index.ts` 時自動檢查：(1) 禁止 `SELECT *` in migration INSERT (2) DROP TABLE 必須搭配 `foreign_keys = OFF` (3) `setSchemaVersion` 不可在 transaction 內。對 agent/teammate 也生效。
-- Agent/Teammate 開發規範：(1) commit 前必須執行 `npm run lint:fix && npm run format` 消除 unused imports 等殘留 (2) 使用 worktree 時，進入後驗證工作目錄不是主 repo（`git rev-parse --show-toplevel` 應指向 `.claude/worktrees/` 下的路徑），防止直接 commit 到 local main。
+- Agent/Teammate 開發規範：**(0) 第一個動作：驗證不在 main 上**（`git branch --show-current` 不是 `main`，或 `git rev-parse --show-toplevel` 指向 `.claude/worktrees/`）。未驗證前不做任何 code 改動。(1) commit 前必須執行 `npm run lint:fix && npm run format` 消除 unused imports 等殘留 (2) 必須在 worktree 或 feature branch 上工作 (3) 完成後開 PR，不直接 push main。如果意外 commit 到 main：`git checkout -b feat/xxx && git push -u origin feat/xxx`，然後 `git checkout main && git reset --hard origin/main`。
 
 For detailed conventions on specific modules (API retry, Performance, PWA, Logging, Sentry, CSP, Offline UI, State management, CI/CD, Sharing, Export), Claude auto-loads the conventions-detail skill when relevant.
 
