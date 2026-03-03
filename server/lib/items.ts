@@ -8,9 +8,15 @@ import type * as schema from "../db/schema.js";
 
 type DB = BetterSQLite3Database<typeof schema>;
 
-const NOTE_STATUSES = ["fleeting", "developing", "permanent", "exported", "archived"] as const;
-const TODO_STATUSES = ["active", "done", "archived"] as const;
-const SCRATCH_STATUSES = ["draft", "archived"] as const;
+export const NOTE_STATUSES = [
+  "fleeting",
+  "developing",
+  "permanent",
+  "exported",
+  "archived",
+] as const;
+export const TODO_STATUSES = ["active", "done", "archived"] as const;
+export const SCRATCH_STATUSES = ["draft", "archived"] as const;
 
 export function isValidTypeStatus(type: string, status: string): boolean {
   if (type === "note") return (NOTE_STATUSES as readonly string[]).includes(status);

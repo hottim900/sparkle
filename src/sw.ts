@@ -199,10 +199,17 @@ async function replayQueue() {
 
   if (syncedIds.length > 0) {
     await deleteFromQueue(syncedIds);
-    // Notify clients about synced items
-    const clients = await self.clients.matchAll({ type: "window" });
-    for (const client of clients) {
+  }
+
+  // Notify clients about sync results
+  const failedCount = items.length - syncedIds.length;
+  const clients = await self.clients.matchAll({ type: "window" });
+  for (const client of clients) {
+    if (syncedIds.length > 0) {
       client.postMessage({ type: "OFFLINE_SYNC", count: syncedIds.length });
+    }
+    if (failedCount > 0) {
+      client.postMessage({ type: "OFFLINE_SYNC_FAILED", count: failedCount });
     }
   }
 }

@@ -168,6 +168,7 @@ export async function listItems(params?: {
   offset?: number;
   excludeStatus?: string[];
 }): Promise<ListItemsResponse> {
+  // Source of truth: server/schemas/items.ts statusEnum
   const validStatuses = new Set([
     "fleeting",
     "developing",
@@ -175,6 +176,7 @@ export async function listItems(params?: {
     "exported",
     "active",
     "done",
+    "draft",
     "archived",
   ]);
   const search = new URLSearchParams();
