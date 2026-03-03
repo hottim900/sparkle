@@ -82,10 +82,11 @@ grep '狀態.*In Progress' /home/tim/sparkle/docs/plans/quality/defects/
 
 ### 品質檔案版本控制
 
-品質追蹤檔案有獨立的本地 git repo。建立或更新品質項目後，提交變更：
+品質追蹤檔案在 private companion repo（`hottim900/sparkle-quality`），本地路徑同上。
+建立或更新品質項目後，commit + push：
 
 ```bash
-cd /home/tim/sparkle/docs/plans/quality && git add -A && git commit -m "描述變更"
+cd /home/tim/sparkle/docs/plans/quality && git add -A && git commit -m "描述變更" && git push
 ```
 
 ---
