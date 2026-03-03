@@ -114,6 +114,7 @@ describe("CategorySelect", () => {
     await user.click(option);
 
     expect(screen.getByPlaceholderText("分類名稱...")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("分類名稱...")).toHaveFocus();
   });
 
   it("creates category and selects it on Enter", async () => {

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Select,
   SelectContent,
@@ -23,6 +23,8 @@ export function CategorySelect({ value, onChange, disabled }: CategorySelectProp
   const [categories, setCategories] = useState<Category[]>([]);
   const [showCreateInput, setShowCreateInput] = useState(false);
   const [createInputValue, setCreateInputValue] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+  const shouldFocusCreateInput = useRef(false);
 
   useEffect(() => {
     listCategories().then((res) => {
@@ -34,6 +36,7 @@ export function CategorySelect({ value, onChange, disabled }: CategorySelectProp
     if (v === CREATE_VALUE) {
       setShowCreateInput(true);
       setCreateInputValue("");
+      shouldFocusCreateInput.current = true;
       return;
     }
     onChange(v === NONE_VALUE ? null : v);
@@ -60,6 +63,12 @@ export function CategorySelect({ value, onChange, disabled }: CategorySelectProp
     }
   };
 
+  useEffect(() => {
+    if (showCreateInput && inputRef.current) {
+      inputRef.current.focus();
+    }
+  }, [showCreateInput]);
+
   const selectedCategory = categories.find((c) => c.id === value);
   const displayValue = value && selectedCategory ? value : NONE_VALUE;
 
@@ -83,7 +92,14 @@ export function CategorySelect({ value, onChange, disabled }: CategorySelectProp
             )}
           </SelectValue>
         </SelectTrigger>
-        <SelectContent>
+        <SelectContent
+          onCloseAutoFocus={(e) => {
+            if (shouldFocusCreateInput.current) {
+              e.preventDefault();
+              shouldFocusCreateInput.current = false;
+            }
+          }}
+        >
           <SelectItem value={NONE_VALUE}>未分類</SelectItem>
           {categories.map((cat) => (
             <SelectItem key={cat.id} value={cat.id}>
@@ -104,12 +120,12 @@ export function CategorySelect({ value, onChange, disabled }: CategorySelectProp
 
       {showCreateInput && (
         <Input
+          ref={inputRef}
           className="mt-2 w-32"
           placeholder="分類名稱..."
           value={createInputValue}
           onChange={(e) => setCreateInputValue(e.target.value)}
           onKeyDown={handleCreateKeyDown}
-          autoFocus
         />
       )}
     </div>
