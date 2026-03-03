@@ -1,0 +1,8 @@
+# === Block direct push to main ===
+branch=$(git branch --show-current)
+if [ "$branch" = "main" ]; then
+  echo ""
+  echo "  ERROR: 禁止直接 push 到 main。請建立 feature branch 再開 PR。"
+  echo ""
+  exit 1
+fi
