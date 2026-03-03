@@ -8,7 +8,7 @@ import { logger } from "../lib/logger.js";
 
 const DB_PATH = process.env.DATABASE_URL || "./data/todo.db";
 
-const TARGET_VERSION = 12;
+const TARGET_VERSION = 13;
 
 function getSchemaVersion(sqlite: Database.Database): number {
   // Check if schema_version table exists
@@ -238,6 +238,39 @@ function runMigrations(sqlite: Database.Database) {
 
     setSchemaVersion(sqlite, 12);
   }
+
+  // Step 12→13: Create categories table + add category_id to items
+  if (version < 13) {
+    sqlite.exec(`
+      CREATE TABLE IF NOT EXISTS categories (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL UNIQUE,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        color TEXT DEFAULT NULL,
+        created TEXT NOT NULL,
+        modified TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_categories_sort_order ON categories(sort_order);
+    `);
+
+    try {
+      sqlite.exec(
+        "ALTER TABLE items ADD COLUMN category_id TEXT DEFAULT NULL REFERENCES categories(id) ON DELETE SET NULL",
+      );
+    } catch (e: unknown) {
+      const msg = (e as Error).message || "";
+      if (!msg.includes("duplicate column")) throw e;
+    }
+
+    try {
+      sqlite.exec("CREATE INDEX IF NOT EXISTS idx_items_category_id ON items(category_id)");
+    } catch {
+      // Index may already exist
+    }
+
+    setSchemaVersion(sqlite, 13);
+  }
 }
 
 function createDb() {
@@ -271,9 +304,11 @@ function createDb() {
         source TEXT DEFAULT NULL,
         aliases TEXT NOT NULL DEFAULT '[]',
         linked_note_id TEXT DEFAULT NULL,
+        category_id TEXT DEFAULT NULL,
         created TEXT NOT NULL,
         modified TEXT NOT NULL,
-        FOREIGN KEY (linked_note_id) REFERENCES items(id) ON DELETE SET NULL
+        FOREIGN KEY (linked_note_id) REFERENCES items(id) ON DELETE SET NULL,
+        FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL
       );
 
       CREATE INDEX idx_items_status ON items(status);
@@ -300,6 +335,17 @@ function createDb() {
       );
       CREATE INDEX idx_share_tokens_token ON share_tokens(token);
       CREATE INDEX idx_share_tokens_item_id ON share_tokens(item_id);
+
+      CREATE TABLE categories (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL UNIQUE,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        color TEXT DEFAULT NULL,
+        created TEXT NOT NULL,
+        modified TEXT NOT NULL
+      );
+      CREATE INDEX idx_categories_sort_order ON categories(sort_order);
+      CREATE INDEX idx_items_category_id ON items(category_id);
     `);
 
     // Set version to target directly for fresh installs
