@@ -125,7 +125,7 @@ describe("ShareManagement", () => {
     writeTextSpy.mockRestore();
   });
 
-  it("revokes share and removes from list", async () => {
+  it("revokes share after confirmation dialog", async () => {
     const { toast } = await import("sonner");
     mockListShares.mockResolvedValue({
       shares: [makeShare({ id: "s1", item_title: "Shared Note" })],
@@ -139,7 +139,13 @@ describe("ShareManagement", () => {
       expect(screen.getByText("Shared Note")).toBeInTheDocument();
     });
 
+    // Click revoke button opens confirmation dialog
     await user.click(screen.getByTitle("撤銷分享"));
+    expect(screen.getByText("確認撤銷分享")).toBeInTheDocument();
+    expect(screen.getByText(/確定要撤銷「Shared Note」的分享連結嗎/)).toBeInTheDocument();
+
+    // Confirm revoke
+    await user.click(screen.getByRole("button", { name: "撤銷" }));
 
     await waitFor(() => {
       expect(mockRevokeShare).toHaveBeenCalledWith("s1");
@@ -149,6 +155,30 @@ describe("ShareManagement", () => {
     await waitFor(() => {
       expect(screen.queryByText("Shared Note")).not.toBeInTheDocument();
     });
+  });
+
+  it("cancels revoke when cancel button is clicked", async () => {
+    mockListShares.mockResolvedValue({
+      shares: [makeShare({ id: "s1", item_title: "Shared Note" })],
+    });
+
+    const user = userEvent.setup();
+    renderWithContext(<ShareManagement onNavigateToItem={onNavigateToItem} />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Shared Note")).toBeInTheDocument();
+    });
+
+    // Click revoke button opens dialog
+    await user.click(screen.getByTitle("撤銷分享"));
+    expect(screen.getByText("確認撤銷分享")).toBeInTheDocument();
+
+    // Click cancel
+    await user.click(screen.getByRole("button", { name: "取消" }));
+
+    // Dialog closed, API not called
+    expect(mockRevokeShare).not.toHaveBeenCalled();
+    expect(screen.getByText("Shared Note")).toBeInTheDocument();
   });
 
   it("shows error toast on revoke failure", async () => {
@@ -163,7 +193,9 @@ describe("ShareManagement", () => {
       expect(screen.getByText("My Shared Note")).toBeInTheDocument();
     });
 
+    // Open dialog and confirm
     await user.click(screen.getByTitle("撤銷分享"));
+    await user.click(screen.getByRole("button", { name: "撤銷" }));
 
     await waitFor(() => {
       expect(toast.error).toHaveBeenCalledWith("Server error");
@@ -184,6 +216,17 @@ describe("ShareManagement", () => {
 
     await user.click(screen.getByText("Click Me"));
     expect(onNavigateToItem).toHaveBeenCalledWith("note-42");
+  });
+
+  it("navigate button has accessible aria-label", async () => {
+    mockListShares.mockResolvedValue({
+      shares: [makeShare({ item_title: "Accessible Note" })],
+    });
+    renderWithContext(<ShareManagement onNavigateToItem={onNavigateToItem} />);
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("前往筆記：Accessible Note")).toBeInTheDocument();
+    });
   });
 
   it("shows error toast on load failure", async () => {
