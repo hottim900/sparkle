@@ -27,6 +27,7 @@ export const createItemSchema = z.object({
   source: z.string().max(2000).nullable().default(null),
   aliases: z.array(z.string().max(200)).max(10).default([]),
   linked_note_id: z.string().uuid().nullable().default(null),
+  category_id: z.string().uuid().nullable().default(null),
 });
 
 export const updateItemSchema = z.object({
@@ -45,6 +46,7 @@ export const updateItemSchema = z.object({
   source: z.string().max(2000).nullable().optional(),
   aliases: z.array(z.string().max(200)).max(10).optional(),
   linked_note_id: z.string().uuid().nullable().optional(),
+  category_id: z.string().uuid().nullable().optional(),
 });
 
 export const listItemsSchema = z.object({
@@ -58,6 +60,7 @@ export const listItemsSchema = z.object({
   excludeStatus: z
     .union([z.string().transform((s) => s.split(",").filter(Boolean)), z.array(z.string())])
     .optional(),
+  category_id: z.string().uuid().optional(),
 });
 
 export const batchSchema = z.object({
