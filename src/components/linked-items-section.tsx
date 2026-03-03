@@ -143,6 +143,7 @@ export function LinkedItemsSection({
         setNoteSearchResults(res.results.filter((r) => r.type === "note"));
       } catch {
         setNoteSearchResults([]);
+        toast.error("搜尋失敗");
       } finally {
         setNoteSearching(false);
       }

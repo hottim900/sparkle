@@ -33,7 +33,7 @@ if ("serviceWorker" in navigator) {
       // Check for SW updates periodically (every 60 minutes)
       setInterval(() => reg.update(), 60 * 60 * 1000);
     } catch (err) {
-      console.log("SW registration failed:", err);
+      console.warn("SW registration failed:", err);
     }
 
     // Auto-reload when new SW activates (works with skipWaiting + clientsClaim).

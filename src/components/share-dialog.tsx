@@ -47,7 +47,7 @@ export function ShareDialog({
       const res = await getItemShares(itemId);
       setShares(res.shares);
     } catch {
-      // silently fail
+      toast.error("無法載入分享資料");
     } finally {
       setLoading(false);
     }
