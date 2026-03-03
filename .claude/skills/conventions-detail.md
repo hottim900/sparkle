@@ -81,6 +81,18 @@ Weekly npm updates (root + mcp-server) + GitHub Actions version updates. Dev dep
 
 Release-Please (`release.yml`) auto-creates Release PR on push to main when feat/fix commits are detected. Merging the PR bumps `package.json` version, updates `CHANGELOG.md`, and publishes a GitHub Release with semantic version tag. Release PR 在自然里程碑 merge，不隨 session 結束。
 
+## Category
+
+Categories provide a browsing/grouping mechanism for items. Each item can belong to at most one category.
+
+- `category_id` is nullable, single-select per item (FK → `categories` table)
+- ON DELETE SET NULL — deleting a category auto-nullifies `category_id` on all assigned items
+- Preserved across **all** type conversions (note ↔ todo ↔ scratch), unlike tags/aliases which are cleared on → scratch
+- Obsidian export: `category: "name"` in YAML frontmatter (quoted string, omitted if null)
+- API: `/api/categories` — full CRUD (GET list, POST create, PATCH /:id update, DELETE /:id, PATCH /reorder)
+- Items API: `category_id` accepted in create/update; `category_id` query param for filtering; `category_name` computed in responses
+- MCP: `sparkle_list_categories`, `sparkle_create_category`, `sparkle_update_category`, `sparkle_delete_category`
+
 ## DB Migration
 
-Schema version tracked in `schema_version` table (version 0→12). Each step is idempotent. Fresh install creates new schema directly at version 12. Migration 8→9 creates the `settings` table with Obsidian export defaults. Migration 9→10 is a no-op version bump for scratch type support (SQLite text columns need no schema change). Migration 10→11 creates the `share_tokens` table with CASCADE foreign key to items. Migration 11→12 adds FK constraint on `linked_note_id` with ON DELETE SET NULL (requires table recreation; cleans up orphan references, recreates indexes, FTS triggers rebuilt by setupFTS).
+Schema version tracked in `schema_version` table (version 0→13). Each step is idempotent. Fresh install creates new schema directly at version 13. Migration 8→9 creates the `settings` table with Obsidian export defaults. Migration 9→10 is a no-op version bump for scratch type support (SQLite text columns need no schema change). Migration 10→11 creates the `share_tokens` table with CASCADE foreign key to items. Migration 11→12 adds FK constraint on `linked_note_id` with ON DELETE SET NULL (requires table recreation; cleans up orphan references, recreates indexes, FTS triggers rebuilt by setupFTS). Migration 12→13 creates the `categories` table and adds `category_id` FK column to items with ON DELETE SET NULL (requires table recreation).

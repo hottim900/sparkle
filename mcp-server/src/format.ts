@@ -41,6 +41,9 @@ export function formatItem(item: SparkleItem): string {
   if (item.type === "todo" && item.linked_note_title) {
     footer.push(`Linked note: ${item.linked_note_title}`);
   }
+  if (item.category_name) {
+    footer.push(`Category: ${item.category_name}`);
+  }
   if (item.share_visibility) {
     footer.push(`Shared: ${item.share_visibility}`);
   }
@@ -59,7 +62,8 @@ export function formatItemList(items: SparkleItem[], total: number): string {
     const tagStr = tags.length > 0 ? ` [${tags.join(", ")}]` : "";
     const dueStr = item.due ? ` (due: ${item.due})` : "";
     const priorityStr = item.priority ? ` ⚡${item.priority}` : "";
-    lines.push(`- **${item.title}** — ${item.status}${priorityStr}${dueStr}${tagStr}`);
+    const catStr = item.category_name ? ` 📁${item.category_name}` : "";
+    lines.push(`- **${item.title}** — ${item.status}${priorityStr}${dueStr}${catStr}${tagStr}`);
     lines.push(`  ID: ${item.id} | Type: ${item.type} | Modified: ${item.modified}`);
   }
   return lines.join("\n");

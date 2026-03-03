@@ -56,7 +56,7 @@ Shared: `archived` (any type)
 ### Field Names (Obsidian-aligned)
 
 ```
-id, type, title, content, status, priority, due, tags, origin, source, aliases, linked_note_id, created, modified
+id, type, title, content, status, priority, due, tags, origin, source, aliases, linked_note_id, category_id, created, modified
 ```
 
 - `origin`: capture channel (LINE, web, import)
@@ -66,14 +66,16 @@ id, type, title, content, status, priority, due, tags, origin, source, aliases, 
 - `linked_note_id`: todo→note reference (nullable, todo-only; cleared on todo→note conversion; FK with ON DELETE SET NULL — deleting the referenced note auto-nullifies)
 - `linked_todo_count`: computed field in API responses — number of non-archived todos linked to a note (0 for todos)
 - `linked_note_title`: computed field in API responses — title of linked note for todos (null if none)
+- `category_id`: browsing group (nullable FK → categories, ON DELETE SET NULL). Preserved across all type conversions.
+- `category_name`: computed field in API responses — name of assigned category (null if none)
 - `share_visibility`: computed field in API responses — share status of the item ("public", "unlisted", or null if not shared)
 - `created`/`modified`: ISO 8601 timestamps
 
 ### Type Conversion Auto-Mapping
 
-When type changes (note ↔ todo ↔ scratch), status auto-maps server-side. Auto-mapping overrides explicit status. Due date and linked_note_id are cleared on todo→note conversion. Tags, priority, due, aliases, and linked_note_id are cleared on conversion to scratch.
+When type changes (note ↔ todo ↔ scratch), status auto-maps server-side. Auto-mapping overrides explicit status. Due date and linked_note_id are cleared on todo→note conversion. Tags, priority, due, aliases, and linked_note_id are cleared on conversion to scratch. `category_id` is preserved across all type conversions (browsing aid, not type-dependent).
 
-DB migration: version 0→12, idempotent steps. Claude auto-loads the conventions-detail skill for full migration history when relevant.
+DB migration: version 0→13, idempotent steps. Claude auto-loads the conventions-detail skill for full migration history when relevant.
 
 ## Conventions
 
