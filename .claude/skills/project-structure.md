@@ -65,14 +65,15 @@ src/
     markdown-preview.tsx # ReactMarkdown + remarkGfm rendering (lazy-loaded, extracted from item-detail)
     item-card.tsx        # List item display with tags, linked indicators, due date, share indicators
     search-bar.tsx       # FTS search with keyword highlighting
-    settings.tsx         # Settings page (Obsidian config + share management + general tools)
+    settings.tsx         # Settings page (Obsidian config + general tools)
+    share-management.tsx # Share management page (list, copy link, revoke, navigate to note)
     share-dialog.tsx     # Share dialog (create share, copy link, revoke)
     sidebar.tsx          # Desktop nav (筆記/待辦/暫存/共用 sections + settings)
     bottom-nav.tsx       # Mobile nav (Notes, Todos, Scratch, Dashboard, Search + settings)
     fleeting-triage.tsx  # Fleeting note triage mode (發展/進行/封存/保留)
     offline-indicator.tsx # Offline banner (uses shared useOnlineStatus hook)
     install-prompt.tsx   # PWA install banner
-    __tests__/           # Frontend component tests (21 files, Testing Library + jsdom)
+    __tests__/           # Frontend component tests (22 files, Testing Library + jsdom)
   lib/
     api.ts              # API client (auto-logout on 401, shares API, fetchWithRetry with timeout + exponential backoff)
     app-context.ts      # AppContext + useAppContext hook (view, nav, config, isOnline state)

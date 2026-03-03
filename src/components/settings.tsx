@@ -1,15 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useTheme } from "next-themes";
 import { toast } from "sonner";
-import {
-  getSettings,
-  updateSettings,
-  exportData,
-  importData,
-  listShares,
-  revokeShare,
-} from "@/lib/api";
-import type { SettingsResponse, ShareToken } from "@/lib/types";
+import { getSettings, updateSettings, exportData, importData } from "@/lib/api";
+import type { SettingsResponse } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -29,13 +22,7 @@ import {
   Download,
   Upload,
   ExternalLink,
-  Share2,
-  Copy,
-  Trash2,
-  Globe,
-  EyeOff,
 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 
 interface SettingsProps {
   onSettingsChanged: () => void;
@@ -52,11 +39,6 @@ export function Settings({ onSettingsChanged }: SettingsProps) {
   const [inboxFolder, setInboxFolder] = useState("0_Inbox");
   const [exportMode, setExportMode] = useState("overwrite");
 
-  // Share management state
-  const [shares, setShares] = useState<ShareToken[]>([]);
-  const [sharesLoading, setSharesLoading] = useState(true);
-  const [revokingId, setRevokingId] = useState<string | null>(null);
-
   const { resolvedTheme, setTheme } = useTheme();
   const isOnline = useOnlineStatus();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -66,14 +48,13 @@ export function Settings({ onSettingsChanged }: SettingsProps) {
 
     async function load() {
       try {
-        const [settingsData, sharesData] = await Promise.all([getSettings(), listShares()]);
+        const settingsData = await getSettings();
         if (cancelled) return;
         setSettings(settingsData);
         setEnabled(settingsData.obsidian_enabled === "true");
         setVaultPath(settingsData.obsidian_vault_path);
         setInboxFolder(settingsData.obsidian_inbox_folder);
         setExportMode(settingsData.obsidian_export_mode);
-        setShares(sharesData.shares);
       } catch {
         if (!cancelled) {
           toast.error("無法載入設定");
@@ -81,7 +62,6 @@ export function Settings({ onSettingsChanged }: SettingsProps) {
       } finally {
         if (!cancelled) {
           setLoading(false);
-          setSharesLoading(false);
         }
       }
     }
@@ -127,29 +107,6 @@ export function Settings({ onSettingsChanged }: SettingsProps) {
       toast.success(`已匯出 ${data.items.length} 筆資料`);
     } catch {
       toast.error("匯出失敗");
-    }
-  }
-
-  async function handleCopyShareLink(token: string) {
-    const url = `${window.location.origin}/s/${token}`;
-    try {
-      await navigator.clipboard.writeText(url);
-      toast.success("已複製連結");
-    } catch {
-      toast.error("複製失敗");
-    }
-  }
-
-  async function handleRevokeShare(shareId: string) {
-    setRevokingId(shareId);
-    try {
-      await revokeShare(shareId);
-      setShares((prev) => prev.filter((s) => s.id !== shareId));
-      toast.success("已撤銷分享");
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "撤銷失敗");
-    } finally {
-      setRevokingId(null);
     }
   }
 
@@ -271,71 +228,7 @@ export function Settings({ onSettingsChanged }: SettingsProps) {
           </div>
         </section>
 
-        {/* Section 2: Share Management */}
-        <section className="space-y-4">
-          <div className="flex items-center gap-2">
-            <Share2 className="h-4 w-4 text-muted-foreground" />
-            <h2 className="text-sm font-semibold text-muted-foreground">分享管理</h2>
-          </div>
-
-          <div className="border rounded-lg p-4">
-            {sharesLoading ? (
-              <div className="flex items-center justify-center py-4">
-                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-              </div>
-            ) : shares.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-4">尚無分享的筆記</p>
-            ) : (
-              <div className="space-y-2">
-                {shares.map((share) => (
-                  <div key={share.id} className="flex items-center gap-2 rounded-md border p-2">
-                    {share.visibility === "public" ? (
-                      <Globe className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                    ) : (
-                      <EyeOff className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm truncate">{share.item_title ?? "未知筆記"}</p>
-                      <div className="flex items-center gap-1.5 mt-0.5">
-                        <Badge variant="secondary" className="text-xs">
-                          {share.visibility === "public" ? "公開" : "僅限連結"}
-                        </Badge>
-                        <span className="text-xs text-muted-foreground">
-                          {new Date(share.created).toLocaleDateString("zh-TW")}
-                        </span>
-                      </div>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 shrink-0"
-                      onClick={() => handleCopyShareLink(share.token)}
-                      title="複製連結"
-                    >
-                      <Copy className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 shrink-0 text-destructive"
-                      onClick={() => handleRevokeShare(share.id)}
-                      disabled={revokingId === share.id || !isOnline}
-                      title="撤銷分享"
-                    >
-                      {revokingId === share.id ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <Trash2 className="h-3.5 w-3.5" />
-                      )}
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </section>
-
-        {/* Section 3: General */}
+        {/* Section 2: General */}
         <section className="space-y-4">
           <div className="flex items-center gap-2">
             <SettingsIcon className="h-4 w-4 text-muted-foreground" />

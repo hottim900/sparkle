@@ -1,22 +1,18 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Settings } from "../settings";
-import type { SettingsResponse, ShareToken } from "@/lib/types";
+import type { SettingsResponse } from "@/lib/types";
 
 const mockGetSettings = vi.fn();
 const mockUpdateSettings = vi.fn();
 const mockExportData = vi.fn();
 const mockImportData = vi.fn();
-const mockListShares = vi.fn();
-const mockRevokeShare = vi.fn();
 
 vi.mock("@/lib/api", () => ({
   getSettings: (...args: unknown[]) => mockGetSettings(...args),
   updateSettings: (...args: unknown[]) => mockUpdateSettings(...args),
   exportData: (...args: unknown[]) => mockExportData(...args),
   importData: (...args: unknown[]) => mockImportData(...args),
-  listShares: (...args: unknown[]) => mockListShares(...args),
-  revokeShare: (...args: unknown[]) => mockRevokeShare(...args),
 }));
 
 let mockTheme = "light";
@@ -40,21 +36,8 @@ function makeSettings(overrides: Partial<SettingsResponse> = {}): SettingsRespon
   };
 }
 
-function makeShare(overrides: Partial<ShareToken> = {}): ShareToken {
-  return {
-    id: "share-1",
-    item_id: "item-1",
-    token: "abc123",
-    visibility: "unlisted",
-    created: "2026-01-15T00:00:00Z",
-    item_title: "My Shared Note",
-    ...overrides,
-  };
-}
-
-function setupDefaults(settingsOverrides?: Partial<SettingsResponse>, shares?: ShareToken[]) {
+function setupDefaults(settingsOverrides?: Partial<SettingsResponse>) {
   mockGetSettings.mockResolvedValue(makeSettings(settingsOverrides));
-  mockListShares.mockResolvedValue({ shares: shares ?? [] });
 }
 
 describe("Settings", () => {
@@ -67,7 +50,6 @@ describe("Settings", () => {
 
   it("shows loading spinner initially", () => {
     mockGetSettings.mockReturnValue(new Promise(() => {}));
-    mockListShares.mockReturnValue(new Promise(() => {}));
 
     render(<Settings onSettingsChanged={onSettingsChanged} />);
     const spinner = document.querySelector(".animate-spin");
@@ -155,70 +137,6 @@ describe("Settings", () => {
     await waitFor(() => {
       expect(toast.error).toHaveBeenCalledWith("Server error");
     });
-  });
-
-  it("renders shares with visibility badges", async () => {
-    setupDefaults({}, [
-      makeShare({ id: "s1", visibility: "public", item_title: "Public Note" }),
-      makeShare({ id: "s2", visibility: "unlisted", item_title: "Private Note" }),
-    ]);
-    render(<Settings onSettingsChanged={onSettingsChanged} />);
-
-    await waitFor(() => {
-      expect(screen.getByText("Public Note")).toBeInTheDocument();
-    });
-    expect(screen.getByText("Private Note")).toBeInTheDocument();
-    expect(screen.getByText("公開")).toBeInTheDocument();
-    expect(screen.getByText("僅限連結")).toBeInTheDocument();
-  });
-
-  it("revoke share removes it from list", async () => {
-    const { toast } = await import("sonner");
-    const share = makeShare({ id: "s1", item_title: "Shared Note" });
-    setupDefaults({}, [share]);
-    mockRevokeShare.mockResolvedValue(undefined);
-
-    const user = userEvent.setup();
-    render(<Settings onSettingsChanged={onSettingsChanged} />);
-
-    await waitFor(() => {
-      expect(screen.getByText("Shared Note")).toBeInTheDocument();
-    });
-
-    await user.click(screen.getByTitle("撤銷分享"));
-
-    await waitFor(() => {
-      expect(mockRevokeShare).toHaveBeenCalledWith("s1");
-    });
-    expect(toast.success).toHaveBeenCalledWith("已撤銷分享");
-
-    await waitFor(() => {
-      expect(screen.queryByText("Shared Note")).not.toBeInTheDocument();
-    });
-  });
-
-  it("copy share link writes to clipboard", async () => {
-    const { toast } = await import("sonner");
-    setupDefaults({}, [makeShare({ token: "test-token" })]);
-
-    const user = userEvent.setup();
-    render(<Settings onSettingsChanged={onSettingsChanged} />);
-
-    await waitFor(() => {
-      expect(screen.getByText("My Shared Note")).toBeInTheDocument();
-    });
-
-    // Mock clipboard.writeText on the actual navigator.clipboard used at runtime
-    const writeTextSpy = vi.spyOn(navigator.clipboard, "writeText").mockResolvedValue(undefined);
-
-    await user.click(screen.getByTitle("複製連結"));
-
-    await waitFor(() => {
-      expect(writeTextSpy).toHaveBeenCalledWith(expect.stringContaining("/s/test-token"));
-    });
-    expect(toast.success).toHaveBeenCalledWith("已複製連結");
-
-    writeTextSpy.mockRestore();
   });
 
   it("export data calls API and shows toast", async () => {

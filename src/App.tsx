@@ -33,6 +33,9 @@ const FleetingTriage = lazy(() =>
 const Dashboard = lazy(() =>
   import("@/components/dashboard").then((m) => ({ default: m.Dashboard })),
 );
+const ShareManagement = lazy(() =>
+  import("@/components/share-management").then((m) => ({ default: m.ShareManagement })),
+);
 
 const LoadingFallback = () => (
   <div className="flex items-center justify-center h-full">
@@ -248,6 +251,24 @@ function MainApp() {
             <ErrorBoundary>
               <Suspense fallback={<LoadingFallback />}>
                 <Settings onSettingsChanged={refreshConfig} />
+              </Suspense>
+            </ErrorBoundary>
+          ) : currentView === "shares" ? (
+            /* Share Management takes full width */
+            <ErrorBoundary>
+              <Suspense fallback={<LoadingFallback />}>
+                <ShareManagement
+                  onNavigateToItem={async (itemId) => {
+                    setNavStack((prev) => [...prev, { view: "shares", itemId: null }]);
+                    try {
+                      const data = await getItem(itemId);
+                      setCurrentView("all");
+                      setSelectedItem(parseItem(data));
+                    } catch {
+                      /* item may have been deleted */
+                    }
+                  }}
+                />
               </Suspense>
             </ErrorBoundary>
           ) : (
