@@ -21,6 +21,7 @@ Args:
   - source (string, optional): Reference URL
   - aliases (string[], optional): Alternative names for Obsidian linking
   - linked_note_id (string, optional): UUID of a note to link this todo to (todo only)
+  - category_id (string, optional): Category UUID to assign (null to clear)
 
 Returns: The created item with all fields including generated ID and timestamps.`,
       inputSchema: {
@@ -34,6 +35,7 @@ Returns: The created item with all fields including generated ID and timestamps.
         source: z.string().max(2000).optional().describe("Reference URL"),
         aliases: z.array(z.string().max(200)).max(10).optional().describe("Alternative names"),
         linked_note_id: z.string().uuid().optional().describe("UUID of linked note (todo only)"),
+        category_id: z.string().uuid().nullable().optional().describe("Category UUID to assign (null to clear)"),
       },
       annotations: {
         readOnlyHint: false,
@@ -42,7 +44,7 @@ Returns: The created item with all fields including generated ID and timestamps.
         openWorldHint: false,
       },
     },
-    async ({ title, content, tags, status, type, priority, due, source, aliases, linked_note_id }) => {
+    async ({ title, content, tags, status, type, priority, due, source, aliases, linked_note_id, category_id }) => {
       try {
         const item = await createItem({
           title,
@@ -55,6 +57,7 @@ Returns: The created item with all fields including generated ID and timestamps.
           source: source ?? null,
           aliases,
           linked_note_id: linked_note_id ?? null,
+          category_id: category_id ?? null,
         });
         const text = `Note created successfully.\n\n${formatItem(item)}`;
         return {
@@ -88,6 +91,7 @@ Args:
   - aliases (string[], optional): New aliases (replaces all existing aliases)
   - source (string, optional): Reference URL (set to null to clear)
   - linked_note_id (string, optional): UUID of linked note, or null to clear (todo only)
+  - category_id (string, optional): Category UUID to assign, or null to clear
 
 Returns: The updated item with all fields.
 
@@ -107,6 +111,7 @@ Content editing modes:
         aliases: z.array(z.string().max(200)).max(10).optional().describe("New aliases (replaces all)"),
         source: z.string().max(2000).nullable().optional().describe("Reference URL (null to clear)"),
         linked_note_id: z.string().uuid().nullable().optional().describe("Linked note UUID (todo only, null to clear)"),
+        category_id: z.string().uuid().nullable().optional().describe("Category UUID (null to clear)"),
       },
       annotations: {
         readOnlyHint: false,
@@ -115,7 +120,7 @@ Content editing modes:
         openWorldHint: false,
       },
     },
-    async ({ id, title, content, old_content, tags, status, type, priority, due, aliases, source, linked_note_id }) => {
+    async ({ id, title, content, old_content, tags, status, type, priority, due, aliases, source, linked_note_id, category_id }) => {
       try {
         // Find-and-replace mode: old_content + content
         if (old_content !== undefined && content === undefined) {
@@ -156,6 +161,7 @@ Content editing modes:
         if (aliases !== undefined) update.aliases = aliases;
         if (source !== undefined) update.source = source;
         if (linked_note_id !== undefined) update.linked_note_id = linked_note_id;
+        if (category_id !== undefined) update.category_id = category_id;
 
         const item = await updateItem(id, update);
         const text = `Note updated successfully.\n\n${formatItem(item)}`;
