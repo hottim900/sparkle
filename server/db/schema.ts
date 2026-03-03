@@ -1,4 +1,4 @@
-import { sqliteTable, text, index } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, index } from "drizzle-orm/sqlite-core";
 
 export const items = sqliteTable(
   "items",
@@ -30,6 +30,7 @@ export const items = sqliteTable(
     source: text("source"),
     aliases: text("aliases").notNull().default("[]"),
     linked_note_id: text("linked_note_id"),
+    category_id: text("category_id"),
     created: text("created").notNull(),
     modified: text("modified").notNull(),
   },
@@ -37,6 +38,7 @@ export const items = sqliteTable(
     index("idx_items_status").on(table.status),
     index("idx_items_type").on(table.type),
     index("idx_items_created").on(table.created),
+    index("idx_items_category_id").on(table.category_id),
   ],
 );
 
@@ -69,3 +71,15 @@ export const shareTokens = sqliteTable(
 
 export type ShareToken = typeof shareTokens.$inferSelect;
 export type NewShareToken = typeof shareTokens.$inferInsert;
+
+export const categories = sqliteTable("categories", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull().unique(),
+  sort_order: integer("sort_order").notNull().default(0),
+  color: text("color"),
+  created: text("created").notNull(),
+  modified: text("modified").notNull(),
+});
+
+export type Category = typeof categories.$inferSelect;
+export type NewCategory = typeof categories.$inferInsert;
