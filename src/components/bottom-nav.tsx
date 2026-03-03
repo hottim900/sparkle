@@ -35,12 +35,17 @@ export function BottomNav() {
   const isMoreActive = moreItems.some((item) => item.id === currentView);
 
   return (
-    <>
-      {/* More sheet overlay */}
+    <nav className="relative bg-card border-t md:hidden pb-[env(safe-area-inset-bottom)]">
+      {/* More menu overlay + popup */}
       {moreOpen && (
-        <div className="fixed inset-0 z-40 md:hidden" onClick={() => setMoreOpen(false)}>
+        <>
           <div
-            className="absolute bottom-14 right-2 bg-popover border rounded-lg shadow-lg p-2 min-w-[120px]"
+            data-testid="more-overlay"
+            className="fixed inset-0 z-40"
+            onClick={() => setMoreOpen(false)}
+          />
+          <div
+            className="absolute bottom-full right-2 mb-2 z-40 bg-popover border rounded-lg shadow-lg p-2 min-w-[120px]"
             onClick={(e) => e.stopPropagation()}
           >
             {moreItems.map((item) => (
@@ -61,34 +66,32 @@ export function BottomNav() {
               </button>
             ))}
           </div>
-        </div>
+        </>
       )}
 
-      <nav className="fixed bottom-0 left-0 right-0 bg-card border-t z-40 md:hidden safe-area-pb">
-        <div className="flex justify-around">
-          {mainNavItems.map((item) => (
-            <button
-              key={item.id}
-              className={`flex flex-col items-center py-2 px-3 flex-1 ${
-                currentView === item.id ? "text-primary" : "text-muted-foreground"
-              }`}
-              onClick={() => onViewChange(item.id)}
-            >
-              {item.icon}
-              <span className="text-xs mt-0.5">{item.label}</span>
-            </button>
-          ))}
+      <div className="flex justify-around">
+        {mainNavItems.map((item) => (
           <button
+            key={item.id}
             className={`flex flex-col items-center py-2 px-3 flex-1 ${
-              isMoreActive || moreOpen ? "text-primary" : "text-muted-foreground"
+              currentView === item.id ? "text-primary" : "text-muted-foreground"
             }`}
-            onClick={() => setMoreOpen(!moreOpen)}
+            onClick={() => onViewChange(item.id)}
           >
-            <Menu className="h-5 w-5" />
-            <span className="text-xs mt-0.5">更多</span>
+            {item.icon}
+            <span className="text-xs mt-0.5">{item.label}</span>
           </button>
-        </div>
-      </nav>
-    </>
+        ))}
+        <button
+          className={`flex flex-col items-center py-2 px-3 flex-1 ${
+            isMoreActive || moreOpen ? "text-primary" : "text-muted-foreground"
+          }`}
+          onClick={() => setMoreOpen(!moreOpen)}
+        >
+          <Menu className="h-5 w-5" />
+          <span className="text-xs mt-0.5">更多</span>
+        </button>
+      </div>
+    </nav>
   );
 }

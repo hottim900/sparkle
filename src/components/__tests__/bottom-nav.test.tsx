@@ -71,9 +71,8 @@ describe("BottomNav", () => {
     await user.click(screen.getByText("更多"));
     expect(screen.getByText("全部")).toBeInTheDocument();
 
-    // Click the overlay (the fixed inset-0 div)
-    const overlay = screen.getByText("全部").closest(".absolute")!.parentElement!;
-    await user.click(overlay);
+    // Click the overlay to close
+    await user.click(screen.getByTestId("more-overlay"));
 
     expect(screen.queryByText("全部")).not.toBeInTheDocument();
   });
