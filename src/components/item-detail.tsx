@@ -319,7 +319,10 @@ export function ItemDetail({ itemId, onUpdated, onDeleted }: ItemDetailProps) {
             <label className="text-sm text-muted-foreground block mb-1">分類</label>
             <CategorySelect
               value={item.category_id ?? null}
-              onChange={(categoryId) => saveField("category_id", categoryId)}
+              onChange={(categoryId) => {
+                setItem((prev) => (prev ? { ...prev, category_id: categoryId } : prev));
+                saveField("category_id", categoryId);
+              }}
               disabled={saveStatus === "saving"}
             />
           </div>
