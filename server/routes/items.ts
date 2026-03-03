@@ -29,6 +29,7 @@ itemsRouter.get("/", (c) => {
       excludeStatus: c.req.query("excludeStatus"),
       type: c.req.query("type"),
       tag: c.req.query("tag"),
+      category_id: c.req.query("category_id"),
       sort: c.req.query("sort"),
       order: c.req.query("order"),
       limit: c.req.query("limit"),

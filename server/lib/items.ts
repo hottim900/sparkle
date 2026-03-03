@@ -2,7 +2,7 @@ import { eq, desc, asc, sql, and, notInArray, inArray } from "drizzle-orm";
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import type Database from "better-sqlite3";
 import { v4 as uuidv4 } from "uuid";
-import { items, shareTokens } from "../db/schema.js";
+import { items, shareTokens, categories } from "../db/schema.js";
 import type { CreateItemInput, UpdateItemInput } from "../schemas/items.js";
 import type * as schema from "../db/schema.js";
 
@@ -74,6 +74,7 @@ export type ItemWithLinkedInfo = typeof items.$inferSelect & {
   linked_note_title: string | null;
   linked_todo_count: number;
   share_visibility: "public" | "unlisted" | null;
+  category_name: string | null;
 };
 
 function resolveLinkedInfo(db: DB, rows: (typeof items.$inferSelect)[]): ItemWithLinkedInfo[] {
@@ -134,11 +135,27 @@ function resolveLinkedInfo(db: DB, rows: (typeof items.$inferSelect)[]): ItemWit
     }
   }
 
+  // Resolve category_name for all items
+  const categoryIds = rows.map((r) => r.category_id).filter((id): id is string => id != null);
+  const categoryNameMap = new Map<string, string>();
+  if (categoryIds.length > 0) {
+    const uniqueCatIds = [...new Set(categoryIds)];
+    const catRows = db
+      .select({ id: categories.id, name: categories.name })
+      .from(categories)
+      .where(inArray(categories.id, uniqueCatIds))
+      .all();
+    for (const cr of catRows) {
+      categoryNameMap.set(cr.id, cr.name);
+    }
+  }
+
   return rows.map((row) => ({
     ...row,
     linked_note_title: row.linked_note_id ? (titleMap.get(row.linked_note_id) ?? null) : null,
     linked_todo_count: row.type === "note" ? (countMap.get(row.id) ?? 0) : 0,
     share_visibility: shareMap.get(row.id) ?? null,
+    category_name: row.category_id ? (categoryNameMap.get(row.category_id) ?? null) : null,
   }));
 }
 
@@ -161,6 +178,7 @@ export function createItem(db: DB, input: Partial<CreateItemInput> & { title: st
     source: input.source ?? null,
     aliases: type === "scratch" ? "[]" : JSON.stringify(input.aliases ?? []),
     linked_note_id: type === "todo" ? (input.linked_note_id ?? null) : null,
+    category_id: input.category_id ?? null,
     created: now,
     modified: now,
   };
@@ -183,6 +201,7 @@ export function listItems(
     type?: string;
     tag?: string;
     linked_note_id?: string;
+    category_id?: string;
     sort?: "created" | "priority" | "due" | "modified";
     order?: "asc" | "desc";
     limit?: number;
@@ -202,6 +221,9 @@ export function listItems(
   }
   if (filters?.linked_note_id) {
     conditions.push(eq(items.linked_note_id, filters.linked_note_id));
+  }
+  if (filters?.category_id) {
+    conditions.push(eq(items.category_id, filters.category_id));
   }
   if (filters?.tag) {
     conditions.push(sql`json_each.value = ${filters.tag}`);
@@ -280,6 +302,7 @@ export function updateItem(db: DB, id: string, input: UpdateItemInput) {
   if (input.source !== undefined) updates.source = input.source;
   if (input.aliases !== undefined) updates.aliases = JSON.stringify(input.aliases);
   if (input.linked_note_id !== undefined) updates.linked_note_id = input.linked_note_id;
+  if (input.category_id !== undefined) updates.category_id = input.category_id;
 
   // Type conversion auto-mapping (Section 9)
   if (input.type !== undefined && input.type !== existing.type) {
