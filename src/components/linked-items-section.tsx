@@ -63,9 +63,10 @@ export function LinkedItemsSection({
   });
 
   // Fetch linked note title for backlink display on todos
+  // Must use same queryFn shape as ItemDetail (parseItem) to keep cache consistent
   const { data: linkedNoteTitle } = useQuery({
     queryKey: queryKeys.items.detail(item.linked_note_id ?? ""),
-    queryFn: () => getItem(item.linked_note_id!),
+    queryFn: () => getItem(item.linked_note_id!).then(parseItem),
     select: (data) => data.title,
     enabled: item.type === "todo" && !!item.linked_note_id,
   });
