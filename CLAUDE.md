@@ -98,6 +98,14 @@ DB migration: version 0→13, idempotent steps. Claude auto-loads the convention
 
 For detailed conventions on specific modules (API retry, Performance, PWA, Logging, Sentry, CSP, Offline UI, State management, CI/CD, Sharing, Export), Claude auto-loads the conventions-detail skill when relevant.
 
+## Quality Management（品質管理）
+
+活躍的缺陷、技術債、功能缺口追蹤在 `docs/plans/quality/README.md`。Claude auto-loads the quality skill when relevant.
+
+**發現項目：** `glob docs/plans/quality/defects/DEF-*.md` + `grep '狀態.*Pending'`
+**修復後必須更新：** 依照項目檔底部「完成步驟」checklist 逐項執行。
+**建立新項目：** 依照 README.md「建立新項目」段落操作。
+
 ## Skills Reference
 
 Available skills for this project (invoke with `/skill-name` or auto-loaded by Claude):
@@ -110,6 +118,7 @@ Available skills for this project (invoke with `/skill-name` or auto-loaded by C
 | line-bot           | `/line-bot`   | LINE Bot commands & integration    |
 | mcp-server         | `/mcp-server` | MCP server for Claude Code         |
 | conventions-detail | auto          | Detailed module conventions        |
+| quality            | `/quality`    | Quality tracking system operations |
 
 ## Maintenance
 
@@ -122,3 +131,5 @@ When making changes that affect documentation, **update the relevant file in the
 - **`.claude/skills/line-bot.md`**: When LINE Bot commands change
 - **`.claude/skills/mcp-server.md`**: When MCP server tools/config changes
 - **`.claude/skills/conventions-detail.md`**: When module-specific conventions change
+- **`.claude/skills/quality.md`**: When quality tracking system changes
+- **`docs/plans/quality/README.md`**: When quality items are created/completed/updated
