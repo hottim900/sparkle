@@ -91,3 +91,21 @@ export async function quickCaptureTodo(page: Page, title: string) {
   await page.locator("button[type='submit']").click();
   await page.getByText("已新增").waitFor({ timeout: 5_000 });
 }
+
+/**
+ * Create a share for an item via API.
+ */
+export async function createShareViaApi(
+  request: APIRequestContext,
+  itemId: string,
+  visibility: "unlisted" | "public" = "unlisted",
+) {
+  const response = await request.post(`${API_BASE}/items/${itemId}/share`, {
+    headers: {
+      Authorization: `Bearer ${AUTH_TOKEN}`,
+      "Content-Type": "application/json",
+    },
+    data: { visibility },
+  });
+  return response.json();
+}
