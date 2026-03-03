@@ -570,6 +570,17 @@ describe("ItemDetail offline behavior", () => {
 describe("ItemDetail category", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Polyfills for Radix Select in jsdom
+    window.HTMLElement.prototype.hasPointerCapture = vi.fn().mockReturnValue(false);
+    window.HTMLElement.prototype.setPointerCapture = vi.fn();
+    window.HTMLElement.prototype.releasePointerCapture = vi.fn();
+    window.HTMLElement.prototype.scrollIntoView = vi.fn();
+    // @ts-expect-error ResizeObserver mock
+    window.ResizeObserver = vi.fn().mockImplementation(() => ({
+      observe: vi.fn(),
+      unobserve: vi.fn(),
+      disconnect: vi.fn(),
+    }));
   });
 
   afterEach(() => {
@@ -599,21 +610,58 @@ describe("ItemDetail category", () => {
     expect(screen.queryByText("分類")).not.toBeInTheDocument();
   });
 
-  it("calls updateItem when category changes", async () => {
-    setupDefaultMocks();
+  it("updates local state immediately when selecting a category", async () => {
+    const user = userEvent.setup();
+
+    // Setup with one category available
+    vi.mocked(api.getItem).mockResolvedValue(mockItem);
+    vi.mocked(api.getTags).mockResolvedValue({ tags: [] });
+    vi.mocked(api.getLinkedTodos).mockResolvedValue({ items: [], total: 0 });
+    vi.mocked(api.listCategories).mockResolvedValue({
+      categories: [
+        {
+          id: "cat-1",
+          name: "工作",
+          sort_order: 0,
+          color: "#ff0000",
+          created: "2026-01-01T00:00:00.000Z",
+          modified: "2026-01-01T00:00:00.000Z",
+        },
+      ],
+    });
     vi.mocked(api.updateItem).mockResolvedValue({
       ...mockItem,
+      category_id: "cat-1",
+      category_name: "工作",
       modified: "2026-01-01T00:01:00.000Z",
     });
 
     renderItemDetail();
+
+    // Wait for categories to load
     await waitFor(() => {
       expect(screen.getByText("分類")).toBeInTheDocument();
     });
 
-    // CategorySelect is rendered — the saveField("category_id", ...) integration
-    // is tested via the component's onChange prop. Since CategorySelect is a stub
-    // (renders null), we verify the label renders and the section exists.
-    expect(screen.getByText("分類")).toBeInTheDocument();
+    // Find the category combobox (shows "未分類")
+    const allComboboxes = screen.getAllByRole("combobox");
+    const categoryTrigger = allComboboxes.find((cb) => cb.textContent?.includes("未分類"));
+    expect(categoryTrigger).toBeDefined();
+
+    // Open dropdown and select "工作"
+    await user.click(categoryTrigger!);
+    const option = await screen.findByRole("option", { name: /工作/ });
+    await user.click(option);
+
+    // Verify updateItem was called with the selected category
+    await waitFor(() => {
+      expect(api.updateItem).toHaveBeenCalledWith("test-1", { category_id: "cat-1" });
+    });
+
+    // Key assertion: after save, CategorySelect should still show "工作"
+    // Without the fix, local state doesn't update category_id so it reverts to "未分類"
+    await waitFor(() => {
+      expect(categoryTrigger).toHaveTextContent("工作");
+    });
   });
 });
