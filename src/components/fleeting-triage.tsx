@@ -3,6 +3,7 @@ import { listItems, updateItem, getTags } from "@/lib/api";
 import { parseItems, type ParsedItem } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { TagInput } from "@/components/tag-input";
+import { CategorySelect } from "@/components/category-select";
 import { useOnlineStatus } from "@/hooks/use-online-status";
 import { toast } from "sonner";
 import {
@@ -23,6 +24,7 @@ interface FleetingTriageProps {
 interface PendingChanges {
   type?: "note" | "todo";
   tags?: string[];
+  category_id?: string | null;
 }
 
 export function FleetingTriage({ onDone }: FleetingTriageProps) {
@@ -59,6 +61,8 @@ export function FleetingTriage({ onDone }: FleetingTriageProps) {
   // Resolved values: pending overrides current
   const resolvedType = pending.type ?? current?.type ?? "note";
   const resolvedTags = pending.tags ?? current?.tags ?? [];
+  const resolvedCategoryId =
+    pending.category_id !== undefined ? pending.category_id : (current?.category_id ?? null);
   const resetAndNext = () => {
     setPending({});
     if (currentIndex + 1 >= items.length) {
@@ -79,6 +83,7 @@ export function FleetingTriage({ onDone }: FleetingTriageProps) {
       updates.status = targetType === "note" ? "developing" : "active";
       if (pending.type !== undefined) updates.type = pending.type;
       if (pending.tags !== undefined) updates.tags = pending.tags;
+      if (pending.category_id !== undefined) updates.category_id = pending.category_id;
       await updateItem(current.id, updates);
       toast.success(targetType === "note" ? "已設為發展中" : "已設為進行中");
       resetAndNext();
@@ -93,6 +98,7 @@ export function FleetingTriage({ onDone }: FleetingTriageProps) {
       const updates: Record<string, unknown> = { status: "archived" };
       if (pending.type !== undefined) updates.type = pending.type;
       if (pending.tags !== undefined) updates.tags = pending.tags;
+      if (pending.category_id !== undefined) updates.category_id = pending.category_id;
       await updateItem(current.id, updates);
       toast.success("已封存");
       resetAndNext();
@@ -199,6 +205,15 @@ export function FleetingTriage({ onDone }: FleetingTriageProps) {
               placeholder="輸入標籤"
             />
           </div>
+        </div>
+
+        {/* Category */}
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-muted-foreground w-10">分類</span>
+          <CategorySelect
+            value={resolvedCategoryId}
+            onChange={(categoryId) => setPending((p) => ({ ...p, category_id: categoryId }))}
+          />
         </div>
       </div>
 
