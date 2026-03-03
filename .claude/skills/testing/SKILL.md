@@ -1,11 +1,6 @@
 ---
 name: testing
-description: >
-  Test architecture, configuration, and patterns for Sparkle. Vitest unit tests
-  (server + frontend 707 tests), Playwright E2E tests (29 tests), coverage thresholds,
-  mock patterns (vi.mock, createTestDb, renderWithContext), E2E helpers and flakiness
-  workarounds, MCP server tests. Use when writing tests, debugging test failures,
-  or modifying test infrastructure.
+description: Test architecture and patterns reference. Use when writing tests, debugging test failures, or modifying test infrastructure.
 user-invocable: true
 ---
 

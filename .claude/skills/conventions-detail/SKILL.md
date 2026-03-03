@@ -1,11 +1,6 @@
 ---
 name: conventions-detail
-description: >
-  Detailed implementation conventions for specific Sparkle modules: API client retry/timeout
-  (fetchWithRetry), Performance and cache-control, PWA/Service Worker caching (Workbox),
-  pino logging, Sentry error tracking, CSP header, offline UI (useOnlineStatus), AppContext
-  state management, public sharing (SSR/OpenGraph), Obsidian export, Settings API, CI/CD
-  pipeline, Dependabot, Release-Please, DB migration history. Use when modifying these subsystems.
+description: Detailed implementation conventions for Sparkle subsystems. Use when modifying API client, PWA, logging, Sentry, CSP, offline UI, state management, CI/CD, sharing, export, or DB migrations.
 user-invocable: false
 ---
 

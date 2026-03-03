@@ -1,10 +1,6 @@
 ---
 name: line-bot
-description: >
-  LINE Bot integration for Sparkle. Complete command reference (create, query, advance,
-  operate items), session mechanism with numbered items and 10-min TTL, natural language
-  date parsing (chrono-node zh.hant), webhook config. Use when developing LINE Bot features
-  or debugging webhook. Key files: server/routes/webhook.ts, server/lib/line*.ts.
+description: LINE Bot command reference and integration guide. Use when developing LINE Bot features or debugging the webhook.
 user-invocable: true
 ---
 

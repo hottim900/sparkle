@@ -1,9 +1,6 @@
 ---
 name: quality
-description: >
-  品質管理追蹤系統操作指南。當 Claude 修復 bug、處理缺陷、進行程式碼品質審查、
-  或被要求建立/更新品質追蹤項目時自動載入。涵蓋 Defect、Tech Debt、Feature Gap
-  的完整操作流程、搜查手冊使用、和完成步驟 checklist。
+description: Quality tracking system operations guide. Use when fixing bugs, managing defect/tech-debt/feature-gap items, or running code quality audits.
 user-invocable: true
 ---
 

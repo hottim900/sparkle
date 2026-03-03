@@ -1,11 +1,6 @@
 ---
 name: ops
-description: >
-  Production deployment and operations for Sparkle. Self-hosted on WSL2 with systemd,
-  Cloudflare Tunnel, WireGuard VPN. Covers auto-deploy (GitHub Actions self-hosted runner),
-  environment variables, HTTPS/mkcert, iptables firewall, restic backup with offsite copy,
-  LINE push alert monitoring, Cloudflare Tunnel + Access setup, systemd service management.
-  Use for deployment issues, infrastructure changes, or ops tasks.
+description: Production deployment and operations guide. Use when troubleshooting deployment, modifying infrastructure, or managing systemd services.
 user-invocable: true
 ---
 
