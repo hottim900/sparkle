@@ -1,4 +1,5 @@
-import { useState, useCallback, useMemo, useEffect, lazy, Suspense } from "react";
+import { useState, useCallback, useMemo, lazy, Suspense } from "react";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { AuthGate } from "@/components/auth-gate";
 import { Toaster } from "@/components/ui/sonner";
 import { QuickCapture } from "@/components/quick-capture";
@@ -11,7 +12,10 @@ import { InstallPrompt } from "@/components/install-prompt";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
 import { useOnlineStatus } from "@/hooks/use-online-status";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getConfig, getItem } from "@/lib/api";
+import { queryKeys } from "@/lib/query-keys";
+import { createQueryClient } from "@/lib/query-client";
 import { AppContext } from "@/lib/app-context";
 import { Button } from "@/components/ui/button";
 import { List, ListTodo, Loader2 } from "lucide-react";
@@ -45,13 +49,14 @@ const LoadingFallback = () => (
 
 const isMobile = () => window.innerWidth < 768;
 
+const queryClient = createQueryClient();
+
 function MainApp() {
+  const qc = useQueryClient();
   const [currentView, setCurrentView] = useState<ViewType>(isMobile() ? "notes" : "dashboard");
   const [selectedItem, setSelectedItem] = useState<ParsedItem | null>(null);
   const [selectedTag, setSelectedTag] = useState<string | undefined>();
-  const [refreshKey, setRefreshKey] = useState(0);
   const [triageMode, setTriageMode] = useState(false);
-  const [obsidianEnabled, setObsidianEnabled] = useState(false);
   const isOnline = useOnlineStatus();
 
   // Navigation stack for back button
@@ -63,20 +68,15 @@ function MainApp() {
   >("fleeting");
   const [todoSubView, setTodoSubView] = useState<"active" | "done">("active");
 
-  // Load config on mount
-  const refreshConfig = useCallback(() => {
-    getConfig()
-      .then((config) => setObsidianEnabled(config.obsidian_export_enabled))
-      .catch(() => {});
-  }, []);
+  // Load config via React Query
+  const { data: obsidianEnabled = false } = useQuery({
+    queryKey: queryKeys.config,
+    queryFn: () => getConfig().then((c) => c.obsidian_export_enabled),
+  });
 
-  useEffect(() => {
-    refreshConfig();
-  }, [refreshConfig]);
-
-  const refresh = useCallback(() => {
-    setRefreshKey((k) => k + 1);
-  }, []);
+  const handleSettingsChanged = useCallback(() => {
+    qc.invalidateQueries({ queryKey: queryKeys.config });
+  }, [qc]);
 
   const handleSelect = useCallback((item: ParsedItem) => {
     setSelectedItem(item);
@@ -166,8 +166,6 @@ function MainApp() {
       canGoBack: navStack.length > 0,
       obsidianEnabled,
       isOnline,
-      refreshKey,
-      refresh,
     }),
     [
       currentView,
@@ -181,8 +179,6 @@ function MainApp() {
       navStack.length,
       obsidianEnabled,
       isOnline,
-      refreshKey,
-      refresh,
     ],
   );
 
@@ -250,7 +246,7 @@ function MainApp() {
             /* Settings takes full width */
             <ErrorBoundary>
               <Suspense fallback={<LoadingFallback />}>
-                <Settings onSettingsChanged={refreshConfig} />
+                <Settings onSettingsChanged={handleSettingsChanged} />
               </Suspense>
             </ErrorBoundary>
           ) : currentView === "shares" ? (
@@ -279,7 +275,7 @@ function MainApp() {
                   selectedItem ? "hidden md:flex" : "flex"
                 } md:w-96 md:max-w-none md:flex-none md:border-r`}
               >
-                <QuickCapture onCreated={refresh} />
+                <QuickCapture />
 
                 {/* Triage toggle for fleeting view */}
                 {isFleetingView && (
@@ -337,11 +333,9 @@ function MainApp() {
                     <Suspense fallback={<LoadingFallback />}>
                       <ItemDetail
                         itemId={selectedItem.id}
-                        onUpdated={refresh}
                         onDeleted={() => {
                           setSelectedItem(null);
                           setNavStack([]);
-                          refresh();
                         }}
                       />
                     </Suspense>
@@ -369,9 +363,11 @@ function MainApp() {
 export default function App() {
   return (
     <>
-      <AuthGate>
-        <MainApp />
-      </AuthGate>
+      <QueryClientProvider client={queryClient}>
+        <AuthGate>
+          <MainApp />
+        </AuthGate>
+      </QueryClientProvider>
       <Toaster position="top-center" richColors />
     </>
   );

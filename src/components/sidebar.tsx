@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { SearchBar } from "./search-bar";
 import { getTags } from "@/lib/api";
 import { clearToken } from "@/lib/api";
 import { useAppContext } from "@/lib/app-context";
+import { queryKeys } from "@/lib/query-keys";
 import type { ViewType } from "@/lib/types";
 import {
   Sparkles,
@@ -60,15 +61,11 @@ const navGroups: NavGroup[] = [
 ];
 
 export function Sidebar() {
-  const { currentView, onViewChange, selectedTag, onTagSelect, onSelectItem, refreshKey } =
-    useAppContext();
-  const [tags, setTags] = useState<string[]>([]);
-
-  useEffect(() => {
-    getTags()
-      .then((res) => setTags(res.tags))
-      .catch(() => {});
-  }, [refreshKey]);
+  const { currentView, onViewChange, selectedTag, onTagSelect, onSelectItem } = useAppContext();
+  const { data: tags = [] } = useQuery({
+    queryKey: queryKeys.tags,
+    queryFn: () => getTags().then((r) => r.tags),
+  });
 
   return (
     <div className="w-64 border-r h-full flex flex-col bg-card">

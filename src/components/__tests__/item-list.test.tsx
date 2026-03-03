@@ -323,13 +323,13 @@ describe("ItemList", () => {
 
       await waitFor(() => {
         expect(screen.getByText("Work Note")).toBeInTheDocument();
+        expect(screen.getByText("Personal Note")).toBeInTheDocument();
+        // Group headers should exist
+        const headers = screen.getAllByTestId("category-group-header");
+        expect(headers).toHaveLength(2);
+        expect(headers[0]!.textContent).toContain("工作");
+        expect(headers[1]!.textContent).toContain("個人");
       });
-      expect(screen.getByText("Personal Note")).toBeInTheDocument();
-      // Group headers should exist
-      const headers = screen.getAllByTestId("category-group-header");
-      expect(headers).toHaveLength(2);
-      expect(headers[0]!.textContent).toContain("工作");
-      expect(headers[1]!.textContent).toContain("個人");
     });
 
     it("shows 未分類 for uncategorized items alongside categorized ones", async () => {
@@ -349,12 +349,12 @@ describe("ItemList", () => {
 
       await waitFor(() => {
         expect(screen.getByText("Categorized")).toBeInTheDocument();
+        expect(screen.getByText("Uncategorized")).toBeInTheDocument();
+        const headers = screen.getAllByTestId("category-group-header");
+        expect(headers).toHaveLength(2);
+        expect(headers[0]!.textContent).toContain("工作");
+        expect(headers[1]!.textContent).toContain("未分類");
       });
-      expect(screen.getByText("Uncategorized")).toBeInTheDocument();
-      const headers = screen.getAllByTestId("category-group-header");
-      expect(headers).toHaveLength(2);
-      expect(headers[0]!.textContent).toContain("工作");
-      expect(headers[1]!.textContent).toContain("未分類");
     });
 
     it("category sections sorted by sort_order with 未分類 last", async () => {
@@ -376,13 +376,12 @@ describe("ItemList", () => {
 
       await waitFor(() => {
         expect(screen.getByText("Work")).toBeInTheDocument();
+        // Get all section headers to verify order
+        const headers = screen.getAllByTestId("category-group-header").map((el) => el.textContent);
+        expect(headers[0]).toContain("工作");
+        expect(headers[1]).toContain("個人");
+        expect(headers[2]).toContain("未分類");
       });
-
-      // Get all section headers to verify order
-      const headers = screen.getAllByTestId("category-group-header").map((el) => el.textContent);
-      expect(headers[0]).toContain("工作");
-      expect(headers[1]).toContain("個人");
-      expect(headers[2]).toContain("未分類");
     });
 
     it("shows item count per section", async () => {
@@ -402,11 +401,11 @@ describe("ItemList", () => {
 
       await waitFor(() => {
         expect(screen.getByText("Note A")).toBeInTheDocument();
+        // Should show count (2) somewhere in the header
+        const header = screen.getByTestId("category-group-header");
+        expect(header.textContent).toContain("工作");
+        expect(header.textContent).toContain("2");
       });
-      // Should show count (2) somewhere in the header
-      const header = screen.getByTestId("category-group-header");
-      expect(header.textContent).toContain("工作");
-      expect(header.textContent).toContain("2");
     });
 
     it("renders flat list when all items are uncategorized", async () => {

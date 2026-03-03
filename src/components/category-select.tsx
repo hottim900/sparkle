@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Select,
   SelectContent,
@@ -8,7 +9,7 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { listCategories, createCategory } from "@/lib/api";
-import type { Category } from "@/lib/types";
+import { queryKeys } from "@/lib/query-keys";
 
 const NONE_VALUE = "__none__";
 const CREATE_VALUE = "__create__";
@@ -20,17 +21,27 @@ interface CategorySelectProps {
 }
 
 export function CategorySelect({ value, onChange, disabled }: CategorySelectProps) {
-  const [categories, setCategories] = useState<Category[]>([]);
+  const queryClient = useQueryClient();
   const [showCreateInput, setShowCreateInput] = useState(false);
   const [createInputValue, setCreateInputValue] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const shouldFocusCreateInput = useRef(false);
 
-  useEffect(() => {
-    listCategories().then((res) => {
-      setCategories(res.categories.sort((a, b) => a.sort_order - b.sort_order));
-    });
-  }, []);
+  const { data: categories = [] } = useQuery({
+    queryKey: queryKeys.categories,
+    queryFn: () =>
+      listCategories().then((r) => r.categories.sort((a, b) => a.sort_order - b.sort_order)),
+  });
+
+  const createMutation = useMutation({
+    mutationFn: (params: { name: string }) => createCategory(params),
+    onSuccess: (newCat) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.categories });
+      setShowCreateInput(false);
+      setCreateInputValue("");
+      onChange(newCat.id);
+    },
+  });
 
   const handleValueChange = (v: string) => {
     if (v === CREATE_VALUE) {
@@ -42,15 +53,10 @@ export function CategorySelect({ value, onChange, disabled }: CategorySelectProp
     onChange(v === NONE_VALUE ? null : v);
   };
 
-  const handleCreateSubmit = async () => {
+  const handleCreateSubmit = () => {
     const name = createInputValue.trim();
     if (!name) return;
-
-    const newCat = await createCategory({ name });
-    setCategories((prev) => [...prev, newCat]);
-    setShowCreateInput(false);
-    setCreateInputValue("");
-    onChange(newCat.id);
+    createMutation.mutate({ name });
   };
 
   const handleCreateKeyDown = (e: React.KeyboardEvent) => {

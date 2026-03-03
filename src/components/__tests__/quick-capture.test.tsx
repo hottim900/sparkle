@@ -80,8 +80,7 @@ describe("QuickCapture", () => {
 
   it("calls createItem on form submit", async () => {
     const user = userEvent.setup();
-    const onCreated = vi.fn();
-    renderWithContext(<QuickCapture onCreated={onCreated} />, { currentView: "notes" });
+    renderWithContext(<QuickCapture />, { currentView: "notes" });
 
     await waitFor(() => {
       expect(screen.getByPlaceholderText("快速記錄...")).toBeInTheDocument();
@@ -92,13 +91,14 @@ describe("QuickCapture", () => {
     await user.click(getSubmitButton());
 
     await waitFor(() => {
-      expect(mockCreateItem).toHaveBeenCalledWith(
-        expect.objectContaining({
-          title: "New Note Title",
-          type: "note",
-        }),
-      );
+      expect(mockCreateItem).toHaveBeenCalled();
     });
+    expect(mockCreateItem.mock.calls[0][0]).toEqual(
+      expect.objectContaining({
+        title: "New Note Title",
+        type: "note",
+      }),
+    );
   });
 
   it("clears input after successful submit", async () => {
