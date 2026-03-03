@@ -10,6 +10,7 @@ import {
   Archive,
   Settings,
   StickyNote,
+  Share2,
 } from "lucide-react";
 
 const mainNavItems: { id: ViewType; label: string; icon: React.ReactNode }[] = [
@@ -23,6 +24,7 @@ const mainNavItems: { id: ViewType; label: string; icon: React.ReactNode }[] = [
 const moreItems: { id: ViewType; label: string; icon: React.ReactNode }[] = [
   { id: "all", label: "全部", icon: <FileText className="h-4 w-4" /> },
   { id: "archived", label: "已封存", icon: <Archive className="h-4 w-4" /> },
+  { id: "shares", label: "分享管理", icon: <Share2 className="h-4 w-4" /> },
   { id: "settings", label: "設定", icon: <Settings className="h-4 w-4" /> },
 ];
 
