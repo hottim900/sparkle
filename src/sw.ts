@@ -1,7 +1,7 @@
 /// <reference lib="webworker" />
 
 import { clientsClaim } from "workbox-core";
-import { precacheAndRoute } from "workbox-precaching";
+import { matchPrecache, precacheAndRoute } from "workbox-precaching";
 import { registerRoute } from "workbox-routing";
 import { NetworkFirst } from "workbox-strategies";
 
@@ -11,8 +11,33 @@ declare let self: ServiceWorkerGlobalScope;
 self.skipWaiting();
 clientsClaim();
 
-// Precache Vite build assets
-precacheAndRoute(self.__WB_MANIFEST);
+// Precache Vite build assets (disable navigation mapping so CF Access can check cookies)
+precacheAndRoute(self.__WB_MANIFEST, {
+  directoryIndex: null,
+  cleanURLs: false,
+});
+
+// Navigation requests: network-first so CF Access can verify auth cookies on page load.
+// Falls back to cached page, then precached app shell when truly offline.
+registerRoute(
+  ({ request }) => request.mode === "navigate",
+  new NetworkFirst({
+    cacheName: "pages",
+    plugins: [
+      {
+        handlerDidError: async () => {
+          return (
+            (await matchPrecache("index.html")) ||
+            new Response("<h1>Sparkle is offline</h1><p>請檢查網路連線後重新整理。</p>", {
+              headers: { "Content-Type": "text/html; charset=utf-8" },
+              status: 503,
+            })
+          );
+        },
+      },
+    ],
+  }),
+);
 
 // Runtime caching: GET /api/* with NetworkFirst strategy
 // Online → always fetch from network (fresh data)
