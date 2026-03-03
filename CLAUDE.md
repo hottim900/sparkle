@@ -100,11 +100,9 @@ For detailed conventions on specific modules (API retry, Performance, PWA, Loggi
 
 ## Quality Management（品質管理）
 
-活躍的缺陷、技術債、功能缺口追蹤在 `docs/plans/quality/README.md`。Claude auto-loads the quality skill when relevant.
+品質追蹤系統（Defect / Tech Debt / Feature Gap）。檔案在主目錄的獨立本地 git repo（gitignored，不推 GitHub）。
 
-**發現項目：** `glob docs/plans/quality/defects/DEF-*.md` + `grep '狀態.*Pending'`
-**修復後必須更新：** 依照項目檔底部「完成步驟」checklist 逐項執行。
-**建立新項目：** 依照 README.md「建立新項目」段落操作。
+**操作前必須載入 `/quality` skill** — 內含絕對路徑、操作流程、完成步驟 checklist。Worktree 裡沒有品質檔案，skill 指向正確位置。
 
 ## Skills Reference
 
