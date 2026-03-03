@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
-import { toast } from "sonner";
+import { useQuery } from "@tanstack/react-query";
 import { getStats, getFocus } from "@/lib/api";
-import { parseItems, type ParsedItem, type StatsResponse } from "@/lib/types";
+import { parseItems, type ParsedItem } from "@/lib/types";
 import { useAppContext } from "@/lib/app-context";
+import { queryKeys } from "@/lib/query-keys";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -70,39 +70,18 @@ function priorityVariant(
 
 export function Dashboard({ onSelectItem }: DashboardProps) {
   const { onViewChange } = useAppContext();
-  const [stats, setStats] = useState<StatsResponse | null>(null);
-  const [focusItems, setFocusItems] = useState<ParsedItem[]>([]);
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    let cancelled = false;
+  const { data: stats, isLoading: statsLoading } = useQuery({
+    queryKey: queryKeys.stats,
+    queryFn: getStats,
+  });
 
-    async function load() {
-      try {
-        const [statsRes, focusRes] = await Promise.all([getStats(), getFocus()]);
+  const { data: focusItems = [], isLoading: focusLoading } = useQuery({
+    queryKey: queryKeys.focus,
+    queryFn: () => getFocus().then((r) => parseItems(r.items).slice(0, 5)),
+  });
 
-        if (cancelled) return;
-
-        setStats(statsRes);
-        setFocusItems(parseItems(focusRes.items).slice(0, 5));
-      } catch {
-        if (!cancelled) {
-          toast.error("無法載入總覽資料");
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
-    }
-
-    load();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  if (loading) {
+  if (statsLoading || focusLoading) {
     return (
       <div className="flex items-center justify-center py-12">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />

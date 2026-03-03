@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { createTestQueryClient } from "@/test-utils";
 import { CategorySelect } from "@/components/category-select";
 import * as api from "@/lib/api";
 import type { Category } from "@/lib/types";
@@ -44,6 +46,19 @@ function setupMocks(categories: Category[] = mockCategories) {
   vi.mocked(api.listCategories).mockResolvedValue({ categories });
 }
 
+function renderCategorySelect(props: {
+  value: string | null;
+  onChange: ReturnType<typeof vi.fn>;
+  disabled?: boolean;
+}) {
+  const queryClient = createTestQueryClient();
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <CategorySelect {...props} />
+    </QueryClientProvider>,
+  );
+}
+
 describe("CategorySelect", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -51,7 +66,7 @@ describe("CategorySelect", () => {
   });
 
   it("renders with '未分類' when value is null", async () => {
-    render(<CategorySelect value={null} onChange={vi.fn()} />);
+    renderCategorySelect({ value: null, onChange: vi.fn() });
 
     await waitFor(() => {
       expect(screen.getByRole("combobox")).toHaveTextContent("未分類");
@@ -59,7 +74,7 @@ describe("CategorySelect", () => {
   });
 
   it("renders category name when value matches a category", async () => {
-    render(<CategorySelect value="cat-1" onChange={vi.fn()} />);
+    renderCategorySelect({ value: "cat-1", onChange: vi.fn() });
 
     await waitFor(() => {
       expect(screen.getByRole("combobox")).toHaveTextContent("工作");
@@ -69,7 +84,7 @@ describe("CategorySelect", () => {
   it("calls onChange with null when '未分類' is selected", async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();
-    render(<CategorySelect value="cat-1" onChange={onChange} />);
+    renderCategorySelect({ value: "cat-1", onChange });
 
     await waitFor(() => {
       expect(screen.getByRole("combobox")).toHaveTextContent("工作");
@@ -86,7 +101,7 @@ describe("CategorySelect", () => {
   it("calls onChange with category id when a category is selected", async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();
-    render(<CategorySelect value={null} onChange={onChange} />);
+    renderCategorySelect({ value: null, onChange });
 
     await waitFor(() => {
       expect(screen.getByRole("combobox")).toHaveTextContent("未分類");
@@ -102,7 +117,7 @@ describe("CategorySelect", () => {
 
   it("shows inline input when '+ 新增分類' is clicked", async () => {
     const user = userEvent.setup();
-    render(<CategorySelect value={null} onChange={vi.fn()} />);
+    renderCategorySelect({ value: null, onChange: vi.fn() });
 
     await waitFor(() => {
       expect(screen.getByRole("combobox")).toHaveTextContent("未分類");
@@ -130,7 +145,7 @@ describe("CategorySelect", () => {
     };
     vi.mocked(api.createCategory).mockResolvedValue(newCategory);
 
-    render(<CategorySelect value={null} onChange={onChange} />);
+    renderCategorySelect({ value: null, onChange });
 
     await waitFor(() => {
       expect(screen.getByRole("combobox")).toHaveTextContent("未分類");
@@ -153,7 +168,7 @@ describe("CategorySelect", () => {
 
   it("hides input on Escape", async () => {
     const user = userEvent.setup();
-    render(<CategorySelect value={null} onChange={vi.fn()} />);
+    renderCategorySelect({ value: null, onChange: vi.fn() });
 
     await waitFor(() => {
       expect(screen.getByRole("combobox")).toHaveTextContent("未分類");
@@ -173,7 +188,7 @@ describe("CategorySelect", () => {
   });
 
   it("respects disabled prop", async () => {
-    render(<CategorySelect value={null} onChange={vi.fn()} disabled />);
+    renderCategorySelect({ value: null, onChange: vi.fn(), disabled: true });
 
     await waitFor(() => {
       expect(screen.getByRole("combobox")).toBeDisabled();

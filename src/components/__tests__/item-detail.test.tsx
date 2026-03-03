@@ -1,11 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, fireEvent, act, waitFor } from "@testing-library/react";
+import { screen, fireEvent, act, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { AppContext, type AppContextValue } from "@/lib/app-context";
+import { type AppContextValue } from "@/lib/app-context";
 import { ItemDetail } from "@/components/item-detail";
 import type { Item } from "@/lib/types";
 import * as api from "@/lib/api";
 import { toast } from "sonner";
+import { renderWithContext } from "@/test-utils";
 
 vi.mock("@/lib/api");
 
@@ -57,33 +58,11 @@ const mockItemWithAliases: Item = {
   aliases: '["alias-one","alias-two"]',
 };
 
-const defaultContext: AppContextValue = {
-  currentView: "notes",
-  onViewChange: vi.fn(),
-  selectedItem: null,
-  onSelectItem: vi.fn(),
-  selectedTag: undefined,
-  onTagSelect: vi.fn(),
-  onNavigate: vi.fn(),
-  onBack: vi.fn(),
-  onClearDetail: vi.fn(),
-  canGoBack: false,
-  obsidianEnabled: false,
-  isOnline: true,
-  refreshKey: 0,
-  refresh: vi.fn(),
-};
-
 function renderItemDetail(
   contextOverrides: Partial<AppContextValue> = {},
-  props: { onDeleted?: () => void; onUpdated?: () => void } = {},
+  props: { onDeleted?: () => void } = {},
 ) {
-  const contextValue = { ...defaultContext, ...contextOverrides };
-  return render(
-    <AppContext.Provider value={contextValue}>
-      <ItemDetail itemId="test-1" {...props} />
-    </AppContext.Provider>,
-  );
+  return renderWithContext(<ItemDetail itemId="test-1" {...props} />, contextOverrides);
 }
 
 function setupDefaultMocks(item: Item = mockItem) {
@@ -115,8 +94,10 @@ describe("ItemDetail auto-save", () => {
 
     renderItemDetail();
 
-    // Flush microtasks for initial load (getItem + getTags + getLinkedTodos)
-    await act(async () => {});
+    // Flush React Query scheduling + microtasks with fake timers
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
 
     const titleInput = screen.getByPlaceholderText("標題");
     expect(titleInput).toHaveValue("Original Title");
@@ -200,7 +181,9 @@ describe("ItemDetail title editing", () => {
 
   it("debounced save triggers after 1500ms", async () => {
     renderItemDetail();
-    await act(async () => {});
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
 
     const titleInput = screen.getByPlaceholderText("標題");
     fireEvent.change(titleInput, { target: { value: "Updated Title" } });
@@ -217,7 +200,9 @@ describe("ItemDetail title editing", () => {
 
   it("blur triggers immediate save when debounce is pending", async () => {
     renderItemDetail();
-    await act(async () => {});
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
 
     const titleInput = screen.getByPlaceholderText("標題");
     fireEvent.change(titleInput, { target: { value: "Blur Save" } });
@@ -251,7 +236,9 @@ describe("ItemDetail source URL", () => {
 
   it("debounced save on source URL change", async () => {
     renderItemDetail();
-    await act(async () => {});
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
 
     const sourceInput = screen.getByPlaceholderText("https://...");
     fireEvent.change(sourceInput, { target: { value: "https://example.com" } });
@@ -466,7 +453,6 @@ describe("ItemDetail export", () => {
 
   it("calls exportItem and updates status on success", async () => {
     const user = userEvent.setup();
-    const onUpdated = vi.fn();
     setupDefaultMocks(mockPermanentNote);
     vi.mocked(api.exportItem).mockResolvedValue({ path: "/vault/test.md" });
     vi.mocked(api.getItem)
@@ -476,7 +462,7 @@ describe("ItemDetail export", () => {
         status: "exported",
       });
 
-    renderItemDetail({ obsidianEnabled: true }, { onUpdated });
+    renderItemDetail({ obsidianEnabled: true });
 
     await waitFor(() => {
       expect(screen.getByText("匯出到 Obsidian")).toBeInTheDocument();
@@ -490,7 +476,6 @@ describe("ItemDetail export", () => {
     await waitFor(() => {
       expect(toast.success).toHaveBeenCalledWith("已匯出到 Obsidian: /vault/test.md");
     });
-    expect(onUpdated).toHaveBeenCalled();
   });
 });
 
@@ -506,7 +491,9 @@ describe("ItemDetail offline behavior", () => {
 
   it("suppresses auto-save and shows toast when offline", async () => {
     renderItemDetail({ isOnline: false });
-    await act(async () => {});
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
 
     // Clear any calls from initial load
     vi.mocked(api.updateItem).mockClear();
@@ -527,7 +514,9 @@ describe("ItemDetail offline behavior", () => {
 
   it("disables delete button when offline", async () => {
     renderItemDetail({ isOnline: false });
-    await act(async () => {});
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
 
     // Find the delete button (has Trash2 icon with text-destructive class)
     const buttons = screen.getAllByRole("button");
@@ -539,7 +528,9 @@ describe("ItemDetail offline behavior", () => {
 
   it("disables header action buttons when offline", async () => {
     renderItemDetail({ isOnline: false });
-    await act(async () => {});
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
 
     // Share button should be disabled
     const shareBtn = screen.getByRole("button", { name: /分享/ });
@@ -553,7 +544,9 @@ describe("ItemDetail offline behavior", () => {
   it("disables export button when offline", async () => {
     setupDefaultMocks(mockPermanentNote);
     renderItemDetail({ isOnline: false, obsidianEnabled: true });
-    await act(async () => {});
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
 
     const exportBtn = screen.getByRole("button", { name: /匯出到 Obsidian/ });
     expect(exportBtn).toBeDisabled();
@@ -561,7 +554,9 @@ describe("ItemDetail offline behavior", () => {
 
   it("shows offline warning in content editor", async () => {
     renderItemDetail({ isOnline: false });
-    await act(async () => {});
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
 
     expect(screen.getByText("離線中 — 編輯內容將不會自動儲存")).toBeInTheDocument();
   });

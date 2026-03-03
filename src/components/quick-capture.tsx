@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,13 +13,10 @@ import {
 import { createItem, getTags } from "@/lib/api";
 import { TagInput } from "@/components/tag-input";
 import { useAppContext } from "@/lib/app-context";
+import { queryKeys } from "@/lib/query-keys";
 import { toast } from "sonner";
 import type { ItemType, ItemPriority, ViewType } from "@/lib/types";
 import { ChevronDown, ChevronUp, Send, Sun, Moon, StickyNote, Pin, Paperclip } from "lucide-react";
-
-interface QuickCaptureProps {
-  onCreated?: () => void;
-}
 
 const gtdTags = [
   { tag: "next-action", label: "下一步" },
@@ -38,24 +36,31 @@ function viewToDefaultType(view: ViewType): ItemType {
   return "note";
 }
 
-export function QuickCapture({ onCreated }: QuickCaptureProps) {
+export function QuickCapture() {
   const { currentView, isOnline } = useAppContext();
   const { resolvedTheme, setTheme } = useTheme();
+  const queryClient = useQueryClient();
   const [title, setTitle] = useState("");
   const [expanded, setExpanded] = useState(false);
   const defaultType = viewToDefaultType(currentView);
   const [type, setType] = useState<ItemType>(defaultType);
   const [priority, setPriority] = useState<ItemPriority | "none">("none");
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
-  const [allTags, setAllTags] = useState<string[]>([]);
   const [source, setSource] = useState("");
-  const [submitting, setSubmitting] = useState(false);
 
-  useEffect(() => {
-    getTags()
-      .then((res) => setAllTags(res.tags ?? []))
-      .catch(() => {});
-  }, []);
+  const { data: allTags = [] } = useQuery({
+    queryKey: queryKeys.tags,
+    queryFn: () => getTags().then((r) => r.tags ?? []),
+  });
+
+  const createMutation = useMutation({
+    mutationFn: createItem,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.items.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.tags });
+      queryClient.invalidateQueries({ queryKey: queryKeys.stats });
+    },
+  });
 
   useEffect(() => {
     setType(viewToDefaultType(currentView));
@@ -80,11 +85,10 @@ export function QuickCapture({ onCreated }: QuickCaptureProps) {
   const handleSubmit = async (e?: React.FormEvent) => {
     e?.preventDefault();
     const trimmed = title.trim();
-    if (!trimmed || submitting) return;
+    if (!trimmed || createMutation.isPending) return;
 
-    setSubmitting(true);
     try {
-      await createItem({
+      await createMutation.mutateAsync({
         title: trimmed,
         type,
         priority: priority === "none" ? null : priority,
@@ -97,11 +101,8 @@ export function QuickCapture({ onCreated }: QuickCaptureProps) {
       setPriority("none");
       setExpanded(false);
       toast.success("已新增");
-      onCreated?.();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "新增失敗");
-    } finally {
-      setSubmitting(false);
     }
   };
 
@@ -162,7 +163,7 @@ export function QuickCapture({ onCreated }: QuickCaptureProps) {
         <Button
           type="submit"
           size="icon"
-          disabled={!title.trim() || submitting}
+          disabled={!title.trim() || createMutation.isPending}
           className="shrink-0"
         >
           <Send className="h-4 w-4" />

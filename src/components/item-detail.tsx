@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -20,10 +21,10 @@ import { ItemDetailHeader } from "@/components/item-detail-header";
 import { LinkedItemsSection } from "@/components/linked-items-section";
 import { ItemContentEditor } from "@/components/item-content-editor";
 import { CategorySelect } from "@/components/category-select";
+import { queryKeys } from "@/lib/query-keys";
 
 interface ItemDetailProps {
   itemId: string;
-  onUpdated?: () => void;
   onDeleted?: () => void;
 }
 
@@ -51,7 +52,8 @@ const gtdTags = [
   { tag: "someday", label: "有一天" },
 ];
 
-export function ItemDetail({ itemId, onUpdated, onDeleted }: ItemDetailProps) {
+export function ItemDetail({ itemId, onDeleted }: ItemDetailProps) {
+  const queryClient = useQueryClient();
   const {
     obsidianEnabled,
     isOnline,
@@ -61,9 +63,8 @@ export function ItemDetail({ itemId, onUpdated, onDeleted }: ItemDetailProps) {
     onNavigate,
   } = useAppContext();
   const [item, setItem] = useState<ParsedItem | null>(null);
-  const [allTags, setAllTags] = useState<string[]>([]);
+  const [isDirty, setIsDirty] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
-  const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const [aliasInput, setAliasInput] = useState("");
@@ -71,19 +72,38 @@ export function ItemDetail({ itemId, onUpdated, onDeleted }: ItemDetailProps) {
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const savedTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
+  const {
+    data: serverItem,
+    isLoading,
+    error: itemError,
+  } = useQuery({
+    queryKey: queryKeys.items.detail(itemId),
+    queryFn: () => getItem(itemId).then(parseItem),
+    refetchOnWindowFocus: !isDirty,
+  });
+
+  const { data: allTags = [] } = useQuery({
+    queryKey: queryKeys.tags,
+    queryFn: () => getTags().then((r) => r.tags),
+  });
+
+  // Show error toast on fetch failure
   useEffect(() => {
-    setLoading(true);
-    Promise.all([getItem(itemId), getTags()])
-      .then(([itemData, tagsData]) => {
-        const parsed = parseItem(itemData);
-        setItem(parsed);
-        setAllTags(tagsData.tags);
-      })
-      .catch((err) => {
-        toast.error(err instanceof Error ? err.message : "載入失敗");
-      })
-      .finally(() => setLoading(false));
-  }, [itemId]);
+    if (itemError) {
+      toast.error(itemError instanceof Error ? itemError.message : "載入失敗");
+    }
+  }, [itemError]);
+
+  // Sync server data to local state only when not dirty
+  useEffect(() => {
+    if (serverItem && !isDirty) setItem(serverItem);
+  }, [serverItem, isDirty]);
+
+  const invalidateAfterSave = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: queryKeys.items.all });
+    queryClient.invalidateQueries({ queryKey: queryKeys.tags });
+    queryClient.invalidateQueries({ queryKey: queryKeys.stats });
+  }, [queryClient]);
 
   const saveField = useCallback(
     async (field: string, value: unknown) => {
@@ -100,7 +120,11 @@ export function ItemDetail({ itemId, onUpdated, onDeleted }: ItemDetailProps) {
         // to avoid resetting cursor position during typing
         const serverModified = updated.modified;
         setItem((prev) => (prev ? { ...prev, modified: serverModified } : prev));
-        onUpdated?.();
+        // Only clear dirty if no new edits were made during save
+        if (!saveTimeoutRef.current) {
+          setIsDirty(false);
+        }
+        invalidateAfterSave();
         setSaveStatus("saved");
         savedTimerRef.current = setTimeout(() => setSaveStatus("idle"), 2000);
       } catch (err) {
@@ -108,7 +132,7 @@ export function ItemDetail({ itemId, onUpdated, onDeleted }: ItemDetailProps) {
         toast.error(err instanceof Error ? err.message : "儲存失敗");
       }
     },
-    [item, isOnline, onUpdated],
+    [item, isOnline, invalidateAfterSave],
   );
 
   const debouncedSave = useCallback(
@@ -135,6 +159,7 @@ export function ItemDetail({ itemId, onUpdated, onDeleted }: ItemDetailProps) {
     try {
       await deleteItem(item.id);
       toast.success("已刪除");
+      invalidateAfterSave();
       onDeleted?.();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "刪除失敗");
@@ -153,7 +178,7 @@ export function ItemDetail({ itemId, onUpdated, onDeleted }: ItemDetailProps) {
       toast.success(`已匯出到 Obsidian: ${result.path}`);
       const updated = await getItem(item.id);
       setItem(parseItem(updated));
-      onUpdated?.();
+      invalidateAfterSave();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "匯出失敗");
     } finally {
@@ -194,7 +219,7 @@ export function ItemDetail({ itemId, onUpdated, onDeleted }: ItemDetailProps) {
 
   const dismissCreateTodo = useCallback(() => setCreateTodoRequested(false), []);
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full">
         <p className="text-muted-foreground">載入中...</p>
@@ -236,6 +261,7 @@ export function ItemDetail({ itemId, onUpdated, onDeleted }: ItemDetailProps) {
         <Input
           value={item.title}
           onChange={(e) => {
+            setIsDirty(true);
             setItem({ ...item, title: e.target.value });
             debouncedSave("title", e.target.value);
           }}
@@ -352,7 +378,6 @@ export function ItemDetail({ itemId, onUpdated, onDeleted }: ItemDetailProps) {
           onCreateTodoDismiss={dismissCreateTodo}
           isOnline={isOnline}
           onNavigate={onNavigate}
-          onUpdated={onUpdated}
           onItemChange={setItem}
           onSaveStatusChange={setSaveStatus}
         />
@@ -365,6 +390,7 @@ export function ItemDetail({ itemId, onUpdated, onDeleted }: ItemDetailProps) {
             value={item.source ?? ""}
             onChange={(e) => {
               const val = e.target.value || null;
+              setIsDirty(true);
               setItem({ ...item, source: val });
               debouncedSave("source", val);
             }}
@@ -451,6 +477,7 @@ export function ItemDetail({ itemId, onUpdated, onDeleted }: ItemDetailProps) {
           content={item.content}
           offlineWarning={!isOnline}
           onChange={(content) => {
+            setIsDirty(true);
             setItem({ ...item, content });
             debouncedSave("content", content);
           }}
