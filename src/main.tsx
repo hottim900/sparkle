@@ -67,4 +67,12 @@ if ("serviceWorker" in navigator) {
     toast.dismiss("offline-fallback");
     navigator.serviceWorker.controller?.postMessage({ type: "REPLAY_QUEUE" });
   });
+
+  // Re-check connectivity when page becomes visible (mobile background → foreground)
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && navigator.onLine) {
+      toast.dismiss("offline-fallback");
+      navigator.serviceWorker.controller?.postMessage({ type: "REPLAY_QUEUE" });
+    }
+  });
 }
