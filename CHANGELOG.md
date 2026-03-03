@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.1](https://github.com/hottim900/sparkle/compare/v1.1.0...v1.1.1) (2026-03-03)
+
+
+### Bug Fixes
+
+* correct precacheAndRoute directoryIndex type (null → undefined) ([#47](https://github.com/hottim900/sparkle/issues/47)) ([439e029](https://github.com/hottim900/sparkle/commit/439e029a953980f00f8f4441d874eb232377fcec))
+* resolve mobile web stuck in offline mode ([#44](https://github.com/hottim900/sparkle/issues/44)) ([a6ebbbd](https://github.com/hottim900/sparkle/commit/a6ebbbdf800aab34e793f34b540373064386bbf5))
+
 ## [1.1.0](https://github.com/hottim900/sparkle/compare/v1.0.0...v1.1.0) (2026-03-01)
 
 
