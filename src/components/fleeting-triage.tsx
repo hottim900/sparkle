@@ -38,6 +38,8 @@ export function FleetingTriage({ onDone }: FleetingTriageProps) {
   const { data: items = [], isPending: loading } = useQuery({
     queryKey: queryKeys.items.list({ status: "fleeting", limit: 100 }),
     queryFn: () => listItems({ status: "fleeting", limit: 100 }).then((r) => parseItems(r.items)),
+    refetchOnWindowFocus: false,
+    staleTime: Infinity,
   });
 
   const { data: allTags = [] } = useQuery({
@@ -49,7 +51,7 @@ export function FleetingTriage({ onDone }: FleetingTriageProps) {
     mutationFn: ({ id, updates }: { id: string; updates: Record<string, unknown> }) =>
       updateItem(id, updates),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["items"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.items.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.tags });
       queryClient.invalidateQueries({ queryKey: queryKeys.stats });
     },

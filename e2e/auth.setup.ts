@@ -12,7 +12,7 @@ setup("authenticate", async ({ page }) => {
   await page.getByRole("button", { name: "登入" }).click();
 
   // Wait for main app to load — desktop starts on dashboard view
-  await expect(page.getByText("總覽")).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole("heading", { name: "總覽" })).toBeVisible({ timeout: 10_000 });
 
   // Save auth state
   await page.context().storageState({ path: "e2e/.auth/user.json" });

@@ -1,8 +1,10 @@
+import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getStats, getFocus } from "@/lib/api";
 import { parseItems, type ParsedItem } from "@/lib/types";
 import { useAppContext } from "@/lib/app-context";
 import { queryKeys } from "@/lib/query-keys";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -71,7 +73,11 @@ function priorityVariant(
 export function Dashboard({ onSelectItem }: DashboardProps) {
   const { onViewChange } = useAppContext();
 
-  const { data: stats, isLoading: statsLoading } = useQuery({
+  const {
+    data: stats,
+    isLoading: statsLoading,
+    error: statsError,
+  } = useQuery({
     queryKey: queryKeys.stats,
     queryFn: getStats,
   });
@@ -80,6 +86,10 @@ export function Dashboard({ onSelectItem }: DashboardProps) {
     queryKey: queryKeys.focus,
     queryFn: () => getFocus().then((r) => parseItems(r.items).slice(0, 5)),
   });
+
+  useEffect(() => {
+    if (statsError) toast.error("無法載入總覽資料");
+  }, [statsError]);
 
   if (statsLoading || focusLoading) {
     return (

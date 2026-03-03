@@ -377,6 +377,8 @@ export function ItemList({
 
   const handleItemUpdated = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: queryKeys.items.all });
+    queryClient.invalidateQueries({ queryKey: queryKeys.tags });
+    queryClient.invalidateQueries({ queryKey: queryKeys.stats });
   }, [queryClient]);
 
   const activeSubView =

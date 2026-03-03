@@ -94,6 +94,12 @@ export function ItemDetail({ itemId, onDeleted }: ItemDetailProps) {
     }
   }, [itemError]);
 
+  // Reset dirty state when switching items
+  useEffect(() => {
+    setIsDirty(false);
+    setItem(null);
+  }, [itemId]);
+
   // Sync server data to local state only when not dirty
   useEffect(() => {
     if (serverItem && !isDirty) setItem(serverItem);
