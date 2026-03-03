@@ -5,6 +5,15 @@ import type { ShareToken } from "@/lib/types";
 import { useOnlineStatus } from "@/hooks/use-online-status";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Share2, Copy, Trash2, Globe, EyeOff, Loader2 } from "lucide-react";
 
 interface ShareManagementProps {
@@ -14,7 +23,7 @@ interface ShareManagementProps {
 export function ShareManagement({ onNavigateToItem }: ShareManagementProps) {
   const [shares, setShares] = useState<ShareToken[]>([]);
   const [loading, setLoading] = useState(true);
-  const [revokingId, setRevokingId] = useState<string | null>(null);
+  const [revokeDialogShareId, setRevokeDialogShareId] = useState<string | null>(null);
   const isOnline = useOnlineStatus();
 
   useEffect(() => {
@@ -47,15 +56,12 @@ export function ShareManagement({ onNavigateToItem }: ShareManagementProps) {
   }
 
   async function handleRevokeShare(shareId: string) {
-    setRevokingId(shareId);
     try {
       await revokeShare(shareId);
       setShares((prev) => prev.filter((s) => s.id !== shareId));
       toast.success("已撤銷分享");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "撤銷失敗");
-    } finally {
-      setRevokingId(null);
     }
   }
 
@@ -98,8 +104,10 @@ export function ShareManagement({ onNavigateToItem }: ShareManagementProps) {
                   )}
                   <div className="flex-1 min-w-0">
                     <button
+                      type="button"
                       className="text-sm text-primary hover:underline truncate block max-w-full text-left"
                       onClick={() => onNavigateToItem(share.item_id)}
+                      aria-label={`前往筆記：${share.item_title ?? "未知筆記"}`}
                     >
                       {share.item_title ?? "未知筆記"}
                     </button>
@@ -121,20 +129,45 @@ export function ShareManagement({ onNavigateToItem }: ShareManagementProps) {
                   >
                     <Copy className="h-3.5 w-3.5" />
                   </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7 shrink-0 text-destructive"
-                    onClick={() => handleRevokeShare(share.id)}
-                    disabled={revokingId === share.id || !isOnline}
-                    title="撤銷分享"
+                  <Dialog
+                    open={revokeDialogShareId === share.id}
+                    onOpenChange={(open) => setRevokeDialogShareId(open ? share.id : null)}
                   >
-                    {revokingId === share.id ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      <Trash2 className="h-3.5 w-3.5" />
-                    )}
-                  </Button>
+                    <DialogTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 shrink-0 text-destructive"
+                        disabled={!isOnline}
+                        title="撤銷分享"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>確認撤銷分享</DialogTitle>
+                        <DialogDescription>
+                          確定要撤銷「{share.item_title ?? "未知筆記"}
+                          」的分享連結嗎？撤銷後連結將失效。
+                        </DialogDescription>
+                      </DialogHeader>
+                      <DialogFooter>
+                        <Button variant="outline" onClick={() => setRevokeDialogShareId(null)}>
+                          取消
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          onClick={() => {
+                            setRevokeDialogShareId(null);
+                            handleRevokeShare(share.id);
+                          }}
+                        >
+                          撤銷
+                        </Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
                 </div>
               ))}
             </div>
