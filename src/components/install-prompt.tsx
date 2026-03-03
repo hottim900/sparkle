@@ -46,7 +46,7 @@ export function InstallPrompt() {
   };
 
   return (
-    <div className="fixed bottom-20 left-4 right-4 z-50 mx-auto max-w-md animate-in slide-in-from-bottom-4 fade-in duration-300">
+    <div className="px-4 py-2 mx-auto max-w-md md:pb-4 animate-in slide-in-from-bottom-4 fade-in duration-300">
       <div className="flex items-center gap-3 rounded-lg border bg-background p-3 shadow-lg">
         <Download className="h-5 w-5 shrink-0 text-primary" />
         <p className="flex-1 text-sm">安裝到主畫面，享受更好的體驗</p>

@@ -218,140 +218,144 @@ function MainApp() {
 
   return (
     <AppContext.Provider value={appContextValue}>
-      <div className="h-screen flex flex-col md:flex-row overflow-hidden">
+      <div className="h-dvh flex flex-col overflow-hidden">
         <OfflineIndicator />
-        <InstallPrompt />
 
-        {/* Desktop Sidebar */}
-        <div className="hidden md:flex">
-          <Sidebar />
-        </div>
+        {/* Inner wrapper: horizontal on desktop (sidebar + content) */}
+        <div className="flex-1 flex flex-col md:flex-row min-h-0 overflow-hidden">
+          {/* Desktop Sidebar */}
+          <div className="hidden md:flex">
+            <Sidebar />
+          </div>
 
-        {/* Main content area */}
-        <div className="flex-1 flex flex-col md:flex-row min-w-0 overflow-hidden">
-          {currentView === "dashboard" ? (
-            /* Dashboard takes full width */
-            <ErrorBoundary>
-              <Suspense fallback={<LoadingFallback />}>
-                <Dashboard
-                  onSelectItem={(item) => {
-                    setNavStack((prev) => [...prev, { view: "dashboard", itemId: null }]);
-                    setCurrentView("all");
-                    setSelectedItem(item);
-                  }}
-                />
-              </Suspense>
-            </ErrorBoundary>
-          ) : currentView === "settings" ? (
-            /* Settings takes full width */
-            <ErrorBoundary>
-              <Suspense fallback={<LoadingFallback />}>
-                <Settings onSettingsChanged={handleSettingsChanged} />
-              </Suspense>
-            </ErrorBoundary>
-          ) : currentView === "shares" ? (
-            /* Share Management takes full width */
-            <ErrorBoundary>
-              <Suspense fallback={<LoadingFallback />}>
-                <ShareManagement
-                  onNavigateToItem={async (itemId) => {
-                    setNavStack((prev) => [...prev, { view: "shares", itemId: null }]);
-                    try {
-                      const data = await getItem(itemId);
+          {/* Main content area */}
+          <div className="flex-1 flex flex-col md:flex-row min-w-0 overflow-hidden">
+            {currentView === "dashboard" ? (
+              /* Dashboard takes full width */
+              <ErrorBoundary>
+                <Suspense fallback={<LoadingFallback />}>
+                  <Dashboard
+                    onSelectItem={(item) => {
+                      setNavStack((prev) => [...prev, { view: "dashboard", itemId: null }]);
                       setCurrentView("all");
-                      setSelectedItem(parseItem(data));
-                    } catch {
-                      /* item may have been deleted */
-                    }
-                  }}
-                />
-              </Suspense>
-            </ErrorBoundary>
-          ) : (
-            <>
-              {/* List panel */}
-              <div
-                className={`flex-1 flex flex-col min-w-0 overflow-hidden ${
-                  selectedItem ? "hidden md:flex" : "flex"
-                } md:w-96 md:max-w-none md:flex-none md:border-r`}
-              >
-                <QuickCapture />
+                      setSelectedItem(item);
+                    }}
+                  />
+                </Suspense>
+              </ErrorBoundary>
+            ) : currentView === "settings" ? (
+              /* Settings takes full width */
+              <ErrorBoundary>
+                <Suspense fallback={<LoadingFallback />}>
+                  <Settings onSettingsChanged={handleSettingsChanged} />
+                </Suspense>
+              </ErrorBoundary>
+            ) : currentView === "shares" ? (
+              /* Share Management takes full width */
+              <ErrorBoundary>
+                <Suspense fallback={<LoadingFallback />}>
+                  <ShareManagement
+                    onNavigateToItem={async (itemId) => {
+                      setNavStack((prev) => [...prev, { view: "shares", itemId: null }]);
+                      try {
+                        const data = await getItem(itemId);
+                        setCurrentView("all");
+                        setSelectedItem(parseItem(data));
+                      } catch {
+                        /* item may have been deleted */
+                      }
+                    }}
+                  />
+                </Suspense>
+              </ErrorBoundary>
+            ) : (
+              <>
+                {/* List panel */}
+                <div
+                  className={`flex-1 flex flex-col min-w-0 overflow-hidden ${
+                    selectedItem ? "hidden md:flex" : "flex"
+                  } md:w-96 md:max-w-none md:flex-none md:border-r`}
+                >
+                  <QuickCapture />
 
-                {/* Triage toggle for fleeting view */}
-                {isFleetingView && (
-                  <div className="flex border-b">
-                    <Button
-                      variant="ghost"
-                      className={`flex-1 rounded-none gap-1.5 ${!triageMode ? "border-b-2 border-primary text-primary" : "text-muted-foreground"}`}
-                      onClick={() => setTriageMode(false)}
-                    >
-                      <List className="h-4 w-4" />
-                      列表
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      className={`flex-1 rounded-none gap-1.5 ${triageMode ? "border-b-2 border-primary text-primary" : "text-muted-foreground"}`}
-                      onClick={() => setTriageMode(true)}
-                    >
-                      <ListTodo className="h-4 w-4" />
-                      整理
-                    </Button>
-                  </div>
-                )}
+                  {/* Triage toggle for fleeting view */}
+                  {isFleetingView && (
+                    <div className="flex border-b">
+                      <Button
+                        variant="ghost"
+                        className={`flex-1 rounded-none gap-1.5 ${!triageMode ? "border-b-2 border-primary text-primary" : "text-muted-foreground"}`}
+                        onClick={() => setTriageMode(false)}
+                      >
+                        <List className="h-4 w-4" />
+                        列表
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        className={`flex-1 rounded-none gap-1.5 ${triageMode ? "border-b-2 border-primary text-primary" : "text-muted-foreground"}`}
+                        onClick={() => setTriageMode(true)}
+                      >
+                        <ListTodo className="h-4 w-4" />
+                        整理
+                      </Button>
+                    </div>
+                  )}
 
-                {isTriageActive ? (
-                  <div className="flex-1 overflow-y-auto">
+                  {isTriageActive ? (
+                    <div className="flex-1 overflow-y-auto">
+                      <ErrorBoundary>
+                        <Suspense fallback={<LoadingFallback />}>
+                          <FleetingTriage onDone={() => setTriageMode(false)} />
+                        </Suspense>
+                      </ErrorBoundary>
+                    </div>
+                  ) : currentView === "search" ? (
+                    <div className="flex-1 overflow-y-auto p-3 md:hidden">
+                      <SearchBar onSelect={handleSelect} />
+                    </div>
+                  ) : (
+                    <div className="flex-1 overflow-y-auto">
+                      <ItemList
+                        status={statusFilter}
+                        type={typeFilter}
+                        selectedId={selectedItem?.id}
+                        noteSubView={noteSubView}
+                        todoSubView={todoSubView}
+                        onNoteSubViewChange={setNoteSubView}
+                        onTodoSubViewChange={setTodoSubView}
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {/* Detail panel */}
+                {selectedItem && (
+                  <div className="fixed inset-0 z-50 bg-background md:static md:z-auto md:flex-1 md:min-w-0 md:border-l">
                     <ErrorBoundary>
                       <Suspense fallback={<LoadingFallback />}>
-                        <FleetingTriage onDone={() => setTriageMode(false)} />
+                        <ItemDetail
+                          itemId={selectedItem.id}
+                          onDeleted={() => {
+                            setSelectedItem(null);
+                            setNavStack([]);
+                          }}
+                        />
                       </Suspense>
                     </ErrorBoundary>
                   </div>
-                ) : currentView === "search" ? (
-                  <div className="flex-1 overflow-y-auto p-3 md:hidden">
-                    <SearchBar onSelect={handleSelect} />
-                  </div>
-                ) : (
-                  <div className="flex-1 overflow-y-auto">
-                    <ItemList
-                      status={statusFilter}
-                      type={typeFilter}
-                      selectedId={selectedItem?.id}
-                      noteSubView={noteSubView}
-                      todoSubView={todoSubView}
-                      onNoteSubViewChange={setNoteSubView}
-                      onTodoSubViewChange={setTodoSubView}
-                    />
+                )}
+
+                {/* Empty state for desktop when no item selected */}
+                {!selectedItem && !isTriageActive && currentView !== "search" && (
+                  <div className="hidden md:flex flex-1 items-center justify-center text-muted-foreground">
+                    <p>選擇一個項目以查看詳情</p>
                   </div>
                 )}
-              </div>
-
-              {/* Detail panel */}
-              {selectedItem && (
-                <div className="fixed inset-0 z-50 bg-background md:static md:z-auto md:flex-1 md:min-w-0 md:border-l">
-                  <ErrorBoundary>
-                    <Suspense fallback={<LoadingFallback />}>
-                      <ItemDetail
-                        itemId={selectedItem.id}
-                        onDeleted={() => {
-                          setSelectedItem(null);
-                          setNavStack([]);
-                        }}
-                      />
-                    </Suspense>
-                  </ErrorBoundary>
-                </div>
-              )}
-
-              {/* Empty state for desktop when no item selected */}
-              {!selectedItem && !isTriageActive && currentView !== "search" && (
-                <div className="hidden md:flex flex-1 items-center justify-center text-muted-foreground">
-                  <p>選擇一個項目以查看詳情</p>
-                </div>
-              )}
-            </>
-          )}
+              </>
+            )}
+          </div>
         </div>
+
+        <InstallPrompt />
 
         {/* Mobile Bottom Nav - hidden when detail panel is open */}
         {!selectedItem && <BottomNav />}
