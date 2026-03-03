@@ -61,13 +61,14 @@ webhookRouter.post("/line", async (c) => {
     return c.json({ error: "Invalid signature" }, 401);
   }
 
-  let body: Record<string, unknown>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let body: any;
   try {
     body = JSON.parse(rawBody);
   } catch {
     return c.json({ error: "Invalid JSON body" }, 400);
   }
-  const events = (body.events as unknown[]) ?? [];
+  const events = body.events ?? [];
 
   for (const event of events) {
     if (event.type !== "message" || event.message.type !== "text") {
