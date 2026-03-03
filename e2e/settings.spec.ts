@@ -12,9 +12,8 @@ test.describe("Settings", () => {
       timeout: 10_000,
     });
 
-    // Verify all three section headings
+    // Verify section headings
     await expect(page.getByRole("heading", { name: "Obsidian 匯出" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "分享管理" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "一般" })).toBeVisible();
 
     // Verify key elements within sections

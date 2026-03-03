@@ -19,6 +19,7 @@ import {
   LogOut,
   Settings,
   StickyNote,
+  Share2,
 } from "lucide-react";
 
 type NavItem = { id: ViewType; label: string; icon: React.ReactNode };
@@ -53,6 +54,7 @@ const navGroups: NavGroup[] = [
     items: [
       { id: "all", label: "全部", icon: <FileText className="h-4 w-4" /> },
       { id: "archived", label: "已封存", icon: <Archive className="h-4 w-4" /> },
+      { id: "shares", label: "分享管理", icon: <Share2 className="h-4 w-4" /> },
     ],
   },
 ];

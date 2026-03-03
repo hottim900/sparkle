@@ -125,7 +125,8 @@ export type ViewType =
   | "notes"
   | "todos"
   | "scratch"
-  | "settings";
+  | "settings"
+  | "shares";
 
 // Share types
 export interface ShareToken {
