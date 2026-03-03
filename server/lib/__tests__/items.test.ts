@@ -641,6 +641,81 @@ describe("Data Access Layer", () => {
     });
   });
 
+  describe("category_id", () => {
+    function insertCategory(name: string): string {
+      const id = crypto.randomUUID();
+      const now = new Date().toISOString();
+      sqlite
+        .prepare(
+          "INSERT INTO categories (id, name, sort_order, created, modified) VALUES (?, ?, 0, ?, ?)",
+        )
+        .run(id, name, now, now);
+      return id;
+    }
+
+    it("createItem with category_id stores it", () => {
+      const catId = insertCategory("Work");
+      const item = createItem(db, { title: "Categorized note", category_id: catId });
+      expect(item.category_id).toBe(catId);
+    });
+
+    it("updateItem with category_id updates it", () => {
+      const catId = insertCategory("Personal");
+      const item = createItem(db, { title: "Uncategorized" });
+      expect(item.category_id).toBeNull();
+      const updated = updateItem(db, item.id, { category_id: catId });
+      expect(updated!.category_id).toBe(catId);
+    });
+
+    it("updateItem can clear category_id", () => {
+      const catId = insertCategory("Temp");
+      const item = createItem(db, { title: "Will uncategorize", category_id: catId });
+      const updated = updateItem(db, item.id, { category_id: null });
+      expect(updated!.category_id).toBeNull();
+    });
+
+    it("listItems filtered by category_id", () => {
+      const catId = insertCategory("Filter Cat");
+      createItem(db, { title: "In category", category_id: catId });
+      createItem(db, { title: "No category" });
+      const result = listItems(db, { category_id: catId });
+      expect(result.items).toHaveLength(1);
+      expect(result.items[0]!.title).toBe("In category");
+    });
+
+    it("category_name is resolved in getItem response", () => {
+      const catId = insertCategory("Resolved Cat");
+      const item = createItem(db, { title: "With category", category_id: catId });
+      const fetched = getItem(db, item.id);
+      expect(fetched!.category_name).toBe("Resolved Cat");
+    });
+
+    it("category_name is null when no category_id", () => {
+      const item = createItem(db, { title: "No cat" });
+      const fetched = getItem(db, item.id);
+      expect(fetched!.category_name).toBeNull();
+    });
+
+    it("category_id preserved on type conversion to scratch", () => {
+      const catId = insertCategory("Keep Me");
+      const note = createItem(db, { title: "Note with cat", type: "note", category_id: catId });
+      const updated = updateItem(db, note.id, { type: "scratch" });
+      expect(updated!.type).toBe("scratch");
+      expect(updated!.category_id).toBe(catId);
+    });
+
+    it("listItems returns category_name for items", () => {
+      const catId = insertCategory("List Cat");
+      createItem(db, { title: "Categorized", category_id: catId });
+      createItem(db, { title: "Uncategorized" });
+      const result = listItems(db);
+      const categorized = result.items.find((i) => i.title === "Categorized");
+      const uncategorized = result.items.find((i) => i.title === "Uncategorized");
+      expect(categorized!.category_name).toBe("List Cat");
+      expect(uncategorized!.category_name).toBeNull();
+    });
+  });
+
   describe("scratch field clearing", () => {
     it("creates scratch item without tags/priority/due/aliases/linked_note_id", () => {
       const item = createItem(db, {

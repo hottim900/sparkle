@@ -48,6 +48,7 @@ export interface ExportableItem {
   origin: string | null;
   priority: string | null;
   due: string | null;
+  category_name: string | null;
 }
 
 /**
@@ -59,6 +60,11 @@ export function generateFrontmatter(item: ExportableItem): string {
 
   // Always present
   lines.push(`sparkle_id: "${item.id}"`);
+
+  // Category — include when non-null
+  if (item.category_name) {
+    lines.push(`category: "${item.category_name.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`);
+  }
 
   // Tags — include when non-empty
   const tags: string[] = JSON.parse(item.tags);

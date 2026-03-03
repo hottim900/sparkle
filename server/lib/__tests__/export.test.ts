@@ -72,6 +72,7 @@ function makeItem(overrides: Partial<ExportableItem> = {}): ExportableItem {
     origin: "web",
     priority: null,
     due: null,
+    category_name: null,
     ...overrides,
   };
 }
@@ -140,6 +141,26 @@ describe("generateFrontmatter", () => {
   it("includes non-null due", () => {
     const fm = generateFrontmatter(makeItem({ due: "2026-03-01" }));
     expect(fm).toContain("due: 2026-03-01");
+  });
+
+  it("includes category when category_name is set", () => {
+    const fm = generateFrontmatter(makeItem({ category_name: "Work" }));
+    expect(fm).toContain('category: "Work"');
+  });
+
+  it("omits category when category_name is null", () => {
+    const fm = generateFrontmatter(makeItem({ category_name: null }));
+    expect(fm).not.toContain("category:");
+  });
+
+  it("places category after sparkle_id and before tags", () => {
+    const fm = generateFrontmatter(makeItem({ category_name: "Research", tags: '["science"]' }));
+    const lines = fm.split("\n");
+    const catIndex = lines.findIndex((l) => l.startsWith("category:"));
+    const sparkleIndex = lines.findIndex((l) => l.startsWith("sparkle_id:"));
+    const tagsIndex = lines.findIndex((l) => l.startsWith("tags:"));
+    expect(catIndex).toBeGreaterThan(sparkleIndex);
+    expect(catIndex).toBeLessThan(tagsIndex);
   });
 
   it("uses local time without Z suffix", () => {
