@@ -47,11 +47,11 @@ Todos use simplified lifecycle: `active` → `done`
 Scratch is disposable temporary storage: `draft`
 Shared: `archived` (any type)
 
-| Type | Valid Statuses | Default |
-|------|---------------|---------|
-| `note` | fleeting, developing, permanent, exported, archived | fleeting |
-| `todo` | active, done, archived | active |
-| `scratch` | draft, archived | draft |
+| Type      | Valid Statuses                                      | Default  |
+| --------- | --------------------------------------------------- | -------- |
+| `note`    | fleeting, developing, permanent, exported, archived | fleeting |
+| `todo`    | active, done, archived                              | active   |
+| `scratch` | draft, archived                                     | draft    |
 
 ### Field Names (Obsidian-aligned)
 
@@ -83,13 +83,14 @@ DB migration: version 0→12, idempotent steps. Claude auto-loads the convention
 - Tags stored as JSON array string in SQLite
 - Aliases stored as JSON array string in SQLite
 - Timestamps: ISO 8601 strings
-- API: REST, JSON, Bearer token auth on /api/* (except /api/webhook/, /api/public/, /api/health), rate-limited
+- API: REST, JSON, Bearer token auth on /api/\* (except /api/webhook/, /api/public/, /api/health), rate-limited
 - Linting: ESLint 9 flat config with typescript-eslint (recommended), react-hooks plugin, eslint-config-prettier. Test files relaxed (`no-explicit-any` warn, `no-require-imports` off). Unused vars allowed with `_` prefix.
 - Formatting: Prettier (double quotes, trailing commas, 100 char width). Enforced via lint-staged + Husky pre-commit. `.prettierignore` excludes dist, mcp-server, data, certs.
 - Commit conventions: commitlint with `@commitlint/config-conventional`. Enforced via `.husky/commit-msg` hook. Allowed types: feat, fix, docs, chore, refactor, test, perf, ci, build, style, revert
 - PR 原則：按風險隔離切分。DB migration 永遠獨立 PR。不同風險等級（DB schema / 後端邏輯 / 純前端 / CI config）不混在同一個 PR。同風險等級的相關改動可以合併。
 - Merge 順序：高風險先行，驗證後再繼續。DB migration PR merge 後必須等 deploy + health check 通過才 merge 下一個。低風險 PR（純前端、CI config）可以連續 merge。不要在離開前 merge 高風險 PR。
 - Migration 安全：PostToolUse hook (`.claude/hooks/migration-safety.sh`) 在編輯 `server/db/index.ts` 時自動檢查：(1) 禁止 `SELECT *` in migration INSERT (2) DROP TABLE 必須搭配 `foreign_keys = OFF` (3) `setSchemaVersion` 不可在 transaction 內。對 agent/teammate 也生效。
+- Agent/Teammate 開發規範：(1) commit 前必須執行 `npm run lint:fix && npm run format` 消除 unused imports 等殘留 (2) 使用 worktree 時，進入後驗證工作目錄不是主 repo（`git rev-parse --show-toplevel` 應指向 `.claude/worktrees/` 下的路徑），防止直接 commit 到 local main。
 
 For detailed conventions on specific modules (API retry, Performance, PWA, Logging, Sentry, CSP, Offline UI, State management, CI/CD, Sharing, Export), Claude auto-loads the conventions-detail skill when relevant.
 
@@ -97,14 +98,14 @@ For detailed conventions on specific modules (API retry, Performance, PWA, Loggi
 
 Available skills for this project (invoke with `/skill-name` or auto-loaded by Claude):
 
-| Skill | Invoke | Description |
-|-------|--------|-------------|
-| project-structure | auto | Full annotated file tree |
-| testing | `/testing` | Test architecture, patterns, E2E |
-| ops | `/ops` | Production deployment & operations |
-| line-bot | `/line-bot` | LINE Bot commands & integration |
-| mcp-server | `/mcp-server` | MCP server for Claude Code |
-| conventions-detail | auto | Detailed module conventions |
+| Skill              | Invoke        | Description                        |
+| ------------------ | ------------- | ---------------------------------- |
+| project-structure  | auto          | Full annotated file tree           |
+| testing            | `/testing`    | Test architecture, patterns, E2E   |
+| ops                | `/ops`        | Production deployment & operations |
+| line-bot           | `/line-bot`   | LINE Bot commands & integration    |
+| mcp-server         | `/mcp-server` | MCP server for Claude Code         |
+| conventions-detail | auto          | Detailed module conventions        |
 
 ## Maintenance
 
