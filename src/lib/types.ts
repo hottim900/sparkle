@@ -22,8 +22,23 @@ export interface Item {
   linked_note_title: string | null;
   linked_todo_count: number;
   share_visibility: "unlisted" | "public" | null;
+  category_id: string | null;
+  category_name: string | null;
   created: string;
   modified: string;
+}
+
+export interface Category {
+  id: string;
+  name: string;
+  sort_order: number;
+  color: string | null;
+  created: string;
+  modified: string;
+}
+
+export interface CategoriesResponse {
+  categories: Category[];
 }
 
 export interface ListItemsResponse {

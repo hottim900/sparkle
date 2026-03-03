@@ -1,5 +1,7 @@
 import type {
   Item,
+  Category,
+  CategoriesResponse,
   ListItemsResponse,
   SearchResponse,
   TagsResponse,
@@ -159,6 +161,7 @@ export async function listItems(params?: {
   status?: string;
   type?: string;
   tag?: string;
+  category_id?: string;
   sort?: string;
   order?: string;
   limit?: number;
@@ -178,6 +181,7 @@ export async function listItems(params?: {
   if (params?.status && validStatuses.has(params.status)) search.set("status", params.status);
   if (params?.type) search.set("type", params.type);
   if (params?.tag) search.set("tag", params.tag);
+  if (params?.category_id) search.set("category_id", params.category_id);
   if (params?.sort) search.set("sort", params.sort);
   if (params?.order) search.set("order", params.order);
   if (params?.limit) search.set("limit", String(params.limit));
@@ -202,6 +206,7 @@ export async function createItem(input: {
   tags?: string[];
   source?: string | null;
   linked_note_id?: string | null;
+  category_id?: string | null;
 }): Promise<Item> {
   return request<Item>("/items", {
     method: "POST",
@@ -226,6 +231,7 @@ export async function updateItem(
     source?: string | null;
     aliases?: string[];
     linked_note_id?: string | null;
+    category_id?: string | null;
   },
 ): Promise<Item> {
   return request<Item>(`/items/${id}`, {
@@ -335,6 +341,44 @@ export async function getItemShares(itemId: string): Promise<ListSharesResponse>
 
 export async function revokeShare(shareId: string): Promise<void> {
   await request(`/shares/${shareId}`, { method: "DELETE" });
+}
+
+// Categories API
+export async function listCategories(): Promise<CategoriesResponse> {
+  return request<CategoriesResponse>("/categories");
+}
+
+export async function createCategory(input: {
+  name: string;
+  color?: string | null;
+}): Promise<Category> {
+  return request<Category>("/categories", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function updateCategory(
+  id: string,
+  input: { name?: string; color?: string | null; sort_order?: number },
+): Promise<Category> {
+  return request<Category>(`/categories/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function deleteCategory(id: string): Promise<void> {
+  await request(`/categories/${id}`, { method: "DELETE" });
+}
+
+export async function reorderCategories(
+  items: { id: string; sort_order: number }[],
+): Promise<void> {
+  await request("/categories/reorder", {
+    method: "PATCH",
+    body: JSON.stringify({ items }),
+  });
 }
 
 export { ApiClientError };
