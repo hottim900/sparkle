@@ -64,8 +64,9 @@ export function LinkedItemsSection({
 
   // Fetch linked note title for backlink display on todos
   const { data: linkedNoteTitle } = useQuery({
-    queryKey: queryKeys.items.detail(item.linked_note_id!),
-    queryFn: () => getItem(item.linked_note_id!).then((r) => r.title),
+    queryKey: queryKeys.items.detail(item.linked_note_id ?? ""),
+    queryFn: () => getItem(item.linked_note_id!),
+    select: (data) => data.title,
     enabled: item.type === "todo" && !!item.linked_note_id,
   });
 
