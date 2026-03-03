@@ -86,7 +86,10 @@ export function generateFrontmatter(item: ExportableItem): string {
   try {
     aliases = JSON.parse(item.aliases);
   } catch {
-    logger.warn({ id: item.id, aliases: item.aliases }, "Failed to parse aliases JSON during export");
+    logger.warn(
+      { id: item.id, aliases: item.aliases },
+      "Failed to parse aliases JSON during export",
+    );
   }
   if (aliases.length > 0) {
     lines.push("aliases:");
