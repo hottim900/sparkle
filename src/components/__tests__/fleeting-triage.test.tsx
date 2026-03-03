@@ -6,11 +6,15 @@ import { toast } from "sonner";
 const mockListItems = vi.fn();
 const mockUpdateItem = vi.fn();
 const mockGetTags = vi.fn();
+const mockListCategories = vi.fn();
+const mockCreateCategory = vi.fn();
 
 vi.mock("@/lib/api", () => ({
   listItems: (...args: unknown[]) => mockListItems(...args),
   updateItem: (...args: unknown[]) => mockUpdateItem(...args),
   getTags: (...args: unknown[]) => mockGetTags(...args),
+  listCategories: (...args: unknown[]) => mockListCategories(...args),
+  createCategory: (...args: unknown[]) => mockCreateCategory(...args),
 }));
 
 vi.mock("sonner", () => ({
@@ -33,6 +37,8 @@ function makeFleetingItem(overrides: Record<string, unknown> = {}) {
     linked_note_id: null,
     linked_note_title: null,
     linked_todo_count: 0,
+    category_id: null,
+    category_name: null,
     share_visibility: null,
     created: "2026-02-28T10:00:00Z",
     modified: "2026-02-28T10:00:00Z",
@@ -44,11 +50,27 @@ function setupWithItems(items: Record<string, unknown>[]) {
   mockListItems.mockResolvedValue({ items, total: items.length });
   mockGetTags.mockResolvedValue({ tags: ["existing-tag"] });
   mockUpdateItem.mockResolvedValue({});
+  mockListCategories.mockResolvedValue({
+    categories: [
+      { id: "cat-1", name: "工作", color: "#ef4444", sort_order: 0 },
+      { id: "cat-2", name: "學習", color: "#3b82f6", sort_order: 1 },
+    ],
+  });
 }
 
 describe("FleetingTriage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Radix Select polyfills for jsdom
+    window.HTMLElement.prototype.hasPointerCapture = vi.fn().mockReturnValue(false);
+    window.HTMLElement.prototype.setPointerCapture = vi.fn();
+    window.HTMLElement.prototype.releasePointerCapture = vi.fn();
+    window.HTMLElement.prototype.scrollIntoView = vi.fn();
+    window.ResizeObserver = vi.fn().mockImplementation(() => ({
+      observe: vi.fn(),
+      unobserve: vi.fn(),
+      disconnect: vi.fn(),
+    }));
   });
 
   it("shows loading spinner initially", () => {
@@ -242,6 +264,109 @@ describe("FleetingTriage", () => {
 
     await waitFor(() => {
       expect(toast.error).toHaveBeenCalledWith("Network error");
+    });
+  });
+
+  describe("category selection", () => {
+    // Helper: CategorySelect trigger is the combobox that is a <button>, not the TagInput <input>
+    function getCategoryCombobox() {
+      const comboboxes = screen.getAllByRole("combobox");
+      const selectTrigger = comboboxes.find((el) => el.tagName === "BUTTON");
+      if (!selectTrigger) throw new Error("CategorySelect combobox not found");
+      return selectTrigger;
+    }
+
+    it("includes category_id in primary action when category is selected", async () => {
+      setupWithItems([makeFleetingItem({ id: "cat-note-1" })]);
+
+      const user = userEvent.setup();
+      render(<FleetingTriage />);
+
+      await waitFor(() => {
+        expect(screen.getByText("Test Fleeting Note")).toBeInTheDocument();
+      });
+
+      // Open category select and pick "工作"
+      await user.click(getCategoryCombobox());
+      const option = await screen.findByRole("option", { name: /工作/ });
+      await user.click(option);
+
+      await user.click(screen.getByText("發展"));
+
+      await waitFor(() => {
+        expect(mockUpdateItem).toHaveBeenCalledWith("cat-note-1", {
+          status: "developing",
+          category_id: "cat-1",
+        });
+      });
+    });
+
+    it("includes category_id in archive action when category is selected", async () => {
+      setupWithItems([makeFleetingItem({ id: "cat-arch-1" })]);
+
+      const user = userEvent.setup();
+      render(<FleetingTriage />);
+
+      await waitFor(() => {
+        expect(screen.getByText("Test Fleeting Note")).toBeInTheDocument();
+      });
+
+      await user.click(getCategoryCombobox());
+      const option = await screen.findByRole("option", { name: /學習/ });
+      await user.click(option);
+
+      await user.click(screen.getByText("封存"));
+
+      await waitFor(() => {
+        expect(mockUpdateItem).toHaveBeenCalledWith("cat-arch-1", {
+          status: "archived",
+          category_id: "cat-2",
+        });
+      });
+    });
+
+    it("does not include category_id when no category change is made", async () => {
+      setupWithItems([makeFleetingItem({ id: "no-cat-1" })]);
+
+      const user = userEvent.setup();
+      render(<FleetingTriage />);
+
+      await waitFor(() => {
+        expect(screen.getByText("發展")).toBeInTheDocument();
+      });
+
+      await user.click(screen.getByText("發展"));
+
+      await waitFor(() => {
+        expect(mockUpdateItem).toHaveBeenCalledWith("no-cat-1", { status: "developing" });
+      });
+    });
+
+    it("resets category selection when skipping to next item", async () => {
+      setupWithItems([
+        makeFleetingItem({ id: "item-1", title: "First" }),
+        makeFleetingItem({ id: "item-2", title: "Second" }),
+      ]);
+
+      const user = userEvent.setup();
+      render(<FleetingTriage />);
+
+      await waitFor(() => {
+        expect(screen.getByText("First")).toBeInTheDocument();
+      });
+
+      // Select a category on first item
+      await user.click(getCategoryCombobox());
+      const option = await screen.findByRole("option", { name: /工作/ });
+      await user.click(option);
+
+      // Skip to next
+      await user.click(screen.getByText("保留"));
+
+      expect(screen.getByText("Second")).toBeInTheDocument();
+
+      // Category select should show "未分類" (reset to next item's default)
+      expect(getCategoryCombobox()).toHaveTextContent("未分類");
     });
   });
 
