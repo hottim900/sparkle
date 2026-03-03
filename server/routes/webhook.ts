@@ -99,7 +99,7 @@ webhookRouter.post("/line", async (c) => {
             reply = formatNumberedList(`🔍 搜尋「${cmd.keyword}」`, results, results.length);
           }
         } catch {
-          reply = `🔍 找不到「${cmd.keyword}」相關的項目`;
+          reply = `❌ 搜尋失敗，請稍後再試`;
         }
         break;
       }
