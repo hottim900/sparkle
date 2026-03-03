@@ -22,9 +22,11 @@ export function createTestDb() {
       source TEXT DEFAULT NULL,
       aliases TEXT NOT NULL DEFAULT '[]',
       linked_note_id TEXT DEFAULT NULL,
+      category_id TEXT DEFAULT NULL,
       created TEXT NOT NULL,
       modified TEXT NOT NULL,
-      FOREIGN KEY (linked_note_id) REFERENCES items(id) ON DELETE SET NULL
+      FOREIGN KEY (linked_note_id) REFERENCES items(id) ON DELETE SET NULL,
+      FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL
     );
     CREATE INDEX idx_items_status ON items(status);
     CREATE INDEX idx_items_type ON items(type);
@@ -50,6 +52,17 @@ export function createTestDb() {
     );
     CREATE INDEX idx_share_tokens_token ON share_tokens(token);
     CREATE INDEX idx_share_tokens_item_id ON share_tokens(item_id);
+
+    CREATE TABLE categories (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL UNIQUE,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      color TEXT DEFAULT NULL,
+      created TEXT NOT NULL,
+      modified TEXT NOT NULL
+    );
+    CREATE INDEX idx_categories_sort_order ON categories(sort_order);
+    CREATE INDEX idx_items_category_id ON items(category_id);
   `);
 
   setupFTS(sqlite);
