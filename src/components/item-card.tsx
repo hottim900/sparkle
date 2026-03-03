@@ -150,6 +150,11 @@ export function ItemCard({
                 {tag}
               </Badge>
             ))}
+            {item.category_name && (
+              <span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                {item.category_name}
+              </span>
+            )}
             {item.type === "todo" && item.linked_note_id && item.linked_note_title && (
               <button
                 type="button"

@@ -19,6 +19,7 @@ server/
     rate-limit.ts       # Rate limiting (API general, auth failure, webhook)
     logger.ts           # Pino HTTP request logger middleware (replaces hono's built-in)
   routes/
+    categories.ts       # Categories CRUD (GET/POST/PATCH/DELETE /api/categories)
     items.ts            # CRUD + batch operations + GET /:id/linked-todos + POST /:id/export
     search.ts           # FTS5 full-text search
     stats.ts            # GET /api/stats, GET /api/stats/focus
@@ -27,6 +28,7 @@ server/
     public.ts           # Public routes (JSON API + SSR page at /s/:token) — no auth
     webhook.ts          # LINE Bot webhook (POST /api/webhook/line)
   lib/
+    categories.ts       # Category CRUD functions (Drizzle)
     items.ts            # DB query functions (Drizzle), type-status validation, auto-mapping, linked_note_id filter
     stats.ts            # Stats (Zettelkasten + GTD) + focus query functions
     export.ts           # Obsidian .md export (frontmatter, sanitize filename, write to vault)
@@ -42,11 +44,12 @@ server/
     render-public-page.ts # SSR HTML rendering (marked, OpenGraph tags, dark mode CSS)
     health.ts           # Health check (DB ping + disk space via statfs)
   schemas/
+    categories.ts       # Zod schemas for category create/update/reorder
     items.ts            # Zod validation schemas (statusEnum, excludeStatus, batch actions)
     shares.ts           # Zod schema for share creation (visibility enum)
   db/
-    index.ts            # DB connection + schema migration (version 0→12)
-    schema.ts           # Drizzle table schema (items + settings + share_tokens)
+    index.ts            # DB connection + schema migration (version 0→13)
+    schema.ts           # Drizzle table schema (items + settings + share_tokens + categories)
     fts.ts              # FTS5 virtual table + sync triggers
   test-utils.ts         # Shared test DB setup (createTestDb: in-memory SQLite + all tables + FTS)
 
@@ -122,7 +125,8 @@ mcp-server/
     tools/
       search.ts           # sparkle_search
       read.ts             # sparkle_get_note, sparkle_list_notes
-      write.ts            # sparkle_create_note, sparkle_update_note (note/todo/scratch, full field support, partial edit via old_content)
+      write.ts            # sparkle_create_note, sparkle_update_note (note/todo/scratch, full field support, partial edit via old_content, category_id)
+      categories.ts       # sparkle_list_categories, sparkle_create_category, sparkle_update_category, sparkle_delete_category
       workflow.ts         # sparkle_advance_note, sparkle_export_to_obsidian
       meta.ts             # sparkle_get_stats, sparkle_list_tags
       guide.ts            # sparkle_guide (documentation query by topic)

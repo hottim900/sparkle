@@ -5,6 +5,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { registerSearchTools } from "./tools/search.js";
 import { registerReadTools } from "./tools/read.js";
 import { registerWriteTools } from "./tools/write.js";
+import { registerCategoryTools } from "./tools/categories.js";
 import { registerWorkflowTools } from "./tools/workflow.js";
 import { registerMetaTools } from "./tools/meta.js";
 import { registerGuideTools } from "./tools/guide.js";
@@ -20,6 +21,7 @@ const server = new McpServer(
 registerSearchTools(server);
 registerReadTools(server);
 registerWriteTools(server);
+registerCategoryTools(server);
 registerWorkflowTools(server);
 registerMetaTools(server);
 registerGuideTools(server);

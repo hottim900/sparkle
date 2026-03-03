@@ -1,5 +1,5 @@
-import { useEffect, useState, useCallback } from "react";
-import { listItems, batchAction } from "@/lib/api";
+import { useEffect, useState, useCallback, useMemo } from "react";
+import { listItems, batchAction, listCategories } from "@/lib/api";
 import { useAppContext } from "@/lib/app-context";
 import {
   parseItems,
@@ -7,6 +7,7 @@ import {
   type ItemStatus,
   type ItemType,
   type ViewType,
+  type Category,
 } from "@/lib/types";
 import { ItemCard } from "./item-card";
 import { Button } from "@/components/ui/button";
@@ -32,6 +33,8 @@ import {
   FileText,
   ListTodo,
   StickyNote,
+  ChevronDown,
+  ChevronRight,
 } from "lucide-react";
 
 type SortOption = {
@@ -168,6 +171,8 @@ export function ItemList({
   const [sortIdx, setSortIdx] = useState(0);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
   const limit = 50;
 
   const noteViews = ["notes", "fleeting", "developing", "permanent", "exported"];
@@ -255,6 +260,63 @@ export function ItemList({
   useEffect(() => {
     fetchItems();
   }, [fetchItems]);
+
+  // Fetch categories for grouping
+  useEffect(() => {
+    listCategories()
+      .then((res) => setCategories(res.categories))
+      .catch(() => {
+        // Categories are optional — fail silently
+      });
+  }, [refreshKey]);
+
+  const categoriesMap = useMemo(() => {
+    const map = new Map<string, Category>();
+    for (const cat of categories) {
+      map.set(cat.id, cat);
+    }
+    return map;
+  }, [categories]);
+
+  // Group items by category_id — only when not in "all"/"archived" views
+  const categoryGroups = useMemo(() => {
+    const hasAnyCategorized = items.some((i) => i.category_id != null);
+    if (!hasAnyCategorized) return null; // flat list
+
+    const groups = new Map<string | null, ParsedItem[]>();
+    for (const item of items) {
+      const key = item.category_id;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(item);
+    }
+
+    // Sort keys: categories by sort_order, null last
+    const sortedKeys = [...groups.keys()].sort((a, b) => {
+      if (a === null) return 1;
+      if (b === null) return -1;
+      const catA = categoriesMap.get(a);
+      const catB = categoriesMap.get(b);
+      return (catA?.sort_order ?? 0) - (catB?.sort_order ?? 0);
+    });
+
+    return sortedKeys.map((key) => ({
+      key: key ?? "uncategorized",
+      name: key ? (categoriesMap.get(key)?.name ?? "未知分類") : "未分類",
+      items: groups.get(key)!,
+    }));
+  }, [items, categoriesMap]);
+
+  const toggleCategoryCollapse = (key: string) => {
+    setCollapsedCategories((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  };
 
   const exitSelectionMode = () => {
     setSelectionMode(false);
@@ -503,19 +565,51 @@ export function ItemList({
                 </>
               );
             })()
-          : items.map((item) => (
-              <ItemCard
-                key={item.id}
-                item={item}
-                selected={item.id === selectedId}
-                onSelect={onSelect}
-                onNavigate={onNavigate}
-                onUpdated={fetchItems}
-                selectionMode={selectionMode}
-                checked={selectedIds.has(item.id)}
-                onToggle={toggleSelection}
-              />
-            ))}
+          : categoryGroups
+            ? categoryGroups.map((group) => (
+                <div key={group.key}>
+                  <div
+                    data-testid="category-group-header"
+                    className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-muted-foreground bg-muted/50 sticky top-0 z-10 cursor-pointer select-none hover:bg-muted/80"
+                    onClick={() => toggleCategoryCollapse(group.key)}
+                  >
+                    {collapsedCategories.has(group.key) ? (
+                      <ChevronRight className="h-3.5 w-3.5" />
+                    ) : (
+                      <ChevronDown className="h-3.5 w-3.5" />
+                    )}
+                    {group.name}
+                    <span className="text-muted-foreground/60">({group.items.length})</span>
+                  </div>
+                  {!collapsedCategories.has(group.key) &&
+                    group.items.map((item) => (
+                      <ItemCard
+                        key={item.id}
+                        item={item}
+                        selected={item.id === selectedId}
+                        onSelect={onSelect}
+                        onNavigate={onNavigate}
+                        onUpdated={fetchItems}
+                        selectionMode={selectionMode}
+                        checked={selectedIds.has(item.id)}
+                        onToggle={toggleSelection}
+                      />
+                    ))}
+                </div>
+              ))
+            : items.map((item) => (
+                <ItemCard
+                  key={item.id}
+                  item={item}
+                  selected={item.id === selectedId}
+                  onSelect={onSelect}
+                  onNavigate={onNavigate}
+                  onUpdated={fetchItems}
+                  selectionMode={selectionMode}
+                  checked={selectedIds.has(item.id)}
+                  onToggle={toggleSelection}
+                />
+              ))}
         {total > offset + limit && (
           <button
             className="w-full py-3 text-sm text-muted-foreground hover:text-foreground"

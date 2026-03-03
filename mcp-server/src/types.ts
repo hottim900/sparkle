@@ -15,6 +15,17 @@ export interface SparkleItem {
   linked_note_title: string | null;
   linked_todo_count: number;
   share_visibility: "public" | "unlisted" | null;
+  category_id: string | null;
+  category_name: string | null;
+  created: string;
+  modified: string;
+}
+
+export interface Category {
+  id: string;
+  name: string;
+  sort_order: number;
+  color: string | null;
   created: string;
   modified: string;
 }

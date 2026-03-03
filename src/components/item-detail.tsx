@@ -19,6 +19,7 @@ import { ShareDialog } from "@/components/share-dialog";
 import { ItemDetailHeader } from "@/components/item-detail-header";
 import { LinkedItemsSection } from "@/components/linked-items-section";
 import { ItemContentEditor } from "@/components/item-content-editor";
+import { CategorySelect } from "@/components/category-select";
 
 interface ItemDetailProps {
   itemId: string;
@@ -311,6 +312,18 @@ export function ItemDetail({ itemId, onUpdated, onDeleted }: ItemDetailProps) {
             </Select>
           )}
         </div>
+
+        {/* 分類 (not for scratch) */}
+        {item.type !== "scratch" && (
+          <div>
+            <label className="text-sm text-muted-foreground block mb-1">分類</label>
+            <CategorySelect
+              value={item.category_id ?? null}
+              onChange={(categoryId) => saveField("category_id", categoryId)}
+              disabled={saveStatus === "saving"}
+            />
+          </div>
+        )}
 
         {/* Due date (todo only) */}
         {item.type === "todo" && (
