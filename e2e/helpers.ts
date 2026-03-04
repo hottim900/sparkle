@@ -19,6 +19,7 @@ export async function createItemViaApi(
     due?: string | null;
     tags?: string[];
     linked_note_id?: string | null;
+    category_id?: string | null;
   },
 ) {
   const response = await request.post(`${API_BASE}/items`, {
@@ -106,6 +107,23 @@ export async function createShareViaApi(
       "Content-Type": "application/json",
     },
     data: { visibility },
+  });
+  return response.json();
+}
+
+/**
+ * Create a category via the REST API (bypasses UI for fast setup).
+ */
+export async function createCategoryViaApi(
+  request: APIRequestContext,
+  data: { name: string; color?: string },
+) {
+  const response = await request.post(`${API_BASE}/categories`, {
+    headers: {
+      Authorization: `Bearer ${AUTH_TOKEN}`,
+      "Content-Type": "application/json",
+    },
+    data,
   });
   return response.json();
 }
