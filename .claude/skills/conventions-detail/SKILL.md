@@ -1,10 +1,36 @@
 ---
 name: conventions-detail
-description: Detailed implementation conventions for Sparkle subsystems. Use when modifying API client, PWA, logging, Sentry, CSP, offline UI, state management, CI/CD, sharing, export, or DB migrations.
+description: Detailed implementation conventions for Sparkle subsystems. Use when modifying API client, PWA, logging, Sentry, CSP, offline UI, state management, CI/CD, sharing, export, data model, or DB migrations.
 user-invocable: false
 ---
 
 # Conventions — Detailed Reference
+
+## Data Model Fields
+
+```
+id, type, title, content, status, priority, due, tags, origin, source, aliases, linked_note_id, category_id, created, modified
+```
+
+| Type      | Valid Statuses                                      | Default  |
+| --------- | --------------------------------------------------- | -------- |
+| `note`    | fleeting, developing, permanent, exported, archived | fleeting |
+| `todo`    | active, done, archived                              | active   |
+| `scratch` | draft, archived                                     | draft    |
+
+- `origin`: capture channel (LINE, web, import)
+- `source`: reference URL (nullable)
+- `aliases`: alternative names for Obsidian linking (JSON array stored as string)
+- `due`: YYYY-MM-DD format, **todo-only** (notes ignore due; todo→note conversion clears due)
+- `linked_note_id`: todo→note reference (nullable, todo-only; cleared on todo→note conversion; FK with ON DELETE SET NULL)
+- `linked_todo_count`: computed in API responses — non-archived todos linked to a note (0 for todos)
+- `linked_note_title`: computed in API responses — title of linked note for todos (null if none)
+- `category_id`: browsing group (nullable FK → categories, ON DELETE SET NULL). Preserved across all type conversions.
+- `category_name`: computed in API responses — name of assigned category (null if none)
+- `share_visibility`: computed in API responses — "public", "unlisted", or null
+- `created`/`modified`: ISO 8601 timestamps
+- Tags stored as JSON array string in SQLite
+- Aliases stored as JSON array string in SQLite
 
 ## API Client
 
