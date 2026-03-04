@@ -140,9 +140,25 @@ mcp-server/
       guide.ts            # sparkle_guide (documentation query by topic)
 
 e2e/
+  helpers.ts             # Shared E2E utilities (createItemViaApi, createCategoryViaApi, createShareViaApi, navigateTo, selectRadixOption, waitForSave)
   auth.setup.ts          # Playwright auth setup (login + save storageState)
-  basic-flow.spec.ts     # E2E tests: login, quick capture, search, item detail
+  basic-flow.spec.ts     # Login, quick capture, search, item detail
+  item-lifecycle.spec.ts # Title/content edit, status change, tags, delete, type conversion
+  note-workflow.spec.ts  # Triage (develop/archive/skip), maturity progression
+  todo-workflow.spec.ts  # Priority, due date, done status, linked todos
+  category-workflow.spec.ts  # Category create/assign/clear/delete
+  share-creation.spec.ts     # Share create (unlisted/public), copy link
+  shares.spec.ts         # Share management page, revoke, navigate to source
+  field-editing.spec.ts  # Source URL, aliases add/remove
+  obsidian-export.spec.ts    # Settings config, permanent note export
+  dashboard.spec.ts      # Stats cards, overdue todo focus
+  keyboard-shortcuts.spec.ts # / search focus, Escape close detail
+  settings.spec.ts       # Settings page, theme toggle, data export
+  mobile.spec.ts         # Mobile: bottom nav, quick capture, tags, detail, search
   .auth/                 # Generated auth state (gitignored)
+
+scripts/
+  check-skills-drift.sh  # CI: non-blocking skills drift detection (warns if skill docs diverge from codebase)
 
 playwright.config.ts    # Playwright config (Chromium-only, auto-starts Hono server on :3456, temp test DB)
 eslint.config.js        # ESLint 9 flat config (typescript-eslint, react-hooks, prettier compat)
@@ -158,13 +174,17 @@ eslint.config.js        # ESLint 9 flat config (typescript-eslint, react-hooks, 
     release.yml         # Release-Please (auto CHANGELOG + GitHub Release on conventional commits)
 
 .claude/
+  agents/                 # Custom subagents (code-reviewer, e2e-writer, explorer)
+    code-reviewer.md        # Read-only code review with project memory
+    e2e-writer.md           # Playwright E2E test specialist (preloads testing skill)
+    explorer.md             # Fast codebase exploration (haiku model)
   hooks/
     migration-safety.sh   # PostToolUse hook: blocks SELECT * in migrations, enforces FK rules
-  settings.json           # Claude Code project settings (hooks config)
+  settings.json           # Claude Code project settings (hooks config, auto-format hook)
   skills/                 # On-demand documentation skills (7 skill directories, each with SKILL.md)
     ops/SKILL.md            # Production deployment & operations
     testing/SKILL.md        # Test architecture & patterns
-    conventions-detail/SKILL.md  # Detailed module conventions
+    conventions-detail/SKILL.md  # Detailed module conventions + data model fields
     quality/SKILL.md        # Quality tracking system
     mcp-server/SKILL.md     # MCP server for Claude Code
     line-bot/SKILL.md       # LINE Bot integration
