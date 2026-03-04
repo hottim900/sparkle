@@ -7,6 +7,28 @@ on:
     branches: [main]
 
 jobs:
+  validate-pr-title:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    steps:
+      - uses: amannn/action-semantic-pull-request@v5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          types: |
+            feat
+            fix
+            docs
+            chore
+            refactor
+            test
+            perf
+            ci
+            build
+            style
+            revert
+
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -35,6 +57,9 @@ jobs:
 
       - name: Type-check (server)
         run: npx tsc --noEmit -p tsconfig.server.json
+
+      - name: Check skills drift
+        run: bash scripts/check-skills-drift.sh
 
       - name: Build
         run: npm run build
