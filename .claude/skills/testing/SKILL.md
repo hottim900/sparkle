@@ -12,7 +12,7 @@ user-invocable: true
 # Tests require node v22 (better-sqlite3 native module is incompatible with v24)
 nvm use 22
 
-# Unit tests (707 tests, 37 files — server 475 + frontend 232)
+# Unit tests (778 tests, 42 files — server 546 + frontend 232)
 npx vitest run                # Run all tests
 npm run test:coverage         # With coverage report (thresholds: 75% statements, 70% branches)
 npx vitest                    # Watch mode
@@ -51,8 +51,8 @@ cd mcp-server && npm test
 - Playwright (Chromium desktop + iPhone 14 mobile, serial `workers: 1`) against production build (`dist/`)
 - Hono server on port 3456 with temp SQLite DB (`/tmp/sparkle-e2e-test.db`)
 - Auth via storageState, `RATE_LIMIT_MAX=10000` for test server
-- 29 tests across 6 spec files (24 desktop + 5 mobile)
-- Shared helpers in `e2e/helpers.ts`
+- ~47 tests across 13 spec files (desktop + 5 mobile)
+- Shared helpers in `e2e/helpers.ts` (`createItemViaApi`, `createCategoryViaApi`, `createShareViaApi`, `navigateTo`, `selectRadixOption`, `waitForSave`, `quickCaptureNote`, `quickCaptureTodo`)
 
 ### Coverage
 
@@ -60,6 +60,12 @@ cd mcp-server && npm test
 - item lifecycle CRUD (edit title/content, status change, tags, delete, type conversion)
 - note triage workflow (develop/archive/skip), note maturity progression
 - todo priority/due/done, linked todo create/navigate
+- category workflow (create/assign/clear/delete)
+- share creation (unlisted/public, copy link)
+- field editing (source URL, aliases add/remove)
+- Obsidian export (settings config, permanent note export)
+- dashboard stats (sections display, overdue todo focus)
+- keyboard shortcuts (/ search focus, Escape close detail)
 - settings page, theme toggle, data export
 - Mobile (`e2e/mobile.spec.ts`): bottom nav, quick capture, tag + button, item detail, search
 
@@ -68,6 +74,9 @@ cd mcp-server && npm test
 - `waitForResponse` for PATCH save verification
 - Radix Select options render in portal to `<body>` — use `page.getByRole("option")` globally, not scoped to trigger parent
 - Auto-save debounce: use `blur()` to trigger immediate save or `waitForResponse` for PATCH. Don't rely solely on "已儲存" text which may be ambiguous
+- Button name collisions: use `{ exact: true }` when button text is substring of another (e.g. "分享" vs "分享管理")
+- Clipboard API: headless Chromium needs `test.use({ permissions: ["clipboard-write", "clipboard-read"] })`
+- Dashboard text duplication: stats text may appear in sidebar nav — scope assertions with container locator
 - Different ports for parallel E2E agents (3457, 3458)
 - Parallel workers + shared DB = flaky. Fixed by `workers: 1`
 - Rate limiting in E2E: 200 req/min default too low. Fixed by `RATE_LIMIT_MAX` env var (set to 10000 in playwright.config.ts)
