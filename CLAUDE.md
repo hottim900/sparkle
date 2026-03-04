@@ -1,112 +1,50 @@
 # Sparkle — Project Guide
 
-## What is this
-
-Self-hosted PWA for personal idea capture + task management with Zettelkasten note maturity flow. Quick capture on mobile, rich editing on desktop. LINE Bot integration for capturing ideas from chat. Obsidian export for permanent notes.
-
-## Tech Stack
-
-- **Frontend**: Vite + React 19 + TypeScript + Tailwind CSS + shadcn/ui (Radix) + code splitting (lazy-loaded routes)
-- **Backend**: Hono (Node.js) + Drizzle ORM + better-sqlite3 + FTS5 + hono-rate-limiter + marked (SSR Markdown) + @sentry/node (error tracking)
-- **PWA**: vite-plugin-pwa + Workbox + IndexedDB offline queue
-- **Validation**: Zod on all API endpoints
-- **Themes**: next-themes (dark/light)
-- **Toast**: sonner
-- **Icons**: lucide-react
+Self-hosted PWA: idea capture + task management with Zettelkasten maturity flow, LINE Bot, Obsidian export.
 
 ## Development
 
 ```bash
-# Start dev servers (two terminals)
 npm run dev          # Vite on :5173, proxies /api to :3000
 npm run dev:server   # Hono on :3000 with tsx watch
-
-# Tests require node v22 (better-sqlite3 native module)
-nvm use 22
-npx vitest run       # Unit tests (707 tests, 37 files)
-npm run test:e2e     # E2E tests (Playwright, requires build)
-
-# Linting & formatting
-npm run lint         # ESLint check (src/ + server/)
+nvm use 22           # Required for better-sqlite3 native module
+npx vitest run       # Unit tests
+npm run test:e2e     # E2E tests (requires build)
 npm run lint:fix     # ESLint auto-fix
 npm run format       # Prettier write
-npm run format:check # Prettier check (CI uses this)
-
-# Build
 npm run build        # Production frontend → dist/
 ```
 
-Auto-deploy (`deploy.yml`) runs `npm run build` on the self-hosted runner. See `/ops` skill for production deployment. See `/testing` skill for detailed test architecture and patterns.
+See `/testing` for test architecture. See `/ops` for deployment.
 
 ## Data Model
 
-### Status System
+Notes: `fleeting` → `developing` → `permanent` → `exported` → `archived`. Todos: `active` → `done` → `archived`. Scratch: `draft` → `archived`. Full field reference in `conventions-detail` skill (auto-loaded when modifying data model).
 
-Notes follow Zettelkasten maturity: `fleeting` → `developing` → `permanent` → `exported`
-Todos use simplified lifecycle: `active` → `done`
-Scratch is disposable temporary storage: `draft`
-Shared: `archived` (any type)
+Type conversion auto-maps status server-side. `category_id` preserved; `due`/`linked_note_id` cleared on todo→note; tags/priority/aliases cleared on →scratch.
 
-| Type      | Valid Statuses                                      | Default  |
-| --------- | --------------------------------------------------- | -------- |
-| `note`    | fleeting, developing, permanent, exported, archived | fleeting |
-| `todo`    | active, done, archived                              | active   |
-| `scratch` | draft, archived                                     | draft    |
-
-### Field Names (Obsidian-aligned)
-
-```
-id, type, title, content, status, priority, due, tags, origin, source, aliases, linked_note_id, category_id, created, modified
-```
-
-- `origin`: capture channel (LINE, web, import)
-- `source`: reference URL (nullable)
-- `aliases`: alternative names for Obsidian linking (JSON array)
-- `due`: YYYY-MM-DD format, **todo-only** (notes ignore due; todo→note conversion clears due)
-- `linked_note_id`: todo→note reference (nullable, todo-only; cleared on todo→note conversion; FK with ON DELETE SET NULL — deleting the referenced note auto-nullifies)
-- `linked_todo_count`: computed field in API responses — number of non-archived todos linked to a note (0 for todos)
-- `linked_note_title`: computed field in API responses — title of linked note for todos (null if none)
-- `category_id`: browsing group (nullable FK → categories, ON DELETE SET NULL). Preserved across all type conversions.
-- `category_name`: computed field in API responses — name of assigned category (null if none)
-- `share_visibility`: computed field in API responses — share status of the item ("public", "unlisted", or null if not shared)
-- `created`/`modified`: ISO 8601 timestamps
-
-### Type Conversion Auto-Mapping
-
-When type changes (note ↔ todo ↔ scratch), status auto-maps server-side. Auto-mapping overrides explicit status. Due date and linked_note_id are cleared on todo→note conversion. Tags, priority, due, aliases, and linked_note_id are cleared on conversion to scratch. `category_id` is preserved across all type conversions (browsing aid, not type-dependent).
-
-DB migration: version 0→13, idempotent steps. Claude auto-loads the conventions-detail skill for full migration history when relevant.
+DB migration version 0→13, idempotent. Migration safety enforced by PostToolUse hook.
 
 ## Conventions
 
 - UI language: 繁體中文
-- Node version: engines in package.json (>=22, <24), enforced by .npmrc engine-strict=true
-- Database: SQLite WAL mode, FTS5 trigram tokenizer for search (supports Chinese)
-- Tags stored as JSON array string in SQLite
-- Aliases stored as JSON array string in SQLite
-- Timestamps: ISO 8601 strings
-- API: REST, JSON, Bearer token auth on /api/\* (except /api/webhook/, /api/public/, /api/health), rate-limited
-- Linting: ESLint 9 flat config with typescript-eslint (recommended), react-hooks plugin, eslint-config-prettier. Test files relaxed (`no-explicit-any` warn, `no-require-imports` off). Unused vars allowed with `_` prefix.
-- Formatting: Prettier (double quotes, trailing commas, 100 char width). Enforced via lint-staged + Husky pre-commit. `.prettierignore` excludes dist, mcp-server, data, certs.
-- Commit conventions: commitlint with `@commitlint/config-conventional`. Enforced via `.husky/commit-msg` hook. Allowed types: feat, fix, docs, chore, refactor, test, perf, ci, build, style, revert
-- Worktree 開發：**此機器同時是開發和生產環境，main working directory 必須始終留在 main branch。** 所有 Claude Code session 必須用 `claude --worktree` 啟動（或對話中用 `start a worktree`），在 `.claude/worktrees/` 下隔離開發。禁止在主 working directory checkout feature branch，否則 deploy workflow 的 `git pull` 會失敗。Agent/teammate 用 `isolation: "worktree"` 參數。
-- 分支策略：**所有 code 改動必須在 feature branch 上進行，禁止直接 commit 到 main。** GitHub ruleset 已啟用（main 要求 PR + `test` CI 通過才能 merge，squash merge only）。pre-commit hook 會阻擋在 main 上的 commit。不論是人、Claude Code session、或 agent/teammate，一律建立 feature branch 再開 PR。命名慣例：`{type}/{short-description}`（如 `feat/offline-queue`、`fix/migration-null`）。PR 標題必須符合 conventional commit 格式（如 `feat: add offline queue`），因為 squash merge 用 PR 標題作為 commit message。
-- PR 原則：按風險隔離切分。DB migration 永遠獨立 PR。不同風險等級（DB schema / 後端邏輯 / 純前端 / CI config）不混在同一個 PR。同風險等級的相關改動可以合併。
-- Merge 策略：使用 `gh pr merge --squash --auto` 啟用 auto-merge，CLI 立即返回，GitHub 在 CI 通過後自動 merge（避免阻塞等待）。高風險先行，驗證後再繼續。DB migration PR merge 後必須等 deploy + health check 通過才 merge 下一個。低風險 PR（純前端、CI config）可以連續 merge。不要在離開前 merge 高風險 PR。
-- Migration 安全：PostToolUse hook (`.claude/hooks/migration-safety.sh`) 在編輯 `server/db/index.ts` 時自動檢查：(1) 禁止 `SELECT *` in migration INSERT (2) DROP TABLE 必須搭配 `foreign_keys = OFF` (3) `setSchemaVersion` 不可在 transaction 內。對 agent/teammate 也生效。
-- Agent/Teammate 開發規範：**(0) 第一個動作：驗證不在 main 上**（`git branch --show-current` 不是 `main`，或 `git rev-parse --show-toplevel` 指向 `.claude/worktrees/`）。未驗證前不做任何 code 改動。(1) commit 前必須執行 `npm run lint:fix && npm run format` 消除 unused imports 等殘留 (2) 必須在 worktree 或 feature branch 上工作 (3) 完成後開 PR，不直接 push main。如果意外 commit 到 main：`git checkout -b feat/xxx && git push -u origin feat/xxx`，然後 `git checkout main && git reset --hard origin/main`。
+- Node >=22 <24, enforced by `.npmrc engine-strict=true`
+- SQLite WAL mode, FTS5 trigram tokenizer (Chinese support)
+- Commit: `@commitlint/config-conventional` via `.husky/commit-msg`. Types: feat, fix, docs, chore, refactor, test, perf, ci, build, style, revert
+- Worktree 開發：**此機器同時是開發和生產環境，main working directory 必須留在 main branch。** 所有 session 用 `claude --worktree`，agent 用 `isolation: "worktree"`。
+- 分支策略：**禁止直接 commit 到 main。** 一律 feature branch → PR → squash merge。命名：`{type}/{short-description}`。PR 標題必須符合 conventional commit 格式。
+- PR 原則：按風險隔離。DB migration 獨立 PR。不同風險等級不混合。
+- Merge：`gh pr merge --squash --auto`。DB migration PR merge 後等 deploy + health check 通過才繼續。
+- Session 管理：不相關任務之間用 `/clear` 重置 context。長 session 品質下降時 `/compact` 或 `/clear`。
+- Agent/Teammate：**(0) 驗證不在 main 上** (1) commit 前 `npm run lint:fix && npm run format` (2) 在 worktree 或 feature branch 工作 (3) 完成後開 PR。
 
-For detailed conventions on specific modules (API retry, Performance, PWA, Logging, Sentry, CSP, Offline UI, State management, CI/CD, Sharing, Export), Claude auto-loads the conventions-detail skill when relevant.
+Detailed module conventions (API retry, PWA, Logging, Sentry, CSP, Offline UI, State management, CI/CD, Sharing, Export, Data Model fields) auto-loaded via `conventions-detail` skill.
 
-## Quality Management（品質管理）
+## Quality Management
 
-品質追蹤系統（Defect / Tech Debt / Feature Gap）。檔案在主目錄的獨立本地 git repo（gitignored，不推 GitHub）。
-
-**操作前必須載入 `/quality` skill** — 內含絕對路徑、操作流程、完成步驟 checklist。Worktree 裡沒有品質檔案，skill 指向正確位置。
+品質追蹤系統（Defect / Tech Debt / Feature Gap）。**操作前必須載入 `/quality` skill**。
 
 ## Skills Reference
-
-Available skills for this project (invoke with `/skill-name` or auto-loaded by Claude):
 
 | Skill              | Invoke        | Description                        |
 | ------------------ | ------------- | ---------------------------------- |
@@ -120,14 +58,4 @@ Available skills for this project (invoke with `/skill-name` or auto-loaded by C
 
 ## Maintenance
 
-When making changes that affect documentation, **update the relevant file in the same commit or follow-up commit**:
-
-- **CLAUDE.md**: Core conventions, data model, dev commands, Skills Reference table
-- **`.claude/skills/project-structure/SKILL.md`**: When files are added/removed/renamed
-- **`.claude/skills/testing/SKILL.md`**: When tests are added/removed or test infra changes
-- **`.claude/skills/ops/SKILL.md`**: When deployment/infra changes
-- **`.claude/skills/line-bot/SKILL.md`**: When LINE Bot commands change
-- **`.claude/skills/mcp-server/SKILL.md`**: When MCP server tools/config changes
-- **`.claude/skills/conventions-detail/SKILL.md`**: When module-specific conventions change
-- **`.claude/skills/quality/SKILL.md`**: When quality tracking system changes
-- **`docs/plans/quality/README.md`**: When quality items are created/completed/updated
+Update docs in same commit: **CLAUDE.md** (core conventions), **`.claude/skills/*/SKILL.md`** (domain details), **`docs/plans/quality/README.md`** (quality items).
