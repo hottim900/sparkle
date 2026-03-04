@@ -21,8 +21,9 @@ test.describe("Share Management", () => {
     });
 
     // Verify share is listed with correct details
-    await expect(page.getByText("E2E Shared Note")).toBeVisible();
-    await expect(page.getByText("公開")).toBeVisible();
+    const shareRow = page.locator(".rounded-md.border", { hasText: "E2E Shared Note" });
+    await expect(shareRow).toBeVisible();
+    await expect(shareRow.getByText("公開")).toBeVisible();
   });
 
   test("revokes share with confirmation dialog", async ({ page, request }) => {
