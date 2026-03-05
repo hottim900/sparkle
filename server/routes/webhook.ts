@@ -305,7 +305,7 @@ webhookRouter.post("/line", async (c) => {
           break;
         }
         const existingTags: string[] = JSON.parse(resolved.item.tags || "[]");
-        const newTags = [...new Set([...existingTags, ...cmd.tags])];
+        const newTags = [...new Set([...existingTags, ...cmd.tags])].slice(0, 20);
         updateItem(db, resolved.itemId, { tags: newTags });
         reply = `✅ 已為「${resolved.item.title}」加上標籤：${cmd.tags.join("、")}`;
         break;

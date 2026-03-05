@@ -192,25 +192,39 @@ app.get("/api/export", (c) => {
 });
 
 // Import items (upsert) — only accepts new field names/status values
+const jsonStringArray = z.preprocess(
+  (val) => {
+    if (typeof val === "string") {
+      try {
+        return JSON.parse(val);
+      } catch {
+        return val;
+      }
+    }
+    return val;
+  },
+  z.array(z.string().max(200)).max(20),
+);
+
 const importItemSchema = z.object({
-  id: z.string().min(1),
-  type: z.enum(["note", "todo"]).default("note"),
+  id: z.string().uuid(),
+  type: z.enum(["note", "todo", "scratch"]).default("note"),
   title: z.string().min(1).max(500),
-  content: z.string().default(""),
+  content: z.string().max(50000).default(""),
   status: statusEnum.default("fleeting"),
   priority: z.enum(["low", "medium", "high"]).nullable().default(null),
   due: z.string().nullable().default(null),
-  tags: z.string().default("[]"),
+  tags: jsonStringArray.default([]),
   origin: z.string().default(""),
   source: z.string().nullable().default(null),
-  aliases: z.string().default("[]"),
+  aliases: jsonStringArray.default([]),
   linked_note_id: z.string().nullable().default(null),
   created: z.string().min(1),
   modified: z.string().min(1),
 });
 
 const importSchema = z.object({
-  items: z.array(importItemSchema),
+  items: z.array(importItemSchema).max(10000),
 });
 
 // Detect old format fields and reject with helpful message

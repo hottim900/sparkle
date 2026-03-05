@@ -52,7 +52,7 @@ export const updateItemSchema = z.object({
 export const listItemsSchema = z.object({
   status: statusEnum.optional(),
   type: z.enum(["note", "todo", "scratch"]).optional(),
-  tag: z.string().optional(),
+  tag: z.string().min(1).max(50).optional(),
   sort: z.enum(["created", "priority", "due", "modified"]).default("created"),
   order: z.enum(["asc", "desc"]).default("desc"),
   limit: z.coerce.number().int().min(1).max(100).default(50),
@@ -64,12 +64,12 @@ export const listItemsSchema = z.object({
 });
 
 export const batchSchema = z.object({
-  ids: z.array(z.string().uuid()).min(1, "At least one id is required"),
+  ids: z.array(z.string().uuid()).min(1, "At least one id is required").max(1000),
   action: z.enum(["archive", "done", "active", "delete", "develop", "mature", "export"]),
 });
 
 export const searchSchema = z.object({
-  q: z.string().min(1, "Search query is required"),
+  q: z.string().min(1, "Search query is required").max(1000),
   limit: z.coerce.number().int().min(1).max(100).default(20),
 });
 
