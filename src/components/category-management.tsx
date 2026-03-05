@@ -150,9 +150,12 @@ export function CategoryManagement() {
 
   const handleMove = (index: number, direction: "up" | "down") => {
     const swapIndex = direction === "up" ? index - 1 : index + 1;
+    const swapCat = categories[swapIndex];
+    const currentCat = categories[index];
+    if (!swapCat || !currentCat) return;
     const newItems = categories.map((cat, i) => {
-      if (i === index) return { id: cat.id, sort_order: categories[swapIndex].sort_order };
-      if (i === swapIndex) return { id: cat.id, sort_order: categories[index].sort_order };
+      if (i === index) return { id: cat.id, sort_order: swapCat.sort_order };
+      if (i === swapIndex) return { id: cat.id, sort_order: currentCat.sort_order };
       return { id: cat.id, sort_order: cat.sort_order };
     });
     reorderMutation.mutate(newItems);
