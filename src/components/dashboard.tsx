@@ -1,24 +1,20 @@
 import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { getStats, getFocus } from "@/lib/api";
+import { getStats, getFocus, getStaleNotes, getCategoryDistribution } from "@/lib/api";
 import { parseItems, type ParsedItem } from "@/lib/types";
 import { useAppContext } from "@/lib/app-context";
 import { queryKeys } from "@/lib/query-keys";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
-  TrendingUp,
-  Sparkles,
-  AlertTriangle,
-  Target,
-  ChevronRight,
   LayoutDashboard,
+  Target,
+  TrendingUp,
+  AlertTriangle,
+  ChevronRight,
+  Sparkles,
+  Clock,
   Loader2,
-  Gem,
-  Pencil,
-  CheckCircle,
-  StickyNote,
 } from "lucide-react";
 
 interface DashboardProps {
@@ -71,7 +67,7 @@ function priorityVariant(
 }
 
 export function Dashboard({ onSelectItem }: DashboardProps) {
-  const { onViewChange } = useAppContext();
+  const { onViewChange, onNavigate } = useAppContext();
 
   const {
     data: stats,
@@ -87,11 +83,21 @@ export function Dashboard({ onSelectItem }: DashboardProps) {
     queryFn: () => getFocus().then((r) => parseItems(r.items).slice(0, 5)),
   });
 
+  const { data: staleItems = [], isLoading: staleLoading } = useQuery({
+    queryKey: queryKeys.stale,
+    queryFn: () => getStaleNotes().then((r) => r.items),
+  });
+
+  const { data: categoryDist = [], isLoading: categoryLoading } = useQuery({
+    queryKey: queryKeys.categoryDistribution,
+    queryFn: () => getCategoryDistribution().then((r) => r.distribution),
+  });
+
   useEffect(() => {
     if (statsError) toast.error("無法載入總覽資料");
   }, [statsError]);
 
-  if (statsLoading || focusLoading) {
+  if (statsLoading || focusLoading || staleLoading || categoryLoading) {
     return (
       <div className="flex items-center justify-center py-12">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -100,6 +106,9 @@ export function Dashboard({ onSelectItem }: DashboardProps) {
   }
 
   if (!stats) return null;
+
+  const hasAttentionItems = focusItems.length > 0 || staleItems.length > 0;
+  const maxCategoryCount = Math.max(...categoryDist.map((d) => d.count), 1);
 
   return (
     <div className="flex-1 overflow-y-auto pb-4">
@@ -110,64 +119,20 @@ export function Dashboard({ onSelectItem }: DashboardProps) {
           <h1 className="text-xl font-bold">總覽</h1>
         </div>
 
-        {/* Section 1: Zettelkasten Progress */}
-        <section className="space-y-3">
-          <div className="flex items-center gap-2">
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
-            <h2 className="text-sm font-semibold text-muted-foreground">知識庫進度</h2>
-          </div>
-
-          {/* Number cards */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="border rounded-lg p-4 text-center">
-              <p className="text-2xl font-bold">{stats.exported_this_week}</p>
-              <p className="text-xs text-muted-foreground">本週匯出</p>
-            </div>
-            <div className="border rounded-lg p-4 text-center">
-              <p className="text-2xl font-bold">{stats.exported_this_month}</p>
-              <p className="text-xs text-muted-foreground">本月匯出</p>
-            </div>
-          </div>
-
-          {/* Note maturity stats */}
-          <div className="grid grid-cols-3 gap-2">
-            <div className="border rounded-lg p-3 text-center">
-              <div className="flex items-center justify-center gap-1 text-green-600 dark:text-green-400">
-                <Gem className="h-3.5 w-3.5" />
-                <p className="text-lg font-bold">{stats.permanent_count}</p>
-              </div>
-              <p className="text-xs text-muted-foreground">永久筆記</p>
-            </div>
-            <div className="border rounded-lg p-3 text-center">
-              <div className="flex items-center justify-center gap-1 text-blue-600 dark:text-blue-400">
-                <Pencil className="h-3.5 w-3.5" />
-                <p className="text-lg font-bold">{stats.developing_count}</p>
-              </div>
-              <p className="text-xs text-muted-foreground">發展中</p>
-            </div>
-            <div className="border rounded-lg p-3 text-center">
-              <div className="flex items-center justify-center gap-1 text-muted-foreground">
-                <CheckCircle className="h-3.5 w-3.5" />
-                <p className="text-lg font-bold">{stats.done_this_week}</p>
-              </div>
-              <p className="text-xs text-muted-foreground">本週完成</p>
-            </div>
-          </div>
-        </section>
-
-        {/* Section 2: Today's Focus */}
+        {/* Section 1: Needs Attention */}
         <section className="space-y-3">
           <div className="flex items-center gap-2">
             <Target className="h-4 w-4 text-muted-foreground" />
-            <h2 className="text-sm font-semibold text-muted-foreground">今日焦點</h2>
+            <h2 className="text-sm font-semibold text-muted-foreground">需要關注</h2>
           </div>
 
-          {focusItems.length === 0 ? (
+          {!hasAttentionItems ? (
             <div className="border rounded-lg p-6 text-center text-sm text-muted-foreground">
-              沒有緊急項目，做得好！
+              沒有需要關注的項目，做得好！
             </div>
           ) : (
             <div className="space-y-2">
+              {/* Focus items */}
               {focusItems.map((item) => {
                 const overdue = isOverdue(item.due);
                 return (
@@ -186,12 +151,6 @@ export function Dashboard({ onSelectItem }: DashboardProps) {
                             {priorityLabel(item.priority)}
                           </Badge>
                         )}
-                        {item.status === "fleeting" && (
-                          <Badge variant="outline" className="text-amber-600 dark:text-amber-400">
-                            <Sparkles className="h-3 w-3 mr-1" />
-                            閃念
-                          </Badge>
-                        )}
                       </div>
                     </div>
                     {item.due && (
@@ -207,70 +166,134 @@ export function Dashboard({ onSelectItem }: DashboardProps) {
                   </button>
                 );
               })}
+
+              {/* Stale notes */}
+              {staleItems.map((item) => (
+                <button
+                  key={item.id}
+                  className="w-full border rounded-lg p-3 text-left hover:bg-accent transition-colors"
+                  onClick={() => onNavigate(item.id)}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="text-sm font-medium truncate flex-1">{item.title}</span>
+                    <Badge variant="outline" className="text-amber-600 dark:text-amber-400">
+                      <Clock className="h-3 w-3 mr-1" />
+                      {item.days_stale} 天未更新
+                    </Badge>
+                  </div>
+                </button>
+              ))}
             </div>
           )}
         </section>
 
-        {/* Section 3: Fleeting Health */}
+        {/* Section 2: Zettelkasten Pipeline */}
         <section className="space-y-3">
           <div className="flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-muted-foreground" />
-            <h2 className="text-sm font-semibold text-muted-foreground">閃念健康度</h2>
+            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+            <h2 className="text-sm font-semibold text-muted-foreground">Zettelkasten 管道</h2>
           </div>
 
-          <div
-            className={`border rounded-lg p-6 text-center space-y-2 ${
-              stats.fleeting_count === 0
-                ? "border-green-300 bg-green-50 dark:border-green-800 dark:bg-green-950"
-                : stats.fleeting_count > 10
-                  ? "border-yellow-300 bg-yellow-50 dark:border-yellow-800 dark:bg-yellow-950"
-                  : ""
-            }`}
-          >
-            <p className="text-3xl font-bold">{stats.fleeting_count}</p>
-            <p className="text-sm text-muted-foreground">
-              {stats.fleeting_count === 0
-                ? "閃念筆記已清空！"
-                : stats.fleeting_count <= 10
-                  ? "閃念筆記狀態良好"
-                  : `有 ${stats.fleeting_count} 筆閃念待整理`}
-            </p>
-            {stats.fleeting_count > 10 && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="mt-2"
-                onClick={() => onViewChange("notes")}
-              >
-                開始整理
-                <ChevronRight className="h-4 w-4 ml-1" />
-              </Button>
-            )}
-            {stats.overdue_count > 0 && (
-              <div className="flex items-center justify-center gap-1 text-sm text-red-500 pt-2">
-                <AlertTriangle className="h-4 w-4" />
-                <span>{stats.overdue_count} 筆已逾期</span>
+          <div className="grid grid-cols-3 gap-2 items-center">
+            <button
+              data-testid="pipeline-fleeting"
+              className="border rounded-lg p-3 text-center hover:bg-accent transition-colors border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950"
+              onClick={() => onViewChange("fleeting")}
+            >
+              <div className="flex items-center justify-center gap-1 text-amber-600 dark:text-amber-400">
+                <Sparkles className="h-3.5 w-3.5" />
+                <p className="text-lg font-bold">{stats.fleeting_count}</p>
               </div>
-            )}
+              <p className="text-xs text-muted-foreground">閃念</p>
+            </button>
+
+            <div className="flex items-center justify-center">
+              <ChevronRight className="h-4 w-4 text-muted-foreground -mx-2" />
+              <button
+                data-testid="pipeline-developing"
+                className="border rounded-lg p-3 text-center hover:bg-accent transition-colors border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950 flex-1"
+                onClick={() => onViewChange("developing")}
+              >
+                <div className="flex items-center justify-center gap-1 text-blue-600 dark:text-blue-400">
+                  <p className="text-lg font-bold">{stats.developing_count}</p>
+                </div>
+                <p className="text-xs text-muted-foreground">發展中</p>
+              </button>
+              <ChevronRight className="h-4 w-4 text-muted-foreground -mx-2" />
+            </div>
+
+            <button
+              data-testid="pipeline-permanent"
+              className="border rounded-lg p-3 text-center hover:bg-accent transition-colors border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950"
+              onClick={() => onViewChange("permanent")}
+            >
+              <div className="flex items-center justify-center gap-1 text-green-600 dark:text-green-400">
+                <p className="text-lg font-bold">{stats.permanent_count}</p>
+              </div>
+              <p className="text-xs text-muted-foreground">永久</p>
+            </button>
           </div>
         </section>
 
-        {/* Section 4: Scratch count (only show if there are scratch items) */}
-        {stats.scratch_count > 0 && (
-          <section>
-            <button
-              className="w-full border rounded-lg p-4 flex items-center justify-between hover:bg-accent transition-colors"
-              onClick={() => onViewChange("scratch")}
-            >
-              <div className="flex items-center gap-2">
-                <StickyNote className="h-4 w-4 text-amber-500" />
-                <span className="text-sm font-medium">暫存區</span>
+        {/* Section 3: Monthly Summary */}
+        <section className="space-y-3">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 text-muted-foreground" />
+            <h2 className="text-sm font-semibold text-muted-foreground">本月活動</h2>
+          </div>
+
+          <div className="border rounded-lg p-4">
+            <div className="flex items-center justify-around text-center">
+              <div>
+                <p className="text-lg font-bold">{stats.created_this_month}</p>
+                <p className="text-xs text-muted-foreground">建立</p>
               </div>
-              <div className="flex items-center gap-2">
-                <span className="text-lg font-bold">{stats.scratch_count}</span>
-                <ChevronRight className="h-4 w-4 text-muted-foreground" />
+              <div className="h-8 w-px bg-border" />
+              <div>
+                <p className="text-lg font-bold">{stats.done_this_month}</p>
+                <p className="text-xs text-muted-foreground">完成</p>
               </div>
-            </button>
+              <div className="h-8 w-px bg-border" />
+              <div>
+                <p className="text-lg font-bold">{stats.exported_this_month}</p>
+                <p className="text-xs text-muted-foreground">匯出</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Section 4: Category Distribution */}
+        {categoryDist.length > 0 && (
+          <section className="space-y-3">
+            <h2 className="text-sm font-semibold text-muted-foreground">分類分布</h2>
+
+            <div className="border rounded-lg p-4 space-y-3">
+              {categoryDist.map((cat) => (
+                <div key={cat.category_id ?? "uncategorized"} className="space-y-1">
+                  <div className="flex items-center justify-between text-sm">
+                    <div className="flex items-center gap-2">
+                      {cat.color && (
+                        <span
+                          className="inline-block h-3 w-3 rounded-full"
+                          style={{ backgroundColor: cat.color }}
+                        />
+                      )}
+                      <span>{cat.category_name}</span>
+                    </div>
+                    <span className="text-muted-foreground">{cat.count}</span>
+                  </div>
+                  <div className="h-2 rounded-full bg-muted">
+                    <div
+                      className="h-2 rounded-full bg-primary"
+                      style={{
+                        width: `${(cat.count / maxCategoryCount) * 100}%`,
+                        backgroundColor: cat.color ?? undefined,
+                      }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
           </section>
         )}
       </div>
