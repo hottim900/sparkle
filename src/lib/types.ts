@@ -132,11 +132,23 @@ export interface ParsedItem extends Omit<Item, "tags" | "aliases"> {
   aliases: string[];
 }
 
+function safeParseStringArray(json: string): string[] {
+  try {
+    const parsed: unknown = JSON.parse(json);
+    if (Array.isArray(parsed) && parsed.every((t) => typeof t === "string")) {
+      return parsed;
+    }
+  } catch {
+    // invalid JSON
+  }
+  return [];
+}
+
 export function parseItem(item: Item): ParsedItem {
   return {
     ...item,
-    tags: JSON.parse(item.tags) as string[],
-    aliases: JSON.parse(item.aliases) as string[],
+    tags: safeParseStringArray(item.tags),
+    aliases: safeParseStringArray(item.aliases),
   };
 }
 
