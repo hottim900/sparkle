@@ -326,4 +326,84 @@ describe("CategoryManagement", () => {
       });
     });
   });
+
+  describe("delete", () => {
+    beforeEach(() => {
+      mockListCategories.mockResolvedValue({ categories: threeCategories });
+    });
+
+    it("opens confirmation dialog on delete click", async () => {
+      const user = userEvent.setup();
+      renderWithContext(<CategoryManagement />);
+
+      await waitFor(() => {
+        expect(screen.getByText("Work")).toBeInTheDocument();
+      });
+
+      const deleteButtons = screen.getAllByTitle("刪除");
+      await user.click(deleteButtons[0]);
+
+      expect(screen.getByText("確認刪除分類")).toBeInTheDocument();
+      expect(screen.getByText(/刪除「Work」？相關項目將變為未分類。/)).toBeInTheDocument();
+    });
+
+    it("deletes category on confirm", async () => {
+      const { toast } = await import("sonner");
+      const user = userEvent.setup();
+      mockDeleteCategory.mockResolvedValue(undefined);
+
+      renderWithContext(<CategoryManagement />);
+
+      await waitFor(() => {
+        expect(screen.getByText("Work")).toBeInTheDocument();
+      });
+
+      const deleteButtons = screen.getAllByTitle("刪除");
+      await user.click(deleteButtons[0]);
+
+      await user.click(screen.getByRole("button", { name: "刪除" }));
+
+      await waitFor(() => {
+        expect(mockDeleteCategory).toHaveBeenCalledWith("cat-1");
+      });
+      expect(toast.success).toHaveBeenCalledWith("已刪除分類");
+    });
+
+    it("cancels delete on cancel button", async () => {
+      const user = userEvent.setup();
+      renderWithContext(<CategoryManagement />);
+
+      await waitFor(() => {
+        expect(screen.getByText("Work")).toBeInTheDocument();
+      });
+
+      const deleteButtons = screen.getAllByTitle("刪除");
+      await user.click(deleteButtons[0]);
+
+      await user.click(screen.getByRole("button", { name: "取消" }));
+
+      expect(mockDeleteCategory).not.toHaveBeenCalled();
+      expect(screen.getByText("Work")).toBeInTheDocument();
+    });
+
+    it("shows error toast on delete failure", async () => {
+      const { toast } = await import("sonner");
+      const user = userEvent.setup();
+      mockDeleteCategory.mockRejectedValue(new Error("Server error"));
+
+      renderWithContext(<CategoryManagement />);
+
+      await waitFor(() => {
+        expect(screen.getByText("Work")).toBeInTheDocument();
+      });
+
+      const deleteButtons = screen.getAllByTitle("刪除");
+      await user.click(deleteButtons[0]);
+      await user.click(screen.getByRole("button", { name: "刪除" }));
+
+      await waitFor(() => {
+        expect(toast.error).toHaveBeenCalled();
+      });
+    });
+  });
 });

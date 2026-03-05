@@ -1,12 +1,26 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { listCategories, createCategory, updateCategory, reorderCategories } from "@/lib/api";
+import {
+  listCategories,
+  createCategory,
+  updateCategory,
+  deleteCategory,
+  reorderCategories,
+} from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
 import type { Category } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Tag, Plus, X, Pencil, ChevronUp, ChevronDown } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Tag, Plus, X, Pencil, ChevronUp, ChevronDown, Trash2 } from "lucide-react";
 
 const PRESET_COLORS = [
   "#ef4444",
@@ -26,6 +40,7 @@ export function CategoryManagement() {
   const [isCreating, setIsCreating] = useState(false);
   const [formName, setFormName] = useState("");
   const [formColor, setFormColor] = useState<string | null>(null);
+  const [deleteDialogId, setDeleteDialogId] = useState<string | null>(null);
 
   const { data: categories = [] } = useQuery({
     queryKey: queryKeys.categories,
@@ -110,6 +125,18 @@ export function CategoryManagement() {
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.categories });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => deleteCategory(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.categories });
+      toast.success("已刪除分類");
+      setDeleteDialogId(null);
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : "刪除分類失敗");
     },
   });
 
@@ -239,6 +266,36 @@ export function CategoryManagement() {
                       <ChevronDown className="h-3.5 w-3.5" />
                     </Button>
                   )}
+                  <Dialog
+                    open={deleteDialogId === cat.id}
+                    onOpenChange={(open) => setDeleteDialogId(open ? cat.id : null)}
+                  >
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 shrink-0 text-destructive"
+                      title="刪除"
+                      onClick={() => setDeleteDialogId(cat.id)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>確認刪除分類</DialogTitle>
+                        <DialogDescription>
+                          刪除「{cat.name}」？相關項目將變為未分類。
+                        </DialogDescription>
+                      </DialogHeader>
+                      <DialogFooter>
+                        <Button variant="outline" onClick={() => setDeleteDialogId(null)}>
+                          取消
+                        </Button>
+                        <Button variant="destructive" onClick={() => deleteMutation.mutate(cat.id)}>
+                          刪除
+                        </Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
                 </div>
               ),
             )}
