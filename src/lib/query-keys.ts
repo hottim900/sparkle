@@ -21,5 +21,7 @@ export const queryKeys = {
   tags: ["tags"] as const,
   stats: ["stats"] as const,
   focus: ["focus"] as const,
+  stale: ["stale"] as const,
+  categoryDistribution: ["categoryDistribution"] as const,
   config: ["config"] as const,
 } as const;

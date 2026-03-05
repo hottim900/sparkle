@@ -88,6 +88,53 @@ export function getStats(sqlite: Database.Database): Stats {
   return row;
 }
 
+export interface StaleItem {
+  id: string;
+  title: string;
+  category_name: string | null;
+  modified: string;
+  days_stale: number;
+}
+
+export function getStaleNotes(sqlite: Database.Database): StaleItem[] {
+  return sqlite
+    .prepare(
+      `SELECT i.id, i.title, c.name AS category_name, i.modified,
+        CAST(julianday('now') - julianday(i.modified) AS INTEGER) AS days_stale
+       FROM items i
+       LEFT JOIN categories c ON i.category_id = c.id
+       WHERE i.status = 'developing'
+         AND i.modified < datetime('now', '-7 days')
+       ORDER BY i.modified ASC
+       LIMIT 10`,
+    )
+    .all() as StaleItem[];
+}
+
+export interface CategoryDistribution {
+  category_id: string | null;
+  category_name: string;
+  color: string | null;
+  count: number;
+}
+
+export function getCategoryDistribution(sqlite: Database.Database): CategoryDistribution[] {
+  return sqlite
+    .prepare(
+      `SELECT
+        i.category_id,
+        COALESCE(c.name, '未分類') AS category_name,
+        c.color,
+        COUNT(*) AS count
+       FROM items i
+       LEFT JOIN categories c ON i.category_id = c.id
+       WHERE i.status NOT IN ('archived', 'done')
+       GROUP BY i.category_id
+       ORDER BY count DESC`,
+    )
+    .all() as CategoryDistribution[];
+}
+
 export interface FocusItem {
   id: string;
   type: string;

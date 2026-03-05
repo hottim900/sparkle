@@ -9,6 +9,8 @@ import type {
   ImportResponse,
   StatsResponse,
   FocusResponse,
+  StaleResponse,
+  CategoryDistributionResponse,
   ConfigResponse,
   SettingsResponse,
   ShareResponse,
@@ -303,6 +305,14 @@ export async function getStats(): Promise<StatsResponse> {
 
 export async function getFocus(): Promise<FocusResponse> {
   return request<FocusResponse>("/stats/focus");
+}
+
+export async function getStaleNotes(): Promise<StaleResponse> {
+  return request<StaleResponse>("/stats/stale");
+}
+
+export async function getCategoryDistribution(): Promise<CategoryDistributionResponse> {
+  return request<CategoryDistributionResponse>("/stats/category-distribution");
 }
 
 // Config API
