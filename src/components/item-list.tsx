@@ -294,6 +294,7 @@ export function ItemList({
     return sortedKeys.map((key) => ({
       key: key ?? "uncategorized",
       name: key ? (categoriesMap.get(key)?.name ?? "未知分類") : "未分類",
+      color: key ? (categoriesMap.get(key)?.color ?? null) : null,
       items: groups.get(key)!,
     }));
   }, [items, categoriesMap]);
@@ -587,6 +588,12 @@ export function ItemList({
                       <ChevronRight className="h-3.5 w-3.5" />
                     ) : (
                       <ChevronDown className="h-3.5 w-3.5" />
+                    )}
+                    {group.color && (
+                      <span
+                        className="inline-block size-2.5 rounded-full shrink-0"
+                        style={{ backgroundColor: group.color }}
+                      />
                     )}
                     {group.name}
                     <span className="text-muted-foreground/60">({group.items.length})</span>
