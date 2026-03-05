@@ -1,5 +1,6 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { renderWithContext } from "@/test-utils";
 import { Settings } from "../settings";
 import type { SettingsResponse } from "@/lib/types";
 
@@ -13,6 +14,11 @@ vi.mock("@/lib/api", () => ({
   updateSettings: (...args: unknown[]) => mockUpdateSettings(...args),
   exportData: (...args: unknown[]) => mockExportData(...args),
   importData: (...args: unknown[]) => mockImportData(...args),
+  listCategories: vi.fn().mockResolvedValue({ categories: [] }),
+  createCategory: vi.fn(),
+  updateCategory: vi.fn(),
+  deleteCategory: vi.fn(),
+  reorderCategories: vi.fn(),
 }));
 
 let mockTheme = "light";
@@ -51,14 +57,14 @@ describe("Settings", () => {
   it("shows loading spinner initially", () => {
     mockGetSettings.mockReturnValue(new Promise(() => {}));
 
-    render(<Settings onSettingsChanged={onSettingsChanged} />);
+    renderWithContext(<Settings onSettingsChanged={onSettingsChanged} />);
     const spinner = document.querySelector(".animate-spin");
     expect(spinner).toBeInTheDocument();
   });
 
   it("renders settings after loading", async () => {
     setupDefaults();
-    render(<Settings onSettingsChanged={onSettingsChanged} />);
+    renderWithContext(<Settings onSettingsChanged={onSettingsChanged} />);
 
     await waitFor(() => {
       expect(screen.getByText("設定")).toBeInTheDocument();
@@ -69,7 +75,7 @@ describe("Settings", () => {
   it("toggles obsidian enabled/disabled", async () => {
     setupDefaults();
     const user = userEvent.setup();
-    render(<Settings onSettingsChanged={onSettingsChanged} />);
+    renderWithContext(<Settings onSettingsChanged={onSettingsChanged} />);
 
     await waitFor(() => {
       expect(screen.getByText("已停用")).toBeInTheDocument();
@@ -81,7 +87,7 @@ describe("Settings", () => {
 
   it("vault path input is disabled when obsidian is off", async () => {
     setupDefaults({ obsidian_enabled: "false" });
-    render(<Settings onSettingsChanged={onSettingsChanged} />);
+    renderWithContext(<Settings onSettingsChanged={onSettingsChanged} />);
 
     await waitFor(() => {
       expect(screen.getByText("設定")).toBeInTheDocument();
@@ -98,7 +104,7 @@ describe("Settings", () => {
     mockUpdateSettings.mockResolvedValue(updatedSettings);
 
     const user = userEvent.setup();
-    render(<Settings onSettingsChanged={onSettingsChanged} />);
+    renderWithContext(<Settings onSettingsChanged={onSettingsChanged} />);
 
     await waitFor(() => {
       expect(screen.getByText("已停用")).toBeInTheDocument();
@@ -125,7 +131,7 @@ describe("Settings", () => {
     mockUpdateSettings.mockRejectedValue(new Error("Server error"));
 
     const user = userEvent.setup();
-    render(<Settings onSettingsChanged={onSettingsChanged} />);
+    renderWithContext(<Settings onSettingsChanged={onSettingsChanged} />);
 
     await waitFor(() => {
       expect(screen.getByText("已停用")).toBeInTheDocument();
@@ -149,7 +155,7 @@ describe("Settings", () => {
     URL.revokeObjectURL = vi.fn();
 
     const user = userEvent.setup();
-    render(<Settings onSettingsChanged={onSettingsChanged} />);
+    renderWithContext(<Settings onSettingsChanged={onSettingsChanged} />);
 
     await waitFor(() => {
       expect(screen.getByText("匯出資料")).toBeInTheDocument();
@@ -166,7 +172,7 @@ describe("Settings", () => {
   it("theme toggle calls setTheme", async () => {
     setupDefaults();
     const user = userEvent.setup();
-    render(<Settings onSettingsChanged={onSettingsChanged} />);
+    renderWithContext(<Settings onSettingsChanged={onSettingsChanged} />);
 
     await waitFor(() => {
       expect(screen.getByText("深色模式")).toBeInTheDocument();
@@ -199,7 +205,7 @@ describe("Settings", () => {
     it("disables save button when offline", async () => {
       setupDefaults();
       const user = userEvent.setup();
-      render(<Settings onSettingsChanged={onSettingsChanged} />);
+      renderWithContext(<Settings onSettingsChanged={onSettingsChanged} />);
 
       await waitFor(() => {
         expect(screen.getByText("已停用")).toBeInTheDocument();
@@ -214,7 +220,7 @@ describe("Settings", () => {
 
     it("keeps export button enabled when offline", async () => {
       setupDefaults();
-      render(<Settings onSettingsChanged={onSettingsChanged} />);
+      renderWithContext(<Settings onSettingsChanged={onSettingsChanged} />);
 
       await waitFor(() => {
         expect(screen.getByText("匯出資料")).toBeInTheDocument();
@@ -225,7 +231,7 @@ describe("Settings", () => {
 
     it("disables import button when offline", async () => {
       setupDefaults();
-      render(<Settings onSettingsChanged={onSettingsChanged} />);
+      renderWithContext(<Settings onSettingsChanged={onSettingsChanged} />);
 
       await waitFor(() => {
         expect(screen.getByText("匯入資料")).toBeInTheDocument();

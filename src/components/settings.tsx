@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useOnlineStatus } from "@/hooks/use-online-status";
+import { CategoryManagement } from "@/components/category-management";
 import {
   Settings as SettingsIcon,
   Loader2,
@@ -228,7 +229,10 @@ export function Settings({ onSettingsChanged }: SettingsProps) {
           </div>
         </section>
 
-        {/* Section 2: General */}
+        {/* Section 2: Category Management */}
+        <CategoryManagement />
+
+        {/* Section 3: General */}
         <section className="space-y-4">
           <div className="flex items-center gap-2">
             <SettingsIcon className="h-4 w-4 text-muted-foreground" />
