@@ -165,6 +165,7 @@ async function replayQueue() {
   if (items.length === 0) return;
 
   const syncedIds: number[] = [];
+  const rejectedIds: number[] = [];
   for (const item of items) {
     try {
       // We need the auth token — get it from clients
@@ -182,7 +183,7 @@ async function replayQueue() {
         if (token) break;
       }
 
-      await fetch("/api/items", {
+      const res = await fetch("/api/items", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -190,6 +191,12 @@ async function replayQueue() {
         },
         body: JSON.stringify(item.body),
       });
+      if (!res.ok) {
+        if (res.status >= 500) break; // 5xx: temporary failure, stop and retry later
+        // 4xx: permanent failure, notify user but continue processing other items
+        rejectedIds.push(item.id);
+        continue;
+      }
       syncedIds.push(item.id);
     } catch {
       // If any request fails, stop and try again later
@@ -197,16 +204,23 @@ async function replayQueue() {
     }
   }
 
-  if (syncedIds.length > 0) {
-    await deleteFromQueue(syncedIds);
+  const idsToDelete = [...syncedIds, ...rejectedIds];
+  if (idsToDelete.length > 0) {
+    await deleteFromQueue(idsToDelete);
   }
 
   // Notify clients about sync results
-  const failedCount = items.length - syncedIds.length;
+  const failedCount = items.length - syncedIds.length - rejectedIds.length;
   const clients = await self.clients.matchAll({ type: "window" });
   for (const client of clients) {
     if (syncedIds.length > 0) {
       client.postMessage({ type: "OFFLINE_SYNC", count: syncedIds.length });
+    }
+    if (rejectedIds.length > 0) {
+      client.postMessage({
+        type: "OFFLINE_SYNC_REJECTED",
+        count: rejectedIds.length,
+      });
     }
     if (failedCount > 0) {
       client.postMessage({ type: "OFFLINE_SYNC_FAILED", count: failedCount });
