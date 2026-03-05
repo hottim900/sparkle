@@ -122,6 +122,7 @@ export function LinkedItemsSection({
       queryClient.invalidateQueries({ queryKey: queryKeys.items.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.tags });
       queryClient.invalidateQueries({ queryKey: queryKeys.stats });
+      queryClient.invalidateQueries({ queryKey: queryKeys.categories });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "建立失敗");
     } finally {
@@ -159,6 +160,9 @@ export function LinkedItemsSection({
       setNoteSearchQuery("");
       setNoteSearchResults([]);
       queryClient.invalidateQueries({ queryKey: queryKeys.items.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.tags });
+      queryClient.invalidateQueries({ queryKey: queryKeys.stats });
+      queryClient.invalidateQueries({ queryKey: queryKeys.categories });
       onSaveStatusChange("saved");
       if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
       savedTimerRef.current = setTimeout(() => onSaveStatusChange("idle"), 2000);
@@ -174,6 +178,9 @@ export function LinkedItemsSection({
       const updated = await updateItem(item.id, { linked_note_id: null });
       onItemChange(parseItem(updated));
       queryClient.invalidateQueries({ queryKey: queryKeys.items.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.tags });
+      queryClient.invalidateQueries({ queryKey: queryKeys.stats });
+      queryClient.invalidateQueries({ queryKey: queryKeys.categories });
       onSaveStatusChange("saved");
       if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
       savedTimerRef.current = setTimeout(() => onSaveStatusChange("idle"), 2000);

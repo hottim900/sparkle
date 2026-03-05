@@ -4,7 +4,7 @@ export function createQueryClient() {
   return new QueryClient({
     defaultOptions: {
       queries: {
-        staleTime: 0,
+        staleTime: 60_000,
         refetchOnWindowFocus: true,
         retry: false, // api.ts already has retry logic
       },
