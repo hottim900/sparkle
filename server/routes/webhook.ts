@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import crypto from "node:crypto";
+import { z } from "zod";
 import { safeCompare } from "../lib/safe-compare.js";
 import { logger } from "../lib/logger.js";
 import { db, sqlite } from "../db/index.js";
@@ -25,6 +26,17 @@ import {
   replyLine,
   STATUS_LABELS,
 } from "../lib/line-format.js";
+
+const lineEventSchema = z.object({
+  type: z.string(),
+  message: z.object({ type: z.string(), text: z.string().optional() }).optional(),
+  source: z.object({ userId: z.string() }).optional(),
+  replyToken: z.string().optional(),
+});
+
+const lineWebhookSchema = z.object({
+  events: z.array(lineEventSchema).default([]),
+});
 
 export const webhookRouter = new Hono();
 
@@ -61,23 +73,24 @@ webhookRouter.post("/line", async (c) => {
     return c.json({ error: "Invalid signature" }, 401);
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let body: any;
+  let parsed: z.infer<typeof lineWebhookSchema>;
   try {
-    body = JSON.parse(rawBody);
+    const json: unknown = JSON.parse(rawBody);
+    parsed = lineWebhookSchema.parse(json);
   } catch {
     return c.json({ error: "Invalid JSON body" }, 400);
   }
-  const events = body.events ?? [];
+  const events = parsed.events;
 
   for (const event of events) {
-    if (event.type !== "message" || event.message.type !== "text") {
-      if (event.type === "message" && event.message.type !== "text" && event.replyToken) {
+    if (event.type !== "message" || event.message?.type !== "text") {
+      if (event.type === "message" && event.message?.type !== "text" && event.replyToken) {
         await replyLine(channelToken, event.replyToken, "📎 目前僅支援文字訊息");
       }
       continue;
     }
 
+    if (!event.message?.text) continue; // narrowing: guaranteed by message.type === "text" check above
     const text: string = event.message.text;
     const userId: string = event.source?.userId ?? "unknown";
     const cmd = parseCommand(text);
