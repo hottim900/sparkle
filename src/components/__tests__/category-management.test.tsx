@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderWithContext } from "@/test-utils";
 import { CategoryManagement } from "../category-management";
@@ -252,6 +252,78 @@ describe("CategoryManagement", () => {
 
       expect(screen.queryByPlaceholderText("分類名稱")).not.toBeInTheDocument();
       expect(screen.getByText("Work")).toBeInTheDocument();
+    });
+  });
+
+  describe("reorder", () => {
+    beforeEach(() => {
+      mockListCategories.mockResolvedValue({ categories: threeCategories });
+      mockReorderCategories.mockResolvedValue(undefined);
+    });
+
+    it("hides up arrow on first item", async () => {
+      renderWithContext(<CategoryManagement />);
+
+      await waitFor(() => {
+        expect(screen.getByText("Work")).toBeInTheDocument();
+      });
+
+      const rows = screen.getAllByTestId("category-row");
+      expect(within(rows[0]).queryByTitle("上移")).not.toBeInTheDocument();
+      expect(within(rows[0]).getByTitle("下移")).toBeInTheDocument();
+    });
+
+    it("hides down arrow on last item", async () => {
+      renderWithContext(<CategoryManagement />);
+
+      await waitFor(() => {
+        expect(screen.getByText("Work")).toBeInTheDocument();
+      });
+
+      const rows = screen.getAllByTestId("category-row");
+      const lastRow = rows[rows.length - 1];
+      expect(within(lastRow).getByTitle("上移")).toBeInTheDocument();
+      expect(within(lastRow).queryByTitle("下移")).not.toBeInTheDocument();
+    });
+
+    it("calls reorder API when moving item down", async () => {
+      const user = userEvent.setup();
+      renderWithContext(<CategoryManagement />);
+
+      await waitFor(() => {
+        expect(screen.getByText("Work")).toBeInTheDocument();
+      });
+
+      const rows = screen.getAllByTestId("category-row");
+      await user.click(within(rows[0]).getByTitle("下移"));
+
+      await waitFor(() => {
+        expect(mockReorderCategories).toHaveBeenCalledWith([
+          { id: "cat-1", sort_order: 1 },
+          { id: "cat-2", sort_order: 0 },
+          { id: "cat-3", sort_order: 2 },
+        ]);
+      });
+    });
+
+    it("calls reorder API when moving item up", async () => {
+      const user = userEvent.setup();
+      renderWithContext(<CategoryManagement />);
+
+      await waitFor(() => {
+        expect(screen.getByText("Work")).toBeInTheDocument();
+      });
+
+      const rows = screen.getAllByTestId("category-row");
+      await user.click(within(rows[1]).getByTitle("上移"));
+
+      await waitFor(() => {
+        expect(mockReorderCategories).toHaveBeenCalledWith([
+          { id: "cat-1", sort_order: 1 },
+          { id: "cat-2", sort_order: 0 },
+          { id: "cat-3", sort_order: 2 },
+        ]);
+      });
     });
   });
 });

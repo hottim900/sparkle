@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { listCategories, createCategory, updateCategory } from "@/lib/api";
+import { listCategories, createCategory, updateCategory, reorderCategories } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
 import type { Category } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Tag, Plus, X, Pencil } from "lucide-react";
+import { Tag, Plus, X, Pencil, ChevronUp, ChevronDown } from "lucide-react";
 
 const PRESET_COLORS = [
   "#ef4444",
@@ -85,10 +85,48 @@ export function CategoryManagement() {
     createMutation.mutate({ name, color: formColor });
   };
 
+  const reorderMutation = useMutation({
+    mutationFn: (items: { id: string; sort_order: number }[]) => reorderCategories(items),
+    onMutate: async (newItems) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.categories });
+      const previous = queryClient.getQueryData<Category[]>(queryKeys.categories);
+      queryClient.setQueryData<Category[]>(queryKeys.categories, (old) => {
+        if (!old) return old;
+        const orderMap = new Map(newItems.map((i) => [i.id, i.sort_order]));
+        return [...old]
+          .map((cat) => ({
+            ...cat,
+            sort_order: orderMap.get(cat.id) ?? cat.sort_order,
+          }))
+          .sort((a, b) => a.sort_order - b.sort_order);
+      });
+      return { previous };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(queryKeys.categories, context.previous);
+      }
+      toast.error("排序失敗");
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.categories });
+    },
+  });
+
   const handleUpdate = () => {
     const name = formName.trim();
     if (!name || !editingId) return;
     updateMutation.mutate({ id: editingId, name, color: formColor });
+  };
+
+  const handleMove = (index: number, direction: "up" | "down") => {
+    const swapIndex = direction === "up" ? index - 1 : index + 1;
+    const newItems = categories.map((cat, i) => {
+      if (i === index) return { id: cat.id, sort_order: categories[swapIndex].sort_order };
+      if (i === swapIndex) return { id: cat.id, sort_order: categories[index].sort_order };
+      return { id: cat.id, sort_order: cat.sort_order };
+    });
+    reorderMutation.mutate(newItems);
   };
 
   const renderInlineForm = (mode: "create" | "edit") => (
@@ -153,7 +191,7 @@ export function CategoryManagement() {
           </div>
         ) : (
           <div className="space-y-1">
-            {categories.map((cat) =>
+            {categories.map((cat, index) =>
               editingId === cat.id ? (
                 <div key={cat.id}>{renderInlineForm("edit")}</div>
               ) : (
@@ -179,6 +217,28 @@ export function CategoryManagement() {
                   >
                     <Pencil className="h-3.5 w-3.5" />
                   </Button>
+                  {index > 0 && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 shrink-0"
+                      title="上移"
+                      onClick={() => handleMove(index, "up")}
+                    >
+                      <ChevronUp className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
+                  {index < categories.length - 1 && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 shrink-0"
+                      title="下移"
+                      onClick={() => handleMove(index, "down")}
+                    >
+                      <ChevronDown className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
                 </div>
               ),
             )}
