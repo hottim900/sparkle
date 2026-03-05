@@ -53,6 +53,9 @@ if ("serviceWorker" in navigator) {
     if (event.data?.type === "OFFLINE_SYNC") {
       toast.success(`已同步 ${event.data.count} 個離線項目`);
     }
+    if (event.data?.type === "OFFLINE_SYNC_REJECTED") {
+      toast.error(`${event.data.count} 個離線項目被伺服器拒絕，已從佇列移除`);
+    }
     if (event.data?.type === "OFFLINE_SYNC_FAILED") {
       toast.warning(`${event.data.count} 個離線項目同步失敗，將稍後重試`);
     }
