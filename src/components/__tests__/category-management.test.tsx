@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { renderWithContext } from "@/test-utils";
 import { CategoryManagement } from "../category-management";
 import type { Category } from "@/lib/types";
@@ -85,6 +86,102 @@ describe("CategoryManagement", () => {
 
       await waitFor(() => {
         expect(screen.getByText("分類管理")).toBeInTheDocument();
+      });
+    });
+  });
+
+  describe("create", () => {
+    beforeEach(() => {
+      mockListCategories.mockResolvedValue({ categories: [] });
+    });
+
+    it("shows create form when '+ 新增分類' is clicked", async () => {
+      const user = userEvent.setup();
+      renderWithContext(<CategoryManagement />);
+
+      await waitFor(() => {
+        expect(screen.getByText("尚無分類")).toBeInTheDocument();
+      });
+
+      await user.click(screen.getByRole("button", { name: /新增分類/ }));
+
+      expect(screen.getByPlaceholderText("分類名稱")).toBeInTheDocument();
+    });
+
+    it("creates category on submit", async () => {
+      const { toast } = await import("sonner");
+      const user = userEvent.setup();
+      const newCat = makeCategory({ id: "cat-new", name: "New Cat" });
+      mockCreateCategory.mockResolvedValue(newCat);
+
+      renderWithContext(<CategoryManagement />);
+
+      await waitFor(() => {
+        expect(screen.getByText("尚無分類")).toBeInTheDocument();
+      });
+
+      await user.click(screen.getByRole("button", { name: /新增分類/ }));
+      await user.type(screen.getByPlaceholderText("分類名稱"), "New Cat");
+
+      // Select a color
+      await user.click(screen.getByTestId("color-#3b82f6"));
+
+      await user.click(screen.getByRole("button", { name: "新增" }));
+
+      await waitFor(() => {
+        expect(mockCreateCategory).toHaveBeenCalledWith({
+          name: "New Cat",
+          color: "#3b82f6",
+        });
+      });
+      expect(toast.success).toHaveBeenCalledWith("已建立分類");
+    });
+
+    it("hides create form on cancel", async () => {
+      const user = userEvent.setup();
+      renderWithContext(<CategoryManagement />);
+
+      await waitFor(() => {
+        expect(screen.getByText("尚無分類")).toBeInTheDocument();
+      });
+
+      await user.click(screen.getByRole("button", { name: /新增分類/ }));
+      expect(screen.getByPlaceholderText("分類名稱")).toBeInTheDocument();
+
+      await user.click(screen.getByRole("button", { name: "取消" }));
+
+      expect(screen.queryByPlaceholderText("分類名稱")).not.toBeInTheDocument();
+    });
+
+    it("does not submit empty name", async () => {
+      const user = userEvent.setup();
+      renderWithContext(<CategoryManagement />);
+
+      await waitFor(() => {
+        expect(screen.getByText("尚無分類")).toBeInTheDocument();
+      });
+
+      await user.click(screen.getByRole("button", { name: /新增分類/ }));
+      expect(screen.getByRole("button", { name: "新增" })).toBeDisabled();
+    });
+
+    it("shows error toast on create failure", async () => {
+      const { toast } = await import("sonner");
+      const user = userEvent.setup();
+      mockCreateCategory.mockRejectedValue(new Error("Category name already exists"));
+
+      renderWithContext(<CategoryManagement />);
+
+      await waitFor(() => {
+        expect(screen.getByText("尚無分類")).toBeInTheDocument();
+      });
+
+      await user.click(screen.getByRole("button", { name: /新增分類/ }));
+      await user.type(screen.getByPlaceholderText("分類名稱"), "Duplicate");
+      await user.click(screen.getByRole("button", { name: "新增" }));
+
+      await waitFor(() => {
+        expect(toast.error).toHaveBeenCalled();
       });
     });
   });
