@@ -470,3 +470,204 @@ describe("GET /api/stats/focus", () => {
     expect(body.items.length).toBe(5);
   });
 });
+
+// ============================================================
+// GET /api/stats/stale Tests
+// ============================================================
+describe("GET /api/stats/stale", () => {
+  it("returns 401 without auth", async () => {
+    const res = await app.request("/api/stats/stale");
+    expect(res.status).toBe(401);
+  });
+
+  it("returns empty array when no stale notes", async () => {
+    const res = await app.request("/api/stats/stale", {
+      headers: authHeaders(),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.items).toEqual([]);
+  });
+
+  it("returns developing notes not modified in >7 days", async () => {
+    const now = new Date().toISOString();
+    const oldDate = "2024-01-01T00:00:00.000Z";
+
+    // Stale developing note (modified long ago)
+    insertItem({
+      id: "stale1",
+      title: "Stale note",
+      type: "note",
+      status: "developing",
+      modified: now,
+    });
+    testSqlite.prepare("UPDATE items SET modified = ? WHERE id = ?").run(oldDate, "stale1");
+
+    // Recent developing note (should NOT appear)
+    insertItem({
+      id: "recent1",
+      title: "Recent note",
+      type: "note",
+      status: "developing",
+      modified: now,
+    });
+
+    // Stale but fleeting note (should NOT appear — only developing)
+    insertItem({
+      id: "fleeting1",
+      title: "Fleeting stale",
+      type: "note",
+      status: "fleeting",
+      modified: now,
+    });
+    testSqlite.prepare("UPDATE items SET modified = ? WHERE id = ?").run(oldDate, "fleeting1");
+
+    const res = await app.request("/api/stats/stale", {
+      headers: authHeaders(),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.items).toHaveLength(1);
+    expect(body.items[0].id).toBe("stale1");
+    expect(body.items[0].title).toBe("Stale note");
+    expect(body.items[0].days_stale).toBeGreaterThan(7);
+  });
+
+  it("includes category name via join", async () => {
+    const oldDate = "2024-06-01T00:00:00.000Z";
+
+    testSqlite
+      .prepare(
+        "INSERT INTO categories (id, name, sort_order, color, created, modified) VALUES (?, ?, ?, ?, ?, ?)",
+      )
+      .run("cat1", "My Category", 0, "#ff0000", oldDate, oldDate);
+
+    insertItem({
+      id: "stale-cat",
+      title: "Categorized stale",
+      type: "note",
+      status: "developing",
+      modified: new Date().toISOString(),
+    });
+    testSqlite
+      .prepare("UPDATE items SET modified = ?, category_id = ? WHERE id = ?")
+      .run(oldDate, "cat1", "stale-cat");
+
+    const res = await app.request("/api/stats/stale", {
+      headers: authHeaders(),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.items).toHaveLength(1);
+    expect(body.items[0].category_name).toBe("My Category");
+  });
+
+  it("orders by modified ASC and limits to 10", async () => {
+    const baseDate = new Date("2024-01-01T00:00:00.000Z");
+
+    for (let i = 0; i < 12; i++) {
+      const modified = new Date(baseDate.getTime() + i * 86400000).toISOString();
+      insertItem({
+        id: `stale-${i}`,
+        title: `Stale ${i}`,
+        type: "note",
+        status: "developing",
+        modified,
+      });
+    }
+
+    const res = await app.request("/api/stats/stale", {
+      headers: authHeaders(),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.items).toHaveLength(10);
+    // First item should be the oldest
+    expect(body.items[0].id).toBe("stale-0");
+    // Last item should be stale-9 (11th and 12th excluded by LIMIT)
+    expect(body.items[9].id).toBe("stale-9");
+  });
+});
+
+// ============================================================
+// GET /api/stats/category-distribution Tests
+// ============================================================
+describe("GET /api/stats/category-distribution", () => {
+  it("returns 401 without auth", async () => {
+    const res = await app.request("/api/stats/category-distribution");
+    expect(res.status).toBe(401);
+  });
+
+  it("returns empty array when no items", async () => {
+    const res = await app.request("/api/stats/category-distribution", {
+      headers: authHeaders(),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.distribution).toEqual([]);
+  });
+
+  it("groups items by category with counts", async () => {
+    const now = new Date().toISOString();
+
+    testSqlite
+      .prepare(
+        "INSERT INTO categories (id, name, sort_order, color, created, modified) VALUES (?, ?, ?, ?, ?, ?)",
+      )
+      .run("cat-a", "Category A", 0, "#aaaaaa", now, now);
+    testSqlite
+      .prepare(
+        "INSERT INTO categories (id, name, sort_order, color, created, modified) VALUES (?, ?, ?, ?, ?, ?)",
+      )
+      .run("cat-b", "Category B", 1, "#bbbbbb", now, now);
+
+    // 3 items in Category A
+    insertItem({ id: "a1", title: "A1", type: "note", status: "fleeting" });
+    insertItem({ id: "a2", title: "A2", type: "note", status: "developing" });
+    insertItem({ id: "a3", title: "A3", type: "todo", status: "active" });
+    testSqlite
+      .prepare("UPDATE items SET category_id = ? WHERE id IN ('a1','a2','a3')")
+      .run("cat-a");
+
+    // 1 item in Category B
+    insertItem({ id: "b1", title: "B1", type: "todo", status: "active" });
+    testSqlite.prepare("UPDATE items SET category_id = ? WHERE id = ?").run("cat-b", "b1");
+
+    // 2 uncategorized items
+    insertItem({ id: "u1", title: "U1", type: "note", status: "fleeting" });
+    insertItem({ id: "u2", title: "U2", type: "todo", status: "active" });
+
+    const res = await app.request("/api/stats/category-distribution", {
+      headers: authHeaders(),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+
+    expect(body.distribution).toHaveLength(3);
+    // Ordered by count DESC
+    expect(body.distribution[0].category_name).toBe("Category A");
+    expect(body.distribution[0].count).toBe(3);
+    expect(body.distribution[0].color).toBe("#aaaaaa");
+
+    expect(body.distribution[1].category_name).toBe("未分類");
+    expect(body.distribution[1].count).toBe(2);
+
+    expect(body.distribution[2].category_name).toBe("Category B");
+    expect(body.distribution[2].count).toBe(1);
+    expect(body.distribution[2].color).toBe("#bbbbbb");
+  });
+
+  it("excludes archived and done items", async () => {
+    insertItem({ id: "done1", title: "Done", status: "done" });
+    insertItem({ id: "arch1", title: "Archived", status: "archived" });
+    insertItem({ id: "act1", title: "Active", status: "active" });
+
+    const res = await app.request("/api/stats/category-distribution", {
+      headers: authHeaders(),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.distribution).toHaveLength(1);
+    expect(body.distribution[0].count).toBe(1);
+  });
+});
