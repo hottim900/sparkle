@@ -20,6 +20,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { useOnlineStatus } from "@/hooks/use-online-status";
 import { Tag, Plus, X, Pencil, ChevronUp, ChevronDown, Trash2 } from "lucide-react";
 
 const PRESET_COLORS = [
@@ -35,6 +36,7 @@ const PRESET_COLORS = [
 
 export function CategoryManagement() {
   const queryClient = useQueryClient();
+  const isOnline = useOnlineStatus();
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
@@ -240,6 +242,7 @@ export function CategoryManagement() {
                     size="icon"
                     className="h-7 w-7 shrink-0"
                     title="編輯"
+                    disabled={!isOnline}
                     onClick={() => startEdit(cat)}
                   >
                     <Pencil className="h-3.5 w-3.5" />
@@ -250,6 +253,7 @@ export function CategoryManagement() {
                       size="icon"
                       className="h-7 w-7 shrink-0"
                       title="上移"
+                      disabled={!isOnline}
                       onClick={() => handleMove(index, "up")}
                     >
                       <ChevronUp className="h-3.5 w-3.5" />
@@ -261,6 +265,7 @@ export function CategoryManagement() {
                       size="icon"
                       className="h-7 w-7 shrink-0"
                       title="下移"
+                      disabled={!isOnline}
                       onClick={() => handleMove(index, "down")}
                     >
                       <ChevronDown className="h-3.5 w-3.5" />
@@ -275,6 +280,7 @@ export function CategoryManagement() {
                       size="icon"
                       className="h-7 w-7 shrink-0 text-destructive"
                       title="刪除"
+                      disabled={!isOnline}
                       onClick={() => setDeleteDialogId(cat.id)}
                     >
                       <Trash2 className="h-3.5 w-3.5" />
@@ -305,7 +311,13 @@ export function CategoryManagement() {
         {isCreating && renderInlineForm("create")}
 
         <div className="mt-3">
-          <Button variant="outline" size="sm" className="gap-1" onClick={startCreate}>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1"
+            disabled={!isOnline}
+            onClick={startCreate}
+          >
             <Plus className="h-4 w-4" />
             新增分類
           </Button>

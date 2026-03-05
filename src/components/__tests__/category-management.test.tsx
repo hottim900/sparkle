@@ -406,4 +406,54 @@ describe("CategoryManagement", () => {
       });
     });
   });
+
+  describe("offline", () => {
+    let originalOnLine: boolean;
+
+    beforeEach(() => {
+      mockListCategories.mockResolvedValue({ categories: threeCategories });
+      originalOnLine = navigator.onLine;
+      Object.defineProperty(navigator, "onLine", {
+        value: false,
+        writable: true,
+        configurable: true,
+      });
+    });
+
+    afterEach(() => {
+      Object.defineProperty(navigator, "onLine", {
+        value: originalOnLine,
+        writable: true,
+        configurable: true,
+      });
+    });
+
+    it("disables mutating buttons when offline", async () => {
+      renderWithContext(<CategoryManagement />, { isOnline: false });
+
+      await waitFor(() => {
+        expect(screen.getByText("Work")).toBeInTheDocument();
+      });
+
+      screen.getAllByTitle("編輯").forEach((btn) => {
+        expect(btn).toBeDisabled();
+      });
+      screen.getAllByTitle("刪除").forEach((btn) => {
+        expect(btn).toBeDisabled();
+      });
+      screen.getAllByTitle("下移").forEach((btn) => {
+        expect(btn).toBeDisabled();
+      });
+    });
+
+    it("disables create button when offline", async () => {
+      renderWithContext(<CategoryManagement />, { isOnline: false });
+
+      await waitFor(() => {
+        expect(screen.getByText("Work")).toBeInTheDocument();
+      });
+
+      expect(screen.getByRole("button", { name: /新增分類/ })).toBeDisabled();
+    });
+  });
 });
