@@ -35,6 +35,7 @@ export function createShareToken(
   visibility: "unlisted" | "public" = "unlisted",
 ): ShareTokenRow | null {
   // Verify item exists and is a note
+  // SAFETY: better-sqlite3 .get() returns unknown; schema enforced by migration
   const item = sqlite.prepare("SELECT id, type FROM items WHERE id = ?").get(itemId) as
     | { id: string; type: string }
     | undefined;
@@ -52,6 +53,7 @@ export function createShareToken(
     )
     .run(id, itemId, token, visibility, now);
 
+  // SAFETY: better-sqlite3 .get() returns unknown; columns match ShareTokenRow by migration schema
   return sqlite.prepare("SELECT * FROM share_tokens WHERE id = ?").get(id) as ShareTokenRow;
 }
 
@@ -72,36 +74,43 @@ export function getShareByToken(sqlite: Database.Database, token: string): Share
       JOIN items i ON i.id = s.item_id
       WHERE s.token = ?`,
     )
+    // SAFETY: better-sqlite3 .get() returns unknown; columns match ShareWithItem by query + migration schema
     .get(token) as ShareWithItem | undefined;
 
   return row ?? null;
 }
 
 export function listShares(sqlite: Database.Database): ShareListItem[] {
-  return sqlite
-    .prepare(
-      `SELECT
+  return (
+    sqlite
+      .prepare(
+        `SELECT
         s.id, s.item_id, s.token, s.visibility, s.created,
         i.title AS item_title
       FROM share_tokens s
       JOIN items i ON i.id = s.item_id
       ORDER BY s.created DESC`,
-    )
-    .all() as ShareListItem[];
+      )
+      // SAFETY: better-sqlite3 .all() returns unknown[]; columns match ShareListItem by query + migration schema
+      .all() as ShareListItem[]
+  );
 }
 
 export function listPublicShares(sqlite: Database.Database): ShareListItem[] {
-  return sqlite
-    .prepare(
-      `SELECT
+  return (
+    sqlite
+      .prepare(
+        `SELECT
         s.id, s.item_id, s.token, s.visibility, s.created,
         i.title AS item_title
       FROM share_tokens s
       JOIN items i ON i.id = s.item_id
       WHERE s.visibility = 'public'
       ORDER BY s.created DESC`,
-    )
-    .all() as ShareListItem[];
+      )
+      // SAFETY: better-sqlite3 .all() returns unknown[]; columns match ShareListItem by query + migration schema
+      .all() as ShareListItem[]
+  );
 }
 
 export function revokeShare(sqlite: Database.Database, shareId: string): boolean {
@@ -110,7 +119,10 @@ export function revokeShare(sqlite: Database.Database, shareId: string): boolean
 }
 
 export function getSharesByItemId(sqlite: Database.Database, itemId: string): ShareTokenRow[] {
-  return sqlite
-    .prepare("SELECT * FROM share_tokens WHERE item_id = ? ORDER BY created DESC")
-    .all(itemId) as ShareTokenRow[];
+  return (
+    sqlite
+      .prepare("SELECT * FROM share_tokens WHERE item_id = ? ORDER BY created DESC")
+      // SAFETY: better-sqlite3 .all() returns unknown[]; columns match ShareTokenRow by migration schema
+      .all(itemId) as ShareTokenRow[]
+  );
 }

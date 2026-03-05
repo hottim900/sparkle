@@ -174,9 +174,9 @@ export function createItem(db: DB, input: Partial<CreateItemInput> & { title: st
   const values = {
     id,
     title: input.title,
-    type: type as "note" | "todo" | "scratch",
+    type: type as "note" | "todo" | "scratch", // SAFETY: Drizzle enum; validated by caller
     content: input.content ?? "",
-    status: status as "fleeting",
+    status: status as "fleeting", // SAFETY: Drizzle enum; validated by caller or defaultStatusForType
     priority: type === "scratch" ? null : (input.priority ?? null),
     due: type === "todo" ? (input.due ?? null) : null,
     tags: type === "scratch" ? "[]" : JSON.stringify(input.tags ?? []),
@@ -217,12 +217,15 @@ export function listItems(
   const conditions = [];
 
   if (filters?.status) {
+    // SAFETY: Drizzle requires literal union type; value is validated by Zod in route layer
     conditions.push(eq(items.status, filters.status as "fleeting"));
   }
   if (filters?.excludeStatus && filters.excludeStatus.length > 0) {
+    // SAFETY: Drizzle requires literal union type; values are validated by Zod in route layer
     conditions.push(notInArray(items.status, filters.excludeStatus as ["fleeting"]));
   }
   if (filters?.type) {
+    // SAFETY: Drizzle requires literal union type; value is validated by Zod in route layer
     conditions.push(eq(items.type, filters.type as "note"));
   }
   if (filters?.linked_note_id) {
@@ -407,6 +410,7 @@ export function searchItems(
       ORDER BY created DESC
       LIMIT ?
     `);
+    // SAFETY: better-sqlite3 returns unknown[]; columns match items schema by migration
     const rows = stmt.all(pattern, pattern, limit) as (typeof items.$inferSelect)[];
     return resolveLinkedInfo(db, rows);
   }
@@ -421,6 +425,7 @@ export function searchItems(
     LIMIT ?
   `);
 
+  // SAFETY: better-sqlite3 returns unknown[]; columns match items schema by migration
   const rows = stmt.all(escaped, limit) as (typeof items.$inferSelect)[];
   return resolveLinkedInfo(db, rows);
 }
@@ -433,6 +438,7 @@ export function getAllTags(sqlite: Database.Database): string[] {
     ORDER BY value
   `);
 
+  // SAFETY: better-sqlite3 returns unknown[]; single-column query result
   const rows = stmt.all() as { tag: string }[];
   return rows.map((r) => r.tag);
 }
