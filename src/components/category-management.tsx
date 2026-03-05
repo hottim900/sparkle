@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { listCategories, createCategory } from "@/lib/api";
+import { listCategories, createCategory, updateCategory } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
+import type { Category } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Tag, Plus, X } from "lucide-react";
+import { Tag, Plus, X, Pencil } from "lucide-react";
 
 const PRESET_COLORS = [
   "#ef4444",
@@ -21,6 +22,7 @@ const PRESET_COLORS = [
 export function CategoryManagement() {
   const queryClient = useQueryClient();
 
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [formName, setFormName] = useState("");
   const [formColor, setFormColor] = useState<string | null>(null);
@@ -43,14 +45,36 @@ export function CategoryManagement() {
     },
   });
 
+  const updateMutation = useMutation({
+    mutationFn: ({ id, ...params }: { id: string; name: string; color: string | null }) =>
+      updateCategory(id, params),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.categories });
+      toast.success("已更新分類");
+      cancelForm();
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : "更新分類失敗");
+    },
+  });
+
   const startCreate = () => {
+    setEditingId(null);
     setIsCreating(true);
     setFormName("");
     setFormColor(null);
   };
 
+  const startEdit = (cat: Category) => {
+    setIsCreating(false);
+    setEditingId(cat.id);
+    setFormName(cat.name);
+    setFormColor(cat.color);
+  };
+
   const cancelForm = () => {
     setIsCreating(false);
+    setEditingId(null);
     setFormName("");
     setFormColor(null);
   };
@@ -60,6 +84,58 @@ export function CategoryManagement() {
     if (!name) return;
     createMutation.mutate({ name, color: formColor });
   };
+
+  const handleUpdate = () => {
+    const name = formName.trim();
+    if (!name || !editingId) return;
+    updateMutation.mutate({ id: editingId, name, color: formColor });
+  };
+
+  const renderInlineForm = (mode: "create" | "edit") => (
+    <div className="mt-3 space-y-3 rounded-md border p-3">
+      <Input
+        placeholder="分類名稱"
+        value={formName}
+        onChange={(e) => setFormName(e.target.value)}
+      />
+      <div className="flex items-center gap-1.5">
+        {PRESET_COLORS.map((color) => (
+          <button
+            key={color}
+            type="button"
+            data-testid={`color-${color}`}
+            className={`size-6 rounded-full transition-all ${
+              formColor === color ? "ring-2 ring-offset-2 ring-primary" : ""
+            }`}
+            style={{ backgroundColor: color }}
+            onClick={() => setFormColor(color)}
+          />
+        ))}
+        {formColor && (
+          <button
+            type="button"
+            className="ml-1 text-muted-foreground hover:text-foreground"
+            onClick={() => setFormColor(null)}
+            title="清除顏色"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
+      </div>
+      <div className="flex gap-2">
+        <Button
+          size="sm"
+          onClick={mode === "create" ? handleCreate : handleUpdate}
+          disabled={!formName.trim()}
+        >
+          {mode === "create" ? "新增" : "儲存"}
+        </Button>
+        <Button size="sm" variant="outline" onClick={cancelForm}>
+          取消
+        </Button>
+      </div>
+    </div>
+  );
 
   return (
     <section className="space-y-4">
@@ -77,66 +153,39 @@ export function CategoryManagement() {
           </div>
         ) : (
           <div className="space-y-1">
-            {categories.map((cat) => (
-              <div
-                key={cat.id}
-                data-testid="category-row"
-                className="flex items-center gap-2 rounded-md border p-2"
-              >
-                {cat.color && (
-                  <span
-                    data-testid="category-color-dot"
-                    className="inline-block size-3 rounded-full shrink-0"
-                    style={{ backgroundColor: cat.color }}
-                  />
-                )}
-                <span className="flex-1 text-sm">{cat.name}</span>
-              </div>
-            ))}
+            {categories.map((cat) =>
+              editingId === cat.id ? (
+                <div key={cat.id}>{renderInlineForm("edit")}</div>
+              ) : (
+                <div
+                  key={cat.id}
+                  data-testid="category-row"
+                  className="flex items-center gap-2 rounded-md border p-2"
+                >
+                  {cat.color && (
+                    <span
+                      data-testid="category-color-dot"
+                      className="inline-block size-3 rounded-full shrink-0"
+                      style={{ backgroundColor: cat.color }}
+                    />
+                  )}
+                  <span className="flex-1 text-sm">{cat.name}</span>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 shrink-0"
+                    title="編輯"
+                    onClick={() => startEdit(cat)}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              ),
+            )}
           </div>
         )}
 
-        {isCreating && (
-          <div className="mt-3 space-y-3 rounded-md border p-3">
-            <Input
-              placeholder="分類名稱"
-              value={formName}
-              onChange={(e) => setFormName(e.target.value)}
-            />
-            <div className="flex items-center gap-1.5">
-              {PRESET_COLORS.map((color) => (
-                <button
-                  key={color}
-                  type="button"
-                  data-testid={`color-${color}`}
-                  className={`size-6 rounded-full transition-all ${
-                    formColor === color ? "ring-2 ring-offset-2 ring-primary" : ""
-                  }`}
-                  style={{ backgroundColor: color }}
-                  onClick={() => setFormColor(color)}
-                />
-              ))}
-              {formColor && (
-                <button
-                  type="button"
-                  className="ml-1 text-muted-foreground hover:text-foreground"
-                  onClick={() => setFormColor(null)}
-                  title="清除顏色"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              )}
-            </div>
-            <div className="flex gap-2">
-              <Button size="sm" onClick={handleCreate} disabled={!formName.trim()}>
-                新增
-              </Button>
-              <Button size="sm" variant="outline" onClick={cancelForm}>
-                取消
-              </Button>
-            </div>
-          </div>
-        )}
+        {isCreating && renderInlineForm("create")}
 
         <div className="mt-3">
           <Button variant="outline" size="sm" className="gap-1" onClick={startCreate}>

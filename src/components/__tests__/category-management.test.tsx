@@ -185,4 +185,73 @@ describe("CategoryManagement", () => {
       });
     });
   });
+
+  describe("edit", () => {
+    beforeEach(() => {
+      mockListCategories.mockResolvedValue({ categories: threeCategories });
+    });
+
+    it("shows edit form when edit button is clicked", async () => {
+      const user = userEvent.setup();
+      renderWithContext(<CategoryManagement />);
+
+      await waitFor(() => {
+        expect(screen.getByText("Work")).toBeInTheDocument();
+      });
+
+      const editButtons = screen.getAllByTitle("編輯");
+      await user.click(editButtons[0]);
+
+      const input = screen.getByPlaceholderText("分類名稱");
+      expect(input).toHaveValue("Work");
+    });
+
+    it("saves edited category", async () => {
+      const { toast } = await import("sonner");
+      const user = userEvent.setup();
+      mockUpdateCategory.mockResolvedValue(makeCategory({ id: "cat-1", name: "Updated Work" }));
+
+      renderWithContext(<CategoryManagement />);
+
+      await waitFor(() => {
+        expect(screen.getByText("Work")).toBeInTheDocument();
+      });
+
+      const editButtons = screen.getAllByTitle("編輯");
+      await user.click(editButtons[0]);
+
+      const input = screen.getByPlaceholderText("分類名稱");
+      await user.clear(input);
+      await user.type(input, "Updated Work");
+
+      await user.click(screen.getByRole("button", { name: "儲存" }));
+
+      await waitFor(() => {
+        expect(mockUpdateCategory).toHaveBeenCalledWith("cat-1", {
+          name: "Updated Work",
+          color: "#3b82f6",
+        });
+      });
+      expect(toast.success).toHaveBeenCalledWith("已更新分類");
+    });
+
+    it("closes edit form on cancel", async () => {
+      const user = userEvent.setup();
+      renderWithContext(<CategoryManagement />);
+
+      await waitFor(() => {
+        expect(screen.getByText("Work")).toBeInTheDocument();
+      });
+
+      const editButtons = screen.getAllByTitle("編輯");
+      await user.click(editButtons[0]);
+
+      expect(screen.getByPlaceholderText("分類名稱")).toBeInTheDocument();
+
+      await user.click(screen.getByRole("button", { name: "取消" }));
+
+      expect(screen.queryByPlaceholderText("分類名稱")).not.toBeInTheDocument();
+      expect(screen.getByText("Work")).toBeInTheDocument();
+    });
+  });
 });
