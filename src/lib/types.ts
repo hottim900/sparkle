@@ -92,6 +92,29 @@ export interface FocusResponse {
   items: Item[];
 }
 
+export interface StaleItem {
+  id: string;
+  title: string;
+  category_name: string | null;
+  modified: string;
+  days_stale: number;
+}
+
+export interface StaleResponse {
+  items: StaleItem[];
+}
+
+export interface CategoryDistribution {
+  category_id: string | null;
+  category_name: string;
+  color: string | null;
+  count: number;
+}
+
+export interface CategoryDistributionResponse {
+  distribution: CategoryDistribution[];
+}
+
 export interface ConfigResponse {
   obsidian_export_enabled: boolean;
 }
