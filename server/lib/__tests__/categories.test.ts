@@ -10,7 +10,11 @@ import {
   deleteCategory,
   reorderCategories,
 } from "../categories.js";
-import { createCategorySchema } from "../../schemas/categories.js";
+import {
+  createCategorySchema,
+  updateCategorySchema,
+  reorderCategoriesSchema,
+} from "../../schemas/categories.js";
 import { createItem } from "../items.js";
 
 describe("Categories", () => {
@@ -204,6 +208,27 @@ describe("Categories", () => {
       expect(list[1]!.sort_order).toBe(1);
       expect(list[2]!.name).toBe("A");
       expect(list[2]!.sort_order).toBe(2);
+    });
+  });
+
+  describe("schema validation", () => {
+    it("rejects invalid hex color format", () => {
+      const result = updateCategorySchema.safeParse({ color: "#gggggg" });
+      expect(result.success).toBe(false);
+    });
+
+    it("rejects sort_order exceeding 999999", () => {
+      const result = updateCategorySchema.safeParse({ sort_order: 1000000 });
+      expect(result.success).toBe(false);
+    });
+
+    it("rejects reorder items exceeding 500", () => {
+      const items = Array.from({ length: 501 }, (_, i) => ({
+        id: "550e8400-e29b-41d4-a716-446655440000",
+        sort_order: i,
+      }));
+      const result = reorderCategoriesSchema.safeParse({ items });
+      expect(result.success).toBe(false);
     });
   });
 });
