@@ -494,6 +494,20 @@ describe("Items CRUD", () => {
       expect(withTodos.linked_todo_count).toBe(2);
       expect(withoutTodos.linked_todo_count).toBe(0);
     });
+
+    it("returns 400 when limit exceeds 100", async () => {
+      const res = await app.request("/api/items?limit=101", {
+        headers: jsonHeaders(),
+      });
+      expect(res.status).toBe(400);
+    });
+
+    it("returns 400 when offset is negative", async () => {
+      const res = await app.request("/api/items?offset=-1", {
+        headers: jsonHeaders(),
+      });
+      expect(res.status).toBe(400);
+    });
   });
 
   describe("GET /api/items/:id", () => {
@@ -903,6 +917,13 @@ describe("Search", () => {
     });
     expect(res.status).toBe(400);
   });
+
+  it("returns 400 when q exceeds 1000 characters", async () => {
+    const res = await app.request(`/api/search?q=${"a".repeat(1001)}`, {
+      headers: jsonHeaders(),
+    });
+    expect(res.status).toBe(400);
+  });
 });
 
 // ============================================================
@@ -1058,6 +1079,19 @@ describe("POST /api/items/batch", () => {
       method: "POST",
       headers: jsonHeaders(),
       body: JSON.stringify({ ids: [], action: "archive" }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 400 when ids exceeds 1000", async () => {
+    const ids = Array.from(
+      { length: 1001 },
+      (_, i) => `550e8400-e29b-41d4-a716-${String(i).padStart(12, "0")}`,
+    );
+    const res = await app.request("/api/items/batch", {
+      method: "POST",
+      headers: jsonHeaders(),
+      body: JSON.stringify({ ids, action: "archive" }),
     });
     expect(res.status).toBe(400);
   });
