@@ -29,7 +29,7 @@ import { db, sqlite, DB_PATH } from "./db/index.js";
 import { items } from "./db/schema.js";
 import { checkHealth } from "./lib/health.js";
 import { dirname } from "node:path";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { getAllTags } from "./lib/items.js";
 import { getObsidianSettings } from "./lib/settings.js";
 import { z, ZodError } from "zod";
@@ -183,11 +183,19 @@ app.get("/api/config", (c) => {
 
 // Export all items (new field names)
 app.get("/api/export", (c) => {
-  const allItems = db.select().from(items).all();
+  const EXPORT_LIMIT = 50000;
+  const allItems = db.select().from(items).limit(EXPORT_LIMIT).all();
+  const total = db
+    .select({ count: sql<number>`count(*)` })
+    .from(items)
+    .get();
+  const totalCount = total?.count ?? allItems.length;
   return c.json({
     version: 2,
     exported_at: new Date().toISOString(),
     items: allItems,
+    total: totalCount,
+    truncated: allItems.length >= EXPORT_LIMIT,
   });
 });
 
