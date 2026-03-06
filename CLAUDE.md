@@ -36,7 +36,7 @@ DB migration version 0→13, idempotent. Migration safety enforced by PostToolUs
 - PR 原則：按風險隔離。DB migration 獨立 PR。不同風險等級不混合。
 - Merge：`gh pr merge --squash --auto`。DB migration PR merge 後等 deploy + health check 通過才繼續。
 - Session 管理：不相關任務之間用 `/clear` 重置 context。長 session 品質下降時 `/compact` 或 `/clear`。
-- Agent/Teammate：**(0) 驗證不在 main 上** (1) commit 前 `npm run lint:fix && npm run format` (2) 在 worktree 或 feature branch 工作 (3) 完成後開 PR。
+- Agent/Teammate：**(0) 驗證不在 main 上** (1) commit 前 `npm run lint:fix && npm run format && npx tsc --noEmit` (2) 在 worktree 或 feature branch 工作 (3) 完成後開 PR。
 
 Detailed module conventions (API retry, PWA, Logging, Sentry, CSP, Offline UI, State management, CI/CD, Sharing, Export, Data Model fields) auto-loaded via `conventions-detail` skill.
 
