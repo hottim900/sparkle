@@ -271,10 +271,10 @@ app.post("/api/import", async (c) => {
             status: item.status,
             priority: item.priority,
             due: item.due,
-            tags: item.tags,
+            tags: JSON.stringify(item.tags),
             origin: item.origin,
             source: item.source,
-            aliases: item.aliases,
+            aliases: JSON.stringify(item.aliases),
             linked_note_id: item.linked_note_id,
             created: item.created,
             modified: item.modified,
@@ -283,7 +283,13 @@ app.post("/api/import", async (c) => {
           .run();
         updated++;
       } else {
-        db.insert(items).values(item).run();
+        db.insert(items)
+          .values({
+            ...item,
+            tags: JSON.stringify(item.tags),
+            aliases: JSON.stringify(item.aliases),
+          })
+          .run();
         imported++;
       }
     }
