@@ -497,6 +497,7 @@ export function ItemDetail({ itemId, onDeleted }: ItemDetailProps) {
 
         {/* Metadata */}
         <div className="text-xs text-muted-foreground space-y-1">
+          <p>ID: {item.id}</p>
           <p>建立: {new Date(item.created).toLocaleString("zh-TW")}</p>
           <p>更新: {new Date(item.modified).toLocaleString("zh-TW")}</p>
         </div>
