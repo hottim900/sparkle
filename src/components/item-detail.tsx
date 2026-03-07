@@ -281,6 +281,12 @@ export function ItemDetail({ itemId, onDeleted }: ItemDetailProps) {
           placeholder="標題"
         />
 
+        {/* Metadata */}
+        <div className="text-xs text-muted-foreground font-mono">
+          {item.id} · 建立 {new Date(item.created).toLocaleString("zh-TW")} · 更新{" "}
+          {new Date(item.modified).toLocaleString("zh-TW")}
+        </div>
+
         {/* Type + Status + Priority row */}
         <div className="flex gap-2 flex-wrap">
           <Select
@@ -494,13 +500,6 @@ export function ItemDetail({ itemId, onDeleted }: ItemDetailProps) {
             }
           }}
         />
-
-        {/* Metadata */}
-        <div className="text-xs text-muted-foreground space-y-1">
-          <p>ID: {item.id}</p>
-          <p>建立: {new Date(item.created).toLocaleString("zh-TW")}</p>
-          <p>更新: {new Date(item.modified).toLocaleString("zh-TW")}</p>
-        </div>
       </div>
 
       {/* Share Dialog */}
