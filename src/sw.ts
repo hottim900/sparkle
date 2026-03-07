@@ -25,6 +25,10 @@ registerRoute(
     cacheName: "pages",
     plugins: [
       {
+        // Only cache responses from Sparkle server, not CF Access challenge pages
+        cacheWillUpdate: async ({ response }) => {
+          return response && response.headers.get("X-Sparkle") === "1" ? response : null;
+        },
         handlerDidError: async () => {
           return (
             (await matchPrecache("index.html")) ||
@@ -52,7 +56,9 @@ registerRoute(
     plugins: [
       {
         cacheWillUpdate: async ({ response }) => {
-          return response && response.status === 200 ? response : null;
+          return response && response.status === 200 && response.headers.get("X-Sparkle") === "1"
+            ? response
+            : null;
         },
         fetchDidFail: async ({ request }) => {
           failedFetches.add(request.url);
