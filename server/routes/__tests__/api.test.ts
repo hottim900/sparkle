@@ -562,6 +562,30 @@ describe("Items CRUD", () => {
       const body = await res.json();
       expect(body.error).toMatch(/not found/i);
     });
+
+    it("resolves short ID prefix (8 chars) to full item", async () => {
+      const createRes = await app.request("/api/items", {
+        method: "POST",
+        headers: jsonHeaders(),
+        body: JSON.stringify({ title: "Prefix Test" }),
+      });
+      const created = await createRes.json();
+      const shortId = created.id.substring(0, 8);
+
+      const res = await app.request(`/api/items/${shortId}`, {
+        headers: authHeaders(),
+      });
+      expect(res.status).toBe(200);
+      const item = await res.json();
+      expect(item.id).toBe(created.id);
+    });
+
+    it("returns 404 for non-matching prefix", async () => {
+      const res = await app.request("/api/items/zzzzzzzz", {
+        headers: authHeaders(),
+      });
+      expect(res.status).toBe(404);
+    });
   });
 
   describe("PATCH /api/items/:id", () => {

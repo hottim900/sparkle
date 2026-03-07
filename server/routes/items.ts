@@ -215,13 +215,26 @@ itemsRouter.post("/:id/export", (c) => {
   }
 });
 
-// Get single item
+// Get single item (supports full UUID or short ID prefix)
 itemsRouter.get("/:id", (c) => {
-  const item = getItem(db, c.req.param("id"));
-  if (!item) {
-    return c.json({ error: "Item not found" }, 404);
+  try {
+    const item = getItem(db, c.req.param("id"));
+    if (!item) {
+      return c.json({ error: "Item not found" }, 404);
+    }
+    return c.json(item);
+  } catch (e) {
+    if ((e as { status?: number }).status === 409) {
+      return c.json(
+        {
+          error: (e as Error).message,
+          matches: (e as { matches: string[] }).matches,
+        },
+        409,
+      );
+    }
+    throw e;
   }
-  return c.json(item);
 });
 
 // Update item
