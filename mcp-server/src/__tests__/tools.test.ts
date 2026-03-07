@@ -14,6 +14,7 @@ vi.mock("../client.js", () => ({
 }));
 
 import * as client from "../client.js";
+import { registerReadTools } from "../tools/read.js";
 import { registerSearchTools } from "../tools/search.js";
 import { registerWriteTools } from "../tools/write.js";
 import { registerWorkflowTools } from "../tools/workflow.js";
@@ -57,6 +58,44 @@ describe("sparkle_search", () => {
     const result = await handler({ query: "fail", limit: 20 });
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain("Network error");
+  });
+});
+
+describe("sparkle_get_note", () => {
+  function getReadHandler() {
+    const server = makeMockServer();
+    registerReadTools(server as never);
+    return server.getHandler("sparkle_get_note");
+  }
+
+  it("accepts short ID prefix (8 chars)", async () => {
+    const handler = getReadHandler();
+    const item = makeItem({ title: "Found by prefix" });
+    getItem.mockResolvedValue(item);
+
+    const result = await handler({ id: "a4662876" });
+    expect(result.isError).toBeUndefined();
+    expect(result.content[0].text).toContain("Found by prefix");
+    expect(getItem).toHaveBeenCalledWith("a4662876");
+  });
+
+  it("still accepts full UUID", async () => {
+    const handler = getReadHandler();
+    const item = makeItem();
+    getItem.mockResolvedValue(item);
+
+    const result = await handler({ id: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee" });
+    expect(result.isError).toBeUndefined();
+    expect(getItem).toHaveBeenCalledWith("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee");
+  });
+
+  it("returns error when item not found", async () => {
+    const handler = getReadHandler();
+    getItem.mockRejectedValue(new Error("Not found"));
+
+    const result = await handler({ id: "deadbeef" });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain("Not found");
   });
 });
 

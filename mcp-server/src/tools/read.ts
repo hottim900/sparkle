@@ -8,14 +8,15 @@ export function registerReadTools(server: McpServer): void {
     "sparkle_get_note",
     {
       title: "Get Sparkle Note",
-      description: `Read a single Sparkle note or todo by ID. Returns full content, metadata, tags, aliases, and linked items info.
+      description: `Read a single Sparkle note or todo by ID. Supports full UUID or short ID prefix (min 4 chars, e.g. "a4662876").
 
 Args:
-  - id (string): Item UUID
+  - id (string): Full UUID or short ID prefix (min 4 chars)
 
-Returns: Full item with title, content, status, tags, aliases, linked items, and metadata.`,
+Returns: Full item with title, content, status, tags, aliases, linked items, and metadata.
+If prefix matches multiple items, returns error with candidate IDs.`,
       inputSchema: {
-        id: z.string().uuid().describe("Item UUID"),
+        id: z.string().min(4).describe("Item UUID or short ID prefix (min 4 chars)"),
       },
       annotations: {
         readOnlyHint: true,
@@ -60,10 +61,25 @@ Args:
 
 Returns: List of items with total count and pagination info.`,
       inputSchema: {
-        status: z.enum(["fleeting", "developing", "permanent", "exported", "active", "done", "draft", "archived"]).optional().describe("Filter by status"),
+        status: z
+          .enum([
+            "fleeting",
+            "developing",
+            "permanent",
+            "exported",
+            "active",
+            "done",
+            "draft",
+            "archived",
+          ])
+          .optional()
+          .describe("Filter by status"),
         tag: z.string().optional().describe("Filter by tag name"),
         type: z.enum(["note", "todo", "scratch"]).default("note").describe("Item type"),
-        sort: z.enum(["created", "modified", "priority", "due"]).default("created").describe("Sort field"),
+        sort: z
+          .enum(["created", "modified", "priority", "due"])
+          .default("created")
+          .describe("Sort field"),
         limit: z.number().int().min(1).max(100).default(50).describe("Max results"),
         offset: z.number().int().min(0).default(0).describe("Pagination offset"),
       },

@@ -1,4 +1,4 @@
-import { eq, desc, asc, sql, and, notInArray, inArray } from "drizzle-orm";
+import { eq, desc, asc, sql, and, notInArray, inArray, like } from "drizzle-orm";
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import type Database from "better-sqlite3";
 import { v4 as uuidv4 } from "uuid";
@@ -193,10 +193,35 @@ export function createItem(db: DB, input: Partial<CreateItemInput> & { title: st
   return db.select().from(items).where(eq(items.id, id)).get()!;
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 export function getItem(db: DB, id: string): ItemWithLinkedInfo | null {
-  const row = db.select().from(items).where(eq(items.id, id)).get() ?? null;
-  if (!row) return null;
-  return resolveLinkedInfo(db, [row])[0]!;
+  // Full UUID — exact match (fast path)
+  if (UUID_RE.test(id)) {
+    const row = db.select().from(items).where(eq(items.id, id)).get() ?? null;
+    if (!row) return null;
+    return resolveLinkedInfo(db, [row])[0]!;
+  }
+
+  // Short prefix — LIKE match (min 4 chars)
+  if (id.length < 4) return null;
+  const rows = db
+    .select()
+    .from(items)
+    .where(like(items.id, `${id}%`))
+    .limit(2)
+    .all();
+  if (rows.length === 0) return null;
+  if (rows.length > 1) {
+    const error = new Error(`Ambiguous ID prefix '${id}' matches multiple items`) as Error & {
+      status: number;
+      matches: string[];
+    };
+    error.status = 409;
+    error.matches = rows.map((r) => r.id);
+    throw error;
+  }
+  return resolveLinkedInfo(db, [rows[0]!])[0]!;
 }
 
 export function listItems(
