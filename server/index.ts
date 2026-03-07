@@ -99,6 +99,11 @@ if (lineSecret || lineToken) {
 const app = new Hono();
 
 app.use("*", requestLogger);
+// Marker header for SW to distinguish Sparkle responses from CF Access pages
+app.use("*", async (c, next) => {
+  await next();
+  c.res.headers.set("X-Sparkle", "1");
+});
 app.use("*", compress());
 app.use("*", async (c, next) => {
   await next();
