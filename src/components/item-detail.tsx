@@ -283,7 +283,18 @@ export function ItemDetail({ itemId, onDeleted }: ItemDetailProps) {
 
         {/* Metadata */}
         <div className="text-xs text-muted-foreground font-mono">
-          {item.id} · 建立 {new Date(item.created).toLocaleString("zh-TW")} · 更新{" "}
+          <button
+            type="button"
+            className="hover:text-foreground transition-colors cursor-pointer"
+            title="點擊複製完整 ID"
+            onClick={() => {
+              navigator.clipboard.writeText(item.id);
+              toast.success("已複製 ID");
+            }}
+          >
+            {item.id.split("-")[0]}
+          </button>
+          {" · "}建立 {new Date(item.created).toLocaleString("zh-TW")} · 更新{" "}
           {new Date(item.modified).toLocaleString("zh-TW")}
         </div>
 
