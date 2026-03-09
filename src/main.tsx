@@ -62,6 +62,16 @@ if ("serviceWorker" in navigator) {
     if (event.data?.type === "CACHE_FALLBACK") {
       toast.info("離線模式：顯示的是快取資料", { id: "offline-fallback" });
     }
+    if (event.data?.type === "FETCH_DIAG") {
+      const { url, online, error, time } = event.data;
+      const entry = `[${time}] online=${online} err=${error} url=${url}`;
+      console.warn("[SW fetch-diag]", entry);
+      // Persist last 20 entries in localStorage for post-mortem analysis
+      const log = JSON.parse(localStorage.getItem("sw_fetch_diag") || "[]") as string[];
+      log.push(entry);
+      if (log.length > 20) log.shift();
+      localStorage.setItem("sw_fetch_diag", JSON.stringify(log));
+    }
     if (event.data?.type === "GET_AUTH_TOKEN") {
       const token = localStorage.getItem("auth_token") || "";
       event.ports[0]?.postMessage({ token });
