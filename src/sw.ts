@@ -61,7 +61,16 @@ registerRoute(
             : null;
         },
         fetchDidFail: async ({ request }) => {
-          failedFetches.add(request.url);
+          if (navigator.onLine) {
+            // Online but fetch failed (likely CF Access session expired).
+            // Delete stale cache so NetworkFirst can't fall back,
+            // letting the error propagate to fetchWithRetry which shows
+            // "連線已過期，請重新整理頁面以重新驗證".
+            const cache = await caches.open("api-cache");
+            await cache.delete(request.url);
+          } else {
+            failedFetches.add(request.url);
+          }
         },
         handlerDidRespond: async ({ request, response }) => {
           const url = request.url;
