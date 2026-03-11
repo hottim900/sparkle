@@ -197,8 +197,12 @@ describe("fetchWithRetry", () => {
 
   // --- CF Access JWT expiry detection ---
 
-  it("throws ApiClientError when all retries fail with network error while online (CF Access expired)", async () => {
+  it("auto-reloads on first CF Access expiry (network error while online)", async () => {
     vi.stubGlobal("navigator", { onLine: true });
+    const reloadMock = vi.fn();
+    vi.stubGlobal("location", { reload: reloadMock });
+    sessionStorage.clear();
+
     fetchSpy
       .mockRejectedValueOnce(new TypeError("Failed to fetch"))
       .mockRejectedValueOnce(new TypeError("Failed to fetch"))
@@ -208,6 +212,28 @@ describe("fetchWithRetry", () => {
     await vi.runAllTimersAsync();
 
     const error = await promise.catch((e: unknown) => e);
+    expect(reloadMock).toHaveBeenCalledOnce();
+    expect(error).toBeInstanceOf(ApiClientError);
+    expect(error).toMatchObject({ message: "重新驗證中…", status: 0 });
+  });
+
+  it("throws error instead of reload loop when CF Access reload already attempted", async () => {
+    vi.stubGlobal("navigator", { onLine: true });
+    const reloadMock = vi.fn();
+    vi.stubGlobal("location", { reload: reloadMock });
+    // Simulate a recent reload
+    sessionStorage.setItem("cf_auth_reload", String(Date.now()));
+
+    fetchSpy
+      .mockRejectedValueOnce(new TypeError("Failed to fetch"))
+      .mockRejectedValueOnce(new TypeError("Failed to fetch"))
+      .mockRejectedValueOnce(new TypeError("Failed to fetch"));
+
+    const promise = fetchWithRetry("/api/test");
+    await vi.runAllTimersAsync();
+
+    const error = await promise.catch((e: unknown) => e);
+    expect(reloadMock).not.toHaveBeenCalled();
     expect(error).toBeInstanceOf(ApiClientError);
     expect(error).toMatchObject({
       message: "連線已過期，請重新整理頁面以重新驗證",

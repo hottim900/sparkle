@@ -111,6 +111,18 @@ export async function fetchWithRetry(url: string, options: RequestInit = {}): Pr
           throw new ApiClientError("Request timed out", 0);
         }
         if (isNetworkError(error) && navigator.onLine) {
+          // CF Access session likely expired — auto-reload to re-authenticate.
+          // Guard with sessionStorage to prevent infinite reload loops
+          // (e.g. if server is actually down, reload won't help).
+          const RELOAD_KEY = "cf_auth_reload";
+          const RELOAD_COOLDOWN_MS = 30_000;
+          const lastReload = sessionStorage.getItem(RELOAD_KEY);
+          const now = Date.now();
+          if (!lastReload || now - Number(lastReload) > RELOAD_COOLDOWN_MS) {
+            sessionStorage.setItem(RELOAD_KEY, String(now));
+            window.location.reload();
+            throw new ApiClientError("重新驗證中…", 0);
+          }
           throw new ApiClientError("連線已過期，請重新整理頁面以重新驗證", 0);
         }
         throw error;
