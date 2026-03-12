@@ -21,6 +21,8 @@ export default defineConfig({
         "src/vite-env.d.ts",
         "src/lib/api.ts",
         "src/components/ui/**",
+        "src/routes/**",
+        "src/routeTree.gen.ts",
         "server/instrument.ts",
         "server/test-utils.ts",
       ],
