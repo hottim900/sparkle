@@ -160,8 +160,8 @@ export function QuickCapture() {
           variant="ghost"
           size="icon"
           onClick={() => setExpanded(!expanded)}
-          aria-label="展開/收合"
-          title="展開/收合"
+          aria-label={expanded ? "收合" : "展開"}
+          title={expanded ? "收合" : "展開"}
           className="shrink-0"
         >
           {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}

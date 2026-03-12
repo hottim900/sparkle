@@ -187,6 +187,7 @@ export function CategoryManagement() {
             className="ml-1 text-muted-foreground hover:text-foreground"
             onClick={() => setFormColor(null)}
             title="清除顏色"
+            aria-label="清除顏色"
           >
             <X className="h-4 w-4" />
           </button>
