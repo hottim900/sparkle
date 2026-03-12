@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { createFileRoute, Outlet, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Outlet } from "@tanstack/react-router";
 import { QuickCapture } from "@/components/quick-capture";
 import { ItemDetail } from "@/components/item-detail";
 import { ErrorBoundary } from "@/components/error-boundary";
@@ -8,7 +8,7 @@ import { listSearchSchema } from "@/lib/search-params";
 
 function ListLayout() {
   const { item: selectedId } = Route.useSearch();
-  const navigate = useNavigate();
+  const navigate = Route.useNavigate();
 
   return (
     <>
@@ -32,8 +32,7 @@ function ListLayout() {
               <ItemDetail
                 itemId={selectedId}
                 onDeleted={() => {
-                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                  navigate({ search: (prev: any) => ({ ...prev, item: undefined }) } as any);
+                  navigate({ search: (prev) => ({ ...prev, item: undefined }) });
                 }}
               />
             </Suspense>
