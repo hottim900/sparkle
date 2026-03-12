@@ -45,7 +45,11 @@ function isViewActive(pathname: string, itemId: string): boolean {
   return false;
 }
 
-export function BottomNav() {
+interface BottomNavProps {
+  onSearchClick?: () => void;
+}
+
+export function BottomNav({ onSearchClick }: BottomNavProps) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const [moreOpen, setMoreOpen] = useState(false);
 
@@ -88,16 +92,20 @@ export function BottomNav() {
       <div className="flex justify-around">
         {mainNavItems.map((item) => {
           if (item.path === null) {
-            // Search is a non-routed action: focus the search input
+            // Search is a non-routed action
             return (
               <button
                 key={item.id}
                 className="flex flex-col items-center py-2 px-3 flex-1 text-muted-foreground"
                 onClick={() => {
-                  const input = document.querySelector<HTMLInputElement>(
-                    'input[placeholder="搜尋..."]',
-                  );
-                  input?.focus();
+                  if (onSearchClick) {
+                    onSearchClick();
+                  } else {
+                    const input = document.querySelector<HTMLInputElement>(
+                      'input[placeholder="搜尋..."]',
+                    );
+                    input?.focus();
+                  }
                 }}
               >
                 {item.icon}

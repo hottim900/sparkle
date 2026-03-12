@@ -5,3 +5,4 @@ coverage/
 data/
 certs/
 mcp-server/
+src/routeTree.gen.ts
