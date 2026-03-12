@@ -135,6 +135,33 @@ describe("Data Access Layer", () => {
       expect(result.items[0]!.title).toBe("Tagged");
     });
 
+    it("sorts by priority with tag filter", () => {
+      createItem(db, { title: "Low", tags: ["work"], priority: "low" });
+      createItem(db, { title: "High", tags: ["work"], priority: "high" });
+      createItem(db, { title: "Mid", tags: ["work"], priority: "medium" });
+      const result = listItems(db, { tag: "work", sort: "priority", order: "desc" });
+      expect(result.items.map((i) => i.title)).toEqual(["Mid", "Low", "High"]);
+    });
+
+    it("sorts by created ascending with tag filter", () => {
+      const { v4: uuidv4 } = require("uuid");
+      for (const [title, ts] of [
+        ["Third", "2026-01-03T00:00:00.000Z"],
+        ["First", "2026-01-01T00:00:00.000Z"],
+        ["Second", "2026-01-02T00:00:00.000Z"],
+      ] as const) {
+        sqlite
+          .prepare(
+            "INSERT INTO items (id, title, type, status, tags, origin, aliases, created, modified) VALUES (?, ?, 'note', 'fleeting', '[\"dev\"]', '', '[]', ?, ?)",
+          )
+          .run(uuidv4(), title, ts, ts);
+      }
+      const result = listItems(db, { tag: "dev", sort: "created", order: "asc" });
+      expect(result.items[0]!.title).toBe("First");
+      expect(result.items[1]!.title).toBe("Second");
+      expect(result.items[2]!.title).toBe("Third");
+    });
+
     it("supports pagination", () => {
       for (let i = 0; i < 5; i++) {
         createItem(db, { title: `Item ${i}` });

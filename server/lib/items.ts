@@ -287,9 +287,7 @@ export function listItems(
     const total = countResult[0]?.count ?? 0;
 
     const orderSql =
-      sortOrder === "asc"
-        ? sql`ORDER BY items.${sql.raw(sortField)} ASC`
-        : sql`ORDER BY items.${sql.raw(sortField)} DESC`;
+      sortOrder === "asc" ? sql`ORDER BY ${sortColumn} ASC` : sql`ORDER BY ${sortColumn} DESC`;
 
     const rows = db.all<typeof items.$inferSelect>(
       sql`SELECT DISTINCT items.* FROM items, json_each(items.tags) ${whereClause} ${orderSql} LIMIT ${limit} OFFSET ${offset}`,
