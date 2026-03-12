@@ -37,6 +37,7 @@ import {
   StickyNote,
   ChevronDown,
   ChevronRight,
+  AlertCircle,
 } from "lucide-react";
 
 type SortOption = {
@@ -173,6 +174,7 @@ export function ItemList({ status, type }: ItemListProps) {
     data: itemsData,
     isPending,
     error: itemsError,
+    refetch,
   } = useQuery({
     queryKey: queryKeys.items.list(filters),
     queryFn: () => listItems(filters),
@@ -361,6 +363,18 @@ export function ItemList({ status, type }: ItemListProps) {
     return (
       <div className="flex items-center justify-center py-12">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (itemsError) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+        <AlertCircle className="h-10 w-10 mb-2" />
+        <p className="text-sm">載入失敗</p>
+        <Button variant="ghost" size="sm" onClick={() => refetch()} className="mt-2">
+          重試
+        </Button>
       </div>
     );
   }
