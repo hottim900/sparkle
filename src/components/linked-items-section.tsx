@@ -236,6 +236,8 @@ export function LinkedItemsSection({
                       variant="ghost"
                       size="icon"
                       className="h-8 w-8"
+                      aria-label="關閉搜尋"
+                      title="關閉搜尋"
                       onClick={() => {
                         setShowNoteSearch(false);
                         setNoteSearchQuery("");
@@ -294,6 +296,8 @@ export function LinkedItemsSection({
               variant="ghost"
               size="icon"
               className="h-6 w-6"
+              aria-label="關閉"
+              title="關閉"
               onClick={() => setShowCreateTodo(false)}
             >
               <X className="h-3.5 w-3.5" />

@@ -245,6 +245,7 @@ export function CategoryManagement() {
                     size="icon"
                     className="h-7 w-7 shrink-0"
                     title="編輯"
+                    aria-label="編輯"
                     disabled={!isOnline}
                     onClick={() => startEdit(cat)}
                   >
@@ -256,6 +257,7 @@ export function CategoryManagement() {
                       size="icon"
                       className="h-7 w-7 shrink-0"
                       title="上移"
+                      aria-label="上移"
                       disabled={!isOnline}
                       onClick={() => handleMove(index, "up")}
                     >
@@ -268,6 +270,7 @@ export function CategoryManagement() {
                       size="icon"
                       className="h-7 w-7 shrink-0"
                       title="下移"
+                      aria-label="下移"
                       disabled={!isOnline}
                       onClick={() => handleMove(index, "down")}
                     >
@@ -283,6 +286,7 @@ export function CategoryManagement() {
                       size="icon"
                       className="h-7 w-7 shrink-0 text-destructive"
                       title="刪除"
+                      aria-label="刪除"
                       disabled={!isOnline}
                       onClick={() => setDeleteDialogId(cat.id)}
                     >
