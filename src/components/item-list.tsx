@@ -433,6 +433,7 @@ export function ItemList({ status, type }: ItemListProps) {
             size="icon-xs"
             onClick={() => setSelectionMode(true)}
             title="多選模式"
+            aria-label="多選模式"
             disabled={!isOnline}
           >
             <CheckSquare className="h-3.5 w-3.5" />

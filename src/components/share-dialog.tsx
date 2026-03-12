@@ -140,6 +140,7 @@ export function ShareDialog({
                     className="h-7 w-7 shrink-0"
                     onClick={() => handleCopy(share.token)}
                     title="複製連結"
+                    aria-label="複製連結"
                   >
                     <Copy className="h-3.5 w-3.5" />
                   </Button>
@@ -150,6 +151,7 @@ export function ShareDialog({
                     onClick={() => handleRevoke(share.id)}
                     disabled={revokingId === share.id || !isOnline}
                     title="撤銷分享"
+                    aria-label="撤銷分享"
                   >
                     {revokingId === share.id ? (
                       <Loader2 className="h-3.5 w-3.5 animate-spin" />

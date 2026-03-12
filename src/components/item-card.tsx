@@ -107,6 +107,7 @@ export function ItemCard({
         {selectionMode && (
           <button
             className="mt-0.5 text-muted-foreground hover:text-foreground"
+            aria-label={checked ? "取消選取" : "選取"}
             onClick={(e) => {
               e.stopPropagation();
               onToggle?.(item.id);
@@ -119,6 +120,7 @@ export function ItemCard({
           <button
             onClick={handleToggleDone}
             className="mt-0.5 text-muted-foreground hover:text-foreground"
+            aria-label={item.status === "done" ? "標記未完成" : "標記完成"}
           >
             {item.status === "done" ? (
               <CheckSquare className="h-4 w-4" />
@@ -132,6 +134,7 @@ export function ItemCard({
             onClick={handleScratchDelete}
             className="mt-0.5 text-muted-foreground hover:text-destructive"
             title="刪除"
+            aria-label="刪除"
           >
             <Trash2 className="h-4 w-4" />
           </button>

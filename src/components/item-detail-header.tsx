@@ -67,11 +67,18 @@ export function ItemDetailHeader({
             size="icon"
             onClick={onBack ?? onClose}
             title={canGoBack ? "返回上一頁" : "關閉"}
+            aria-label={canGoBack ? "返回上一頁" : "關閉"}
           >
             <ArrowLeft className="h-4 w-4" />
           </Button>
           {canGoBack && (
-            <Button variant="ghost" size="icon" onClick={onClose} title="關閉詳情">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onClose}
+              title="關閉詳情"
+              aria-label="關閉詳情"
+            >
               <X className="h-4 w-4" />
             </Button>
           )}
@@ -143,7 +150,13 @@ export function ItemDetailHeader({
           )}
           <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
             <DialogTrigger asChild>
-              <Button variant="ghost" size="icon" disabled={!isOnline}>
+              <Button
+                variant="ghost"
+                size="icon"
+                disabled={!isOnline}
+                aria-label="刪除"
+                title="刪除"
+              >
                 <Trash2 className="h-4 w-4 text-destructive" />
               </Button>
             </DialogTrigger>
