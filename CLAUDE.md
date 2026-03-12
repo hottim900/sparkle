@@ -19,7 +19,7 @@ See `/testing` for test architecture. See `/ops` for deployment.
 
 ## Data Model
 
-Notes: `fleeting` → `developing` → `permanent` → `exported` → `archived`. Todos: `active` → `done` → `archived`. Scratch: `draft` → `archived`. Full field reference in `conventions-detail` skill (auto-loaded when modifying data model).
+Notes: `fleeting` → `developing` → `permanent` → `exported` → `archived`. Todos: `active` → `done` → `archived`. Scratch: `draft` → `archived`. Full field reference in `conventions-detail` skill (invoke `/conventions-detail` for field reference).
 
 Type conversion auto-maps status server-side. `category_id` preserved; `due`/`linked_note_id` cleared on todo→note; tags/priority/aliases cleared on →scratch.
 
@@ -38,7 +38,7 @@ DB migration version 0→13, idempotent. Migration safety enforced by PostToolUs
 - Session 管理：不相關任務之間用 `/clear` 重置 context。長 session 品質下降時 `/compact` 或 `/clear`。
 - Agent/Teammate：**(0) 驗證不在 main 上** (1) commit 前 `npm run lint:fix && npm run format && npx tsc --noEmit` (2) 在 worktree 或 feature branch 工作 (3) 完成後開 PR。
 
-Detailed module conventions (API retry, PWA, Logging, Sentry, CSP, Offline UI, State management, CI/CD, Sharing, Export, Data Model fields) auto-loaded via `conventions-detail` skill.
+Detailed module conventions (API retry, PWA, Logging, Sentry, CSP, Offline UI, State management, CI/CD, Sharing, Export, Data Model fields) — see `conventions-detail` skill.
 
 ## Quality Management
 
@@ -46,15 +46,15 @@ Detailed module conventions (API retry, PWA, Logging, Sentry, CSP, Offline UI, S
 
 ## Skills Reference
 
-| Skill              | Invoke        | Description                        |
-| ------------------ | ------------- | ---------------------------------- |
-| project-structure  | auto          | Full annotated file tree           |
-| testing            | `/testing`    | Test architecture, patterns, E2E   |
-| ops                | `/ops`        | Production deployment & operations |
-| line-bot           | `/line-bot`   | LINE Bot commands & integration    |
-| mcp-server         | `/mcp-server` | MCP server for Claude Code         |
-| conventions-detail | auto          | Detailed module conventions        |
-| quality            | `/quality`    | Quality tracking system operations |
+| Skill              | Invoke                | Description                        |
+| ------------------ | --------------------- | ---------------------------------- |
+| project-structure  | auto                  | Full annotated file tree           |
+| testing            | `/testing`            | Test architecture, patterns, E2E   |
+| ops                | `/ops`                | Production deployment & operations |
+| line-bot           | `/line-bot`           | LINE Bot commands & integration    |
+| mcp-server         | `/mcp-server`         | MCP server for Claude Code         |
+| conventions-detail | `/conventions-detail` | Detailed module conventions        |
+| quality            | `/quality`            | Quality tracking system operations |
 
 ## Maintenance
 
