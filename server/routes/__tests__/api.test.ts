@@ -20,6 +20,15 @@ vi.mock("../../db/index.js", () => ({
   DB_PATH: ":memory:",
 }));
 
+vi.mock("../../lib/logger.js", () => ({
+  logger: {
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    fatal: vi.fn(),
+  },
+}));
+
 // Now import the app (which imports routes that import the mocked db)
 import { Hono } from "hono";
 import { authMiddleware } from "../../middleware/auth.js";
@@ -27,6 +36,7 @@ import { itemsRouter } from "../items.js";
 import { searchRouter } from "../search.js";
 import { settingsRouter } from "../settings.js";
 import { getAllTags } from "../../lib/items.js";
+import { logger } from "../../lib/logger.js";
 import { getObsidianSettings } from "../../lib/settings.js";
 import { items } from "../../db/schema.js";
 import { eq } from "drizzle-orm";
@@ -947,6 +957,26 @@ describe("Search", () => {
       headers: jsonHeaders(),
     });
     expect(res.status).toBe(400);
+  });
+
+  it("logs error and returns 500 when search throws", async () => {
+    const err = new Error("DB connection failed");
+    const spy = vi
+      .spyOn(await import("../../lib/items.js"), "searchItems")
+      .mockImplementation(() => {
+        throw err;
+      });
+    try {
+      const res = await app.request("/api/search?q=test", {
+        headers: authHeaders(),
+      });
+      expect(res.status).toBe(500);
+      const body = await res.json();
+      expect(body.error).toBe("搜尋失敗");
+      expect(logger.error).toHaveBeenCalledWith({ err }, "Search failed");
+    } finally {
+      spy.mockRestore();
+    }
   });
 });
 
