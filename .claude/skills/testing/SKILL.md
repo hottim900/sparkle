@@ -103,7 +103,7 @@ vi.mock("@tanstack/react-router", () => ({
 mockPathname = "/todos/active";
 ```
 
-**Tier 2 — 加上 navigate（如 ItemDetail）：**
+**Tier 2 — 加上 navigate（如 Dashboard）：**
 
 ```typescript
 const mockNavigate = vi.fn();

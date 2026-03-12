@@ -29,8 +29,9 @@ fi
 
 # === Type check ===
 if [ "$SKIP_TSC" != "1" ]; then
-  echo "Running tsc --noEmit..."
+  echo "Running tsc --noEmit (client)..."
   npx tsc --noEmit || exit 1
+  echo "Running tsc --noEmit (server)..."
   npx tsc --noEmit -p tsconfig.server.json || exit 1
 fi
 
