@@ -19,7 +19,9 @@ function ListLayout() {
         } md:w-96 md:max-w-none md:flex-none md:border-r`}
       >
         <QuickCapture />
-        <Outlet />
+        <ErrorBoundary>
+          <Outlet />
+        </ErrorBoundary>
       </div>
 
       {/* Detail panel */}
