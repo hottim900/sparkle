@@ -58,7 +58,13 @@ export function InstallPrompt() {
           <Button size="sm" onClick={handleInstall}>
             安裝
           </Button>
-          <Button size="icon-sm" variant="ghost" onClick={handleDismiss}>
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            onClick={handleDismiss}
+            aria-label="關閉"
+            title="關閉"
+          >
             <X className="h-4 w-4" />
           </Button>
         </div>

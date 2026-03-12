@@ -132,6 +132,7 @@ export function ItemCard({
             onClick={handleScratchDelete}
             className="mt-0.5 text-muted-foreground hover:text-destructive"
             title="刪除"
+            aria-label="刪除"
           >
             <Trash2 className="h-4 w-4" />
           </button>
