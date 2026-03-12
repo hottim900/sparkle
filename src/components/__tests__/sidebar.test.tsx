@@ -21,8 +21,11 @@ const mockNavigate = vi.fn();
 let mockPathname = "/notes/fleeting";
 let mockSearchParams: Record<string, unknown> = {};
 
-vi.mock("@tanstack/react-router", () => {
-  const LinkComponent = ({
+vi.mock("@tanstack/react-router", () => ({
+  useNavigate: () => mockNavigate,
+  useRouterState: ({ select }: { select: (s: unknown) => unknown }) =>
+    select({ location: { pathname: mockPathname, search: mockSearchParams } }),
+  Link: ({
     children,
     to,
     ...props
@@ -34,19 +37,8 @@ vi.mock("@tanstack/react-router", () => {
     <a href={to} {...props}>
       {children}
     </a>
-  );
-
-  return {
-    useNavigate: () => mockNavigate,
-    useRouterState: ({ select }: { select: (s: unknown) => unknown }) =>
-      select({ location: { pathname: mockPathname, search: mockSearchParams } }),
-    Link: LinkComponent,
-    getRouteApi: () => ({
-      useNavigate: () => mockNavigate,
-      Link: LinkComponent,
-    }),
-  };
-});
+  ),
+}));
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -116,11 +108,9 @@ describe("Sidebar", () => {
     await user.click(screen.getByText("idea"));
     expect(mockNavigate).toHaveBeenCalledWith(
       expect.objectContaining({
-        search: expect.any(Function),
+        search: { tag: "idea", item: undefined },
       }),
     );
-    const searchFn = mockNavigate.mock.calls[0][0].search;
-    expect(searchFn({})).toEqual({ tag: "idea", item: undefined });
   });
 
   it("clicking an already-selected tag deselects it", async () => {
@@ -136,11 +126,9 @@ describe("Sidebar", () => {
     await user.click(screen.getByText("idea"));
     expect(mockNavigate).toHaveBeenCalledWith(
       expect.objectContaining({
-        search: expect.any(Function),
+        search: { tag: undefined, item: undefined },
       }),
     );
-    const searchFn = mockNavigate.mock.calls[0][0].search;
-    expect(searchFn({})).toEqual({ tag: undefined, item: undefined });
   });
 
   it("settings link points to /settings", () => {

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { getRouteApi } from "@tanstack/react-router";
+import { useNavigate, type NavigateOptions } from "@tanstack/react-router";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -23,8 +23,6 @@ import { LinkedItemsSection } from "@/components/linked-items-section";
 import { ItemContentEditor } from "@/components/item-content-editor";
 import { CategorySelect } from "@/components/category-select";
 import { queryKeys } from "@/lib/query-keys";
-
-const listRoute = getRouteApi("/_list");
 
 interface ItemDetailProps {
   itemId: string;
@@ -57,7 +55,7 @@ const gtdTags = [
 
 export function ItemDetail({ itemId, onDeleted }: ItemDetailProps) {
   const queryClient = useQueryClient();
-  const navigate = listRoute.useNavigate();
+  const navigate = useNavigate();
   const { obsidianEnabled, isOnline } = useAppContext();
   const [item, setItem] = useState<ParsedItem | null>(null);
   const [isDirty, setIsDirty] = useState(false);
@@ -152,15 +150,15 @@ export function ItemDetail({ itemId, onDeleted }: ItemDetailProps) {
 
   const handleBack = useCallback(() => {
     navigate({
-      search: (prev) => ({ ...prev, item: undefined }),
-    });
+      search: (prev: Record<string, unknown>) => ({ ...prev, item: undefined }),
+    } as NavigateOptions);
   }, [navigate]);
 
   const handleNavigate = useCallback(
     (linkedItemId: string) => {
       navigate({
-        search: (prev) => ({ ...prev, item: linkedItemId }),
-      });
+        search: (prev: Record<string, unknown>) => ({ ...prev, item: linkedItemId }),
+      } as NavigateOptions);
     },
     [navigate],
   );

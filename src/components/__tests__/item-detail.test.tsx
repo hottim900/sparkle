@@ -16,9 +16,6 @@ vi.mock("sonner", () => ({
 
 vi.mock("@tanstack/react-router", () => ({
   useNavigate: () => vi.fn(),
-  getRouteApi: () => ({
-    useNavigate: () => vi.fn(),
-  }),
 }));
 
 const mockItem: Item = {
