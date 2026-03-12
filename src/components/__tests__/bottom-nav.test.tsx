@@ -3,8 +3,31 @@ import userEvent from "@testing-library/user-event";
 import { renderWithContext } from "@/test-utils";
 import { BottomNav } from "../bottom-nav";
 
+let mockPathname = "/notes/fleeting";
+
+vi.mock("@tanstack/react-router", () => ({
+  useRouterState: ({ select }: { select: (s: unknown) => unknown }) =>
+    select({ location: { pathname: mockPathname, search: {} } }),
+  Link: ({
+    children,
+    to,
+    className,
+    onClick,
+  }: {
+    children: React.ReactNode;
+    to: string;
+    className?: string;
+    onClick?: () => void;
+  }) => (
+    <a href={to} className={className} onClick={onClick}>
+      {children}
+    </a>
+  ),
+}));
+
 beforeEach(() => {
   vi.clearAllMocks();
+  mockPathname = "/notes/fleeting";
 });
 
 describe("BottomNav", () => {
@@ -20,22 +43,21 @@ describe("BottomNav", () => {
   });
 
   it("highlights the current view tab", () => {
-    renderWithContext(<BottomNav />, { currentView: "todos" });
+    mockPathname = "/todos";
+    renderWithContext(<BottomNav />);
 
-    const todosButton = screen.getByText("待辦").closest("button")!;
-    expect(todosButton.className).toContain("text-primary");
+    const todosLink = screen.getByText("待辦").closest("a")!;
+    expect(todosLink.className).toContain("text-primary");
 
-    const notesButton = screen.getByText("筆記").closest("button")!;
-    expect(notesButton.className).toContain("text-muted-foreground");
+    const notesLink = screen.getByText("筆記").closest("a")!;
+    expect(notesLink.className).toContain("text-muted-foreground");
   });
 
-  it("calls onViewChange when clicking a tab", async () => {
-    const user = userEvent.setup();
-    const onViewChange = vi.fn();
-    renderWithContext(<BottomNav />, { onViewChange });
+  it("nav items link to correct paths", () => {
+    renderWithContext(<BottomNav />);
 
-    await user.click(screen.getByText("暫存"));
-    expect(onViewChange).toHaveBeenCalledWith("scratch");
+    const scratchLink = screen.getByText("暫存").closest("a");
+    expect(scratchLink).toHaveAttribute("href", "/scratch");
   });
 
   it("opens more menu when clicking 更多", async () => {
@@ -52,15 +74,13 @@ describe("BottomNav", () => {
     expect(screen.getByText("設定")).toBeInTheDocument();
   });
 
-  it("clicking a more menu item calls onViewChange and closes menu", async () => {
+  it("clicking a more menu item closes menu", async () => {
     const user = userEvent.setup();
-    const onViewChange = vi.fn();
-    renderWithContext(<BottomNav />, { onViewChange });
+    renderWithContext(<BottomNav />);
 
     await user.click(screen.getByText("更多"));
     await user.click(screen.getByText("設定"));
 
-    expect(onViewChange).toHaveBeenCalledWith("settings");
     expect(screen.queryByText("全部")).not.toBeInTheDocument();
   });
 
@@ -78,7 +98,8 @@ describe("BottomNav", () => {
   });
 
   it("highlights 更多 button when a more-menu view is active", () => {
-    renderWithContext(<BottomNav />, { currentView: "settings" });
+    mockPathname = "/settings";
+    renderWithContext(<BottomNav />);
 
     const moreButton = screen.getByText("更多").closest("button")!;
     expect(moreButton.className).toContain("text-primary");

@@ -20,6 +20,15 @@ vi.mock("sonner", () => ({
   toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
 }));
 
+const mockNavigate = vi.fn();
+let mockSearchParams: Record<string, unknown> = {};
+
+vi.mock("@tanstack/react-router", () => ({
+  useNavigate: () => mockNavigate,
+  useRouterState: ({ select }: { select: (s: unknown) => unknown }) =>
+    select({ location: { pathname: "/notes/fleeting", search: mockSearchParams } }),
+}));
+
 function makeItem(overrides: Partial<Item> = {}): Item {
   return {
     id: "item-1",
@@ -48,6 +57,7 @@ function makeItem(overrides: Partial<Item> = {}): Item {
 describe("ItemList", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockSearchParams = {};
     mockListCategories.mockResolvedValue({
       categories: [],
     });
@@ -55,7 +65,7 @@ describe("ItemList", () => {
 
   it("shows loading spinner initially", () => {
     mockListItems.mockReturnValue(new Promise(() => {}));
-    renderWithContext(<ItemList />, { currentView: "notes" });
+    renderWithContext(<ItemList type="note" status="fleeting" />);
 
     const spinner = document.querySelector(".animate-spin");
     expect(spinner).toBeInTheDocument();
@@ -63,7 +73,7 @@ describe("ItemList", () => {
 
   it("shows empty state when no items", async () => {
     mockListItems.mockResolvedValue({ items: [], total: 0 });
-    renderWithContext(<ItemList />, { currentView: "notes" });
+    renderWithContext(<ItemList type="note" status="fleeting" />);
 
     await waitFor(() => {
       expect(screen.getByText("沒有項目")).toBeInTheDocument();
@@ -78,7 +88,7 @@ describe("ItemList", () => {
       ],
       total: 2,
     });
-    renderWithContext(<ItemList />, { currentView: "notes" });
+    renderWithContext(<ItemList type="note" status="fleeting" />);
 
     await waitFor(() => {
       expect(screen.getByText("First Note")).toBeInTheDocument();
@@ -86,75 +96,35 @@ describe("ItemList", () => {
     expect(screen.getByText("Second Note")).toBeInTheDocument();
   });
 
-  it("shows noteChips in notes view", async () => {
+  it("calls listItems with correct params for note type", async () => {
     mockListItems.mockResolvedValue({ items: [makeItem()], total: 1 });
-    renderWithContext(<ItemList />, { currentView: "notes" });
-
-    await waitFor(() => {
-      expect(screen.getByText("閃念")).toBeInTheDocument();
-    });
-    expect(screen.getByText("發展中")).toBeInTheDocument();
-    expect(screen.getByText("永久筆記")).toBeInTheDocument();
-    expect(screen.getByText("已匯出")).toBeInTheDocument();
-  });
-
-  it("shows todoChips in todos view", async () => {
-    mockListItems.mockResolvedValue({
-      items: [makeItem({ type: "todo", status: "active" })],
-      total: 1,
-    });
-    renderWithContext(<ItemList />, { currentView: "todos" });
-
-    await waitFor(() => {
-      expect(screen.getByText("進行中")).toBeInTheDocument();
-    });
-    expect(screen.getByText("已完成")).toBeInTheDocument();
-  });
-
-  it("does not show chips in scratch view", async () => {
-    mockListItems.mockResolvedValue({
-      items: [makeItem({ type: "scratch", status: "draft" })],
-      total: 1,
-    });
-    renderWithContext(<ItemList />, { currentView: "scratch" });
-
-    await waitFor(() => {
-      expect(screen.getByText("Test Note")).toBeInTheDocument();
-    });
-    // No sub-nav chips for scratch
-    expect(screen.queryByText("閃念")).not.toBeInTheDocument();
-    expect(screen.queryByText("進行中")).not.toBeInTheDocument();
-  });
-
-  it("calls listItems with correct sort params", async () => {
-    mockListItems.mockResolvedValue({ items: [makeItem()], total: 1 });
-    renderWithContext(<ItemList />, { currentView: "notes" });
+    renderWithContext(<ItemList type="note" status="fleeting" />);
 
     await waitFor(() => {
       expect(mockListItems).toHaveBeenCalled();
     });
 
-    // Default sort for notes: created desc
     expect(mockListItems).toHaveBeenCalledWith(
       expect.objectContaining({
+        type: "note",
+        status: "fleeting",
         sort: "created",
         order: "desc",
       }),
     );
   });
 
-  it("todo view has due date sort option", async () => {
+  it("todo type defaults to due date sort", async () => {
     mockListItems.mockResolvedValue({
       items: [makeItem({ type: "todo", status: "active" })],
       total: 1,
     });
-    renderWithContext(<ItemList />, { currentView: "todos" });
+    renderWithContext(<ItemList type="todo" status="active" />);
 
     await waitFor(() => {
       expect(screen.getByText("Test Note")).toBeInTheDocument();
     });
 
-    // Todo defaults to due date sort — verify API was called with due sort
     expect(mockListItems).toHaveBeenCalledWith(
       expect.objectContaining({
         sort: "due",
@@ -166,7 +136,7 @@ describe("ItemList", () => {
   it("enters selection mode when clicking multi-select button", async () => {
     mockListItems.mockResolvedValue({ items: [makeItem()], total: 1 });
     const user = userEvent.setup();
-    renderWithContext(<ItemList />, { currentView: "notes" });
+    renderWithContext(<ItemList type="note" status="fleeting" />);
 
     await waitFor(() => {
       expect(screen.getByText("Test Note")).toBeInTheDocument();
@@ -182,7 +152,7 @@ describe("ItemList", () => {
       total: 2,
     });
     const user = userEvent.setup();
-    renderWithContext(<ItemList />, { currentView: "notes" });
+    renderWithContext(<ItemList type="note" status="fleeting" />);
 
     await waitFor(() => {
       expect(screen.getByText("Note A")).toBeInTheDocument();
@@ -209,7 +179,7 @@ describe("ItemList", () => {
     });
     mockBatchAction.mockResolvedValue({ affected: 1, skipped: 0 });
     const user = userEvent.setup();
-    renderWithContext(<ItemList noteSubView="fleeting" />, { currentView: "notes" });
+    renderWithContext(<ItemList type="note" status="fleeting" />);
 
     await waitFor(() => {
       expect(screen.getByText("Fleeting Note")).toBeInTheDocument();
@@ -238,7 +208,7 @@ describe("ItemList", () => {
     mockBatchAction.mockResolvedValue({ affected: 1, skipped: 0 });
     const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
     const user = userEvent.setup();
-    renderWithContext(<ItemList noteSubView="fleeting" />, { currentView: "notes" });
+    renderWithContext(<ItemList type="note" status="fleeting" />);
 
     await waitFor(() => {
       expect(screen.getByText("Test Note")).toBeInTheDocument();
@@ -263,7 +233,7 @@ describe("ItemList", () => {
       total: 100,
     });
     const user = userEvent.setup();
-    renderWithContext(<ItemList />, { currentView: "notes" });
+    renderWithContext(<ItemList type="note" status="fleeting" />);
 
     await waitFor(() => {
       expect(screen.getByText("載入更多...")).toBeInTheDocument();
@@ -280,7 +250,7 @@ describe("ItemList", () => {
   it("shows error toast when API fails", async () => {
     const { toast } = await import("sonner");
     mockListItems.mockRejectedValue(new Error("Network error"));
-    renderWithContext(<ItemList />, { currentView: "notes" });
+    renderWithContext(<ItemList type="note" status="fleeting" />);
 
     await waitFor(() => {
       expect(toast.error).toHaveBeenCalledWith("Network error");
@@ -289,7 +259,7 @@ describe("ItemList", () => {
 
   it("disables selection mode button when offline", async () => {
     mockListItems.mockResolvedValue({ items: [makeItem()], total: 1 });
-    renderWithContext(<ItemList />, { currentView: "notes", isOnline: false });
+    renderWithContext(<ItemList type="note" status="fleeting" />, { isOnline: false });
 
     await waitFor(() => {
       expect(screen.getByText("Test Note")).toBeInTheDocument();
@@ -319,7 +289,7 @@ describe("ItemList", () => {
         ],
         total: 2,
       });
-      renderWithContext(<ItemList />, { currentView: "notes" });
+      renderWithContext(<ItemList type="note" status="fleeting" />);
 
       await waitFor(() => {
         expect(screen.getByText("Work Note")).toBeInTheDocument();
@@ -345,7 +315,7 @@ describe("ItemList", () => {
         ],
         total: 2,
       });
-      renderWithContext(<ItemList />, { currentView: "notes" });
+      renderWithContext(<ItemList type="note" status="fleeting" />);
 
       await waitFor(() => {
         expect(screen.getByText("Categorized")).toBeInTheDocument();
@@ -372,7 +342,7 @@ describe("ItemList", () => {
         ],
         total: 3,
       });
-      renderWithContext(<ItemList />, { currentView: "notes" });
+      renderWithContext(<ItemList type="note" status="fleeting" />);
 
       await waitFor(() => {
         expect(screen.getByText("Work")).toBeInTheDocument();
@@ -397,7 +367,7 @@ describe("ItemList", () => {
         ],
         total: 2,
       });
-      renderWithContext(<ItemList />, { currentView: "notes" });
+      renderWithContext(<ItemList type="note" status="fleeting" />);
 
       await waitFor(() => {
         expect(screen.getByText("Note A")).toBeInTheDocument();
@@ -414,7 +384,7 @@ describe("ItemList", () => {
         items: [makeItem({ id: "1", title: "Note A" }), makeItem({ id: "2", title: "Note B" })],
         total: 2,
       });
-      renderWithContext(<ItemList />, { currentView: "notes" });
+      renderWithContext(<ItemList type="note" status="fleeting" />);
 
       await waitFor(() => {
         expect(screen.getByText("Note A")).toBeInTheDocument();
@@ -437,7 +407,7 @@ describe("ItemList", () => {
         ],
         total: 1,
       });
-      renderWithContext(<ItemList />, { currentView: "notes" });
+      renderWithContext(<ItemList type="note" status="fleeting" />);
 
       await waitFor(() => {
         expect(screen.getByText("Work Note")).toBeInTheDocument();

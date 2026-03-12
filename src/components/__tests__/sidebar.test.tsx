@@ -17,9 +17,34 @@ vi.mock("../search-bar", () => ({
   ),
 }));
 
+const mockNavigate = vi.fn();
+let mockPathname = "/notes/fleeting";
+let mockSearchParams: Record<string, unknown> = {};
+
+vi.mock("@tanstack/react-router", () => ({
+  useNavigate: () => mockNavigate,
+  useRouterState: ({ select }: { select: (s: unknown) => unknown }) =>
+    select({ location: { pathname: mockPathname, search: mockSearchParams } }),
+  Link: ({
+    children,
+    to,
+    ...props
+  }: {
+    children: React.ReactNode;
+    to: string;
+    [key: string]: unknown;
+  }) => (
+    <a href={to} {...props}>
+      {children}
+    </a>
+  ),
+}));
+
 beforeEach(() => {
   vi.clearAllMocks();
   mockGetTags.mockResolvedValue({ tags: [] });
+  mockPathname = "/notes/fleeting";
+  mockSearchParams = {};
 });
 
 describe("Sidebar", () => {
@@ -50,22 +75,14 @@ describe("Sidebar", () => {
     expect(screen.getByText("登出")).toBeInTheDocument();
   });
 
-  it("calls onViewChange when clicking a nav item", async () => {
-    const user = userEvent.setup();
-    const onViewChange = vi.fn();
-    renderWithContext(<Sidebar />, { onViewChange });
+  it("nav items are links to correct paths", () => {
+    renderWithContext(<Sidebar />);
 
-    await user.click(screen.getByText("閃念"));
-    expect(onViewChange).toHaveBeenCalledWith("fleeting");
-  });
+    const fleetingLink = screen.getByText("閃念").closest("a");
+    expect(fleetingLink).toHaveAttribute("href", "/notes/fleeting");
 
-  it("clears selectedTag when clicking a nav item", async () => {
-    const user = userEvent.setup();
-    const onTagSelect = vi.fn();
-    renderWithContext(<Sidebar />, { onTagSelect, selectedTag: "test" });
-
-    await user.click(screen.getByText("進行中"));
-    expect(onTagSelect).toHaveBeenCalledWith(undefined);
+    const todosLink = screen.getByText("進行中").closest("a");
+    expect(todosLink).toHaveAttribute("href", "/todos");
   });
 
   it("renders tags from API", async () => {
@@ -79,41 +96,46 @@ describe("Sidebar", () => {
     });
   });
 
-  it("clicking a tag calls onTagSelect", async () => {
+  it("clicking a tag calls navigate with tag param", async () => {
     const user = userEvent.setup();
-    const onTagSelect = vi.fn();
     mockGetTags.mockResolvedValue({ tags: ["idea"] });
-    renderWithContext(<Sidebar />, { onTagSelect });
+    renderWithContext(<Sidebar />);
 
     await waitFor(() => {
       expect(screen.getByText("idea")).toBeInTheDocument();
     });
 
     await user.click(screen.getByText("idea"));
-    expect(onTagSelect).toHaveBeenCalledWith("idea");
+    expect(mockNavigate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        search: { tag: "idea", item: undefined },
+      }),
+    );
   });
 
   it("clicking an already-selected tag deselects it", async () => {
     const user = userEvent.setup();
-    const onTagSelect = vi.fn();
     mockGetTags.mockResolvedValue({ tags: ["idea"] });
-    renderWithContext(<Sidebar />, { onTagSelect, selectedTag: "idea" });
+    mockSearchParams = { tag: "idea" };
+    renderWithContext(<Sidebar />);
 
     await waitFor(() => {
       expect(screen.getByText("idea")).toBeInTheDocument();
     });
 
     await user.click(screen.getByText("idea"));
-    expect(onTagSelect).toHaveBeenCalledWith(undefined);
+    expect(mockNavigate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        search: { tag: undefined, item: undefined },
+      }),
+    );
   });
 
-  it("clicking 設定 navigates to settings view", async () => {
-    const user = userEvent.setup();
-    const onViewChange = vi.fn();
-    renderWithContext(<Sidebar />, { onViewChange });
+  it("settings link points to /settings", () => {
+    renderWithContext(<Sidebar />);
 
-    await user.click(screen.getByText("設定"));
-    expect(onViewChange).toHaveBeenCalledWith("settings");
+    const settingsLink = screen.getByText("設定").closest("a");
+    expect(settingsLink).toHaveAttribute("href", "/settings");
   });
 
   it("clicking 登出 calls clearToken and reloads", async () => {
