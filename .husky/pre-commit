@@ -31,6 +31,7 @@ fi
 if [ "$SKIP_TSC" != "1" ]; then
   echo "Running tsc --noEmit..."
   npx tsc --noEmit || exit 1
+  npx tsc --noEmit -p tsconfig.server.json || exit 1
 fi
 
 # === lint-staged ===
