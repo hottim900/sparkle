@@ -1,5 +1,7 @@
 import { Hono } from "hono";
+import { and, eq, inArray } from "drizzle-orm";
 import { db, sqlite } from "../db/index.js";
+import { items, categories } from "../db/schema.js";
 import {
   createItem,
   getItem,
@@ -9,6 +11,7 @@ import {
   isValidTypeStatus,
   getAutoMappedStatus,
 } from "../lib/items.js";
+import type { ExportableItem } from "../lib/export.js";
 import {
   createItemSchema,
   updateItemSchema,
@@ -78,38 +81,31 @@ itemsRouter.post("/batch", async (c) => {
 
     let affected = 0;
     let skipped = 0;
-    const errors: { id: string; error: string }[] = [];
+
+    const now = new Date().toISOString();
 
     if (action === "delete") {
-      for (const id of ids) {
-        if (deleteItem(db, id)) {
-          affected++;
-        } else {
-          skipped++;
-        }
-      }
+      const result = db.delete(items).where(inArray(items.id, ids)).run();
+      affected = result.changes;
+      skipped = ids.length - affected;
     } else if (action === "develop") {
       // fleeting → developing (notes only)
-      for (const id of ids) {
-        const item = getItem(db, id);
-        if (!item || item.type !== "note" || item.status !== "fleeting") {
-          skipped++;
-          continue;
-        }
-        if (updateItem(db, id, { status: "developing" })) affected++;
-        else skipped++;
-      }
+      const result = db
+        .update(items)
+        .set({ status: "developing", modified: now })
+        .where(and(inArray(items.id, ids), eq(items.type, "note"), eq(items.status, "fleeting")))
+        .run();
+      affected = result.changes;
+      skipped = ids.length - affected;
     } else if (action === "mature") {
       // developing → permanent (notes only)
-      for (const id of ids) {
-        const item = getItem(db, id);
-        if (!item || item.type !== "note" || item.status !== "developing") {
-          skipped++;
-          continue;
-        }
-        if (updateItem(db, id, { status: "permanent" })) affected++;
-        else skipped++;
-      }
+      const result = db
+        .update(items)
+        .set({ status: "permanent", modified: now })
+        .where(and(inArray(items.id, ids), eq(items.type, "note"), eq(items.status, "developing")))
+        .run();
+      affected = result.changes;
+      skipped = ids.length - affected;
     } else if (action === "export") {
       // permanent → exported (notes only, writes .md)
       const obsidian = getObsidianSettings(sqlite);
@@ -121,52 +117,78 @@ itemsRouter.post("/batch", async (c) => {
         inboxFolder: obsidian.obsidian_inbox_folder,
         exportMode: obsidian.obsidian_export_mode,
       };
-      for (const id of ids) {
-        const item = getItem(db, id);
-        if (!item || item.type !== "note" || item.status !== "permanent") {
-          skipped++;
-          continue;
-        }
+      // 1. Bulk fetch eligible items with category names
+      const eligible = db
+        .select({
+          id: items.id,
+          type: items.type,
+          title: items.title,
+          content: items.content,
+          status: items.status,
+          priority: items.priority,
+          due: items.due,
+          tags: items.tags,
+          origin: items.origin,
+          source: items.source,
+          aliases: items.aliases,
+          linked_note_id: items.linked_note_id,
+          category_id: items.category_id,
+          created: items.created,
+          modified: items.modified,
+          category_name: categories.name,
+        })
+        .from(items)
+        .leftJoin(categories, eq(items.category_id, categories.id))
+        .where(and(inArray(items.id, ids), eq(items.type, "note"), eq(items.status, "permanent")))
+        .all();
+      // 2. Loop export (file I/O, unavoidable)
+      const errors: { id: string; error: string }[] = [];
+      const exportedIds: string[] = [];
+      for (const item of eligible) {
         try {
-          exportToObsidian(item, exportConfig);
-          updateItem(db, id, { status: "exported" });
-          affected++;
+          exportToObsidian(item as ExportableItem, exportConfig);
+          exportedIds.push(item.id);
         } catch (e) {
-          errors.push({ id, error: (e as Error).message });
-          skipped++;
+          errors.push({ id: item.id, error: (e as Error).message });
         }
       }
+      // 3. Bulk update exported items (1 query)
+      if (exportedIds.length > 0) {
+        db.update(items)
+          .set({ status: "exported", modified: now })
+          .where(inArray(items.id, exportedIds))
+          .run();
+      }
+      affected = exportedIds.length;
+      skipped = ids.length - affected - errors.length;
       return c.json({ affected, skipped, errors });
     } else if (action === "done") {
-      // → done (todo only)
-      for (const id of ids) {
-        const item = getItem(db, id);
-        if (!item || item.type !== "todo") {
-          skipped++;
-          continue;
-        }
-        if (updateItem(db, id, { status: "done" })) affected++;
-        else skipped++;
-      }
+      // → done (todo only, any status)
+      const result = db
+        .update(items)
+        .set({ status: "done", modified: now })
+        .where(and(inArray(items.id, ids), eq(items.type, "todo")))
+        .run();
+      affected = result.changes;
+      skipped = ids.length - affected;
     } else if (action === "active") {
-      // → active (todo only)
-      for (const id of ids) {
-        const item = getItem(db, id);
-        if (!item || item.type !== "todo") {
-          skipped++;
-          continue;
-        }
-        if (updateItem(db, id, { status: "active" })) affected++;
-        else skipped++;
-      }
+      // → active (todo only, any status)
+      const result = db
+        .update(items)
+        .set({ status: "active", modified: now })
+        .where(and(inArray(items.id, ids), eq(items.type, "todo")))
+        .run();
+      affected = result.changes;
+      skipped = ids.length - affected;
     } else {
       // archive — any type
-      const statusMap = { archive: "archived" } as const;
-      const status = statusMap[action as keyof typeof statusMap];
-      for (const id of ids) {
-        if (updateItem(db, id, { status })) affected++;
-        else skipped++;
-      }
+      const result = db
+        .update(items)
+        .set({ status: "archived", modified: now })
+        .where(inArray(items.id, ids))
+        .run();
+      affected = result.changes;
+      skipped = ids.length - affected;
     }
 
     return c.json({ affected, skipped });
