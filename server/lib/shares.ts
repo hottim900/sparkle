@@ -89,7 +89,8 @@ export function listShares(sqlite: Database.Database): ShareListItem[] {
         i.title AS item_title
       FROM share_tokens s
       JOIN items i ON i.id = s.item_id
-      ORDER BY s.created DESC`,
+      ORDER BY s.created DESC
+      LIMIT 1000`,
       )
       // SAFETY: better-sqlite3 .all() returns unknown[]; columns match ShareListItem by query + migration schema
       .all() as ShareListItem[]
@@ -106,7 +107,8 @@ export function listPublicShares(sqlite: Database.Database): ShareListItem[] {
       FROM share_tokens s
       JOIN items i ON i.id = s.item_id
       WHERE s.visibility = 'public'
-      ORDER BY s.created DESC`,
+      ORDER BY s.created DESC
+      LIMIT 1000`,
       )
       // SAFETY: better-sqlite3 .all() returns unknown[]; columns match ShareListItem by query + migration schema
       .all() as ShareListItem[]
