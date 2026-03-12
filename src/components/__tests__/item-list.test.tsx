@@ -27,6 +27,9 @@ vi.mock("@tanstack/react-router", () => ({
   useNavigate: () => mockNavigate,
   useRouterState: ({ select }: { select: (s: unknown) => unknown }) =>
     select({ location: { pathname: "/notes/fleeting", search: mockSearchParams } }),
+  getRouteApi: () => ({
+    useNavigate: () => mockNavigate,
+  }),
 }));
 
 function makeItem(overrides: Partial<Item> = {}): Item {

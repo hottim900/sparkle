@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Link, useNavigate, useRouterState, type NavigateOptions } from "@tanstack/react-router";
+import { getRouteApi, useRouterState } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { SearchBar } from "./search-bar";
@@ -94,8 +94,10 @@ const navGroups: NavGroup[] = [
   },
 ];
 
+const rootRoute = getRouteApi("__root__");
+
 export function Sidebar() {
-  const navigate = useNavigate();
+  const navigate = rootRoute.useNavigate();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const currentView = pathToView(pathname);
 
@@ -116,7 +118,7 @@ export function Sidebar() {
       <div className="p-3 border-b">
         <SearchBar
           onSelect={(item) => {
-            navigate({ search: { item: item.id } } as NavigateOptions);
+            navigate({ search: { item: item.id } });
           }}
         />
       </div>
@@ -137,11 +139,10 @@ export function Sidebar() {
                 className="w-full justify-start gap-2"
                 asChild
               >
-                {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                <Link to={v.path} search={{} as any}>
+                <rootRoute.Link to={v.path} search={{}}>
                   {v.icon}
                   {v.label}
-                </Link>
+                </rootRoute.Link>
               </Button>
             ))}
           </div>
@@ -161,8 +162,8 @@ export function Sidebar() {
                 onClick={() => {
                   const newTag = selectedTag === tag ? undefined : tag;
                   navigate({
-                    search: { tag: newTag, item: undefined },
-                  } as NavigateOptions);
+                    search: (prev) => ({ ...prev, tag: newTag, item: undefined }),
+                  });
                 }}
               >
                 {tag}
@@ -179,11 +180,10 @@ export function Sidebar() {
           className="w-full justify-start gap-2 text-muted-foreground"
           asChild
         >
-          {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-          <Link to="/settings" search={{} as any}>
+          <rootRoute.Link to="/settings" search={{}}>
             <Settings className="h-4 w-4" />
             設定
-          </Link>
+          </rootRoute.Link>
         </Button>
         <Button
           variant="ghost"

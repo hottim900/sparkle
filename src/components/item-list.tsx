@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
-import { useNavigate, useRouterState, type NavigateOptions } from "@tanstack/react-router";
+import { getRouteApi, useRouterState } from "@tanstack/react-router";
 import { listItems, batchAction, listCategories } from "@/lib/api";
 import { useAppContext } from "@/lib/app-context";
 import { queryKeys, type ItemFilters } from "@/lib/query-keys";
@@ -124,9 +124,11 @@ interface ItemListProps {
   type?: ItemType;
 }
 
+const listRoute = getRouteApi("/_list");
+
 export function ItemList({ status, type }: ItemListProps) {
   const { obsidianEnabled, isOnline } = useAppContext();
-  const navigate = useNavigate();
+  const navigate = listRoute.useNavigate();
   const queryClient = useQueryClient();
 
   // Read search params from URL — use primitive selectors to avoid spurious re-renders
@@ -337,8 +339,8 @@ export function ItemList({ status, type }: ItemListProps) {
   const handleSelect = useCallback(
     (item: ParsedItem) => {
       navigate({
-        search: (prev: Record<string, unknown>) => ({ ...prev, item: item.id }),
-      } as NavigateOptions);
+        search: (prev) => ({ ...prev, item: item.id }),
+      });
     },
     [navigate],
   );
@@ -346,8 +348,8 @@ export function ItemList({ status, type }: ItemListProps) {
   const handleNavigate = useCallback(
     (itemId: string) => {
       navigate({
-        search: (prev: Record<string, unknown>) => ({ ...prev, item: itemId }),
-      } as NavigateOptions);
+        search: (prev) => ({ ...prev, item: itemId }),
+      });
     },
     [navigate],
   );

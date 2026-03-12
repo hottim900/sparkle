@@ -1,12 +1,5 @@
 import { Suspense, useMemo, useState, useCallback } from "react";
-import {
-  createRootRoute,
-  Link,
-  Outlet,
-  useNavigate,
-  useRouterState,
-  type NavigateOptions,
-} from "@tanstack/react-router";
+import { createRootRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Sidebar } from "@/components/sidebar";
 import { BottomNav } from "@/components/bottom-nav";
@@ -59,7 +52,7 @@ function NotFoundPage() {
 function RootLayout() {
   const isOnline = useOnlineStatus();
   const { item: selectedId } = Route.useSearch();
-  const navigate = useNavigate();
+  const navigate = Route.useNavigate();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
 
@@ -71,7 +64,7 @@ function RootLayout() {
   const handleMobileSearchSelect = useCallback(
     (item: { id: string }) => {
       setMobileSearchOpen(false);
-      navigate({ search: { item: item.id } } as NavigateOptions);
+      navigate({ search: { item: item.id } });
     },
     [navigate],
   );
@@ -92,8 +85,7 @@ function RootLayout() {
         }
       },
       onClose: () => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        navigate({ search: (prev: any) => ({ ...prev, item: undefined }) } as any);
+        navigate({ search: (prev) => ({ ...prev, item: undefined }) });
       },
     }),
     [navigate],
