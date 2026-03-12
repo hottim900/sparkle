@@ -8,7 +8,7 @@ async function createNoteAndOpenDetail(page: import("@playwright/test").Page, pr
   const title = `${prefix} ${Date.now()}`;
 
   // Navigate to fleeting notes view
-  await page.getByRole("button", { name: "閃念" }).click();
+  await page.getByTestId("sidebar").getByRole("link", { name: "閃念" }).click();
   await expect(page.getByPlaceholder("快速記錄...")).toBeVisible();
 
   // Create note
@@ -47,7 +47,7 @@ test.describe("Item Lifecycle", () => {
 
     // Reload and verify persistence via UI
     await page.reload();
-    await page.getByRole("button", { name: "閃念" }).click();
+    await page.getByTestId("sidebar").getByRole("link", { name: "閃念" }).click();
     await expect(page.getByPlaceholder("快速記錄...")).toBeVisible();
     await expect(page.getByText(newTitle)).toBeVisible({ timeout: 10_000 });
   });
@@ -96,7 +96,7 @@ test.describe("Item Lifecycle", () => {
 
     // Close detail and navigate to "發展中" view to verify
     await page.keyboard.press("Escape");
-    await page.getByRole("button", { name: "發展中" }).click();
+    await page.getByTestId("sidebar").getByRole("link", { name: "發展中" }).click();
     await expect(page.getByText(title)).toBeVisible({ timeout: 5_000 });
   });
 
@@ -165,7 +165,7 @@ test.describe("Item Lifecycle", () => {
     await page.keyboard.press("Escape");
 
     // Navigate to active todos view — server auto-maps fleeting → active
-    await page.getByRole("button", { name: "進行中" }).click();
+    await page.getByTestId("sidebar").getByRole("link", { name: "進行中" }).click();
     await expect(page.getByText(title)).toBeVisible({ timeout: 5_000 });
   });
 });

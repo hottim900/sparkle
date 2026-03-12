@@ -65,7 +65,7 @@ export async function selectRadixOption(
  * Navigate to a sidebar view by clicking the corresponding button.
  */
 export async function navigateTo(page: Page, label: string) {
-  await page.getByRole("button", { name: label }).click();
+  await page.getByTestId("sidebar").getByRole("link", { name: label }).click();
 }
 
 /**

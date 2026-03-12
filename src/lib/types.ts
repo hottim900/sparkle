@@ -160,24 +160,6 @@ export type ItemStatus = Item["status"];
 export type ItemType = Item["type"];
 export type ItemPriority = NonNullable<Item["priority"]>;
 
-export type ViewType =
-  | "fleeting"
-  | "developing"
-  | "permanent"
-  | "exported"
-  | "active"
-  | "done"
-  | "draft"
-  | "all"
-  | "archived"
-  | "search"
-  | "dashboard"
-  | "notes"
-  | "todos"
-  | "scratch"
-  | "settings"
-  | "shares";
-
 // Share types
 export interface ShareToken {
   id: string;

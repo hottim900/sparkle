@@ -135,7 +135,7 @@ test.describe("Linked Todos", () => {
     await expect(page.locator(`input[value="${todoTitle}"]`)).toBeVisible({ timeout: 10_000 });
 
     // "關聯筆記" section should show the linked note
-    await expect(page.getByText("關聯筆記")).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByText("關聯筆記", { exact: true })).toBeVisible({ timeout: 5_000 });
 
     // Click the linked note button to navigate
     await page.locator("button").filter({ hasText: noteTitle }).first().click();

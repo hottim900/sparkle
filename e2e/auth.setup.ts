@@ -11,8 +11,8 @@ setup("authenticate", async ({ page }) => {
   await page.getByPlaceholder("存取權杖").fill(AUTH_TOKEN);
   await page.getByRole("button", { name: "登入" }).click();
 
-  // Wait for main app to load — desktop starts on dashboard view
-  await expect(page.getByRole("heading", { name: "總覽" })).toBeVisible({ timeout: 10_000 });
+  // Wait for main app to load — now redirects to /notes/fleeting
+  await expect(page.getByPlaceholder("快速記錄...")).toBeVisible({ timeout: 10_000 });
 
   // Save auth state
   await page.context().storageState({ path: "e2e/.auth/user.json" });

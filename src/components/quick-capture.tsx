@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useRouterState } from "@tanstack/react-router";
 import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,7 +16,7 @@ import { TagInput } from "@/components/tag-input";
 import { useAppContext } from "@/lib/app-context";
 import { queryKeys } from "@/lib/query-keys";
 import { toast } from "sonner";
-import type { ItemType, ItemPriority, ViewType } from "@/lib/types";
+import type { ItemType, ItemPriority } from "@/lib/types";
 import { ChevronDown, ChevronUp, Send, Sun, Moon, StickyNote, Pin, Paperclip } from "lucide-react";
 
 const gtdTags = [
@@ -30,19 +31,20 @@ const typeOptions: { value: ItemType; icon: typeof StickyNote; label: string }[]
   { value: "scratch", icon: Paperclip, label: "暫存" },
 ];
 
-function viewToDefaultType(view: ViewType): ItemType {
-  if (["todos", "active", "done"].includes(view)) return "todo";
-  if (["scratch", "draft"].includes(view)) return "scratch";
+function pathToDefaultType(pathname: string): ItemType {
+  if (pathname.startsWith("/todos")) return "todo";
+  if (pathname.startsWith("/scratch")) return "scratch";
   return "note";
 }
 
 export function QuickCapture() {
-  const { currentView, isOnline } = useAppContext();
+  const { isOnline } = useAppContext();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { resolvedTheme, setTheme } = useTheme();
   const queryClient = useQueryClient();
   const [title, setTitle] = useState("");
   const [expanded, setExpanded] = useState(false);
-  const defaultType = viewToDefaultType(currentView);
+  const defaultType = pathToDefaultType(pathname);
   const [type, setType] = useState<ItemType>(defaultType);
   const [priority, setPriority] = useState<ItemPriority | "none">("none");
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
@@ -63,8 +65,8 @@ export function QuickCapture() {
   });
 
   useEffect(() => {
-    setType(viewToDefaultType(currentView));
-  }, [currentView]);
+    setType(pathToDefaultType(pathname));
+  }, [pathname]);
 
   const addTag = (tag: string) => {
     setSelectedTags((prev) => [...prev, tag]);

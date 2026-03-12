@@ -21,7 +21,7 @@ test.describe("Obsidian Export", () => {
     await page.goto("/");
 
     // Navigate to settings
-    await page.getByRole("button", { name: "設定" }).click();
+    await page.getByTestId("sidebar").getByRole("link", { name: "設定" }).click();
     await expect(page.getByRole("heading", { name: "設定" })).toBeVisible({ timeout: 10_000 });
 
     // Wait for settings to load, then enable Obsidian export toggle
@@ -38,7 +38,7 @@ test.describe("Obsidian Export", () => {
 
     // Reload and verify persistence
     await page.reload();
-    await page.getByRole("button", { name: "設定" }).click();
+    await page.getByTestId("sidebar").getByRole("link", { name: "設定" }).click();
     await expect(page.getByRole("heading", { name: "設定" })).toBeVisible({ timeout: 10_000 });
     await expect(page.getByRole("button", { name: "已啟用" })).toBeVisible();
     await expect(vaultPathInput).toHaveValue(VAULT_PATH);

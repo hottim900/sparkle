@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
+import { useNavigate, useRouterState, type NavigateOptions } from "@tanstack/react-router";
 import { listItems, batchAction, listCategories } from "@/lib/api";
 import { useAppContext } from "@/lib/app-context";
 import { queryKeys, type ItemFilters } from "@/lib/query-keys";
@@ -8,7 +9,6 @@ import {
   type ParsedItem,
   type ItemStatus,
   type ItemType,
-  type ViewType,
   type Category,
 } from "@/lib/types";
 import { ItemCard } from "./item-card";
@@ -54,21 +54,6 @@ const baseSortOptions: SortOption[] = [
 
 const dueSortOption: SortOption = { label: "到期日近→遠", sort: "due", order: "asc" };
 
-type NoteSubView = "fleeting" | "developing" | "permanent" | "exported";
-type TodoSubView = "active" | "done";
-
-const noteChips: { id: NoteSubView; label: string }[] = [
-  { id: "fleeting", label: "閃念" },
-  { id: "developing", label: "發展中" },
-  { id: "permanent", label: "永久筆記" },
-  { id: "exported", label: "已匯出" },
-];
-
-const todoChips: { id: TodoSubView; label: string }[] = [
-  { id: "active", label: "進行中" },
-  { id: "done", label: "已完成" },
-];
-
 // Batch actions per view context
 type BatchActionConfig = {
   action: string;
@@ -78,12 +63,7 @@ type BatchActionConfig = {
   confirm?: string;
 };
 
-function getBatchActions(
-  view: ViewType,
-  subView?: string,
-  obsidianEnabled?: boolean,
-): BatchActionConfig[] {
-  const effectiveView = subView ?? view;
+function getBatchActions(status?: ItemStatus, obsidianEnabled?: boolean): BatchActionConfig[] {
   const universal: BatchActionConfig[] = [
     { action: "archive", label: "封存", icon: <Archive className="h-3.5 w-3.5" /> },
     {
@@ -95,7 +75,7 @@ function getBatchActions(
     },
   ];
 
-  switch (effectiveView) {
+  switch (status) {
     case "fleeting":
       return [
         { action: "develop", label: "發展", icon: <Pencil className="h-3.5 w-3.5" /> },
@@ -141,31 +121,27 @@ function getBatchActions(
 interface ItemListProps {
   status?: ItemStatus;
   type?: ItemType;
-  selectedId?: string;
-  noteSubView?: NoteSubView;
-  todoSubView?: TodoSubView;
-  onNoteSubViewChange?: (v: NoteSubView) => void;
-  onTodoSubViewChange?: (v: TodoSubView) => void;
 }
 
-export function ItemList({
-  status,
-  type,
-  selectedId,
-  noteSubView,
-  todoSubView,
-  onNoteSubViewChange,
-  onTodoSubViewChange,
-}: ItemListProps) {
-  const {
-    currentView,
-    selectedTag: tag,
-    onSelectItem: onSelect,
-    onNavigate,
-    obsidianEnabled,
-    isOnline,
-  } = useAppContext();
+export function ItemList({ status, type }: ItemListProps) {
+  const { obsidianEnabled, isOnline } = useAppContext();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
+
+  // Read search params from URL — use primitive selectors to avoid spurious re-renders
+  const tag = useRouterState({
+    select: (s) => {
+      const search = s.location.search as Record<string, unknown>;
+      return typeof search.tag === "string" ? search.tag : undefined;
+    },
+  });
+  const selectedId = useRouterState({
+    select: (s) => {
+      const search = s.location.search as Record<string, unknown>;
+      return typeof search.item === "string" ? search.item : undefined;
+    },
+  });
+
   const [offset, setOffset] = useState(0);
   const [sortIdx, setSortIdx] = useState(0);
   const [selectionMode, setSelectionMode] = useState(false);
@@ -173,50 +149,24 @@ export function ItemList({
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
   const limit = 50;
 
-  const noteViews = ["notes", "fleeting", "developing", "permanent", "exported"];
-  const todoViews = ["todos", "active", "done"];
-  const scratchViews = ["scratch", "draft"];
-  const isNoteView = currentView ? noteViews.includes(currentView) : false;
-  const isTodoView = currentView ? todoViews.includes(currentView) : false;
-  const isScratchView = currentView ? scratchViews.includes(currentView) : false;
+  const isNoteType = type === "note";
+  const isTodoType = type === "todo";
+  const isScratchType = type === "scratch";
   const sortOptions =
-    isNoteView || isScratchView ? baseSortOptions : [...baseSortOptions, dueSortOption];
-  const defaultSortIdx = isTodoView ? sortOptions.length - 1 : 0; // todos default to due date
+    isNoteType || isScratchType ? baseSortOptions : [...baseSortOptions, dueSortOption];
+  const defaultSortIdx = isTodoType ? sortOptions.length - 1 : 0;
   const safeSortIdx = sortIdx < sortOptions.length ? sortIdx : defaultSortIdx;
   const currentSort = sortOptions[safeSortIdx];
 
-  // Determine effective status and type from view + sub-navigation
-  const effectiveStatus: ItemStatus | undefined = (() => {
-    if (currentView === "notes" && noteSubView) return noteSubView;
-    if (currentView === "todos" && todoSubView) return todoSubView;
-    if (currentView === "scratch") return "draft";
-    return status;
-  })();
-
-  const effectiveType: ItemType | undefined = (() => {
-    if (currentView === "notes") return "note";
-    if (currentView === "todos") return "todo";
-    if (currentView === "scratch") return "scratch";
-    return type;
-  })();
-
-  // For views that exclude archived
-  const excludeStatus: string[] | undefined = (() => {
-    if (currentView === "notes" && !noteSubView) return ["archived"];
-    if (currentView === "todos" && !todoSubView) return ["archived"];
-    return undefined;
-  })();
-
   // Items query
   const filters: ItemFilters = {
-    status: effectiveStatus,
-    type: effectiveType,
+    status,
+    type,
     tag,
     sort: currentSort?.sort ?? "created",
     order: currentSort?.order ?? "desc",
     limit,
     offset,
-    excludeStatus,
   };
 
   const {
@@ -249,18 +199,18 @@ export function ItemList({
 
   // Reset sort to view-appropriate default when switching views
   useEffect(() => {
-    if (isScratchView) {
+    if (isScratchType) {
       setSortIdx(2); // "最近更新" (index 2 in baseSortOptions)
-    } else if (isTodoView) {
+    } else if (isTodoType) {
       setSortIdx(sortOptions.length - 1);
     } else {
       setSortIdx(0);
     }
-  }, [currentView, isScratchView, isTodoView, sortOptions.length]);
+  }, [status, type, isScratchType, isTodoType, sortOptions.length]);
 
   useEffect(() => {
     setOffset(0);
-  }, [effectiveStatus, effectiveType, tag, safeSortIdx]);
+  }, [status, type, tag, safeSortIdx]);
 
   const categoriesMap = useMemo(() => {
     const map = new Map<string, Category>();
@@ -270,7 +220,7 @@ export function ItemList({
     return map;
   }, [categories]);
 
-  // Group items by category_id — only when not in "all"/"archived" views
+  // Group items by category_id
   const categoryGroups = useMemo(() => {
     const hasAnyCategorized = items.some((i) => i.category_id != null);
     if (!hasAnyCategorized) return null; // flat list
@@ -382,74 +332,50 @@ export function ItemList({
     queryClient.invalidateQueries({ queryKey: queryKeys.stats });
   }, [queryClient]);
 
-  const activeSubView =
-    currentView === "notes" ? noteSubView : currentView === "todos" ? todoSubView : undefined;
-  const batchActions = getBatchActions(currentView ?? "all", activeSubView, obsidianEnabled);
+  const handleSelect = useCallback(
+    (item: ParsedItem) => {
+      navigate({
+        search: (prev: Record<string, unknown>) => ({ ...prev, item: item.id }),
+      } as NavigateOptions);
+    },
+    [navigate],
+  );
+
+  const handleNavigate = useCallback(
+    (itemId: string) => {
+      navigate({
+        search: (prev: Record<string, unknown>) => ({ ...prev, item: itemId }),
+      } as NavigateOptions);
+    },
+    [navigate],
+  );
+
+  const batchActions = getBatchActions(status, obsidianEnabled);
+
+  // Determine if this is an "all" or "archived" view (no specific type)
+  const isAllView = !type && !status;
+  const isArchivedView = !type && status === "archived";
+  const showTypeGroups = isAllView || isArchivedView;
 
   if (isPending) {
     return (
-      <>
-        {renderSubNav()}
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-        </div>
-      </>
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
     );
-  }
-
-  function renderSubNav() {
-    if (currentView === "notes") {
-      return (
-        <div className="flex gap-1 px-3 py-2 border-b overflow-x-auto">
-          {noteChips.map((chip) => (
-            <Button
-              key={chip.id}
-              size="sm"
-              variant={noteSubView === chip.id ? "default" : "outline"}
-              className="h-7 text-xs shrink-0"
-              onClick={() => onNoteSubViewChange?.(chip.id)}
-            >
-              {chip.label}
-            </Button>
-          ))}
-        </div>
-      );
-    }
-    if (currentView === "todos") {
-      return (
-        <div className="flex gap-1 px-3 py-2 border-b overflow-x-auto">
-          {todoChips.map((chip) => (
-            <Button
-              key={chip.id}
-              size="sm"
-              variant={todoSubView === chip.id ? "default" : "outline"}
-              className="h-7 text-xs shrink-0"
-              onClick={() => onTodoSubViewChange?.(chip.id)}
-            >
-              {chip.label}
-            </Button>
-          ))}
-        </div>
-      );
-    }
-    return null;
   }
 
   if (items.length === 0) {
     return (
-      <>
-        {renderSubNav()}
-        <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-          <Inbox className="h-10 w-10 mb-2" />
-          <p className="text-sm">沒有項目</p>
-        </div>
-      </>
+      <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+        <Inbox className="h-10 w-10 mb-2" />
+        <p className="text-sm">沒有項目</p>
+      </div>
     );
   }
 
   return (
     <div>
-      {renderSubNav()}
       {selectionMode ? (
         <div className="flex items-center gap-2 px-3 py-2 border-b flex-wrap">
           <span className="text-sm text-muted-foreground">已選 {selectedIds.size} 項</span>
@@ -500,7 +426,7 @@ export function ItemList({
         </div>
       )}
       <div className="divide-y">
-        {currentView === "all" || currentView === "archived"
+        {showTypeGroups
           ? (() => {
               const notes = items.filter((i) => i.type === "note");
               const todos = items.filter((i) => i.type === "todo");
@@ -519,8 +445,8 @@ export function ItemList({
                           key={item.id}
                           item={item}
                           selected={item.id === selectedId}
-                          onSelect={onSelect}
-                          onNavigate={onNavigate}
+                          onSelect={handleSelect}
+                          onNavigate={handleNavigate}
                           onUpdated={handleItemUpdated}
                           selectionMode={selectionMode}
                           checked={selectedIds.has(item.id)}
@@ -541,8 +467,8 @@ export function ItemList({
                           key={item.id}
                           item={item}
                           selected={item.id === selectedId}
-                          onSelect={onSelect}
-                          onNavigate={onNavigate}
+                          onSelect={handleSelect}
+                          onNavigate={handleNavigate}
                           onUpdated={handleItemUpdated}
                           selectionMode={selectionMode}
                           checked={selectedIds.has(item.id)}
@@ -563,8 +489,8 @@ export function ItemList({
                           key={item.id}
                           item={item}
                           selected={item.id === selectedId}
-                          onSelect={onSelect}
-                          onNavigate={onNavigate}
+                          onSelect={handleSelect}
+                          onNavigate={handleNavigate}
                           onUpdated={handleItemUpdated}
                           selectionMode={selectionMode}
                           checked={selectedIds.has(item.id)}
@@ -604,8 +530,8 @@ export function ItemList({
                         key={item.id}
                         item={item}
                         selected={item.id === selectedId}
-                        onSelect={onSelect}
-                        onNavigate={onNavigate}
+                        onSelect={handleSelect}
+                        onNavigate={handleNavigate}
                         onUpdated={handleItemUpdated}
                         selectionMode={selectionMode}
                         checked={selectedIds.has(item.id)}
@@ -619,8 +545,8 @@ export function ItemList({
                   key={item.id}
                   item={item}
                   selected={item.id === selectedId}
-                  onSelect={onSelect}
-                  onNavigate={onNavigate}
+                  onSelect={handleSelect}
+                  onNavigate={handleNavigate}
                   onUpdated={handleItemUpdated}
                   selectionMode={selectionMode}
                   checked={selectedIds.has(item.id)}

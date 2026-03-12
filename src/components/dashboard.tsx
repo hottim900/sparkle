@@ -1,8 +1,8 @@
 import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
 import { getStats, getFocus, getStaleNotes, getCategoryDistribution } from "@/lib/api";
-import { parseItems, type ParsedItem } from "@/lib/types";
-import { useAppContext } from "@/lib/app-context";
+import { parseItems } from "@/lib/types";
 import { queryKeys } from "@/lib/query-keys";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -16,10 +16,6 @@ import {
   Clock,
   Loader2,
 } from "lucide-react";
-
-interface DashboardProps {
-  onSelectItem: (item: ParsedItem) => void;
-}
 
 function isOverdue(due: string | null): boolean {
   if (!due) return false;
@@ -66,8 +62,8 @@ function priorityVariant(
   }
 }
 
-export function Dashboard({ onSelectItem }: DashboardProps) {
-  const { onViewChange, onNavigate } = useAppContext();
+export function Dashboard() {
+  const navigate = useNavigate();
 
   const {
     data: stats,
@@ -141,7 +137,7 @@ export function Dashboard({ onSelectItem }: DashboardProps) {
                     className={`w-full border rounded-lg p-3 text-left hover:bg-accent transition-colors ${
                       overdue ? "border-red-300 dark:border-red-800" : ""
                     }`}
-                    onClick={() => onSelectItem(item)}
+                    onClick={() => navigate({ to: "/all", search: { item: item.id } })}
                   >
                     <div className="flex items-start justify-between gap-2">
                       <span className="text-sm font-medium truncate flex-1">{item.title}</span>
@@ -172,7 +168,7 @@ export function Dashboard({ onSelectItem }: DashboardProps) {
                 <button
                   key={item.id}
                   className="w-full border rounded-lg p-3 text-left hover:bg-accent transition-colors"
-                  onClick={() => onNavigate(item.id)}
+                  onClick={() => navigate({ to: "/all", search: { item: item.id } })}
                 >
                   <div className="flex items-start justify-between gap-2">
                     <span className="text-sm font-medium truncate flex-1">{item.title}</span>
@@ -198,7 +194,7 @@ export function Dashboard({ onSelectItem }: DashboardProps) {
             <button
               data-testid="pipeline-fleeting"
               className="border rounded-lg p-3 text-center hover:bg-accent transition-colors border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950"
-              onClick={() => onViewChange("fleeting")}
+              onClick={() => navigate({ to: "/notes/fleeting" })}
             >
               <div className="flex items-center justify-center gap-1 text-amber-600 dark:text-amber-400">
                 <Sparkles className="h-3.5 w-3.5" />
@@ -212,7 +208,7 @@ export function Dashboard({ onSelectItem }: DashboardProps) {
               <button
                 data-testid="pipeline-developing"
                 className="border rounded-lg p-3 text-center hover:bg-accent transition-colors border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950 flex-1"
-                onClick={() => onViewChange("developing")}
+                onClick={() => navigate({ to: "/notes/developing" })}
               >
                 <div className="flex items-center justify-center gap-1 text-blue-600 dark:text-blue-400">
                   <p className="text-lg font-bold">{stats.developing_count}</p>
@@ -225,7 +221,7 @@ export function Dashboard({ onSelectItem }: DashboardProps) {
             <button
               data-testid="pipeline-permanent"
               className="border rounded-lg p-3 text-center hover:bg-accent transition-colors border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950"
-              onClick={() => onViewChange("permanent")}
+              onClick={() => navigate({ to: "/notes/permanent" })}
             >
               <div className="flex items-center justify-center gap-1 text-green-600 dark:text-green-400">
                 <p className="text-lg font-bold">{stats.permanent_count}</p>

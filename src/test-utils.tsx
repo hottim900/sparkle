@@ -4,16 +4,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AppContext, type AppContextValue } from "@/lib/app-context";
 
 const defaultContext: AppContextValue = {
-  currentView: "notes",
-  onViewChange: vi.fn(),
-  selectedItem: null,
-  onSelectItem: vi.fn(),
-  selectedTag: undefined,
-  onTagSelect: vi.fn(),
-  onNavigate: vi.fn(),
-  onBack: vi.fn(),
-  onClearDetail: vi.fn(),
-  canGoBack: false,
   obsidianEnabled: false,
   isOnline: true,
 };
