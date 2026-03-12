@@ -149,6 +149,8 @@ export function QuickCapture() {
           variant="ghost"
           size="icon"
           onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
+          aria-label="切換主題"
+          title="切換主題"
           className="shrink-0 md:hidden"
         >
           {resolvedTheme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
@@ -158,6 +160,8 @@ export function QuickCapture() {
           variant="ghost"
           size="icon"
           onClick={() => setExpanded(!expanded)}
+          aria-label={expanded ? "收合" : "展開"}
+          title={expanded ? "收合" : "展開"}
           className="shrink-0"
         >
           {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
@@ -166,6 +170,8 @@ export function QuickCapture() {
           type="submit"
           size="icon"
           disabled={!title.trim() || createMutation.isPending}
+          aria-label="送出"
+          title="送出"
           className="shrink-0"
         >
           <Send className="h-4 w-4" />
