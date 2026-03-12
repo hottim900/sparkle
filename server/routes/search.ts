@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { db, sqlite } from "../db/index.js";
 import { searchItems } from "../lib/items.js";
+import { logger } from "../lib/logger.js";
 import { searchSchema } from "../schemas/items.js";
 import { ZodError } from "zod";
 
@@ -18,6 +19,7 @@ searchRouter.get("/", (c) => {
     if (e instanceof ZodError) {
       return c.json({ error: e.issues[0]?.message ?? "Validation error" }, 400);
     }
+    logger.error({ err: e }, "Search failed");
     return c.json({ results: [], error: "搜尋失敗" }, 500);
   }
 });
