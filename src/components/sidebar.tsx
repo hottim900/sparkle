@@ -111,7 +111,7 @@ export function Sidebar() {
   const selectedTag = typeof searchParams.tag === "string" ? searchParams.tag : undefined;
 
   return (
-    <div className="w-64 border-r h-full flex flex-col bg-card">
+    <div data-testid="sidebar" className="w-64 border-r h-full flex flex-col bg-card">
       {/* Search */}
       <div className="p-3 border-b">
         <SearchBar

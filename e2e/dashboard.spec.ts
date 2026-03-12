@@ -4,7 +4,7 @@ import { createItemViaApi } from "./helpers";
 
 test.describe("Dashboard", () => {
   test("displays dashboard sections", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/dashboard");
 
     const heading = page.getByRole("heading", { name: "總覽" });
     await expect(heading).toBeVisible({ timeout: 10_000 });
@@ -28,7 +28,7 @@ test.describe("Dashboard", () => {
       due: dueDate,
     });
 
-    await page.goto("/");
+    await page.goto("/dashboard");
     await expect(page.getByRole("heading", { name: "總覽" })).toBeVisible({ timeout: 10_000 });
 
     const main = page.locator(".max-w-2xl");

@@ -5,7 +5,10 @@ import { createItemViaApi, navigateTo } from "./helpers";
 test.describe("Keyboard Shortcuts", () => {
   test("/ focuses search input", async ({ page }) => {
     await page.goto("/");
-    await expect(page.getByRole("heading", { name: "總覽" })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByPlaceholder("快速記錄...")).toBeVisible({ timeout: 10_000 });
+
+    // Ensure no input is focused (keyboard shortcuts are ignored when input focused)
+    await page.locator("body").click();
 
     // Press / to focus search
     await page.keyboard.press("/");
