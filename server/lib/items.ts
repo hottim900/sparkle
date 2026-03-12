@@ -194,6 +194,7 @@ export function createItem(db: DB, input: Partial<CreateItemInput> & { title: st
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const LIKE_SAFE_RE = /^[^%_]{4,36}$/;
 
 export function getItem(db: DB, id: string): ItemWithLinkedInfo | null {
   // Full UUID — exact match (fast path)
@@ -203,12 +204,13 @@ export function getItem(db: DB, id: string): ItemWithLinkedInfo | null {
     return resolveLinkedInfo(db, [row])[0]!;
   }
 
-  // Short prefix — LIKE match (min 4 chars)
-  if (id.length < 4) return null;
+  // Short prefix — LIKE match (hex only, 4–36 chars)
+  if (!LIKE_SAFE_RE.test(id)) return null;
   const rows = db
     .select()
     .from(items)
     .where(like(items.id, `${id}%`))
+    .orderBy(asc(items.id))
     .limit(2)
     .all();
   if (rows.length === 0) return null;

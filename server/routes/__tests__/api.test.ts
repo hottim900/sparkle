@@ -596,6 +596,20 @@ describe("Items CRUD", () => {
       });
       expect(res.status).toBe(404);
     });
+
+    it("returns 404 for prefix longer than 36 chars", async () => {
+      const res = await app.request(`/api/items/${"a".repeat(37)}`, {
+        headers: authHeaders(),
+      });
+      expect(res.status).toBe(404);
+    });
+
+    it("returns 404 for prefix containing LIKE wildcards", async () => {
+      const res = await app.request("/api/items/ab_c1234", {
+        headers: authHeaders(),
+      });
+      expect(res.status).toBe(404);
+    });
   });
 
   describe("PATCH /api/items/:id", () => {

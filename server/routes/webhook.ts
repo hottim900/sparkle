@@ -117,7 +117,8 @@ webhookRouter.post("/line", async (c) => {
             );
             reply = formatNumberedList(`🔍 搜尋「${cmd.keyword}」`, results, results.length);
           }
-        } catch {
+        } catch (err) {
+          logger.error({ err, userId }, "LINE webhook search failed");
           reply = `❌ 搜尋失敗，請稍後再試`;
         }
         break;
