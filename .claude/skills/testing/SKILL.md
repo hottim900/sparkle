@@ -85,6 +85,60 @@ cd mcp-server && npm test
 
 - Test files excluded from tsconfig (both `tsconfig.json` and `tsconfig.server.json`) — Vitest handles test file type-checking via its own config
 
+### TanStack Router Mock Patterns
+
+按需選用，只 mock 你用到的 export。每個 tier 累加上一層。
+
+**Tier 1 — 只讀 pathname（如 QuickCapture）：**
+
+```typescript
+let mockPathname = "/notes/fleeting";
+
+vi.mock("@tanstack/react-router", () => ({
+  useRouterState: ({ select }: { select: (s: unknown) => unknown }) =>
+    select({ location: { pathname: mockPathname, search: {} } }),
+}));
+
+// 測試中切換 pathname：
+mockPathname = "/todos/active";
+```
+
+**Tier 2 — 加上 navigate（如 ItemDetail）：**
+
+```typescript
+const mockNavigate = vi.fn();
+let mockPathname = "/notes/fleeting";
+let mockSearchParams: Record<string, unknown> = {};
+
+vi.mock("@tanstack/react-router", () => ({
+  useNavigate: () => mockNavigate,
+  useRouterState: ({ select }: { select: (s: unknown) => unknown }) =>
+    select({ location: { pathname: mockPathname, search: mockSearchParams } }),
+}));
+```
+
+**Tier 3 — 加上 Link 元件（如 Sidebar、BottomNav）：**
+
+```typescript
+vi.mock("@tanstack/react-router", () => ({
+  useNavigate: () => mockNavigate,
+  useRouterState: ({ select }: { select: (s: unknown) => unknown }) =>
+    select({ location: { pathname: mockPathname, search: mockSearchParams } }),
+  Link: ({ children, to, className, onClick }: {
+    children: React.ReactNode;
+    to: string;
+    className?: string;
+    onClick?: () => void;
+  }) => <a href={to} className={className} onClick={onClick}>{children}</a>,
+}));
+```
+
+**注意事項：**
+
+- `useRouterState` 的 `select` callback 是 TanStack Router 的 selector pattern，mock 時需回傳 `select(...)` 的結果
+- 不需要 mock `useParams()` 或 `useSearch()` — 目前所有 routing state 透過 `useRouterState` selector 取得
+- `Link` mock 為 `<a>` tag，在 unit test 中不實際導航
+
 ## MCP Server Tests
 
 - Vitest in `mcp-server/`, 43 tests (format helpers + API client + tool handlers)
