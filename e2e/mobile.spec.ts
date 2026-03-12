@@ -63,19 +63,20 @@ test.describe("Mobile viewport", () => {
     await expect(page.getByText("Content visible on mobile")).toBeVisible();
   });
 
-  test.skip("search finds items", async ({ page, request }) => {
+  test("search finds items", async ({ page, request }) => {
     await createItemViaApi(request, {
       title: "Unique mobile search target",
     });
 
     await page.goto("/");
 
-    // Tap search in bottom nav
+    // Tap search in bottom nav — opens mobile search overlay
     const bottomNav = page.getByRole("navigation");
     await bottomNav.getByRole("button", { name: "搜尋" }).click();
 
-    // The mobile search view input (sidebar's search is hidden via display:none)
+    // Mobile search overlay shows with auto-focused input
     const searchInput = page.getByPlaceholder("搜尋...").last();
+    await expect(searchInput).toBeVisible({ timeout: 5_000 });
     await searchInput.fill("Unique mobile search");
 
     // Verify result appears

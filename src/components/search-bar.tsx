@@ -19,6 +19,7 @@ import {
 
 interface SearchBarProps {
   onSelect?: (item: ParsedItem) => void;
+  autoFocus?: boolean;
 }
 
 const STATUS_CONFIG: Record<ItemStatus, { label: string; color: string; icon: React.ReactNode }> = {
@@ -96,7 +97,7 @@ function StatusBadge({ status }: { status: ItemStatus }) {
   );
 }
 
-export function SearchBar({ onSelect }: SearchBarProps) {
+export function SearchBar({ onSelect, autoFocus }: SearchBarProps) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<ParsedItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -171,6 +172,7 @@ export function SearchBar({ onSelect }: SearchBarProps) {
             onChange={(e) => handleInputChange(e.target.value)}
             onKeyDown={handleKeyDown}
             className="pl-8"
+            autoFocus={autoFocus}
           />
         </div>
       </div>
