@@ -14,8 +14,8 @@ test.describe("Login", () => {
     await page.getByPlaceholder("存取權杖").fill(AUTH_TOKEN);
     await page.getByRole("button", { name: "登入" }).click();
 
-    // Main app loads — desktop default view is dashboard
-    await expect(page.getByRole("heading", { name: "總覽" })).toBeVisible({ timeout: 10_000 });
+    // Main app loads — redirects to /notes/fleeting
+    await expect(page.getByPlaceholder("快速記錄...")).toBeVisible({ timeout: 10_000 });
   });
 
   test("shows error for invalid token", async ({ page }) => {
@@ -33,7 +33,7 @@ test.describe("Quick Capture", () => {
     await page.goto("/");
 
     // Navigate to fleeting notes view (sidebar)
-    await page.getByRole("button", { name: "閃念" }).click();
+    await page.getByTestId("sidebar").getByRole("link", { name: "閃念" }).click();
 
     // Quick capture input should now be visible
     await expect(page.getByPlaceholder("快速記錄...")).toBeVisible();
@@ -53,7 +53,7 @@ test.describe("Quick Capture", () => {
     await page.goto("/");
 
     // Navigate to active todos view
-    await page.getByRole("button", { name: "進行中" }).click();
+    await page.getByTestId("sidebar").getByRole("link", { name: "進行中" }).click();
 
     // Quick capture should show with todo type pre-selected
     await expect(page.getByPlaceholder("新增待辦...")).toBeVisible();
@@ -75,7 +75,7 @@ test.describe("Search", () => {
     await page.goto("/");
 
     // Navigate to fleeting notes
-    await page.getByRole("button", { name: "閃念" }).click();
+    await page.getByTestId("sidebar").getByRole("link", { name: "閃念" }).click();
     await expect(page.getByPlaceholder("快速記錄...")).toBeVisible();
 
     // Create a note with a unique title
@@ -99,7 +99,7 @@ test.describe("Item Detail", () => {
     await page.goto("/");
 
     // Navigate to fleeting notes
-    await page.getByRole("button", { name: "閃念" }).click();
+    await page.getByTestId("sidebar").getByRole("link", { name: "閃念" }).click();
     await expect(page.getByPlaceholder("快速記錄...")).toBeVisible();
 
     // Create a note

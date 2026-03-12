@@ -20,6 +20,12 @@ vi.mock("sonner", () => ({
   toast: { success: vi.fn(), error: vi.fn() },
 }));
 
+const mockNavigate = vi.fn();
+
+vi.mock("@tanstack/react-router", () => ({
+  useNavigate: () => mockNavigate,
+}));
+
 function makeStats(overrides: Partial<StatsResponse> = {}): StatsResponse {
   return {
     fleeting_count: 5,
@@ -92,8 +98,6 @@ function setupDefaultMocks() {
 }
 
 describe("Dashboard", () => {
-  const onSelectItem = vi.fn();
-
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -105,7 +109,7 @@ describe("Dashboard", () => {
     mockGetStaleNotes.mockReturnValue(new Promise(() => {}));
     mockGetCategoryDistribution.mockReturnValue(new Promise(() => {}));
 
-    renderWithContext(<Dashboard onSelectItem={onSelectItem} />);
+    renderWithContext(<Dashboard />);
     const spinner = document.querySelector(".animate-spin");
     expect(spinner).toBeInTheDocument();
   });
@@ -120,7 +124,7 @@ describe("Dashboard", () => {
       mockGetStaleNotes.mockResolvedValue({ items: [] });
       mockGetCategoryDistribution.mockResolvedValue({ distribution: [] });
 
-      renderWithContext(<Dashboard onSelectItem={onSelectItem} />);
+      renderWithContext(<Dashboard />);
 
       await waitFor(() => {
         expect(screen.getByText("High Priority Task")).toBeInTheDocument();
@@ -136,7 +140,7 @@ describe("Dashboard", () => {
       mockGetStaleNotes.mockResolvedValue({ items: [] });
       mockGetCategoryDistribution.mockResolvedValue({ distribution: [] });
 
-      renderWithContext(<Dashboard onSelectItem={onSelectItem} />);
+      renderWithContext(<Dashboard />);
 
       await waitFor(() => {
         expect(screen.getByText("Due Task")).toBeInTheDocument();
@@ -153,7 +157,7 @@ describe("Dashboard", () => {
       });
       mockGetCategoryDistribution.mockResolvedValue({ distribution: [] });
 
-      renderWithContext(<Dashboard onSelectItem={onSelectItem} />);
+      renderWithContext(<Dashboard />);
 
       await waitFor(() => {
         expect(screen.getByText("Old Developing Note")).toBeInTheDocument();
@@ -164,14 +168,14 @@ describe("Dashboard", () => {
     it("shows empty state when no focus items and no stale notes", async () => {
       setupDefaultMocks();
 
-      renderWithContext(<Dashboard onSelectItem={onSelectItem} />);
+      renderWithContext(<Dashboard />);
 
       await waitFor(() => {
         expect(screen.getByText("沒有需要關注的項目，做得好！")).toBeInTheDocument();
       });
     });
 
-    it("calls onSelectItem when focus item is clicked", async () => {
+    it("calls navigate when focus item is clicked", async () => {
       mockGetStats.mockResolvedValue(makeStats());
       mockGetFocus.mockResolvedValue({
         items: [makeFocusItem({ title: "Click Me Focus" })],
@@ -180,19 +184,17 @@ describe("Dashboard", () => {
       mockGetCategoryDistribution.mockResolvedValue({ distribution: [] });
 
       const user = userEvent.setup();
-      renderWithContext(<Dashboard onSelectItem={onSelectItem} />);
+      renderWithContext(<Dashboard />);
 
       await waitFor(() => {
         expect(screen.getByText("Click Me Focus")).toBeInTheDocument();
       });
 
       await user.click(screen.getByText("Click Me Focus"));
-      expect(onSelectItem).toHaveBeenCalledWith(
-        expect.objectContaining({ title: "Click Me Focus" }),
-      );
+      expect(mockNavigate).toHaveBeenCalledWith({ to: "/all", search: { item: "focus-1" } });
     });
 
-    it("calls onNavigate when stale note is clicked", async () => {
+    it("calls navigate when stale note is clicked", async () => {
       mockGetStats.mockResolvedValue(makeStats());
       mockGetFocus.mockResolvedValue({ items: [] });
       mockGetStaleNotes.mockResolvedValue({
@@ -200,18 +202,15 @@ describe("Dashboard", () => {
       });
       mockGetCategoryDistribution.mockResolvedValue({ distribution: [] });
 
-      const mockOnNavigate = vi.fn();
       const user = userEvent.setup();
-      renderWithContext(<Dashboard onSelectItem={onSelectItem} />, {
-        onNavigate: mockOnNavigate,
-      });
+      renderWithContext(<Dashboard />);
 
       await waitFor(() => {
         expect(screen.getByText("Navigate To This")).toBeInTheDocument();
       });
 
       await user.click(screen.getByText("Navigate To This"));
-      expect(mockOnNavigate).toHaveBeenCalledWith("stale-nav");
+      expect(mockNavigate).toHaveBeenCalledWith({ to: "/all", search: { item: "stale-nav" } });
     });
   });
 
@@ -225,7 +224,7 @@ describe("Dashboard", () => {
       mockGetStaleNotes.mockResolvedValue({ items: [] });
       mockGetCategoryDistribution.mockResolvedValue({ distribution: [] });
 
-      renderWithContext(<Dashboard onSelectItem={onSelectItem} />);
+      renderWithContext(<Dashboard />);
 
       await waitFor(() => {
         const fleetingCard = screen.getByTestId("pipeline-fleeting");
@@ -241,7 +240,7 @@ describe("Dashboard", () => {
 
     it("shows pipeline labels", async () => {
       setupDefaultMocks();
-      renderWithContext(<Dashboard onSelectItem={onSelectItem} />);
+      renderWithContext(<Dashboard />);
 
       await waitFor(() => {
         expect(screen.getByTestId("pipeline-fleeting")).toBeInTheDocument();
@@ -256,52 +255,43 @@ describe("Dashboard", () => {
       ).toBeInTheDocument();
     });
 
-    it("calls onViewChange('fleeting') when fleeting card is clicked", async () => {
+    it("calls navigate to /notes/fleeting when fleeting card is clicked", async () => {
       setupDefaultMocks();
-      const mockOnViewChange = vi.fn();
       const user = userEvent.setup();
-      renderWithContext(<Dashboard onSelectItem={onSelectItem} />, {
-        onViewChange: mockOnViewChange,
-      });
+      renderWithContext(<Dashboard />);
 
       await waitFor(() => {
         expect(screen.getByTestId("pipeline-fleeting")).toBeInTheDocument();
       });
 
       await user.click(screen.getByTestId("pipeline-fleeting"));
-      expect(mockOnViewChange).toHaveBeenCalledWith("fleeting");
+      expect(mockNavigate).toHaveBeenCalledWith({ to: "/notes/fleeting" });
     });
 
-    it("calls onViewChange('developing') when developing card is clicked", async () => {
+    it("calls navigate to /notes/developing when developing card is clicked", async () => {
       setupDefaultMocks();
-      const mockOnViewChange = vi.fn();
       const user = userEvent.setup();
-      renderWithContext(<Dashboard onSelectItem={onSelectItem} />, {
-        onViewChange: mockOnViewChange,
-      });
+      renderWithContext(<Dashboard />);
 
       await waitFor(() => {
         expect(screen.getByTestId("pipeline-developing")).toBeInTheDocument();
       });
 
       await user.click(screen.getByTestId("pipeline-developing"));
-      expect(mockOnViewChange).toHaveBeenCalledWith("developing");
+      expect(mockNavigate).toHaveBeenCalledWith({ to: "/notes/developing" });
     });
 
-    it("calls onViewChange('permanent') when permanent card is clicked", async () => {
+    it("calls navigate to /notes/permanent when permanent card is clicked", async () => {
       setupDefaultMocks();
-      const mockOnViewChange = vi.fn();
       const user = userEvent.setup();
-      renderWithContext(<Dashboard onSelectItem={onSelectItem} />, {
-        onViewChange: mockOnViewChange,
-      });
+      renderWithContext(<Dashboard />);
 
       await waitFor(() => {
         expect(screen.getByTestId("pipeline-permanent")).toBeInTheDocument();
       });
 
       await user.click(screen.getByTestId("pipeline-permanent"));
-      expect(mockOnViewChange).toHaveBeenCalledWith("permanent");
+      expect(mockNavigate).toHaveBeenCalledWith({ to: "/notes/permanent" });
     });
   });
 
@@ -315,7 +305,7 @@ describe("Dashboard", () => {
       mockGetStaleNotes.mockResolvedValue({ items: [] });
       mockGetCategoryDistribution.mockResolvedValue({ distribution: [] });
 
-      renderWithContext(<Dashboard onSelectItem={onSelectItem} />);
+      renderWithContext(<Dashboard />);
 
       await waitFor(() => {
         expect(screen.getByText(/建立/)).toBeInTheDocument();
@@ -344,7 +334,7 @@ describe("Dashboard", () => {
         ],
       });
 
-      renderWithContext(<Dashboard onSelectItem={onSelectItem} />);
+      renderWithContext(<Dashboard />);
 
       await waitFor(() => {
         expect(screen.getByText("分類分布")).toBeInTheDocument();
@@ -356,7 +346,7 @@ describe("Dashboard", () => {
     it("hides category distribution when no data", async () => {
       setupDefaultMocks();
 
-      renderWithContext(<Dashboard onSelectItem={onSelectItem} />);
+      renderWithContext(<Dashboard />);
 
       await waitFor(() => {
         expect(screen.getByText("Zettelkasten 管道")).toBeInTheDocument();
@@ -374,7 +364,7 @@ describe("Dashboard", () => {
       mockGetStaleNotes.mockResolvedValue({ items: [] });
       mockGetCategoryDistribution.mockResolvedValue({ distribution: [] });
 
-      renderWithContext(<Dashboard onSelectItem={onSelectItem} />);
+      renderWithContext(<Dashboard />);
 
       await waitFor(() => {
         expect(toast.error).toHaveBeenCalledWith("無法載入總覽資料");

@@ -1,12 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
+import { Link, useNavigate, useRouterState, type NavigateOptions } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { SearchBar } from "./search-bar";
 import { getTags } from "@/lib/api";
 import { clearToken } from "@/lib/api";
-import { useAppContext } from "@/lib/app-context";
 import { queryKeys } from "@/lib/query-keys";
-import type { ViewType } from "@/lib/types";
+import { pathToView } from "@/lib/navigation";
 import {
   Sparkles,
   Pencil,
@@ -23,55 +23,102 @@ import {
   Share2,
 } from "lucide-react";
 
-type NavItem = { id: ViewType; label: string; icon: React.ReactNode };
+type NavItem = { id: string; label: string; icon: React.ReactNode; path: string };
 type NavGroup = { label?: string; items: NavItem[] };
 
 const navGroups: NavGroup[] = [
   {
-    items: [{ id: "dashboard", label: "總覽", icon: <LayoutDashboard className="h-4 w-4" /> }],
+    items: [
+      {
+        id: "dashboard",
+        label: "總覽",
+        icon: <LayoutDashboard className="h-4 w-4" />,
+        path: "/dashboard",
+      },
+    ],
   },
   {
     label: "筆記",
     items: [
-      { id: "fleeting", label: "閃念", icon: <Sparkles className="h-4 w-4" /> },
-      { id: "developing", label: "發展中", icon: <Pencil className="h-4 w-4" /> },
-      { id: "permanent", label: "永久筆記", icon: <Gem className="h-4 w-4" /> },
-      { id: "exported", label: "已匯出", icon: <ExternalLink className="h-4 w-4" /> },
+      {
+        id: "fleeting",
+        label: "閃念",
+        icon: <Sparkles className="h-4 w-4" />,
+        path: "/notes/fleeting",
+      },
+      {
+        id: "developing",
+        label: "發展中",
+        icon: <Pencil className="h-4 w-4" />,
+        path: "/notes/developing",
+      },
+      {
+        id: "permanent",
+        label: "永久筆記",
+        icon: <Gem className="h-4 w-4" />,
+        path: "/notes/permanent",
+      },
+      {
+        id: "exported",
+        label: "已匯出",
+        icon: <ExternalLink className="h-4 w-4" />,
+        path: "/notes/exported",
+      },
     ],
   },
   {
     label: "待辦",
     items: [
-      { id: "active", label: "進行中", icon: <PlayCircle className="h-4 w-4" /> },
-      { id: "done", label: "已完成", icon: <CheckCircle className="h-4 w-4" /> },
+      { id: "active", label: "進行中", icon: <PlayCircle className="h-4 w-4" />, path: "/todos" },
+      {
+        id: "done",
+        label: "已完成",
+        icon: <CheckCircle className="h-4 w-4" />,
+        path: "/todos/done",
+      },
     ],
   },
   {
     label: "暫存",
-    items: [{ id: "draft", label: "暫存區", icon: <StickyNote className="h-4 w-4" /> }],
+    items: [
+      { id: "draft", label: "暫存區", icon: <StickyNote className="h-4 w-4" />, path: "/scratch" },
+    ],
   },
   {
     label: "共用",
     items: [
-      { id: "all", label: "全部", icon: <FileText className="h-4 w-4" /> },
-      { id: "archived", label: "已封存", icon: <Archive className="h-4 w-4" /> },
-      { id: "shares", label: "分享管理", icon: <Share2 className="h-4 w-4" /> },
+      { id: "all", label: "全部", icon: <FileText className="h-4 w-4" />, path: "/all" },
+      { id: "archived", label: "已封存", icon: <Archive className="h-4 w-4" />, path: "/archived" },
+      { id: "shares", label: "分享管理", icon: <Share2 className="h-4 w-4" />, path: "/shares" },
     ],
   },
 ];
 
 export function Sidebar() {
-  const { currentView, onViewChange, selectedTag, onTagSelect, onSelectItem } = useAppContext();
+  const navigate = useNavigate();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const currentView = pathToView(pathname);
+
   const { data: tags = [] } = useQuery({
     queryKey: queryKeys.tags,
     queryFn: () => getTags().then((r) => r.tags),
   });
 
+  const searchParams = useRouterState({ select: (s) => s.location.search }) as Record<
+    string,
+    unknown
+  >;
+  const selectedTag = typeof searchParams.tag === "string" ? searchParams.tag : undefined;
+
   return (
-    <div className="w-64 border-r h-full flex flex-col bg-card">
+    <div data-testid="sidebar" className="w-64 border-r h-full flex flex-col bg-card">
       {/* Search */}
       <div className="p-3 border-b">
-        <SearchBar onSelect={onSelectItem} />
+        <SearchBar
+          onSelect={(item) => {
+            navigate({ search: { item: item.id } } as NavigateOptions);
+          }}
+        />
       </div>
 
       {/* Views */}
@@ -88,13 +135,13 @@ export function Sidebar() {
                 key={v.id}
                 variant={currentView === v.id ? "secondary" : "ghost"}
                 className="w-full justify-start gap-2"
-                onClick={() => {
-                  onViewChange(v.id);
-                  onTagSelect(undefined);
-                }}
+                asChild
               >
-                {v.icon}
-                {v.label}
+                {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                <Link to={v.path} search={{} as any}>
+                  {v.icon}
+                  {v.label}
+                </Link>
               </Button>
             ))}
           </div>
@@ -111,7 +158,12 @@ export function Sidebar() {
                 key={tag}
                 variant={selectedTag === tag ? "default" : "secondary"}
                 className="cursor-pointer"
-                onClick={() => onTagSelect(selectedTag === tag ? undefined : tag)}
+                onClick={() => {
+                  const newTag = selectedTag === tag ? undefined : tag;
+                  navigate({
+                    search: { tag: newTag, item: undefined },
+                  } as NavigateOptions);
+                }}
               >
                 {tag}
               </Badge>
@@ -125,13 +177,13 @@ export function Sidebar() {
         <Button
           variant={currentView === "settings" ? "secondary" : "ghost"}
           className="w-full justify-start gap-2 text-muted-foreground"
-          onClick={() => {
-            onViewChange("settings");
-            onTagSelect(undefined);
-          }}
+          asChild
         >
-          <Settings className="h-4 w-4" />
-          設定
+          {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+          <Link to="/settings" search={{} as any}>
+            <Settings className="h-4 w-4" />
+            設定
+          </Link>
         </Button>
         <Button
           variant="ghost"

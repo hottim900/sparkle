@@ -1,11 +1,13 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
+import { TanStackRouterVite } from "@tanstack/router-plugin/vite";
 import { VitePWA } from "vite-plugin-pwa";
 import path from "path";
 
 export default defineConfig({
   plugins: [
+    TanStackRouterVite({ target: "react", autoCodeSplitting: true }),
     react(),
     tailwindcss(),
     VitePWA({
@@ -47,8 +49,8 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: {
-          'ui': ['radix-ui', 'class-variance-authority', 'clsx', 'tailwind-merge'],
-          'markdown': ['react-markdown', 'remark-gfm'],
+          ui: ["radix-ui", "class-variance-authority", "clsx", "tailwind-merge"],
+          markdown: ["react-markdown", "remark-gfm"],
         },
       },
     },

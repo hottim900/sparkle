@@ -19,6 +19,13 @@ vi.mock("sonner", () => ({
   toast: { success: vi.fn(), error: vi.fn() },
 }));
 
+let mockPathname = "/notes/fleeting";
+
+vi.mock("@tanstack/react-router", () => ({
+  useRouterState: ({ select }: { select: (s: unknown) => unknown }) =>
+    select({ location: { pathname: mockPathname, search: {} } }),
+}));
+
 function getSubmitButton(): HTMLButtonElement {
   const form = document.querySelector("form")!;
   return form.querySelector('button[type="submit"]') as HTMLButtonElement;
@@ -27,31 +34,34 @@ function getSubmitButton(): HTMLButtonElement {
 describe("QuickCapture", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockPathname = "/notes/fleeting";
   });
 
   it("renders with note placeholder by default", async () => {
-    renderWithContext(<QuickCapture />, { currentView: "notes" });
+    renderWithContext(<QuickCapture />);
     await waitFor(() => {
       expect(screen.getByPlaceholderText("快速記錄...")).toBeInTheDocument();
     });
   });
 
-  it("renders with todo placeholder when in todos view", async () => {
-    renderWithContext(<QuickCapture />, { currentView: "todos" });
+  it("renders with todo placeholder when on todos path", async () => {
+    mockPathname = "/todos";
+    renderWithContext(<QuickCapture />);
     await waitFor(() => {
       expect(screen.getByPlaceholderText("新增待辦...")).toBeInTheDocument();
     });
   });
 
-  it("renders with scratch placeholder when in scratch view", async () => {
-    renderWithContext(<QuickCapture />, { currentView: "scratch" });
+  it("renders with scratch placeholder when on scratch path", async () => {
+    mockPathname = "/scratch";
+    renderWithContext(<QuickCapture />);
     await waitFor(() => {
       expect(screen.getByPlaceholderText("暫存筆記...")).toBeInTheDocument();
     });
   });
 
   it("renders type buttons for note, todo, scratch", async () => {
-    renderWithContext(<QuickCapture />, { currentView: "notes" });
+    renderWithContext(<QuickCapture />);
     await waitFor(() => {
       expect(screen.getByText("筆記")).toBeInTheDocument();
     });
@@ -61,7 +71,7 @@ describe("QuickCapture", () => {
 
   it("switches type when clicking type buttons", async () => {
     const user = userEvent.setup();
-    renderWithContext(<QuickCapture />, { currentView: "notes" });
+    renderWithContext(<QuickCapture />);
 
     await waitFor(() => {
       expect(screen.getByText("待辦")).toBeInTheDocument();
@@ -72,7 +82,7 @@ describe("QuickCapture", () => {
   });
 
   it("submit button is disabled when title is empty", async () => {
-    renderWithContext(<QuickCapture />, { currentView: "notes" });
+    renderWithContext(<QuickCapture />);
     await waitFor(() => {
       expect(getSubmitButton()).toBeDisabled();
     });
@@ -80,7 +90,7 @@ describe("QuickCapture", () => {
 
   it("calls createItem on form submit", async () => {
     const user = userEvent.setup();
-    renderWithContext(<QuickCapture />, { currentView: "notes" });
+    renderWithContext(<QuickCapture />);
 
     await waitFor(() => {
       expect(screen.getByPlaceholderText("快速記錄...")).toBeInTheDocument();
@@ -103,7 +113,7 @@ describe("QuickCapture", () => {
 
   it("clears input after successful submit", async () => {
     const user = userEvent.setup();
-    renderWithContext(<QuickCapture />, { currentView: "notes" });
+    renderWithContext(<QuickCapture />);
 
     await waitFor(() => {
       expect(screen.getByPlaceholderText("快速記錄...")).toBeInTheDocument();
@@ -120,7 +130,7 @@ describe("QuickCapture", () => {
 
   it("submits on Enter key", async () => {
     const user = userEvent.setup();
-    renderWithContext(<QuickCapture />, { currentView: "notes" });
+    renderWithContext(<QuickCapture />);
 
     await waitFor(() => {
       expect(screen.getByPlaceholderText("快速記錄...")).toBeInTheDocument();
@@ -136,7 +146,8 @@ describe("QuickCapture", () => {
 
   it("shows GTD tags only for todo type when expanded", async () => {
     const user = userEvent.setup();
-    renderWithContext(<QuickCapture />, { currentView: "todos" });
+    mockPathname = "/todos";
+    renderWithContext(<QuickCapture />);
 
     await waitFor(() => {
       expect(screen.getByPlaceholderText("新增待辦...")).toBeInTheDocument();
@@ -158,13 +169,13 @@ describe("QuickCapture", () => {
   });
 
   it("shows offline hint when offline", () => {
-    renderWithContext(<QuickCapture />, { currentView: "notes", isOnline: false });
+    renderWithContext(<QuickCapture />, { isOnline: false });
     expect(screen.getByText(/離線模式/)).toBeInTheDocument();
   });
 
   it("keeps submit button enabled when offline with input", async () => {
     const user = userEvent.setup();
-    renderWithContext(<QuickCapture />, { currentView: "notes", isOnline: false });
+    renderWithContext(<QuickCapture />, { isOnline: false });
 
     const input = screen.getByPlaceholderText("快速記錄...");
     await user.type(input, "Offline note");

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useNavigate, type NavigateOptions } from "@tanstack/react-router";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -54,14 +55,8 @@ const gtdTags = [
 
 export function ItemDetail({ itemId, onDeleted }: ItemDetailProps) {
   const queryClient = useQueryClient();
-  const {
-    obsidianEnabled,
-    isOnline,
-    onBack,
-    onClearDetail: onClose,
-    canGoBack,
-    onNavigate,
-  } = useAppContext();
+  const navigate = useNavigate();
+  const { obsidianEnabled, isOnline } = useAppContext();
   const [item, setItem] = useState<ParsedItem | null>(null);
   const [isDirty, setIsDirty] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
@@ -122,11 +117,8 @@ export function ItemDetail({ itemId, onDeleted }: ItemDetailProps) {
       if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
       try {
         const updated = await updateItem(item.id, { [field]: value });
-        // Only update modified timestamp — don't overwrite local state
-        // to avoid resetting cursor position during typing
         const serverModified = updated.modified;
         setItem((prev) => (prev ? { ...prev, modified: serverModified } : prev));
-        // Only clear dirty if no new edits were made during save
         if (!saveTimeoutRef.current) {
           setIsDirty(false);
         }
@@ -155,6 +147,21 @@ export function ItemDetail({ itemId, onDeleted }: ItemDetailProps) {
       if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
     };
   }, []);
+
+  const handleBack = useCallback(() => {
+    navigate({
+      search: (prev: Record<string, unknown>) => ({ ...prev, item: undefined }),
+    } as NavigateOptions);
+  }, [navigate]);
+
+  const handleNavigate = useCallback(
+    (linkedItemId: string) => {
+      navigate({
+        search: (prev: Record<string, unknown>) => ({ ...prev, item: linkedItemId }),
+      } as NavigateOptions);
+    },
+    [navigate],
+  );
 
   const handleDelete = async () => {
     if (!item) return;
@@ -249,12 +256,12 @@ export function ItemDetail({ itemId, onDeleted }: ItemDetailProps) {
       <ItemDetailHeader
         item={item}
         obsidianEnabled={obsidianEnabled}
-        canGoBack={canGoBack}
+        canGoBack={false}
         saveStatus={saveStatus}
         exporting={exporting}
         isOnline={isOnline}
-        onBack={onBack}
-        onClose={onClose}
+        onBack={handleBack}
+        onClose={handleBack}
         onExport={handleExport}
         onDelete={handleDelete}
         onOpenCreateTodo={() => setCreateTodoRequested(true)}
@@ -400,7 +407,7 @@ export function ItemDetail({ itemId, onDeleted }: ItemDetailProps) {
           createTodoRequested={createTodoRequested}
           onCreateTodoDismiss={dismissCreateTodo}
           isOnline={isOnline}
-          onNavigate={onNavigate}
+          onNavigate={handleNavigate}
           onItemChange={setItem}
           onSaveStatusChange={setSaveStatus}
         />
