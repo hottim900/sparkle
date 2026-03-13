@@ -5,76 +5,18 @@ import { v4 as uuidv4 } from "uuid";
 import { items, shareTokens, categories } from "../db/schema.js";
 import type { CreateItemInput, UpdateItemInput } from "../schemas/items.js";
 import type * as schema from "../db/schema.js";
+import { getAutoMappedStatus, defaultStatusForType } from "./item-type-system.js";
+
+// Re-export type system for backwards compat (will be cleaned up in Task 3)
+export {
+  NOTE_STATUSES,
+  TODO_STATUSES,
+  SCRATCH_STATUSES,
+  isValidTypeStatus,
+  getAutoMappedStatus,
+} from "./item-type-system.js";
 
 type DB = BetterSQLite3Database<typeof schema>;
-
-export const NOTE_STATUSES = [
-  "fleeting",
-  "developing",
-  "permanent",
-  "exported",
-  "archived",
-] as const;
-export const TODO_STATUSES = ["active", "done", "archived"] as const;
-export const SCRATCH_STATUSES = ["draft", "archived"] as const;
-
-export function isValidTypeStatus(type: string, status: string): boolean {
-  if (type === "note") return (NOTE_STATUSES as readonly string[]).includes(status);
-  if (type === "todo") return (TODO_STATUSES as readonly string[]).includes(status);
-  if (type === "scratch") return (SCRATCH_STATUSES as readonly string[]).includes(status);
-  return false;
-}
-
-const TYPE_CONVERSION_MAP: Record<string, Record<string, string>> = {
-  "todo→note": {
-    active: "fleeting",
-    done: "permanent",
-    archived: "archived",
-  },
-  "note→todo": {
-    fleeting: "active",
-    developing: "active",
-    permanent: "done",
-    exported: "done",
-    archived: "archived",
-  },
-  "scratch→note": {
-    draft: "fleeting",
-    archived: "archived",
-  },
-  "scratch→todo": {
-    draft: "active",
-    archived: "archived",
-  },
-  "note→scratch": {
-    fleeting: "draft",
-    developing: "draft",
-    permanent: "archived",
-    exported: "archived",
-    archived: "archived",
-  },
-  "todo→scratch": {
-    active: "draft",
-    done: "archived",
-    archived: "archived",
-  },
-};
-
-export function getAutoMappedStatus(
-  fromType: string,
-  toType: string,
-  currentStatus: string,
-): string | null {
-  if (fromType === toType) return null;
-  const key = `${fromType}→${toType}`;
-  return TYPE_CONVERSION_MAP[key]?.[currentStatus] ?? null;
-}
-
-function defaultStatusForType(type: string): string {
-  if (type === "todo") return "active";
-  if (type === "scratch") return "draft";
-  return "fleeting";
-}
 
 export type ItemWithLinkedInfo = typeof items.$inferSelect & {
   linked_note_title: string | null;

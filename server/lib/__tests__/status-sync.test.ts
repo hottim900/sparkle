@@ -1,4 +1,4 @@
-import { NOTE_STATUSES, TODO_STATUSES, SCRATCH_STATUSES } from "../items.js";
+import { NOTE_STATUSES, TODO_STATUSES, SCRATCH_STATUSES } from "../item-type-system.js";
 import { statusEnum } from "../../schemas/items.js";
 
 describe("status constants sync", () => {
