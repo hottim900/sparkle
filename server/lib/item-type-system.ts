@@ -13,7 +13,7 @@ export type TodoStatus = (typeof TYPE_STATUS_MAP.todo)[number];
 export type ScratchStatus = (typeof TYPE_STATUS_MAP.scratch)[number];
 export type ItemStatus = NoteStatus | TodoStatus | ScratchStatus;
 
-// Derived constants (backwards compat re-exports)
+// Derived constants for convenience
 export const NOTE_STATUSES = TYPE_STATUS_MAP.note;
 export const TODO_STATUSES = TYPE_STATUS_MAP.todo;
 export const SCRATCH_STATUSES = TYPE_STATUS_MAP.scratch;
