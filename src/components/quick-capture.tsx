@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { useRouterState } from "@tanstack/react-router";
 import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,7 @@ import { createItem, getTags } from "@/lib/api";
 import { TagInput } from "@/components/tag-input";
 import { useAppContext } from "@/lib/app-context";
 import { queryKeys } from "@/lib/query-keys";
+import { useInvalidateAfterItemMutation } from "@/hooks/use-invalidate";
 import { toast } from "sonner";
 import type { ItemType, ItemPriority } from "@/lib/types";
 import { ChevronDown, ChevronUp, Send, Sun, Moon, StickyNote, Pin, Paperclip } from "lucide-react";
@@ -41,7 +42,7 @@ export function QuickCapture() {
   const { isOnline } = useAppContext();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { resolvedTheme, setTheme } = useTheme();
-  const queryClient = useQueryClient();
+  const invalidateAfterItemMutation = useInvalidateAfterItemMutation();
   const [title, setTitle] = useState("");
   const [expanded, setExpanded] = useState(false);
   const defaultType = pathToDefaultType(pathname);
@@ -57,11 +58,7 @@ export function QuickCapture() {
 
   const createMutation = useMutation({
     mutationFn: createItem,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.items.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.tags });
-      queryClient.invalidateQueries({ queryKey: queryKeys.stats });
-    },
+    onSuccess: invalidateAfterItemMutation,
   });
 
   useEffect(() => {

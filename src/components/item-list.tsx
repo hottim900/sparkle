@@ -1,9 +1,13 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
-import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
+import { useQuery, useMutation, keepPreviousData } from "@tanstack/react-query";
 import { useNavigate, useRouterState, type NavigateOptions } from "@tanstack/react-router";
 import { listItems, batchAction, listCategories } from "@/lib/api";
 import { useAppContext } from "@/lib/app-context";
 import { queryKeys, type ItemFilters } from "@/lib/query-keys";
+import {
+  useInvalidateAfterItemMutation,
+  useInvalidateAfterItemAndCategoryMutation,
+} from "@/hooks/use-invalidate";
 import {
   parseItems,
   type ParsedItem,
@@ -127,7 +131,8 @@ interface ItemListProps {
 export function ItemList({ status, type }: ItemListProps) {
   const { obsidianEnabled, isOnline } = useAppContext();
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
+  const invalidateAfterItemMutation = useInvalidateAfterItemMutation();
+  const invalidateAfterItemAndCategoryMutation = useInvalidateAfterItemAndCategoryMutation();
 
   // Read search params from URL — use primitive selectors to avoid spurious re-renders
   const tag = useRouterState({
@@ -290,12 +295,7 @@ export function ItemList({ status, type }: ItemListProps) {
 
   const batchMutation = useMutation({
     mutationFn: ({ ids, action }: { ids: string[]; action: string }) => batchAction(ids, action),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.items.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.categories });
-      queryClient.invalidateQueries({ queryKey: queryKeys.tags });
-      queryClient.invalidateQueries({ queryKey: queryKeys.stats });
-    },
+    onSuccess: invalidateAfterItemAndCategoryMutation,
   });
 
   const handleBatchAction = async (config: BatchActionConfig) => {
@@ -328,11 +328,7 @@ export function ItemList({ status, type }: ItemListProps) {
     }
   };
 
-  const handleItemUpdated = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: queryKeys.items.all });
-    queryClient.invalidateQueries({ queryKey: queryKeys.tags });
-    queryClient.invalidateQueries({ queryKey: queryKeys.stats });
-  }, [queryClient]);
+  const handleItemUpdated = invalidateAfterItemMutation;
 
   const handleSelect = useCallback(
     (item: ParsedItem) => {

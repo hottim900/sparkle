@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useNavigate, type NavigateOptions } from "@tanstack/react-router";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,7 @@ import { LinkedItemsSection } from "@/components/linked-items-section";
 import { ItemContentEditor } from "@/components/item-content-editor";
 import { CategorySelect } from "@/components/category-select";
 import { queryKeys } from "@/lib/query-keys";
+import { useInvalidateAfterItemMutation } from "@/hooks/use-invalidate";
 
 interface ItemDetailProps {
   itemId: string;
@@ -54,7 +55,7 @@ const gtdTags = [
 ];
 
 export function ItemDetail({ itemId, onDeleted }: ItemDetailProps) {
-  const queryClient = useQueryClient();
+  const invalidateAfterSave = useInvalidateAfterItemMutation();
   const navigate = useNavigate();
   const { obsidianEnabled, isOnline } = useAppContext();
   const [item, setItem] = useState<ParsedItem | null>(null);
@@ -99,12 +100,6 @@ export function ItemDetail({ itemId, onDeleted }: ItemDetailProps) {
   useEffect(() => {
     if (serverItem && !isDirty) setItem(serverItem);
   }, [serverItem, isDirty]);
-
-  const invalidateAfterSave = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: queryKeys.items.all });
-    queryClient.invalidateQueries({ queryKey: queryKeys.tags });
-    queryClient.invalidateQueries({ queryKey: queryKeys.stats });
-  }, [queryClient]);
 
   const saveField = useCallback(
     async (field: string, value: unknown) => {
