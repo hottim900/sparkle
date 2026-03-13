@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -15,6 +15,7 @@ import { TagInput } from "@/components/tag-input";
 import { toast } from "sonner";
 import { Loader2, X, ListTodo, FileText, Plus, Search, Unlink } from "lucide-react";
 import { queryKeys } from "@/lib/query-keys";
+import { useInvalidateAfterItemAndCategoryMutation } from "@/hooks/use-invalidate";
 
 interface LinkedItemsSectionProps {
   item: ParsedItem;
@@ -37,7 +38,7 @@ export function LinkedItemsSection({
   onItemChange,
   onSaveStatusChange,
 }: LinkedItemsSectionProps) {
-  const queryClient = useQueryClient();
+  const invalidateAfterMutation = useInvalidateAfterItemAndCategoryMutation();
 
   // Linked todo state (for notes)
   const [showCreateTodo, setShowCreateTodo] = useState(false);
@@ -119,10 +120,7 @@ export function LinkedItemsSection({
       setLinkedTodoDue("");
       setLinkedTodoPriority("none");
       setLinkedTodoTags([]);
-      queryClient.invalidateQueries({ queryKey: queryKeys.items.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.tags });
-      queryClient.invalidateQueries({ queryKey: queryKeys.stats });
-      queryClient.invalidateQueries({ queryKey: queryKeys.categories });
+      invalidateAfterMutation();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "建立失敗");
     } finally {
@@ -159,10 +157,7 @@ export function LinkedItemsSection({
       setShowNoteSearch(false);
       setNoteSearchQuery("");
       setNoteSearchResults([]);
-      queryClient.invalidateQueries({ queryKey: queryKeys.items.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.tags });
-      queryClient.invalidateQueries({ queryKey: queryKeys.stats });
-      queryClient.invalidateQueries({ queryKey: queryKeys.categories });
+      invalidateAfterMutation();
       onSaveStatusChange("saved");
       if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
       savedTimerRef.current = setTimeout(() => onSaveStatusChange("idle"), 2000);
@@ -177,10 +172,7 @@ export function LinkedItemsSection({
     try {
       const updated = await updateItem(item.id, { linked_note_id: null });
       onItemChange(parseItem(updated));
-      queryClient.invalidateQueries({ queryKey: queryKeys.items.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.tags });
-      queryClient.invalidateQueries({ queryKey: queryKeys.stats });
-      queryClient.invalidateQueries({ queryKey: queryKeys.categories });
+      invalidateAfterMutation();
       onSaveStatusChange("saved");
       if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
       savedTimerRef.current = setTimeout(() => onSaveStatusChange("idle"), 2000);
