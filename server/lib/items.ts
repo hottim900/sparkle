@@ -6,19 +6,7 @@ import { items } from "../db/schema.js";
 import type { CreateItemInput, UpdateItemInput } from "../schemas/items.js";
 import type * as schema from "../db/schema.js";
 import { getAutoMappedStatus, defaultStatusForType } from "./item-type-system.js";
-
-// Re-export type system for backwards compat (will be cleaned up in Task 3)
-export {
-  NOTE_STATUSES,
-  TODO_STATUSES,
-  SCRATCH_STATUSES,
-  isValidTypeStatus,
-  getAutoMappedStatus,
-} from "./item-type-system.js";
-
-// Re-export enrichment layer for backwards compat (will be cleaned up in Task 3)
-export { resolveLinkedInfo, type ItemWithLinkedInfo } from "./item-enrichment.js";
-import { resolveLinkedInfo } from "./item-enrichment.js";
+import { resolveLinkedInfo, type ItemWithLinkedInfo } from "./item-enrichment.js";
 
 type DB = BetterSQLite3Database<typeof schema>;
 

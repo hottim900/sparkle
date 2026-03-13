@@ -2,15 +2,8 @@ import { Hono } from "hono";
 import { and, eq, inArray } from "drizzle-orm";
 import { db, sqlite } from "../db/index.js";
 import { items, categories } from "../db/schema.js";
-import {
-  createItem,
-  getItem,
-  listItems,
-  updateItem,
-  deleteItem,
-  isValidTypeStatus,
-  getAutoMappedStatus,
-} from "../lib/items.js";
+import { createItem, getItem, listItems, updateItem, deleteItem } from "../lib/items.js";
+import { isValidTypeStatus, getAutoMappedStatus } from "../lib/item-type-system.js";
 import type { ExportableItem } from "../lib/export.js";
 import {
   createItemSchema,

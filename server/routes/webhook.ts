@@ -11,8 +11,8 @@ import {
   listItems,
   searchItems,
   updateItem,
-  type ItemWithLinkedInfo,
 } from "../lib/items.js";
+import type { ItemWithLinkedInfo } from "../lib/item-enrichment.js";
 import { getStats, getFocusItems } from "../lib/stats.js";
 import { exportToObsidian } from "../lib/export.js";
 import { getObsidianSettings } from "../lib/settings.js";
