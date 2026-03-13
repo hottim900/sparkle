@@ -383,8 +383,7 @@ export function ItemDetail({ itemId, onDeleted }: ItemDetailProps) {
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
                   e.preventDefault();
-                  addAlias(aliasInput);
-                  setAliasInput("");
+                  if (addAlias(aliasInput)) setAliasInput("");
                 }
               }}
               placeholder="新增別名..."

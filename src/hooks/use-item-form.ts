@@ -123,13 +123,14 @@ export function useItemForm(itemId: string) {
   );
 
   const addAlias = useCallback(
-    (alias: string) => {
-      if (!item) return;
+    (alias: string): boolean => {
+      if (!item) return false;
       const trimmed = alias.trim();
-      if (!trimmed || item.aliases.includes(trimmed)) return;
+      if (!trimmed || item.aliases.includes(trimmed)) return false;
       const newAliases = [...item.aliases, trimmed];
       setItem({ ...item, aliases: newAliases });
       saveField("aliases", newAliases);
+      return true;
     },
     [item, saveField],
   );
