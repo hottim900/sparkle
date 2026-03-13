@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { listItems, updateItem, getTags } from "@/lib/api";
 import { parseItems } from "@/lib/types";
 import { queryKeys } from "@/lib/query-keys";
+import { useInvalidateAfterItemMutation } from "@/hooks/use-invalidate";
 import { Button } from "@/components/ui/button";
 import { TagInput } from "@/components/tag-input";
 import { CategorySelect } from "@/components/category-select";
@@ -30,7 +31,7 @@ interface PendingChanges {
 }
 
 export function FleetingTriage({ onDone }: FleetingTriageProps) {
-  const queryClient = useQueryClient();
+  const invalidateAfterItemMutation = useInvalidateAfterItemMutation();
   const [currentIndex, setCurrentIndex] = useState(0);
   const [pending, setPending] = useState<PendingChanges>({});
   const isOnline = useOnlineStatus();
@@ -50,11 +51,7 @@ export function FleetingTriage({ onDone }: FleetingTriageProps) {
   const triageMutation = useMutation({
     mutationFn: ({ id, updates }: { id: string; updates: Record<string, unknown> }) =>
       updateItem(id, updates),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.items.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.tags });
-      queryClient.invalidateQueries({ queryKey: queryKeys.stats });
-    },
+    onSuccess: invalidateAfterItemMutation,
   });
 
   const current = items[currentIndex];
