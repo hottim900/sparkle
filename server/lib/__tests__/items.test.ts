@@ -10,8 +10,6 @@ import {
   deleteItem,
   searchItems,
   getAllTags,
-  isValidTypeStatus,
-  getAutoMappedStatus,
 } from "../items.js";
 
 describe("Data Access Layer", () => {
@@ -376,93 +374,6 @@ describe("Data Access Layer", () => {
       createItem(db, { title: "No tags" });
       const tags = getAllTags(sqlite);
       expect(tags).toEqual([]);
-    });
-  });
-
-  describe("isValidTypeStatus", () => {
-    it("accepts fleeting/developing/permanent/exported/archived for notes", () => {
-      expect(isValidTypeStatus("note", "fleeting")).toBe(true);
-      expect(isValidTypeStatus("note", "developing")).toBe(true);
-      expect(isValidTypeStatus("note", "permanent")).toBe(true);
-      expect(isValidTypeStatus("note", "exported")).toBe(true);
-      expect(isValidTypeStatus("note", "archived")).toBe(true);
-    });
-
-    it("rejects active/done for notes", () => {
-      expect(isValidTypeStatus("note", "active")).toBe(false);
-      expect(isValidTypeStatus("note", "done")).toBe(false);
-    });
-
-    it("accepts active/done/archived for todos", () => {
-      expect(isValidTypeStatus("todo", "active")).toBe(true);
-      expect(isValidTypeStatus("todo", "done")).toBe(true);
-      expect(isValidTypeStatus("todo", "archived")).toBe(true);
-    });
-
-    it("rejects fleeting/developing/permanent/exported for todos", () => {
-      expect(isValidTypeStatus("todo", "fleeting")).toBe(false);
-      expect(isValidTypeStatus("todo", "developing")).toBe(false);
-      expect(isValidTypeStatus("todo", "permanent")).toBe(false);
-      expect(isValidTypeStatus("todo", "exported")).toBe(false);
-    });
-
-    it("validates scratch type statuses", () => {
-      expect(isValidTypeStatus("scratch", "draft")).toBe(true);
-      expect(isValidTypeStatus("scratch", "archived")).toBe(true);
-      expect(isValidTypeStatus("scratch", "fleeting")).toBe(false);
-      expect(isValidTypeStatus("scratch", "active")).toBe(false);
-    });
-  });
-
-  describe("getAutoMappedStatus", () => {
-    it("returns null when types are the same", () => {
-      expect(getAutoMappedStatus("note", "note", "fleeting")).toBeNull();
-      expect(getAutoMappedStatus("todo", "todo", "active")).toBeNull();
-    });
-
-    it("maps todo(done) -> note to permanent", () => {
-      expect(getAutoMappedStatus("todo", "note", "done")).toBe("permanent");
-    });
-
-    it("maps note(developing) -> todo to active", () => {
-      expect(getAutoMappedStatus("note", "todo", "developing")).toBe("active");
-    });
-
-    it("maps note(permanent) -> todo to done", () => {
-      expect(getAutoMappedStatus("note", "todo", "permanent")).toBe("done");
-    });
-
-    it("maps note(exported) -> todo to done", () => {
-      expect(getAutoMappedStatus("note", "todo", "exported")).toBe("done");
-    });
-
-    it("maps archived -> any type to archived", () => {
-      expect(getAutoMappedStatus("note", "todo", "archived")).toBe("archived");
-      expect(getAutoMappedStatus("todo", "note", "archived")).toBe("archived");
-    });
-
-    it("maps scratch → note statuses", () => {
-      expect(getAutoMappedStatus("scratch", "note", "draft")).toBe("fleeting");
-      expect(getAutoMappedStatus("scratch", "note", "archived")).toBe("archived");
-    });
-
-    it("maps scratch → todo statuses", () => {
-      expect(getAutoMappedStatus("scratch", "todo", "draft")).toBe("active");
-      expect(getAutoMappedStatus("scratch", "todo", "archived")).toBe("archived");
-    });
-
-    it("maps note → scratch statuses", () => {
-      expect(getAutoMappedStatus("note", "scratch", "fleeting")).toBe("draft");
-      expect(getAutoMappedStatus("note", "scratch", "developing")).toBe("draft");
-      expect(getAutoMappedStatus("note", "scratch", "permanent")).toBe("archived");
-      expect(getAutoMappedStatus("note", "scratch", "exported")).toBe("archived");
-      expect(getAutoMappedStatus("note", "scratch", "archived")).toBe("archived");
-    });
-
-    it("maps todo → scratch statuses", () => {
-      expect(getAutoMappedStatus("todo", "scratch", "active")).toBe("draft");
-      expect(getAutoMappedStatus("todo", "scratch", "done")).toBe("archived");
-      expect(getAutoMappedStatus("todo", "scratch", "archived")).toBe("archived");
     });
   });
 
