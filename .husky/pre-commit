@@ -15,15 +15,19 @@ if [ "$branch" = "main" ]; then
   exit 1
 fi
 
-# Branch name convention check
-if [[ ! "$branch" =~ ^(feat|fix|docs|chore|refactor|test|perf|ci|build|style|revert)/[a-z0-9] ]]; then
-  echo ""
-  echo "ERROR: Branch 名稱 '$branch' 不符合 {type}/{short-description} 格式。"
-  echo "允許的 types: feat, fix, docs, chore, refactor, test, perf, ci, build, style, revert"
-  echo "範例: fix/error-boundary, feat/aria-labels"
-  echo ""
-  exit 1
-fi
+# Branch name convention check (POSIX sh compatible — husky runs hooks with sh)
+case "$branch" in
+  feat/*|fix/*|docs/*|chore/*|refactor/*|test/*|perf/*|ci/*|build/*|style/*|revert/*)
+    ;; # valid
+  *)
+    echo ""
+    echo "ERROR: Branch 名稱 '$branch' 不符合 {type}/{short-description} 格式。"
+    echo "允許的 types: feat, fix, docs, chore, refactor, test, perf, ci, build, style, revert"
+    echo "範例: fix/error-boundary, feat/aria-labels"
+    echo ""
+    exit 1
+    ;;
+esac
 
 # === CLAUDE.md / skills update warning ===
 has_code_change=$(git diff --cached --name-only | grep -qE '^(mcp-server|server|src|scripts|docs)/' && echo true || echo false)

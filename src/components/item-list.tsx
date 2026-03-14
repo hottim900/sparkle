@@ -333,7 +333,7 @@ export function ItemList({ status, type }: ItemListProps) {
   const handleSelect = useCallback(
     (item: ParsedItem) => {
       navigate({
-        search: (prev: Record<string, unknown>) => ({ ...prev, item: item.id }),
+        search: (prev) => ({ ...prev, item: item.id }),
       } as NavigateOptions);
     },
     [navigate],
@@ -342,7 +342,7 @@ export function ItemList({ status, type }: ItemListProps) {
   const handleNavigate = useCallback(
     (itemId: string) => {
       navigate({
-        search: (prev: Record<string, unknown>) => ({ ...prev, item: itemId }),
+        search: (prev) => ({ ...prev, item: itemId }),
       } as NavigateOptions);
     },
     [navigate],
