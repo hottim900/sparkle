@@ -64,7 +64,7 @@ function RootLayout() {
   const handleMobileSearchSelect = useCallback(
     (item: { id: string }) => {
       setMobileSearchOpen(false);
-      navigate({ search: { item: item.id } });
+      navigate({ search: (prev) => ({ ...prev, item: item.id }) });
     },
     [navigate],
   );
