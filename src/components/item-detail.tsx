@@ -80,14 +80,14 @@ export function ItemDetail({ itemId, onDeleted }: ItemDetailProps) {
 
   const handleBack = useCallback(() => {
     navigate({
-      search: (prev: Record<string, unknown>) => ({ ...prev, item: undefined }),
+      search: (prev) => ({ ...prev, item: undefined }),
     } as NavigateOptions);
   }, [navigate]);
 
   const handleNavigate = useCallback(
     (linkedItemId: string) => {
       navigate({
-        search: (prev: Record<string, unknown>) => ({ ...prev, item: linkedItemId }),
+        search: (prev) => ({ ...prev, item: linkedItemId }),
       } as NavigateOptions);
     },
     [navigate],

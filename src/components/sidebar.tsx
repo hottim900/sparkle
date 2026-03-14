@@ -104,11 +104,12 @@ export function Sidebar() {
     queryFn: () => getTags().then((r) => r.tags),
   });
 
-  const searchParams = useRouterState({ select: (s) => s.location.search }) as Record<
-    string,
-    unknown
-  >;
-  const selectedTag = typeof searchParams.tag === "string" ? searchParams.tag : undefined;
+  const selectedTag = useRouterState({
+    select: (s) => {
+      const search = s.location.search as Record<string, unknown>;
+      return typeof search.tag === "string" ? search.tag : undefined;
+    },
+  });
 
   return (
     <div data-testid="sidebar" className="w-64 border-r h-full flex flex-col bg-card">
@@ -116,7 +117,9 @@ export function Sidebar() {
       <div className="p-3 border-b">
         <SearchBar
           onSelect={(item) => {
-            navigate({ search: { item: item.id } } as NavigateOptions);
+            navigate({
+              search: (prev) => ({ ...prev, item: item.id }),
+            } as NavigateOptions);
           }}
         />
       </div>
@@ -137,8 +140,7 @@ export function Sidebar() {
                 className="w-full justify-start gap-2"
                 asChild
               >
-                {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                <Link to={v.path} search={{} as any}>
+                <Link to={v.path} search={{}}>
                   {v.icon}
                   {v.label}
                 </Link>
@@ -161,7 +163,7 @@ export function Sidebar() {
                 onClick={() => {
                   const newTag = selectedTag === tag ? undefined : tag;
                   navigate({
-                    search: { tag: newTag, item: undefined },
+                    search: (prev) => ({ ...prev, tag: newTag, item: undefined }),
                   } as NavigateOptions);
                 }}
               >
@@ -179,8 +181,7 @@ export function Sidebar() {
           className="w-full justify-start gap-2 text-muted-foreground"
           asChild
         >
-          {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-          <Link to="/settings" search={{} as any}>
+          <Link to="/settings" search={{}}>
             <Settings className="h-4 w-4" />
             設定
           </Link>

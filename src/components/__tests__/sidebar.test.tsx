@@ -107,10 +107,15 @@ describe("Sidebar", () => {
 
     await user.click(screen.getByText("idea"));
     expect(mockNavigate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        search: { tag: "idea", item: undefined },
-      }),
+      expect.objectContaining({ search: expect.any(Function) }),
     );
+    const searchFn = mockNavigate.mock.calls[0][0].search;
+    expect(searchFn({ sort: "created", cat: "cat-1" })).toEqual({
+      sort: "created",
+      cat: "cat-1",
+      tag: "idea",
+      item: undefined,
+    });
   });
 
   it("clicking an already-selected tag deselects it", async () => {
@@ -125,10 +130,14 @@ describe("Sidebar", () => {
 
     await user.click(screen.getByText("idea"));
     expect(mockNavigate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        search: { tag: undefined, item: undefined },
-      }),
+      expect.objectContaining({ search: expect.any(Function) }),
     );
+    const searchFn = mockNavigate.mock.calls[0][0].search;
+    expect(searchFn({ tag: "idea", sort: "created" })).toEqual({
+      tag: undefined,
+      item: undefined,
+      sort: "created",
+    });
   });
 
   it("settings link points to /settings", () => {
