@@ -47,14 +47,6 @@ itemsRouter.post("/", async (c) => {
     const body = await c.req.json();
     const input = createItemSchema.parse(body);
 
-    // Validate type-status combination if explicit status provided
-    if (input.status && !isValidTypeStatus(input.type ?? "note", input.status)) {
-      return c.json(
-        { error: `Invalid status '${input.status}' for type '${input.type ?? "note"}'` },
-        400,
-      );
-    }
-
     const created = createItem(db, input);
     const item = getItem(db, created.id)!;
     return c.json(item, 201);
