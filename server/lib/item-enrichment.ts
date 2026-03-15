@@ -15,8 +15,19 @@ export type ItemWithLinkedInfo = typeof items.$inferSelect & {
 export function resolveLinkedInfo(
   db: DB,
   rows: (typeof items.$inferSelect)[],
+  enrich = true,
 ): ItemWithLinkedInfo[] {
   if (rows.length === 0) return [];
+
+  if (!enrich) {
+    return rows.map((row) => ({
+      ...row,
+      linked_note_title: null,
+      linked_todo_count: 0,
+      share_visibility: null,
+      category_name: null,
+    }));
+  }
 
   // Resolve linked_note_title for todos
   const linkedIds = rows.map((r) => r.linked_note_id).filter((id): id is string => id != null);

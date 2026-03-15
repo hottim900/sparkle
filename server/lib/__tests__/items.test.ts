@@ -783,4 +783,38 @@ describe("Data Access Layer", () => {
       expect(fetched!.share_visibility).toBe("unlisted");
     });
   });
+
+  describe("enrich=false skips enrichment queries", () => {
+    it("getItem with enrich=false returns null/0 enrichment fields", () => {
+      const item = createItem(db, { title: "Test note" });
+      const fetched = getItem(db, item.id, false);
+      expect(fetched).not.toBeNull();
+      expect(fetched!.title).toBe("Test note");
+      expect(fetched!.linked_note_title).toBeNull();
+      expect(fetched!.linked_todo_count).toBe(0);
+      expect(fetched!.share_visibility).toBeNull();
+      expect(fetched!.category_name).toBeNull();
+    });
+
+    it("listItems with enrich=false returns null/0 enrichment fields", () => {
+      createItem(db, { title: "A", type: "note" });
+      createItem(db, { title: "B", type: "todo" });
+      const result = listItems(db, {}, false);
+      expect(result.items.length).toBe(2);
+      for (const item of result.items) {
+        expect(item.linked_note_title).toBeNull();
+        expect(item.linked_todo_count).toBe(0);
+        expect(item.share_visibility).toBeNull();
+        expect(item.category_name).toBeNull();
+      }
+    });
+
+    it("searchItems with enrich=false returns null/0 enrichment fields", () => {
+      createItem(db, { title: "Searchable note" });
+      const results = searchItems(sqlite, db, "Searchable", 10, false);
+      expect(results.length).toBe(1);
+      expect(results[0]!.linked_note_title).toBeNull();
+      expect(results[0]!.linked_todo_count).toBe(0);
+    });
+  });
 });
