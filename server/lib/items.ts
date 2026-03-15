@@ -162,11 +162,11 @@ export function listItems(
     .offset(offset)
     .all();
 
-  return { items: resolveLinkedInfo(db, rows), total };
+  return { items: resolveLinkedInfo(db, rows, enrich), total };
 }
 
 export function updateItem(db: DB, id: string, input: UpdateItemInput) {
-  const existing = getItem(db, id);
+  const existing = getItem(db, id, false);
   if (!existing) return null;
 
   const now = new Date().toISOString();
@@ -299,7 +299,7 @@ export function searchItems(
 
   // SAFETY: better-sqlite3 returns unknown[]; columns match items schema by migration
   const rows = stmt.all(escaped, limit) as (typeof items.$inferSelect)[];
-  return resolveLinkedInfo(db, rows);
+  return resolveLinkedInfo(db, rows, enrich);
 }
 
 export function getAllTags(sqlite: Database.Database): string[] {
