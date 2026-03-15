@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isValidTypeStatus } from "../lib/item-type-system.js";
 
 export const statusEnum = z.enum([
   "fleeting",
@@ -11,24 +12,29 @@ export const statusEnum = z.enum([
   "archived",
 ]);
 
-export const createItemSchema = z.object({
-  title: z.string().min(1, "Title is required").max(500),
-  type: z.enum(["note", "todo", "scratch"]).default("note"),
-  content: z.string().max(50000).default(""),
-  status: statusEnum.optional(),
-  priority: z.enum(["low", "medium", "high"]).nullable().default(null),
-  due: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, "Must be YYYY-MM-DD format")
-    .nullable()
-    .default(null),
-  tags: z.array(z.string().max(50)).max(20).default([]),
-  origin: z.string().max(200).default(""),
-  source: z.string().max(2000).nullable().default(null),
-  aliases: z.array(z.string().max(200)).max(10).default([]),
-  linked_note_id: z.string().uuid().nullable().default(null),
-  category_id: z.string().uuid().nullable().default(null),
-});
+export const createItemSchema = z
+  .object({
+    title: z.string().min(1, "Title is required").max(500),
+    type: z.enum(["note", "todo", "scratch"]).default("note"),
+    content: z.string().max(50000).default(""),
+    status: statusEnum.optional(),
+    priority: z.enum(["low", "medium", "high"]).nullable().default(null),
+    due: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, "Must be YYYY-MM-DD format")
+      .nullable()
+      .default(null),
+    tags: z.array(z.string().max(50)).max(20).default([]),
+    origin: z.string().max(200).default(""),
+    source: z.string().max(2000).nullable().default(null),
+    aliases: z.array(z.string().max(200)).max(10).default([]),
+    linked_note_id: z.string().uuid().nullable().default(null),
+    category_id: z.string().uuid().nullable().default(null),
+  })
+  .refine((data) => !data.status || isValidTypeStatus(data.type ?? "note", data.status), {
+    message: "Invalid status for the given type",
+    path: ["status"],
+  });
 
 export const updateItemSchema = z.object({
   title: z.string().min(1).max(500).optional(),

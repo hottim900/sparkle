@@ -41,12 +41,12 @@ export function createItem(db: DB, input: Partial<CreateItemInput> & { title: st
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const LIKE_SAFE_RE = /^[^%_]{4,36}$/;
 
-export function getItem(db: DB, id: string): ItemWithLinkedInfo | null {
+export function getItem(db: DB, id: string, enrich = true): ItemWithLinkedInfo | null {
   // Full UUID — exact match (fast path)
   if (UUID_RE.test(id)) {
     const row = db.select().from(items).where(eq(items.id, id)).get() ?? null;
     if (!row) return null;
-    return resolveLinkedInfo(db, [row])[0]!;
+    return resolveLinkedInfo(db, [row], enrich)[0]!;
   }
 
   // Short prefix — LIKE match (hex only, 4–36 chars)
@@ -68,7 +68,7 @@ export function getItem(db: DB, id: string): ItemWithLinkedInfo | null {
     error.matches = rows.map((r) => r.id);
     throw error;
   }
-  return resolveLinkedInfo(db, [rows[0]!])[0]!;
+  return resolveLinkedInfo(db, [rows[0]!], enrich)[0]!;
 }
 
 export function listItems(
@@ -85,6 +85,7 @@ export function listItems(
     limit?: number;
     offset?: number;
   },
+  enrich = true,
 ) {
   const conditions = [];
 
@@ -140,7 +141,7 @@ export function listItems(
       sql`SELECT DISTINCT items.* FROM items, json_each(items.tags) ${whereClause} ${orderSql} LIMIT ${limit} OFFSET ${offset}`,
     );
 
-    return { items: resolveLinkedInfo(db, rows), total };
+    return { items: resolveLinkedInfo(db, rows, enrich), total };
   }
 
   const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
@@ -270,6 +271,7 @@ export function searchItems(
   db: DB,
   query: string,
   limit = 20,
+  enrich = true,
 ): ItemWithLinkedInfo[] {
   // Trigram tokenizer requires at least 3 characters; fall back to LIKE for shorter queries
   if (query.length < 3) {
@@ -282,7 +284,7 @@ export function searchItems(
     `);
     // SAFETY: better-sqlite3 returns unknown[]; columns match items schema by migration
     const rows = stmt.all(pattern, pattern, limit) as (typeof items.$inferSelect)[];
-    return resolveLinkedInfo(db, rows);
+    return resolveLinkedInfo(db, rows, enrich);
   }
 
   const escaped = escapeFts5Query(query);

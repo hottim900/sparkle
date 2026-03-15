@@ -8,7 +8,7 @@ import {
   getAutoMappedStatus,
   defaultStatusForType,
 } from "../item-type-system.js";
-import { statusEnum } from "../../schemas/items.js";
+import { statusEnum, createItemSchema } from "../../schemas/items.js";
 
 describe("item-type-system", () => {
   describe("TYPE_STATUS_MAP is single source of truth", () => {
@@ -85,6 +85,30 @@ describe("item-type-system", () => {
     it("maps scratch↔todo", () => {
       expect(getAutoMappedStatus("scratch", "todo", "draft")).toBe("active");
       expect(getAutoMappedStatus("todo", "scratch", "active")).toBe("draft");
+    });
+  });
+
+  describe("createItemSchema type-status refine", () => {
+    it("rejects invalid status for note type", () => {
+      expect(() =>
+        createItemSchema.parse({ title: "x", type: "note", status: "active" }),
+      ).toThrow();
+    });
+
+    it("accepts valid status for todo type", () => {
+      const result = createItemSchema.parse({ title: "x", type: "todo", status: "active" });
+      expect(result.status).toBe("active");
+    });
+
+    it("accepts missing status (uses default)", () => {
+      const result = createItemSchema.parse({ title: "x" });
+      expect(result.status).toBeUndefined();
+    });
+
+    it("rejects todo status for scratch type", () => {
+      expect(() =>
+        createItemSchema.parse({ title: "x", type: "scratch", status: "active" }),
+      ).toThrow();
     });
   });
 
