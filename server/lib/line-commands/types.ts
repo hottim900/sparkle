@@ -4,7 +4,7 @@ import type * as schema from "../../db/schema.js";
 import type { LineCommand } from "../line.js";
 import type { ItemWithLinkedInfo } from "../item-enrichment.js";
 
-type DB = BetterSQLite3Database<typeof schema>;
+export type DB = BetterSQLite3Database<typeof schema>;
 
 export interface CommandContext {
   userId: string;
