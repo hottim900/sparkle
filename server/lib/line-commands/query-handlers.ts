@@ -12,7 +12,7 @@ const handleHelp: CommandHandler = async () => HELP_TEXT;
 const handleFind: CommandHandler = async ({ userId, command, sqlite, db }) => {
   const cmd = command as Extract<LineCommand, { type: "find" }>;
   try {
-    const results = searchItems(sqlite, db, cmd.keyword, 5);
+    const results = searchItems(sqlite, db, cmd.keyword, 5, false);
     if (results.length === 0) return `🔍 找不到「${cmd.keyword}」相關的項目`;
     setSession(
       userId,
@@ -47,7 +47,7 @@ function makeListHandler(
   filters: Parameters<typeof listItems>[1],
 ): CommandHandler {
   return async ({ userId, db }) => {
-    const { items, total } = listItems(db, filters);
+    const { items, total } = listItems(db, filters, false);
     if (total === 0) return `${emoji} ${emptyMsg}`;
     setSession(
       userId,
@@ -112,7 +112,7 @@ const handleScratch = makeListHandler("📌", "暫存", "沒有暫存項目", {
 
 const handleList: CommandHandler = async ({ userId, command, db }) => {
   const cmd = command as Extract<LineCommand, { type: "list" }>;
-  const { items, total } = listItems(db, { tag: cmd.tag, limit: 5 });
+  const { items, total } = listItems(db, { tag: cmd.tag, limit: 5 }, false);
   if (total === 0) return `🏷️ 找不到標籤「${cmd.tag}」的項目`;
   setSession(
     userId,

@@ -1,15 +1,11 @@
-import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
-import type * as schema from "../../db/schema.js";
 import { getItem } from "../items.js";
 import { getItemId } from "../line-session.js";
-import type { SessionResult } from "./types.js";
-
-type DB = BetterSQLite3Database<typeof schema>;
+import type { DB, SessionResult } from "./types.js";
 
 export function resolveSessionItem(db: DB, userId: string, index: number): SessionResult {
   const itemId = getItemId(userId, index);
   if (!itemId) return { ok: false, error: `❌ 編號 ${index} 不存在，請重新查詢` };
-  const item = getItem(db, itemId);
+  const item = getItem(db, itemId, false);
   if (!item) return { ok: false, error: "❌ 項目不存在" };
   return { ok: true, itemId, item };
 }

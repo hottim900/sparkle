@@ -1,7 +1,7 @@
 import type { CommandHandler } from "./types.js";
 import type { LineCommand } from "../line.js";
 import { resolveSessionItem } from "./shared.js";
-import { getItem, updateItem, deleteItem } from "../items.js";
+import { updateItem, deleteItem } from "../items.js";
 import { exportToObsidian } from "../export.js";
 import { getObsidianSettings } from "../settings.js";
 import { parseDate } from "../line-date.js";
@@ -25,10 +25,9 @@ const handleDue: CommandHandler = async ({ userId, command, db }) => {
   if (!dateParsed.success) return "❌ 無法辨識日期，請用 YYYY-MM-DD 或中文如『明天』『3天後』";
   const dueDate = dateParsed.clear ? null : dateParsed.date;
   updateItem(db, resolved.itemId, { due: dueDate });
-  const dueItem = getItem(db, resolved.itemId);
   return dateParsed.clear
-    ? `✅ 已清除「${dueItem!.title}」的到期日`
-    : `✅ 已設定「${dueItem!.title}」到期日為 ${dueDate}`;
+    ? `✅ 已清除「${resolved.item.title}」的到期日`
+    : `✅ 已設定「${resolved.item.title}」到期日為 ${dueDate}`;
 };
 
 const handleTag: CommandHandler = async ({ userId, command, db }) => {
