@@ -5,6 +5,7 @@ import {
   createCategoryApi,
   updateCategoryApi,
   deleteCategoryApi,
+  reorderCategoriesApi,
 } from "../client.js";
 import type { Category } from "../types.js";
 
@@ -39,11 +40,11 @@ export function registerCategoryTools(server: McpServer): void {
     "sparkle_list_categories",
     {
       title: "List Categories",
-      description: `List all categories in Sparkle, sorted by sort_order.
+      description: `List all categories in Sparkle, sorted by display order.
 
-No args required.
+Use this before assigning a category_id via sparkle_create_note or sparkle_update_note to find the correct UUID. Also useful for checking existing categories before creating a new one to avoid duplicates.
 
-Returns: Array of categories with name, color, sort_order, and metadata.`,
+Returns: Array of categories with name, color (hex), sort_order, and metadata.`,
       inputSchema: {},
       annotations: {
         readOnlyHint: true,
@@ -74,14 +75,21 @@ Returns: Array of categories with name, color, sort_order, and metadata.`,
       title: "Create Category",
       description: `Create a new category for organizing items.
 
+Before creating, use sparkle_list_categories to check if a similar category already exists. Category names must be unique. Items can be assigned to a category via category_id in sparkle_create_note or sparkle_update_note.
+
 Args:
   - name (string, required): Category name (1-50 chars, must be unique)
-  - color (string, optional): Color value (max 20 chars, e.g. "blue", "#3b82f6")
+  - color (string, optional): Hex color code (e.g. "#3b82f6"), must be #RRGGBB format. Null to leave unset.
 
 Returns: The created category with all fields.`,
       inputSchema: {
         name: z.string().min(1).max(50).describe("Category name"),
-        color: z.string().max(20).nullable().optional().describe("Color value"),
+        color: z
+          .string()
+          .regex(/^#[0-9a-fA-F]{6}$/)
+          .nullable()
+          .optional()
+          .describe("Hex color code (#RRGGBB format, e.g. #3b82f6)"),
       },
       annotations: {
         readOnlyHint: false,
@@ -114,17 +122,24 @@ Returns: The created category with all fields.`,
       title: "Update Category",
       description: `Update an existing category's name, color, or sort order.
 
+Use sparkle_list_categories to find the category UUID first. Only provided fields are updated; omitted fields remain unchanged.
+
 Args:
   - id (string, required): Category UUID
   - name (string, optional): New name (1-50 chars, must be unique)
-  - color (string, optional): New color value (max 20 chars, null to clear)
+  - color (string, optional): Hex color code (#RRGGBB format), or null to clear
   - sort_order (number, optional): New sort position (integer >= 0)
 
 Returns: The updated category with all fields.`,
       inputSchema: {
         id: z.string().uuid().describe("Category UUID"),
         name: z.string().min(1).max(50).optional().describe("New name"),
-        color: z.string().max(20).nullable().optional().describe("Color value (null to clear)"),
+        color: z
+          .string()
+          .regex(/^#[0-9a-fA-F]{6}$/)
+          .nullable()
+          .optional()
+          .describe("Hex color code (#RRGGBB format, null to clear)"),
         sort_order: z.number().int().min(0).optional().describe("Sort position"),
       },
       annotations: {
@@ -161,7 +176,9 @@ Returns: The updated category with all fields.`,
     "sparkle_delete_category",
     {
       title: "Delete Category",
-      description: `Delete a category. Items assigned to this category will have their category_id set to null (ON DELETE SET NULL).
+      description: `Delete a category permanently. Items currently assigned to this category will have their category_id set to null automatically (ON DELETE SET NULL) — they will not be deleted.
+
+Use sparkle_list_categories to find the category UUID first.
 
 Args:
   - id (string, required): Category UUID
@@ -187,6 +204,56 @@ Returns: Confirmation of deletion.`,
         return {
           content: [
             { type: "text", text: `Error deleting category: ${(error as Error).message}` },
+          ],
+          isError: true,
+        };
+      }
+    },
+  );
+
+  server.registerTool(
+    "sparkle_reorder_categories",
+    {
+      title: "Reorder Categories",
+      description: `Set the display order of categories by providing each category's new sort_order value.
+
+Use sparkle_list_categories to get current IDs and order, then provide the new ordering. All categories in the list are updated in a single transaction.
+
+Args:
+  - items (array, required): Array of { id: string (UUID), sort_order: number (integer >= 0) }. Min 1, max 500 items.
+
+Returns: Confirmation of reorder.`,
+      inputSchema: {
+        items: z
+          .array(
+            z.object({
+              id: z.string().uuid().describe("Category UUID"),
+              sort_order: z.number().int().min(0).describe("New sort position"),
+            }),
+          )
+          .min(1)
+          .max(500)
+          .describe("Array of { id, sort_order } pairs"),
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ items }) => {
+      try {
+        await reorderCategoriesApi(items);
+        return {
+          content: [
+            { type: "text", text: `Categories reordered successfully (${items.length} updated).` },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            { type: "text", text: `Error reordering categories: ${(error as Error).message}` },
           ],
           isError: true,
         };
