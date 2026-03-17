@@ -58,4 +58,4 @@ Detailed module conventions (API retry, PWA, Logging, Sentry, CSP, Offline UI, S
 
 ## Maintenance
 
-Update docs in same commit: **CLAUDE.md** (core conventions), **`.claude/skills/*/SKILL.md`** (domain details), **`docs/plans/quality/README.md`** (quality items).
+Update docs in same commit: **CLAUDE.md** (core conventions), **`docs/plans/quality/README.md`** (quality items). Skills (`.claude/skills/`) are local-only (gitignored).
