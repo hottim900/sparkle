@@ -36,6 +36,16 @@ const provider = new SparkleAuthProvider(process.env.MCP_AUTH_PIN);
 // --- Express app ---
 
 const app = express();
+app.set("trust proxy", 1); // Behind Cloudflare Tunnel
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on("finish", () => {
+    console.log(
+      `${req.method} ${req.path} ${res.statusCode} ${Date.now() - start}ms from=${req.ip}`,
+    );
+  });
+  next();
+});
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
@@ -45,6 +55,7 @@ app.use(
   mcpAuthRouter({
     provider,
     issuerUrl: new URL(MCP_ISSUER_URL),
+    resourceServerUrl: new URL(`${MCP_ISSUER_URL}/mcp`),
     scopesSupported: ["mcp:tools"],
     resourceName: "Sparkle MCP Server",
   }),
@@ -111,18 +122,21 @@ class SessionStore {
 
 const sessions = new SessionStore();
 
+function getSessionTransport(req: express.Request): StreamableHTTPServerTransport | undefined {
+  const sessionId = req.headers["mcp-session-id"] as string | undefined;
+  return sessionId ? sessions.get(sessionId) : undefined;
+}
+
 // POST /mcp — handle MCP requests
 app.post("/mcp", authMiddleware, async (req, res) => {
-  const sessionId = req.headers["mcp-session-id"] as string | undefined;
-
   try {
-    if (sessionId && sessions.has(sessionId)) {
-      const transport = sessions.get(sessionId)!;
-      await transport.handleRequest(req, res, req.body);
+    const existing = getSessionTransport(req);
+    if (existing) {
+      await existing.handleRequest(req, res, req.body);
       return;
     }
 
-    if (!sessionId && isInitializeRequest(req.body)) {
+    if (!req.headers["mcp-session-id"] && isInitializeRequest(req.body)) {
       if (sessions.size >= MAX_SESSIONS) {
         res.status(503).json({
           jsonrpc: "2.0",
@@ -173,23 +187,23 @@ app.post("/mcp", authMiddleware, async (req, res) => {
 
 // GET /mcp — SSE stream
 app.get("/mcp", authMiddleware, async (req, res) => {
-  const sessionId = req.headers["mcp-session-id"] as string | undefined;
-  if (!sessionId || !sessions.has(sessionId)) {
+  const transport = getSessionTransport(req);
+  if (!transport) {
     res.status(400).send("Invalid or missing session ID");
     return;
   }
-  await sessions.get(sessionId)!.handleRequest(req, res);
+  await transport.handleRequest(req, res);
 });
 
 // DELETE /mcp — session termination
 app.delete("/mcp", authMiddleware, async (req, res) => {
-  const sessionId = req.headers["mcp-session-id"] as string | undefined;
-  if (!sessionId || !sessions.has(sessionId)) {
+  const transport = getSessionTransport(req);
+  if (!transport) {
     res.status(400).send("Invalid or missing session ID");
     return;
   }
   try {
-    await sessions.get(sessionId)!.handleRequest(req, res);
+    await transport.handleRequest(req, res);
   } catch (error) {
     console.error("Error handling session termination:", error);
     if (!res.headersSent) {
