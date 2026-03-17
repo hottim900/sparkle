@@ -1,0 +1,19 @@
+[Unit]
+Description=Sparkle MCP HTTP Server (Claude.ai connector)
+After=network.target sparkle.service
+Wants=sparkle.service
+
+[Service]
+Type=simple
+# TODO: Change to your Linux username
+User=YOUR_USER
+WorkingDirectory=SPARKLE_DIR/mcp-server
+Environment=PATH=NODE_BIN_DIR:/usr/bin
+EnvironmentFile=-SPARKLE_DIR/.env
+ExecStart=NODE_BIN_DIR/node --env-file=SPARKLE_DIR/.env dist/http.js
+MemoryMax=256M
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

@@ -82,6 +82,13 @@ sed -e "s|YOUR_USER|$SPARKLE_USER|g" \
     "$SERVICE_DIR/sparkle.service" > /etc/systemd/system/sparkle.service
 echo "✅ 已安裝 sparkle.service"
 
+# Install MCP HTTP service (for Claude.ai connector)
+sed -e "s|YOUR_USER|$SPARKLE_USER|g" \
+    -e "s|NODE_BIN_DIR|$NODE_BIN_DIR|g" \
+    -e "s|SPARKLE_DIR|$PROJECT_DIR|g" \
+    "$SERVICE_DIR/sparkle-mcp-http.service" > /etc/systemd/system/sparkle-mcp-http.service
+echo "✅ 已安裝 sparkle-mcp-http.service"
+
 # 確保防火牆腳本可執行
 chmod +x "$PROJECT_DIR/scripts/firewall.sh" "$PROJECT_DIR/scripts/firewall-cleanup.sh"
 
@@ -98,6 +105,7 @@ systemctl daemon-reload
 
 # 啟用開機自動啟動
 systemctl enable sparkle.service
+systemctl enable sparkle-mcp-http.service
 if [ "$INSTALL_TUNNEL" = true ]; then
   systemctl enable sparkle-tunnel.service
 fi
@@ -134,6 +142,7 @@ fi
 # 啟動服務（使用 restart 確保冪等）
 if [ "$START_SERVICES" = true ]; then
   systemctl restart sparkle.service
+  systemctl restart sparkle-mcp-http.service
   if [ "$INSTALL_TUNNEL" = true ]; then
     systemctl restart sparkle-tunnel.service
   fi
@@ -142,6 +151,8 @@ if [ "$START_SERVICES" = true ]; then
   echo "✅ 安裝完成！服務狀態："
   echo ""
   systemctl status sparkle.service --no-pager -l | head -5
+  echo ""
+  systemctl status sparkle-mcp-http.service --no-pager -l | head -5
 
   if [ "$INSTALL_TUNNEL" = true ]; then
     echo ""
@@ -157,9 +168,10 @@ echo ""
 echo "常用指令："
 echo "  查看狀態:  sudo systemctl status sparkle"
 echo "  查看 log:  journalctl -u sparkle -f"
+echo "  MCP log:   journalctl -u sparkle-mcp-http -f"
 echo "  重啟:      sudo systemctl restart sparkle"
 if [ "$INSTALL_TUNNEL" = true ]; then
-  echo "  重啟全部:  sudo systemctl restart sparkle sparkle-tunnel"
+  echo "  重啟全部:  sudo systemctl restart sparkle sparkle-mcp-http sparkle-tunnel"
 fi
 echo ""
 echo "💡 WSL2 mirrored 模式下不需要 port forwarding"

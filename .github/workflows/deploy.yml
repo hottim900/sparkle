@@ -26,6 +26,9 @@ jobs:
       - name: Build frontend
         run: cd $SPARKLE_DIR && npm run build
 
+      - name: Build MCP server
+        run: cd $SPARKLE_DIR/mcp-server && npm ci && npm run build
+
       - name: Validate migrations against production DB
         run: |
           cd $SPARKLE_DIR
@@ -38,8 +41,8 @@ jobs:
             exit 1
           }
 
-      - name: Restart service
-        run: sudo systemctl restart sparkle
+      - name: Restart services
+        run: sudo systemctl restart sparkle sparkle-mcp-http
 
       - name: Health check
         run: |
