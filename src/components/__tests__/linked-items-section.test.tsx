@@ -84,12 +84,9 @@ function makeRawItem(overrides: Partial<Item> = {}): Item {
 }
 
 const defaultProps = {
-  allTags: [] as string[],
   createTodoRequested: false,
   onCreateTodoDismiss: vi.fn(),
   onNavigate: vi.fn(),
-  onItemChange: vi.fn(),
-  onSaveStatusChange: vi.fn(),
 };
 
 function renderLinked(item: ParsedItem, propOverrides: Partial<typeof defaultProps> = {}) {
@@ -369,9 +366,8 @@ describe("LinkedItemsSection (todo mode)", () => {
     );
 
     const user = userEvent.setup();
-    const onItemChange = vi.fn();
 
-    renderLinked(makeTodoItem({ linked_note_id: "linked-note" }), { onItemChange });
+    renderLinked(makeTodoItem({ linked_note_id: "linked-note" }));
 
     await waitFor(() => {
       expect(screen.getByText("Linked Note")).toBeInTheDocument();
