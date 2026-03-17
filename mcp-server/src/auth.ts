@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { randomUUID, timingSafeEqual } from "node:crypto";
 import type { Response } from "express";
 import type { OAuthRegisteredClientsStore } from "@modelcontextprotocol/sdk/server/auth/clients.js";
 import type {
@@ -11,9 +11,9 @@ import type {
   OAuthTokens,
   OAuthTokenRevocationRequest,
 } from "@modelcontextprotocol/sdk/shared/auth.js";
-import { InvalidRequestError } from "@modelcontextprotocol/sdk/server/auth/errors.js";
-
 // --- Clients Store ---
+
+const MAX_CLIENTS = 20;
 
 export class SparkleClientsStore implements OAuthRegisteredClientsStore {
   private clients = new Map<string, OAuthClientInformationFull>();
@@ -25,6 +25,9 @@ export class SparkleClientsStore implements OAuthRegisteredClientsStore {
   registerClient(
     client: Omit<OAuthClientInformationFull, "client_id" | "client_id_issued_at">,
   ): OAuthClientInformationFull {
+    if (this.clients.size >= MAX_CLIENTS) {
+      throw new Error("Maximum number of registered clients reached");
+    }
     const full: OAuthClientInformationFull = {
       ...client,
       client_id: randomUUID(),
@@ -37,10 +40,13 @@ export class SparkleClientsStore implements OAuthRegisteredClientsStore {
 
 // --- Auth Provider ---
 
+const MAX_PIN_ATTEMPTS = 5;
+
 interface PendingAuth {
   client: OAuthClientInformationFull;
   params: AuthorizationParams;
   createdAt: number;
+  attempts: number;
 }
 
 interface StoredCode {
@@ -86,6 +92,7 @@ export class SparkleAuthProvider implements OAuthServerProvider {
       client,
       params,
       createdAt: Date.now(),
+      attempts: 0,
     });
 
     res.setHeader("Content-Type", "text/html; charset=utf-8");
@@ -135,12 +142,25 @@ export class SparkleAuthProvider implements OAuthServerProvider {
       return;
     }
 
-    if (pin !== this.pin) {
+    pending.attempts++;
+    if (pending.attempts > MAX_PIN_ATTEMPTS) {
+      this.pendingAuths.delete(pendingId);
+      res.status(429).send(errorPage("嘗試次數過多。請重新開始。"));
+      return;
+    }
+
+    if (!timingSafeCompare(pin, this.pin)) {
       res.status(403).send(errorPage("PIN 錯誤。請返回重試。"));
       return;
     }
 
     this.pendingAuths.delete(pendingId);
+
+    const { redirectUri, state } = pending.params;
+    if (!pending.client.redirect_uris.some((uri) => uri.toString() === redirectUri)) {
+      res.status(400).send(errorPage("無效的重導向 URI。"));
+      return;
+    }
 
     const code = randomUUID();
     this.codes.set(code, {
@@ -148,11 +168,6 @@ export class SparkleAuthProvider implements OAuthServerProvider {
       params: pending.params,
       createdAt: Date.now(),
     });
-
-    const { redirectUri, state } = pending.params;
-    if (!pending.client.redirect_uris.some((uri) => uri.toString() === redirectUri)) {
-      throw new InvalidRequestError("Unregistered redirect_uri");
-    }
 
     const targetUrl = new URL(redirectUri);
     targetUrl.searchParams.set("code", code);
@@ -273,6 +288,13 @@ export class SparkleAuthProvider implements OAuthServerProvider {
 }
 
 // --- Helpers ---
+
+function timingSafeCompare(a: string, b: string): boolean {
+  const bufA = Buffer.from(a);
+  const bufB = Buffer.from(b);
+  if (bufA.length !== bufB.length) return false;
+  return timingSafeEqual(bufA, bufB);
+}
 
 function escapeHtml(str: string): string {
   return str
