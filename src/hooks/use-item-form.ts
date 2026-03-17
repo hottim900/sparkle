@@ -153,7 +153,6 @@ export function useItemForm(itemId: string) {
     isDirty,
     setIsDirty,
     saveStatus,
-    setSaveStatus,
     allTags,
     saveField,
     debouncedSave,
