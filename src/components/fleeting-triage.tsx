@@ -51,7 +51,7 @@ export function FleetingTriage({ onDone }: FleetingTriageProps) {
   const triageMutation = useMutation({
     mutationFn: ({ id, updates }: { id: string; updates: Record<string, unknown> }) =>
       updateItem(id, updates),
-    onSuccess: invalidateAfterItemMutation,
+    onSuccess: () => invalidateAfterItemMutation(),
   });
 
   const current = items[currentIndex];
