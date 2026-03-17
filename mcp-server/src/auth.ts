@@ -1,4 +1,10 @@
-import { randomUUID, timingSafeEqual } from "node:crypto";
+import {
+  randomUUID,
+  timingSafeEqual,
+  createHmac,
+  type KeyObject,
+  createSecretKey,
+} from "node:crypto";
 import type { Response } from "express";
 import type { OAuthRegisteredClientsStore } from "@modelcontextprotocol/sdk/server/auth/clients.js";
 import type {
@@ -11,6 +17,7 @@ import type {
   OAuthTokens,
   OAuthTokenRevocationRequest,
 } from "@modelcontextprotocol/sdk/shared/auth.js";
+import { SignJWT, jwtVerify, type JWTPayload } from "jose";
 // --- Clients Store ---
 
 const MAX_CLIENTS = 20;
@@ -55,27 +62,31 @@ interface StoredCode {
   createdAt: number;
 }
 
-interface StoredToken {
-  clientId: string;
-  scopes: string[];
-  expiresAt: number;
-  resource?: URL;
-}
-
-const TOKEN_EXPIRY_MS = 60 * 60 * 1000; // 1 hour
+const TOKEN_EXPIRY_SECONDS = 365 * 24 * 60 * 60; // 1 year (effectively no expiry)
 const CODE_EXPIRY_MS = 10 * 60 * 1000; // 10 minutes
 const PENDING_AUTH_EXPIRY_MS = 5 * 60 * 1000; // 5 minutes
+
+/**
+ * Derive a stable signing key from the PIN.
+ * Same PIN = same key across restarts → tokens survive restarts.
+ */
+function deriveSigningKey(pin: string): KeyObject {
+  const buf = createHmac("sha256", "sparkle-mcp-jwt-key").update(pin).digest();
+  return createSecretKey(buf);
+}
 
 export class SparkleAuthProvider implements OAuthServerProvider {
   readonly clientsStore = new SparkleClientsStore();
   private codes = new Map<string, StoredCode>();
-  private tokens = new Map<string, StoredToken>();
+  private revokedTokens = new Set<string>(); // JTI of revoked tokens
   private pendingAuths = new Map<string, PendingAuth>();
 
   private readonly pin: string;
+  private readonly jwtKey: KeyObject;
 
   constructor(pin: string) {
     this.pin = pin;
+    this.jwtKey = deriveSigningKey(pin);
   }
 
   /**
@@ -211,20 +222,23 @@ export class SparkleAuthProvider implements OAuthServerProvider {
 
     this.codes.delete(authorizationCode);
 
-    const accessToken = randomUUID();
-    const expiresAt = Date.now() + TOKEN_EXPIRY_MS;
-    this.tokens.set(accessToken, {
-      clientId: client.client_id,
-      scopes: codeData.params.scopes || [],
-      expiresAt,
-      resource,
-    });
+    const scopes = codeData.params.scopes || [];
+    const accessToken = await new SignJWT({
+      sub: client.client_id,
+      scope: scopes.join(" "),
+      ...(resource ? { aud: resource.toString() } : {}),
+    })
+      .setProtectedHeader({ alg: "HS256" })
+      .setJti(randomUUID())
+      .setIssuedAt()
+      .setExpirationTime(`${TOKEN_EXPIRY_SECONDS}s`)
+      .sign(this.jwtKey);
 
     return {
       access_token: accessToken,
       token_type: "bearer",
-      expires_in: Math.floor(TOKEN_EXPIRY_MS / 1000),
-      scope: (codeData.params.scopes || []).join(" "),
+      expires_in: TOKEN_EXPIRY_SECONDS,
+      scope: scopes.join(" "),
     };
   }
 
@@ -238,22 +252,37 @@ export class SparkleAuthProvider implements OAuthServerProvider {
   }
 
   async verifyAccessToken(token: string): Promise<AuthInfo> {
-    const tokenData = this.tokens.get(token);
-    if (!tokenData) {
-      throw new Error("Invalid token");
+    let payload: JWTPayload;
+    try {
+      const result = await jwtVerify(token, this.jwtKey, { algorithms: ["HS256"] });
+      payload = result.payload;
+    } catch {
+      throw new Error("Invalid or expired token");
     }
 
-    if (Date.now() > tokenData.expiresAt) {
-      this.tokens.delete(token);
-      throw new Error("Token has expired");
+    if (payload.jti && this.revokedTokens.has(payload.jti)) {
+      throw new Error("Token has been revoked");
+    }
+
+    if (!payload.sub) {
+      throw new Error("Invalid token: missing sub claim");
+    }
+
+    let resource: URL | undefined;
+    if (payload.aud) {
+      try {
+        resource = new URL(payload.aud as string);
+      } catch {
+        // Malformed aud claim — ignore rather than crash
+      }
     }
 
     return {
       token,
-      clientId: tokenData.clientId,
-      scopes: tokenData.scopes,
-      expiresAt: Math.floor(tokenData.expiresAt / 1000),
-      resource: tokenData.resource,
+      clientId: payload.sub,
+      scopes: payload.scope ? (payload.scope as string).split(" ") : [],
+      expiresAt: payload.exp,
+      ...(resource ? { resource } : {}),
     };
   }
 
@@ -261,11 +290,24 @@ export class SparkleAuthProvider implements OAuthServerProvider {
     _client: OAuthClientInformationFull,
     request: OAuthTokenRevocationRequest,
   ): Promise<void> {
-    this.tokens.delete(request.token);
+    // Decode JTI without verification — revocation doesn't need signature check
+    try {
+      const [, payloadB64] = request.token.split(".");
+      if (payloadB64) {
+        const payload = JSON.parse(Buffer.from(payloadB64, "base64url").toString());
+        if (payload.jti) {
+          this.revokedTokens.add(payload.jti);
+        }
+      }
+    } catch {
+      // Malformed token, nothing to revoke
+    }
   }
 
   /**
    * Clean up expired entries to prevent memory leaks.
+   * Note: JWT tokens are stateless and don't need cleanup.
+   * Only in-memory state (pending auths, auth codes, revocation set) needs cleanup.
    */
   cleanup(): void {
     const now = Date.now();
@@ -279,11 +321,8 @@ export class SparkleAuthProvider implements OAuthServerProvider {
         this.codes.delete(code);
       }
     }
-    for (const [token, data] of this.tokens) {
-      if (now > data.expiresAt) {
-        this.tokens.delete(token);
-      }
-    }
+    // Revoked tokens set is bounded by MAX_SESSIONS * token lifetime.
+    // For a personal server this stays tiny. No cleanup needed.
   }
 }
 

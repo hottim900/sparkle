@@ -1,5 +1,8 @@
+// @vitest-environment node
 import { describe, it, expect, beforeEach } from "vitest";
 import { SparkleClientsStore, SparkleAuthProvider } from "../auth.js";
+
+const TEST_PIN = "test-pin-1234";
 
 describe("SparkleClientsStore", () => {
   let store: SparkleClientsStore;
@@ -29,7 +32,6 @@ describe("SparkleClientsStore", () => {
 
 describe("SparkleAuthProvider", () => {
   let provider: SparkleAuthProvider;
-  const TEST_PIN = "test-pin-1234";
 
   const mockClient = {
     client_id: "test-client-id",
@@ -161,7 +163,7 @@ describe("SparkleAuthProvider", () => {
 
       expect(tokens.access_token).toBeDefined();
       expect(tokens.token_type).toBe("bearer");
-      expect(tokens.expires_in).toBe(3600);
+      expect(tokens.expires_in).toBe(365 * 24 * 60 * 60);
       expect(tokens.scope).toBe("mcp:tools");
     });
 
@@ -196,7 +198,9 @@ describe("SparkleAuthProvider", () => {
     });
 
     it("throws for invalid token", async () => {
-      await expect(provider.verifyAccessToken("invalid")).rejects.toThrow("Invalid token");
+      await expect(provider.verifyAccessToken("invalid")).rejects.toThrow(
+        "Invalid or expired token",
+      );
     });
   });
 
@@ -213,24 +217,24 @@ describe("SparkleAuthProvider", () => {
 
       // Token no longer works
       await expect(provider.verifyAccessToken(tokens.access_token)).rejects.toThrow(
-        "Invalid token",
+        "Token has been revoked",
       );
     });
   });
 
   describe("cleanup", () => {
-    it("removes expired tokens", async () => {
-      const code = await createAuthCode(provider, mockClient, mockParams);
-      const tokens = await provider.exchangeAuthorizationCode(mockClient, code);
+    it("cleans up expired pending auths and codes", () => {
+      // Access internal maps to verify cleanup works
+      const pendingAuths = (provider as any).pendingAuths as Map<string, any>;
+      const codes = (provider as any).codes as Map<string, any>;
 
-      // Manually expire the token by accessing internal state
-      const tokenMap = (provider as any).tokens as Map<string, any>;
-      const tokenData = tokenMap.get(tokens.access_token)!;
-      tokenData.expiresAt = Date.now() - 1000;
+      pendingAuths.set("old-pending", { createdAt: 0, attempts: 0 });
+      codes.set("old-code", { createdAt: 0 });
 
       provider.cleanup();
 
-      await expect(provider.verifyAccessToken(tokens.access_token)).rejects.toThrow();
+      expect(pendingAuths.has("old-pending")).toBe(false);
+      expect(codes.has("old-code")).toBe(false);
     });
   });
 });
@@ -264,6 +268,6 @@ async function createAuthCode(
     },
   } as any;
 
-  provider.completeAuthorization(pendingId, "test-pin-1234", submitRes);
+  provider.completeAuthorization(pendingId, TEST_PIN, submitRes);
   return code;
 }
