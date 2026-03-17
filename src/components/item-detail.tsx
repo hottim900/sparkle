@@ -10,8 +10,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { deleteItem, getItem, exportItem } from "@/lib/api";
-import { parseItem, type ParsedItem, type ItemStatus } from "@/lib/types";
+import { type ParsedItem, type ItemStatus } from "@/lib/types";
+import { useItemActions } from "@/hooks/use-item-actions";
 import { TagInput } from "@/components/tag-input";
 import { useAppContext } from "@/lib/app-context";
 import { toast } from "sonner";
@@ -59,7 +59,6 @@ export function ItemDetail({ itemId, onDeleted }: ItemDetailProps) {
     isLoading,
     setIsDirty,
     saveStatus,
-    setSaveStatus,
     allTags,
     saveField,
     debouncedSave,
@@ -73,8 +72,13 @@ export function ItemDetail({ itemId, onDeleted }: ItemDetailProps) {
 
   const navigate = useNavigate();
   const { obsidianEnabled, isOnline } = useAppContext();
+  const { handleDelete, handleExport, exporting } = useItemActions(item, {
+    isOnline,
+    obsidianEnabled,
+    invalidateAfterSave,
+    onDeleted,
+  });
   const [shareOpen, setShareOpen] = useState(false);
-  const [exporting, setExporting] = useState(false);
   const [aliasInput, setAliasInput] = useState("");
   const [createTodoRequested, setCreateTodoRequested] = useState(false);
 
@@ -92,42 +96,6 @@ export function ItemDetail({ itemId, onDeleted }: ItemDetailProps) {
     },
     [navigate],
   );
-
-  const handleDelete = async () => {
-    if (!item) return;
-    if (!isOnline) {
-      toast.error("離線中，無法刪除");
-      return;
-    }
-    try {
-      await deleteItem(item.id);
-      toast.success("已刪除");
-      invalidateAfterSave();
-      onDeleted?.();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "刪除失敗");
-    }
-  };
-
-  const handleExport = async () => {
-    if (!item) return;
-    if (!isOnline) {
-      toast.error("離線中，無法匯出");
-      return;
-    }
-    setExporting(true);
-    try {
-      const result = await exportItem(item.id);
-      toast.success(`已匯出到 Obsidian: ${result.path}`);
-      const updated = await getItem(item.id);
-      setItem(parseItem(updated));
-      invalidateAfterSave();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "匯出失敗");
-    } finally {
-      setExporting(false);
-    }
-  };
 
   const dismissCreateTodo = useCallback(() => setCreateTodoRequested(false), []);
 
@@ -297,13 +265,10 @@ export function ItemDetail({ itemId, onDeleted }: ItemDetailProps) {
         {/* Linked items (note: linked todos; todo: linked note) */}
         <LinkedItemsSection
           item={item}
-          allTags={allTags}
           createTodoRequested={createTodoRequested}
           onCreateTodoDismiss={dismissCreateTodo}
           isOnline={isOnline}
           onNavigate={handleNavigate}
-          onItemChange={setItem}
-          onSaveStatusChange={setSaveStatus}
         />
 
         {/* Source URL */}
