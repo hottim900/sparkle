@@ -16,7 +16,7 @@
 #   - 健康檢查正常 → 靜默退出
 #
 # 建議 cron 設定:
-#   */5 * * * * /home/tim/sparkle/scripts/health-monitor.sh 2>&1 | logger -t sparkle-health
+#   */5 * * * * /path/to/sparkle/scripts/health-monitor.sh 2>&1 | logger -t sparkle-health
 # ----------------------------------------------------------------------------
 set -euo pipefail
 

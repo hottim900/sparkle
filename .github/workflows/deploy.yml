@@ -6,6 +6,10 @@ on:
     types: [completed]
     branches: [main]
 
+env:
+  # Set SPARKLE_DIR in GitHub repo Settings → Variables and Secrets → Variables
+  SPARKLE_DIR: ${{ vars.SPARKLE_DIR || '/opt/sparkle' }}
+
 jobs:
   deploy:
     if: github.event.workflow_run.conclusion == 'success'
@@ -14,17 +18,17 @@ jobs:
 
     steps:
       - name: Pull latest code
-        run: cd /home/tim/sparkle && git fetch origin main && git checkout main && git pull --ff-only origin main
+        run: cd $SPARKLE_DIR && git fetch origin main && git checkout main && git pull --ff-only origin main
 
       - name: Install dependencies
-        run: cd /home/tim/sparkle && npm ci
+        run: cd $SPARKLE_DIR && npm ci
 
       - name: Build frontend
-        run: cd /home/tim/sparkle && npm run build
+        run: cd $SPARKLE_DIR && npm run build
 
       - name: Validate migrations against production DB
         run: |
-          cd /home/tim/sparkle
+          cd $SPARKLE_DIR
           timeout 10 node --env-file=.env --import tsx -e "
             import './server/db/index.js';
             console.log('Migration validation passed');
