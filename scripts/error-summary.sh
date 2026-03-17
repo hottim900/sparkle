@@ -15,7 +15,7 @@
 #   - systemd journalctl
 #
 # 建議 cron 設定:
-#   0 * * * * /home/tim/sparkle/scripts/error-summary.sh 2>&1 | logger -t sparkle-errors
+#   0 * * * * /path/to/sparkle/scripts/error-summary.sh 2>&1 | logger -t sparkle-errors
 # ----------------------------------------------------------------------------
 set -euo pipefail
 
