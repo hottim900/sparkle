@@ -9,6 +9,8 @@ import {
 } from "../client.js";
 import type { Category } from "../types.js";
 
+const HEX_COLOR_REGEX = /^#[0-9a-fA-F]{6}$/;
+
 function formatCategory(cat: Category): string {
   const color = cat.color ? ` (${cat.color})` : "";
   return `- **${cat.name}**${color} — ID: ${cat.id} | Order: ${cat.sort_order}`;
@@ -86,7 +88,7 @@ Returns: The created category with all fields.`,
         name: z.string().min(1).max(50).describe("Category name"),
         color: z
           .string()
-          .regex(/^#[0-9a-fA-F]{6}$/)
+          .regex(HEX_COLOR_REGEX)
           .nullable()
           .optional()
           .describe("Hex color code (#RRGGBB format, e.g. #3b82f6)"),
@@ -136,11 +138,11 @@ Returns: The updated category with all fields.`,
         name: z.string().min(1).max(50).optional().describe("New name"),
         color: z
           .string()
-          .regex(/^#[0-9a-fA-F]{6}$/)
+          .regex(HEX_COLOR_REGEX)
           .nullable()
           .optional()
           .describe("Hex color code (#RRGGBB format, null to clear)"),
-        sort_order: z.number().int().min(0).optional().describe("Sort position"),
+        sort_order: z.number().int().min(0).max(999999).optional().describe("Sort position"),
       },
       annotations: {
         readOnlyHint: false,
@@ -228,7 +230,7 @@ Returns: Confirmation of reorder.`,
           .array(
             z.object({
               id: z.string().uuid().describe("Category UUID"),
-              sort_order: z.number().int().min(0).describe("New sort position"),
+              sort_order: z.number().int().min(0).max(999999).describe("New sort position"),
             }),
           )
           .min(1)

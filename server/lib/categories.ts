@@ -64,10 +64,11 @@ export function deleteCategory(db: DB, id: string): boolean {
 }
 
 export function reorderCategories(db: DB, items: { id: string; sort_order: number }[]): void {
+  const now = new Date().toISOString();
   db.transaction((tx) => {
     for (const item of items) {
       tx.update(categories)
-        .set({ sort_order: item.sort_order, modified: new Date().toISOString() })
+        .set({ sort_order: item.sort_order, modified: now })
         .where(eq(categories.id, item.id))
         .run();
     }
