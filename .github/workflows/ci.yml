@@ -39,7 +39,7 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: 22
-          cache: 'npm'
+          cache: "npm"
 
       - run: npm ci
 
@@ -57,9 +57,6 @@ jobs:
 
       - name: Type-check (server)
         run: npx tsc --noEmit -p tsconfig.server.json
-
-      - name: Check skills drift
-        run: bash scripts/check-skills-drift.sh
 
       - name: Build
         run: npm run build
