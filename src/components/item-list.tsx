@@ -57,7 +57,7 @@ export function ItemList({ status, type }: ItemListProps) {
   });
 
   const state = useItemListState({ status, type, tag });
-  const { handleBatchAction } = useBatchActions(
+  const { handleBatchAction, isBatchPending } = useBatchActions(
     state.selectedIds,
     state.exitSelectionMode,
     invalidateAfterItemAndCategoryMutation,
@@ -138,6 +138,7 @@ export function ItemList({ status, type }: ItemListProps) {
               key={config.action}
               variant={config.variant ?? "ghost"}
               size="xs"
+              disabled={isBatchPending}
               onClick={() => handleBatchAction(config)}
             >
               {config.icon}
