@@ -162,6 +162,12 @@ export async function deleteCategoryApi(id: string): Promise<{ ok: boolean }> {
   return sparkleApi<{ ok: boolean }>(`/categories/${id}`, "DELETE");
 }
 
+export async function reorderCategoriesApi(
+  items: { id: string; sort_order: number }[],
+): Promise<{ ok: boolean }> {
+  return sparkleApi<{ ok: boolean }>("/categories/reorder", "PATCH", { items });
+}
+
 // --- Workflow operations ---
 
 export async function exportToObsidian(id: string): Promise<ExportResult> {
