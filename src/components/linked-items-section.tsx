@@ -9,7 +9,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { updateItem, getItem, createItem, getLinkedTodos, searchItemsApi } from "@/lib/api";
+import {
+  updateItem,
+  getItem,
+  createItem,
+  getLinkedTodos,
+  searchItemsApi,
+  getTags,
+} from "@/lib/api";
 import { parseItem, parseItems, type ParsedItem, type ItemPriority, type Item } from "@/lib/types";
 import { TagInput } from "@/components/tag-input";
 import { toast } from "sonner";
@@ -19,26 +26,25 @@ import { useInvalidateAfterItemAndCategoryMutation } from "@/hooks/use-invalidat
 
 interface LinkedItemsSectionProps {
   item: ParsedItem;
-  allTags: string[];
   createTodoRequested: boolean;
   onCreateTodoDismiss: () => void;
   isOnline?: boolean;
   onNavigate?: (itemId: string) => void;
-  onItemChange: (item: ParsedItem) => void;
-  onSaveStatusChange: (status: "idle" | "saving" | "saved") => void;
 }
 
 export function LinkedItemsSection({
   item,
-  allTags,
   createTodoRequested,
   onCreateTodoDismiss,
   isOnline = true,
   onNavigate,
-  onItemChange,
-  onSaveStatusChange,
 }: LinkedItemsSectionProps) {
   const invalidateAfterMutation = useInvalidateAfterItemAndCategoryMutation();
+
+  const { data: allTags = [] } = useQuery({
+    queryKey: queryKeys.tags,
+    queryFn: () => getTags().then((r) => r.tags),
+  });
 
   // Linked todo state (for notes)
   const [showCreateTodo, setShowCreateTodo] = useState(false);
@@ -54,7 +60,6 @@ export function LinkedItemsSection({
   const [noteSearchResults, setNoteSearchResults] = useState<Item[]>([]);
   const [noteSearching, setNoteSearching] = useState(false);
   const noteSearchTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const savedTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   // Fetch linked todos for notes
   const { data: linkedTodos = [], isLoading: linkedTodosLoading } = useQuery({
@@ -96,7 +101,6 @@ export function LinkedItemsSection({
   useEffect(() => {
     return () => {
       if (noteSearchTimeoutRef.current) clearTimeout(noteSearchTimeoutRef.current);
-      if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
     };
   }, []);
 
@@ -150,34 +154,22 @@ export function LinkedItemsSection({
   }, []);
 
   const handleLinkNote = async (noteId: string) => {
-    onSaveStatusChange("saving");
     try {
-      const updated = await updateItem(item.id, { linked_note_id: noteId });
-      onItemChange(parseItem(updated));
+      await updateItem(item.id, { linked_note_id: noteId });
       setShowNoteSearch(false);
       setNoteSearchQuery("");
       setNoteSearchResults([]);
       invalidateAfterMutation();
-      onSaveStatusChange("saved");
-      if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
-      savedTimerRef.current = setTimeout(() => onSaveStatusChange("idle"), 2000);
     } catch (err) {
-      onSaveStatusChange("idle");
       toast.error(err instanceof Error ? err.message : "關聯失敗");
     }
   };
 
   const handleUnlinkNote = async () => {
-    onSaveStatusChange("saving");
     try {
-      const updated = await updateItem(item.id, { linked_note_id: null });
-      onItemChange(parseItem(updated));
+      await updateItem(item.id, { linked_note_id: null });
       invalidateAfterMutation();
-      onSaveStatusChange("saved");
-      if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
-      savedTimerRef.current = setTimeout(() => onSaveStatusChange("idle"), 2000);
     } catch (err) {
-      onSaveStatusChange("idle");
       toast.error(err instanceof Error ? err.message : "解除關聯失敗");
     }
   };
