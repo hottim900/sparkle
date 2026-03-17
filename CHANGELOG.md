@@ -1,5 +1,65 @@
 # Changelog
 
+## [1.2.0](https://github.com/hottim900/sparkle/compare/v1.1.1...v1.2.0) (2026-03-17)
+
+
+### Features
+
+* add categories CRUD API and integrate into items ([#53](https://github.com/hottim900/sparkle/issues/53)) ([d87dd82](https://github.com/hottim900/sparkle/commit/d87dd82ca7d271c6525b137f1bd3dbe10fec68f0))
+* add categories table and category_id to items (migration 12→13) ([#52](https://github.com/hottim900/sparkle/issues/52)) ([8094b20](https://github.com/hottim900/sparkle/commit/8094b2034e3dc41f2e0b772e10ebd1d3108adcfe))
+* add category frontend UI, MCP tools, and documentation ([#54](https://github.com/hottim900/sparkle/issues/54)) ([80f871b](https://github.com/hottim900/sparkle/commit/80f871b989cd78917cf905b2e1b46861637023d3))
+* add category management UI ([#72](https://github.com/hottim900/sparkle/issues/72)) ([80d9fff](https://github.com/hottim900/sparkle/commit/80d9fff79a981c4995643babf7c37726deb17bb7))
+* add category select to fleeting triage ([#58](https://github.com/hottim900/sparkle/issues/58)) ([b5da37e](https://github.com/hottim900/sparkle/commit/b5da37eb5fab7962b8d7f56e8172260a01e9ee8d))
+* add standalone share management page ([#49](https://github.com/hottim900/sparkle/issues/49)) ([ee50eac](https://github.com/hottim900/sparkle/commit/ee50eac89db45c14d2c4bc47f1e45889407a1981))
+* display item ID in detail view metadata ([#85](https://github.com/hottim900/sparkle/issues/85)) ([e5a12c7](https://github.com/hottim900/sparkle/commit/e5a12c76e9106fbfa4d4579f0e941e4fafc9cfc4))
+* migrate to TanStack Router file-based routing ([#97](https://github.com/hottim900/sparkle/issues/97)) ([101aac5](https://github.com/hottim900/sparkle/commit/101aac50df8510612db019a1e73659920c5c9023))
+* move metadata below title in detail view ([#86](https://github.com/hottim900/sparkle/issues/86)) ([dbabac0](https://github.com/hottim900/sparkle/commit/dbabac08d0a1352f6933654c3ce6c0c841b12801))
+* redesign dashboard with Zettelkasten flow focus ([#74](https://github.com/hottim900/sparkle/issues/74)) ([348efc3](https://github.com/hottim900/sparkle/commit/348efc33581b1326b8a1f84755a7f488a27c3f88))
+* show category color dot in list group headers ([#73](https://github.com/hottim900/sparkle/issues/73)) ([7366d53](https://github.com/hottim900/sparkle/commit/7366d5329b9c0b09d5ca4d961bb1153ddfb728e7))
+* show short ID with click-to-copy full UUID ([#87](https://github.com/hottim900/sparkle/issues/87)) ([d061a38](https://github.com/hottim900/sparkle/commit/d061a389c0e1aaf98421fce4d98fb81a503c613f))
+* support short ID prefix lookup in GET /api/items/:id ([#89](https://github.com/hottim900/sparkle/issues/89)) ([825b000](https://github.com/hottim900/sparkle/commit/825b0005c3593864ff20df441dabbebf619a8009))
+
+
+### Bug Fixes
+
+* add aria-label to all icon-only buttons (FG-001) ([#107](https://github.com/hottim900/sparkle/issues/107)) ([508c8dd](https://github.com/hottim900/sparkle/commit/508c8dd162fdec5d0e7c44a27366e69a3b56b44d))
+* add error boundary to LINE command dispatcher (TD-016) ([#128](https://github.com/hottim900/sparkle/issues/128)) ([6fb10bd](https://github.com/hottim900/sparkle/commit/6fb10bd0b5825d5a64bb3b92ec50a54a1547f0e1))
+* add error logging to LINE search catch and harden short ID prefix lookup (DEF-012, DEF-013) ([#100](https://github.com/hottim900/sparkle/issues/100)) ([e9c8200](https://github.com/hottim900/sparkle/commit/e9c8200fa79648e82bbc95ade7e137bb214ad386))
+* add ErrorBoundary to list Outlet and error state UI (DEF-015, DEF-016) ([#106](https://github.com/hottim900/sparkle/issues/106)) ([66a01db](https://github.com/hottim900/sparkle/commit/66a01db470c728385d61b72e549c553a50314f20))
+* add export API result limit (DEF-009) ([#78](https://github.com/hottim900/sparkle/issues/78)) ([5443729](https://github.com/hottim900/sparkle/commit/5443729ede439e5b460bbdfc4afbc0a71861f9de))
+* add offline sync failure notification and status SSOT guard ([#65](https://github.com/hottim900/sparkle/issues/65)) ([4b884ef](https://github.com/hottim900/sparkle/commit/4b884efb61f2a5d111dc30b489c2194a54e52125))
+* add response.ok check to SW replayQueue and safe JSON parse (DEF-001, DEF-008) ([#76](https://github.com/hottim900/sparkle/issues/76)) ([8d8a6cf](https://github.com/hottim900/sparkle/commit/8d8a6cf5bde1c08eca77da72077b0064ace05e85))
+* add revoke confirmation dialog, accessibility, and E2E tests for share management ([#51](https://github.com/hottim900/sparkle/issues/51)) ([dd40c5a](https://github.com/hottim900/sparkle/commit/dd40c5ad5dffc5c4f44267456ff1427efc4faedc))
+* auto-focus category create input after Radix Select closes ([#57](https://github.com/hottim900/sparkle/issues/57)) ([7b933b2](https://github.com/hottim900/sparkle/commit/7b933b28c3731aff0b69e4eb690bea284834cab8))
+* auto-reload on CF Access session expiry instead of showing error ([#96](https://github.com/hottim900/sparkle/issues/96)) ([432f645](https://github.com/hottim900/sparkle/commit/432f6456d76e6bbf59c9f7ad5a40937d7972034f))
+* close DEF-010 and DEF-011 quality defects ([#99](https://github.com/hottim900/sparkle/issues/99)) ([cd54b09](https://github.com/hottim900/sparkle/commit/cd54b09c3a870df26f8ce2c9185b9575de7465a5))
+* close DEF-012, DEF-013, DEF-014 quality defects ([#101](https://github.com/hottim900/sparkle/issues/101)) ([1f23fd5](https://github.com/hottim900/sparkle/commit/1f23fd5c6abf4c8e4e03f65f5aceb35146537ce9))
+* close quality defects and improve AI dev efficiency (DEF-012~014, TD-003, TD-007~008, FG-002) ([#103](https://github.com/hottim900/sparkle/issues/103)) ([cfa35fd](https://github.com/hottim900/sparkle/commit/cfa35fde5f838cca6add0cab5904aae40f286473))
+* complete React Query invalidation and adjust staleTime (DEF-002, TD-002) ([#77](https://github.com/hottim900/sparkle/issues/77)) ([bd4a6da](https://github.com/hottim900/sparkle/commit/bd4a6dae3f2071a049bfebc9e00b0a48a30e5704))
+* deduplicate invalidation hooks + invalidate linkedTodos on status change ([#134](https://github.com/hottim900/sparkle/issues/134)) ([c82d7d2](https://github.com/hottim900/sparkle/commit/c82d7d24c087d0499f8a384ede78357806197286))
+* don't serve stale API cache when online and fetch fails ([#90](https://github.com/hottim900/sparkle/issues/90)) ([e965e00](https://github.com/hottim900/sparkle/commit/e965e00b0f9a25a1ae5fd3bff9aa9c3c3764e88d))
+* eliminate fixed-positioning layout pollution in mobile view ([#62](https://github.com/hottim900/sparkle/issues/62)) ([f91ada4](https://github.com/hottim900/sparkle/commit/f91ada4dc3a8231f64b620826dd2e5c5062b1bcf))
+* eliminate silent failures and harden error handling ([#64](https://github.com/hottim900/sparkle/issues/64)) ([9a2b8c1](https://github.com/hottim900/sparkle/commit/9a2b8c1f210a1cf73d6241d64de08184a9f767f1))
+* extract hex color constant, align sort_order max, hoist timestamp ([#138](https://github.com/hottim900/sparkle/issues/138)) ([c17504c](https://github.com/hottim900/sparkle/commit/c17504c173408aadb61be812e7ac5fa19469c6e1))
+* forward enrich param in all resolveLinkedInfo call sites ([#115](https://github.com/hottim900/sparkle/issues/115)) ([77b8545](https://github.com/hottim900/sparkle/commit/77b85454747a3bff8fdfe026c67515e62e49d86e))
+* make deploy resilient to non-main branch checkout ([#59](https://github.com/hottim900/sparkle/issues/59)) ([757968e](https://github.com/hottim900/sparkle/commit/757968edb86c611346af2202e88859d2bea195ac))
+* **mcp:** category tools — fix color validation, add reorder, rebuild dist ([#137](https://github.com/hottim900/sparkle/issues/137)) ([80d248f](https://github.com/hottim900/sparkle/commit/80d248fd1f777c96d857eb90144ce329205de7e5))
+* patch 4 high-ROI defects from systematic audit ([#63](https://github.com/hottim900/sparkle/issues/63)) ([251698a](https://github.com/hottim900/sparkle/commit/251698a11678436c209ab16d63fc264664079f86))
+* preserve search params on navigate + remove type casts (DEF-017, TD-004) ([#113](https://github.com/hottim900/sparkle/issues/113)) ([06291cc](https://github.com/hottim900/sparkle/commit/06291cc5a846068f28f5e6312084ec25abda95b2))
+* prevent SW from caching CF Access pages after idle ([#88](https://github.com/hottim900/sparkle/issues/88)) ([15d2ac1](https://github.com/hottim900/sparkle/commit/15d2ac1237e0546221a69655b2811d58de04b125))
+* strengthen schema validation (DEF-003~007) ([#75](https://github.com/hottim900/sparkle/issues/75)) ([a6c292f](https://github.com/hottim900/sparkle/commit/a6c292fef61bf42f59e94bac7a32b7be53c65ed0))
+* update local state when selecting category in ItemDetail ([#55](https://github.com/hottim900/sparkle/issues/55)) ([5f5423e](https://github.com/hottim900/sparkle/commit/5f5423eb41779401bdb6cb5e04ca6bfff138f9ee))
+* use absolute paths in quality skill for worktree compatibility ([#67](https://github.com/hottim900/sparkle/issues/67)) ([933a305](https://github.com/hottim900/sparkle/commit/933a305fa94706fce2c8cfe81aa69eddddf7fbcc))
+* use safe deploy pull and add worktree convention ([#60](https://github.com/hottim900/sparkle/issues/60)) ([61e7a16](https://github.com/hottim900/sparkle/commit/61e7a16488c4b7c7da0346747fd99ce776062223))
+* wire isBatchPending to disable batch action buttons ([#132](https://github.com/hottim900/sparkle/issues/132)) ([6784bbf](https://github.com/hottim900/sparkle/commit/6784bbf5aacf06e6b7d069535aeb38d187b37396))
+
+
+### Performance Improvements
+
+* field-aware query invalidation to reduce unnecessary refetch (TD-005) ([#133](https://github.com/hottim900/sparkle/issues/133)) ([a958d71](https://github.com/hottim900/sparkle/commit/a958d71ff5c824c0d9b06100f7833e03ddef60b3))
+* replace batch endpoint N+1 loops with bulk SQL queries (TD-003) ([#102](https://github.com/hottim900/sparkle/issues/102)) ([6c4114e](https://github.com/hottim900/sparkle/commit/6c4114e036f40cf4584cedd4de7594fd192aff83))
+* use enrich=false in LINE handlers + remove redundant getItem ([#117](https://github.com/hottim900/sparkle/issues/117)) ([985b0bd](https://github.com/hottim900/sparkle/commit/985b0bdc565330f56e6a50df4cf293b0f1d6ae08))
+
 ## [1.1.1](https://github.com/hottim900/sparkle/compare/v1.1.0...v1.1.1) (2026-03-03)
 
 
