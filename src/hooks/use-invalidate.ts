@@ -2,17 +2,48 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { queryKeys } from "@/lib/query-keys";
 
+// Fields that affect list query results (filtering, sorting, display)
+const LIST_FIELDS = new Set(["title", "status", "type", "priority", "due", "tags", "category_id"]);
+const TAG_FIELDS = new Set(["tags"]);
+const STATS_FIELDS = new Set(["status", "type"]);
+
 /**
  * Invalidate item-related queries after a mutation.
- * Covers: all item lists/details, tags, and stats.
+ *
+ * When `field` is provided, only invalidates queries affected by that field:
+ * - content/source/aliases → details only (lists unaffected)
+ * - title/priority/due → details + lists
+ * - tags → details + lists + tags
+ * - status/type → details + lists + stats
+ *
+ * When `field` is omitted, blanket invalidation (create/delete/batch).
  */
 export function useInvalidateAfterItemMutation() {
   const queryClient = useQueryClient();
-  return useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: queryKeys.items.all });
-    queryClient.invalidateQueries({ queryKey: queryKeys.tags });
-    queryClient.invalidateQueries({ queryKey: queryKeys.stats });
-  }, [queryClient]);
+  return useCallback(
+    (field?: string) => {
+      if (!field) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.items.all });
+        queryClient.invalidateQueries({ queryKey: queryKeys.tags });
+        queryClient.invalidateQueries({ queryKey: queryKeys.stats });
+        return;
+      }
+
+      // Any field change affects detail views
+      queryClient.invalidateQueries({ queryKey: queryKeys.items.details });
+
+      if (LIST_FIELDS.has(field)) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.items.lists });
+      }
+      if (TAG_FIELDS.has(field)) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.tags });
+      }
+      if (STATS_FIELDS.has(field)) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.stats });
+      }
+    },
+    [queryClient],
+  );
 }
 
 /**
@@ -21,10 +52,31 @@ export function useInvalidateAfterItemMutation() {
  */
 export function useInvalidateAfterItemAndCategoryMutation() {
   const queryClient = useQueryClient();
-  return useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: queryKeys.items.all });
-    queryClient.invalidateQueries({ queryKey: queryKeys.tags });
-    queryClient.invalidateQueries({ queryKey: queryKeys.stats });
-    queryClient.invalidateQueries({ queryKey: queryKeys.categories });
-  }, [queryClient]);
+  return useCallback(
+    (field?: string) => {
+      if (!field) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.items.all });
+        queryClient.invalidateQueries({ queryKey: queryKeys.tags });
+        queryClient.invalidateQueries({ queryKey: queryKeys.stats });
+        queryClient.invalidateQueries({ queryKey: queryKeys.categories });
+        return;
+      }
+
+      queryClient.invalidateQueries({ queryKey: queryKeys.items.details });
+
+      if (LIST_FIELDS.has(field)) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.items.lists });
+      }
+      if (TAG_FIELDS.has(field)) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.tags });
+      }
+      if (STATS_FIELDS.has(field)) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.stats });
+      }
+      if (field === "category_id") {
+        queryClient.invalidateQueries({ queryKey: queryKeys.categories });
+      }
+    },
+    [queryClient],
+  );
 }

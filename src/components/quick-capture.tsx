@@ -58,7 +58,7 @@ export function QuickCapture() {
 
   const createMutation = useMutation({
     mutationFn: createItem,
-    onSuccess: invalidateAfterItemMutation,
+    onSuccess: () => invalidateAfterItemMutation(),
   });
 
   useEffect(() => {
