@@ -10,7 +10,7 @@ export function useBatchActions(
 ) {
   const batchMutation = useMutation({
     mutationFn: ({ ids, action }: { ids: string[]; action: string }) => batchAction(ids, action),
-    onSuccess: invalidate,
+    onSuccess: () => invalidate(),
   });
 
   const handleBatchAction = async (config: BatchActionConfig) => {

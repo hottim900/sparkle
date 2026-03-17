@@ -13,6 +13,8 @@ export interface ItemFilters {
 export const queryKeys = {
   items: {
     all: ["items"] as const,
+    lists: ["items", "list"] as const,
+    details: ["items", "detail"] as const,
     list: (filters: ItemFilters) => ["items", "list", filters] as const,
     detail: (id: string) => ["items", "detail", id] as const,
     linkedTodos: (noteId: string) => ["items", "linkedTodos", noteId] as const,

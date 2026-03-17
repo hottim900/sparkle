@@ -65,7 +65,7 @@ export function useItemForm(itemId: string) {
         if (!saveTimeoutRef.current) {
           setIsDirty(false);
         }
-        invalidateAfterSave();
+        invalidateAfterSave(field);
         setSaveStatus("saved");
         savedTimerRef.current = setTimeout(() => setSaveStatus("idle"), 2000);
       } catch (err) {
