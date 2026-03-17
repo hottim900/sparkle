@@ -19,7 +19,6 @@ export default defineConfig({
         "src/sw.ts",
         "src/App.tsx",
         "src/vite-env.d.ts",
-        "src/lib/api.ts",
         "src/components/ui/**",
         "src/routes/**",
         "src/routeTree.gen.ts",
