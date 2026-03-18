@@ -127,6 +127,40 @@ function getSessionTransport(req: express.Request): StreamableHTTPServerTranspor
   return sessionId ? sessions.get(sessionId) : undefined;
 }
 
+/**
+ * Respond when the client sends a session ID we don't recognize.
+ *
+ * Returns 404 (not 409) for expired sessions.
+ *
+ * Root cause (2026-03-18): MCP sessions are in-memory and lost on server restart.
+ * After restart, Claude.ai sends tools/call with the old session ID. Per MCP spec,
+ * the server should return 409 to tell the client to re-initialize. However,
+ * Claude.ai's MCP client does NOT handle 409 — it gives up immediately with a
+ * generic "Tool execution failed" error, never re-initializing.
+ *
+ * Discovered that Claude.ai DOES handle 404 correctly — it re-initializes a new
+ * session transparently. JWT tokens survive restarts (key derived from stable PIN),
+ * so the re-initialization succeeds without requiring the user to re-enter the PIN.
+ *
+ * This is a workaround for a Claude.ai client-side bug. If Claude.ai fixes their
+ * 409 handling in the future, this can be changed back to spec-compliant 409.
+ */
+function sendSessionNotFound(req: express.Request, res: express.Response): void {
+  const hasSessionId = !!req.headers["mcp-session-id"];
+  const status = hasSessionId ? 404 : 400;
+  const message = hasSessionId ? "Session not found. Please re-initialize." : "Missing session ID";
+
+  if (hasSessionId) {
+    console.log(`Session expired for ${req.body?.method ?? "SSE/DELETE"}, returning 404 to trigger re-init`);
+  }
+
+  res.status(status).json({
+    jsonrpc: "2.0",
+    error: { code: -32000, message },
+    id: null,
+  });
+}
+
 // POST /mcp — handle MCP requests
 app.post("/mcp", authMiddleware, async (req, res) => {
   try {
@@ -136,7 +170,9 @@ app.post("/mcp", authMiddleware, async (req, res) => {
       return;
     }
 
-    if (!req.headers["mcp-session-id"] && isInitializeRequest(req.body)) {
+    // Accept initialize requests even if a stale session-id is present (e.g. after server restart).
+    // This saves a round-trip vs returning 409 first.
+    if (isInitializeRequest(req.body)) {
       if (sessions.size >= MAX_SESSIONS) {
         res.status(503).json({
           jsonrpc: "2.0",
@@ -168,11 +204,7 @@ app.post("/mcp", authMiddleware, async (req, res) => {
       return;
     }
 
-    res.status(400).json({
-      jsonrpc: "2.0",
-      error: { code: -32000, message: "Bad Request: No valid session ID provided" },
-      id: null,
-    });
+    sendSessionNotFound(req, res);
   } catch (error) {
     console.error("Error handling MCP request:", error);
     if (!res.headersSent) {
@@ -189,7 +221,7 @@ app.post("/mcp", authMiddleware, async (req, res) => {
 app.get("/mcp", authMiddleware, async (req, res) => {
   const transport = getSessionTransport(req);
   if (!transport) {
-    res.status(400).send("Invalid or missing session ID");
+    sendSessionNotFound(req, res);
     return;
   }
   await transport.handleRequest(req, res);
@@ -199,7 +231,7 @@ app.get("/mcp", authMiddleware, async (req, res) => {
 app.delete("/mcp", authMiddleware, async (req, res) => {
   const transport = getSessionTransport(req);
   if (!transport) {
-    res.status(400).send("Invalid or missing session ID");
+    sendSessionNotFound(req, res);
     return;
   }
   try {
