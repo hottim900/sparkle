@@ -13,6 +13,9 @@ npm run test:e2e     # E2E tests (requires build)
 npm run lint:fix     # ESLint auto-fix
 npm run format       # Prettier write
 npm run build        # Production frontend → dist/
+# MCP server (in mcp-server/)
+cd mcp-server && npm run dev:http  # MCP HTTP server on :3001 (Claude.ai connector)
+cd mcp-server && npm run dev       # MCP stdio server (Claude Code, launched automatically)
 ```
 
 See `/testing` for test architecture. See `/ops` for deployment.
@@ -52,7 +55,7 @@ Detailed module conventions (API retry, PWA, Logging, Sentry, CSP, Offline UI, S
 | testing            | `/testing`            | Test architecture, patterns, E2E   |
 | ops                | `/ops`                | Production deployment & operations |
 | line-bot           | `/line-bot`           | LINE Bot commands & integration    |
-| mcp-server         | `/mcp-server`         | MCP server for Claude Code         |
+| mcp-server         | `/mcp-server`         | MCP server (stdio + HTTP/OAuth)    |
 | conventions-detail | `/conventions-detail` | Detailed module conventions        |
 | quality            | `/quality`            | Quality tracking system operations |
 
