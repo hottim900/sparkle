@@ -12,4 +12,10 @@ ingress:
     #   service: https://localhost:3000
     #   originRequest:
     #     caPool: /path/to/mkcert/rootCA.pem
+  # MCP HTTP server for Claude.ai connector (optional)
+  # Requires: sparkle-mcp-http.service running on port 3001
+  # DNS: add CNAME for MCP_HOSTNAME pointing to this tunnel
+  # Note: do NOT put this hostname behind Cloudflare Access (Claude.ai needs direct access)
+  # - hostname: MCP_HOSTNAME
+  #   service: http://localhost:3001
   - service: http_status:404

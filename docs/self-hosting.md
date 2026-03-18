@@ -33,16 +33,16 @@ cp .env.example .env
 
 ### Environment Variables
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `NODE_ENV` | Yes | Set to `production` |
-| `PORT` | Yes | Server port (default: `3000`) |
-| `DATABASE_URL` | Yes | Path to SQLite database file (e.g., `./data/todo.db`) |
-| `AUTH_TOKEN` | Yes | Bearer token for web UI authentication. Choose a strong random string. |
-| `TLS_CERT` | No | Path to TLS certificate file. Omit to run plain HTTP. |
-| `TLS_KEY` | No | Path to TLS private key file. Omit to run plain HTTP. |
-| `LINE_CHANNEL_SECRET` | No | LINE Messaging API channel secret. Required for LINE Bot. |
-| `LINE_CHANNEL_ACCESS_TOKEN` | No | LINE Messaging API access token. Required for LINE Bot. |
+| Variable                    | Required | Description                                                            |
+| --------------------------- | -------- | ---------------------------------------------------------------------- |
+| `NODE_ENV`                  | Yes      | Set to `production`                                                    |
+| `PORT`                      | Yes      | Server port (default: `3000`)                                          |
+| `DATABASE_URL`              | Yes      | Path to SQLite database file (e.g., `./data/todo.db`)                  |
+| `AUTH_TOKEN`                | Yes      | Bearer token for web UI authentication. Choose a strong random string. |
+| `TLS_CERT`                  | No       | Path to TLS certificate file. Omit to run plain HTTP.                  |
+| `TLS_KEY`                   | No       | Path to TLS private key file. Omit to run plain HTTP.                  |
+| `LINE_CHANNEL_SECRET`       | No       | LINE Messaging API channel secret. Required for LINE Bot.              |
+| `LINE_CHANNEL_ACCESS_TOKEN` | No       | LINE Messaging API access token. Required for LINE Bot.                |
 
 The database file and its parent directory are created automatically on first run.
 
@@ -155,11 +155,13 @@ LINE_CHANNEL_ACCESS_TOKEN=your-channel-access-token
 The LINE webhook endpoint is `https://YOUR_DOMAIN/api/webhook/line`.
 
 Since the webhook must be publicly accessible, you need one of:
+
 - A public domain pointing to your server
 - A Cloudflare Tunnel (see next section)
 - A reverse proxy (nginx, Caddy, etc.)
 
 In the LINE Developers Console:
+
 1. Go to your channel's **Messaging API** tab
 2. Set the **Webhook URL** to your public endpoint
 3. Click **Verify** to test the connection
@@ -168,19 +170,19 @@ In the LINE Developers Console:
 
 ### 4. Available Commands
 
-| Command | Description |
-|---------|-------------|
-| `!todo <text>` | Create a todo |
-| `!high <text>` | Create a high-priority todo |
-| (plain text) | Create a fleeting note |
-| `!fleeting` | List fleeting notes |
-| `!developing` | List developing notes |
-| `!permanent` | List permanent notes |
-| `!active` | List active todos |
-| `!today` | Today's focus |
-| `!find <keyword>` | Search |
-| `!stats` | Statistics |
-| `?` / `help` | Show help |
+| Command           | Description                 |
+| ----------------- | --------------------------- |
+| `!todo <text>`    | Create a todo               |
+| `!high <text>`    | Create a high-priority todo |
+| (plain text)      | Create a fleeting note      |
+| `!fleeting`       | List fleeting notes         |
+| `!developing`     | List developing notes       |
+| `!permanent`      | List permanent notes        |
+| `!active`         | List active todos           |
+| `!today`          | Today's focus               |
+| `!find <keyword>` | Search                      |
+| `!stats`          | Statistics                  |
+| `?` / `help`      | Show help                   |
 
 After a query, results are numbered. Use the number to operate on items (e.g., `!detail 1`, `!done 2`, `!develop 3`).
 
@@ -195,6 +197,7 @@ An interactive setup script is included:
 ```
 
 This script will:
+
 1. Install `cloudflared` if needed
 2. Authenticate with Cloudflare
 3. Create a named tunnel
@@ -220,10 +223,12 @@ Alternatively, set it up manually:
 If you expose Sparkle through a Cloudflare Tunnel, you should set up **Cloudflare Access** to require authentication before anyone can access the app. This replaces the need for a VPN while keeping your data secure.
 
 Key points:
+
 - Free for up to 50 users (no credit card required)
 - Supports Email OTP, Google, GitHub, and other identity providers
 - LINE Bot webhook is configured to bypass authentication
-- MCP Server and localhost access are not affected
+- MCP HTTP server hostname (if configured) must **not** have CF Access — Claude.ai servers need direct access; OAuth provides its own authentication
+- MCP stdio server and localhost access are not affected
 
 For a detailed step-by-step setup guide (in Traditional Chinese), see **[docs/cloudflare-access-setup.md](cloudflare-access-setup.md)**.
 
@@ -246,6 +251,7 @@ If running Sparkle inside WSL2, we recommend using **mirrored networking mode** 
 ### Mirrored Networking Mode
 
 With mirrored mode, WSL2 shares the Windows host's network interfaces. This means:
+
 - No port forwarding (`netsh portproxy`) required
 - No IP changes after reboot
 - Services bind directly on the host network
@@ -306,17 +312,23 @@ Replace `/path/to/node` with the absolute path to your Node.js binary (`which no
 
 ### Available Tools
 
-| Tool | Description |
-|------|-------------|
-| `sparkle_search` | Full-text search |
-| `sparkle_get_note` | Read a single note |
-| `sparkle_list_notes` | List notes with filters |
-| `sparkle_create_note` | Create a new note or todo |
-| `sparkle_update_note` | Update an existing item |
-| `sparkle_advance_note` | Advance note maturity stage |
-| `sparkle_export_to_obsidian` | Export a note to Obsidian |
-| `sparkle_get_stats` | Get statistics |
-| `sparkle_list_tags` | List all tags |
+| Tool                         | Description                 |
+| ---------------------------- | --------------------------- |
+| `sparkle_search`             | Full-text search            |
+| `sparkle_get_note`           | Read a single note          |
+| `sparkle_list_notes`         | List notes with filters     |
+| `sparkle_create_note`        | Create a new note or todo   |
+| `sparkle_update_note`        | Update an existing item     |
+| `sparkle_advance_note`       | Advance note maturity stage |
+| `sparkle_export_to_obsidian` | Export a note to Obsidian   |
+| `sparkle_get_stats`          | Get statistics              |
+| `sparkle_list_tags`          | List all tags               |
+| `sparkle_list_categories`    | List categories             |
+| `sparkle_create_category`    | Create a category           |
+| `sparkle_update_category`    | Update a category           |
+| `sparkle_delete_category`    | Delete a category           |
+| `sparkle_reorder_categories` | Reorder categories          |
+| `sparkle_guide`              | Query Sparkle documentation |
 
 ### Test
 
@@ -324,6 +336,66 @@ Replace `/path/to/node` with the absolute path to your Node.js binary (`which no
 cd mcp-server
 npx @modelcontextprotocol/inspector node dist/index.js
 ```
+
+## MCP HTTP Server for Claude.ai (Optional)
+
+Sparkle can expose MCP tools to Claude.ai web chat via a remote HTTP transport with OAuth 2.0 authentication.
+
+### Prerequisites
+
+- Cloudflare Tunnel with a **separate hostname** for MCP (e.g., `sparkle-mcp.your-domain.com`)
+- The MCP hostname must **not** be behind Cloudflare Access (Claude.ai servers need direct access)
+- Use a single-level subdomain (e.g., `sparkle-mcp.domain.com`, not `mcp.sparkle.domain.com`) — free SSL only covers `*.domain.com`
+
+### Setup
+
+1. **Configure environment variables** in `.env`:
+
+```bash
+SPARKLE_AUTH_TOKEN=same-as-AUTH_TOKEN
+MCP_HTTP_PORT=3001
+MCP_AUTH_PIN=your-secret-pin
+MCP_ISSUER_URL=https://sparkle-mcp.your-domain.com
+```
+
+2. **Build the MCP server**:
+
+```bash
+cd mcp-server && npm install && npm run build
+```
+
+3. **Install the systemd service**:
+
+```bash
+sudo ./scripts/install-services.sh
+# Or manually:
+sudo cp scripts/systemd/sparkle-mcp-http.service /etc/systemd/system/
+# Edit the service file to set correct paths, then:
+sudo systemctl daemon-reload
+sudo systemctl enable --now sparkle-mcp-http
+```
+
+4. **Add Cloudflare Tunnel route** in your tunnel config:
+
+```yaml
+ingress:
+  - hostname: sparkle-mcp.your-domain.com
+    service: http://localhost:3001
+```
+
+5. **Add DNS record**: CNAME `sparkle-mcp` → your tunnel ID
+
+6. **Connect in Claude.ai**: Settings → Connectors → Add custom connector → `https://sparkle-mcp.your-domain.com/mcp`
+
+When prompted, enter your MCP_AUTH_PIN in the authorization page.
+
+### How it works
+
+- OAuth 2.0 Authorization Code flow with PKCE
+- PIN-gated authorization (brute-force protected, 5 attempts max)
+- JWT access tokens signed with a key derived from MCP_AUTH_PIN
+- Tokens survive service restarts (stateless verification, 1-year expiry)
+- `sparkle-mcp-http.service` depends on `sparkle.service` (MCP calls Sparkle API on localhost)
 
 ## Updating
 
@@ -333,7 +405,7 @@ npm install
 npm run build
 
 # If using systemd:
-sudo systemctl restart sparkle
+sudo systemctl restart sparkle sparkle-mcp-http
 ```
 
 If a new database migration is included, it runs automatically on server startup.
