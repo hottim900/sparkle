@@ -71,6 +71,8 @@ export const SPARKLE_INSTRUCTIONS = `
 | 為項目指定分類 | sparkle_create_note / sparkle_update_note 的 category_id 參數（先用 sparkle_list_categories 查詢 UUID）|
 | 讀取 vault 檔案 | sparkle_read_obsidian（按 sparkle_id）、sparkle_read_obsidian_by_path（按路徑）|
 | 修改 vault 檔案 | sparkle_write_obsidian（按 sparkle_id）、sparkle_write_obsidian_by_path（按路徑）|
+| 搜尋 vault 內容 | sparkle_search_obsidian（全文搜尋 vault .md 檔案）|
+| 列出 vault 檔案 | sparkle_list_obsidian（列出 vault 檔案與目錄結構）|
 
 ## 行為準則
 

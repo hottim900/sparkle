@@ -5,8 +5,15 @@ import {
   readVaultFileByPath,
   writeVaultFileBySparkleId,
   writeVaultFileByPath,
+  searchVault,
+  listVault,
 } from "../vault.js";
-import type { VaultFile } from "../types.js";
+import type {
+  VaultFile,
+  VaultFrontmatter,
+  VaultSearchResult,
+  VaultListResult,
+} from "../types.js";
 
 function formatVaultFile(file: VaultFile): string {
   const lines: string[] = [`**Path:** ${file.path}`];
@@ -191,4 +198,174 @@ Returns: Confirmation with file path.`,
       }
     },
   );
+
+  server.registerTool(
+    "sparkle_search_obsidian",
+    {
+      title: "Search Vault",
+      description: `Full-text search across .md files in the Obsidian vault.
+
+Returns matching lines with surrounding context (2 lines before/after) and frontmatter summary for each file.
+
+Args:
+  - query (string): Search term (case-insensitive substring match)
+  - path (string, optional): Restrict search to a subdirectory (e.g. "Projects/")
+  - limit (number, optional): Max number of files to return (default 20, max 100)
+
+Returns: Matching files with line numbers, context, and frontmatter metadata.
+Requires Obsidian integration to be enabled in Sparkle settings.`,
+      inputSchema: {
+        query: z.string().min(1).describe("Search term (case-insensitive)"),
+        path: z
+          .string()
+          .optional()
+          .describe("Restrict search to subdirectory (e.g. 'Projects/')"),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(100)
+          .default(20)
+          .describe("Max files to return (default 20)"),
+      },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true,
+      },
+    },
+    async ({ query, path, limit }) => {
+      try {
+        const results = await searchVault(query, { path, limit });
+        return {
+          content: [{ type: "text", text: formatSearchResults(results, query) }],
+        };
+      } catch (error) {
+        return {
+          content: [{ type: "text", text: `Error: ${(error as Error).message}` }],
+          isError: true,
+        };
+      }
+    },
+  );
+
+  server.registerTool(
+    "sparkle_list_obsidian",
+    {
+      title: "List Vault Files",
+      description: `List .md files in the Obsidian vault with frontmatter summaries.
+
+When recursive is false, also shows subdirectory names for navigation.
+
+Args:
+  - path (string, optional): Subdirectory to list (default: vault root)
+  - recursive (boolean, optional): List all nested files (default true)
+  - limit (number, optional): Max files to return (default 50, max 200)
+
+Returns: File list with sparkle_id, tags, and modified date from frontmatter.
+Requires Obsidian integration to be enabled in Sparkle settings.`,
+      inputSchema: {
+        path: z
+          .string()
+          .optional()
+          .describe("Subdirectory to list (default: vault root)"),
+        recursive: z
+          .boolean()
+          .default(true)
+          .describe("List all nested files (default true)"),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(200)
+          .default(50)
+          .describe("Max files to return (default 50)"),
+      },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true,
+      },
+    },
+    async ({ path, recursive, limit }) => {
+      try {
+        const result = await listVault({ path, recursive, limit });
+        return {
+          content: [{ type: "text", text: formatListResult(result) }],
+        };
+      } catch (error) {
+        return {
+          content: [{ type: "text", text: `Error: ${(error as Error).message}` }],
+          isError: true,
+        };
+      }
+    },
+  );
+}
+
+function formatFrontmatterSummary(fm: VaultFrontmatter): string {
+  const parts: string[] = [];
+  if (fm.sparkle_id) parts.push(`sparkle_id: ${fm.sparkle_id}`);
+  if (fm.tags && Array.isArray(fm.tags) && fm.tags.length > 0) {
+    parts.push(`tags: ${fm.tags.join(", ")}`);
+  }
+  if (fm.category) parts.push(`category: ${fm.category}`);
+  if (fm.modified) parts.push(`modified: ${fm.modified}`);
+  return parts.length > 0 ? parts.join(" | ") : "(no frontmatter)";
+}
+
+function formatSearchResults(results: VaultSearchResult[], query: string): string {
+  if (results.length === 0) {
+    return `No results found for "${query}".`;
+  }
+
+  const lines: string[] = [`Found ${results.length} file(s) matching "${query}":`];
+
+  for (let i = 0; i < results.length; i++) {
+    const r = results[i];
+    lines.push("", "---", "");
+    lines.push(`**${i + 1}. ${r.path}**`);
+    lines.push(formatFrontmatterSummary(r.frontmatter));
+
+    for (const m of r.matches) {
+      lines.push("");
+      for (let j = 0; j < m.context_before.length; j++) {
+        lines.push(`  ${m.line - m.context_before.length + j}: ${m.context_before[j]}`);
+      }
+      lines.push(`> ${m.line}: ${m.text}`);
+      for (let j = 0; j < m.context_after.length; j++) {
+        lines.push(`  ${m.line + 1 + j}: ${m.context_after[j]}`);
+      }
+    }
+  }
+
+  return lines.join("\n");
+}
+
+function formatListResult(result: VaultListResult): string {
+  const lines: string[] = [];
+
+  if (result.directories.length > 0) {
+    lines.push(`**Directories:** (${result.directories.length})`);
+    for (const dir of result.directories) {
+      lines.push(`- ${dir}/`);
+    }
+    lines.push("");
+  }
+
+  lines.push(`**Files:** (${result.files.length})`);
+
+  if (result.files.length === 0) {
+    lines.push("(none)");
+  } else {
+    for (let i = 0; i < result.files.length; i++) {
+      const f = result.files[i];
+      lines.push(`${i + 1}. ${f.path}`);
+      lines.push(`   ${formatFrontmatterSummary(f.frontmatter)}`);
+    }
+  }
+
+  return lines.join("\n");
 }

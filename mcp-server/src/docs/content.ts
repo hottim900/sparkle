@@ -409,6 +409,8 @@ Claude.ai: 透過 plugin marketplace 安裝
 | \`sparkle_write_obsidian\` | 按 sparkle_id 更新已匯出的筆記 |
 | \`sparkle_read_obsidian_by_path\` | 按相對路徑讀取 vault 任意 .md 檔 |
 | \`sparkle_write_obsidian_by_path\` | 按相對路徑寫入 .md 檔（自動建目錄） |
+| \`sparkle_search_obsidian\` | 全文搜尋 vault 中的 .md 檔案 |
+| \`sparkle_list_obsidian\` | 列出 vault 檔案與目錄結構 |
 
 ## sparkle_id 定位
 
@@ -436,6 +438,20 @@ sparkle_write_obsidian(id, content) → 寫回
 \`\`\`
 sparkle_read_obsidian_by_path("Projects/my-note.md")
 sparkle_write_obsidian_by_path("Projects/new-note.md", content)
+\`\`\`
+
+### 搜尋 vault 內容
+
+\`\`\`
+sparkle_search_obsidian("關鍵字")                    → 全文搜尋 vault
+sparkle_search_obsidian("topic", path: "Projects/")  → 限制在子目錄搜尋
+\`\`\`
+
+### 瀏覽 vault 結構
+
+\`\`\`
+sparkle_list_obsidian()                              → 列出整個 vault
+sparkle_list_obsidian(path: "Projects/", recursive: false) → 只看一層目錄
 \`\`\`
 
 ### 比對 Sparkle 與 vault 差異

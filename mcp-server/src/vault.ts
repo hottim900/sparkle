@@ -1,7 +1,14 @@
 import { readFileSync, readdirSync, writeFileSync, existsSync, mkdirSync } from "./fs.js";
 import { resolve, join, relative, dirname } from "node:path";
 import { getSettings } from "./client.js";
-import type { VaultFrontmatter, VaultFile } from "./types.js";
+import type {
+  VaultFrontmatter,
+  VaultFile,
+  VaultSearchMatch,
+  VaultSearchResult,
+  VaultListEntry,
+  VaultListResult,
+} from "./types.js";
 
 // --- Settings cache ---
 
@@ -239,4 +246,105 @@ export async function writeVaultFileByPath(
     sparkleIdIndex.set(fm.sparkle_id, absPath);
   }
   return relativePath;
+}
+
+// --- Search and list operations ---
+
+export async function searchVault(
+  query: string,
+  options?: { path?: string; limit?: number },
+): Promise<VaultSearchResult[]> {
+  const vaultRoot = await getVaultPath();
+  const searchRoot = options?.path
+    ? resolveVaultPath(vaultRoot, options.path)
+    : vaultRoot;
+  const limit = options?.limit ?? 20;
+  const queryLower = query.toLowerCase();
+
+  const results: VaultSearchResult[] = [];
+
+  walkSync(searchRoot, (filePath) => {
+    if (results.length >= limit) return;
+
+    try {
+      const content = readFileSync(filePath, "utf-8");
+      const lines = content.split("\n");
+      const matches: VaultSearchMatch[] = [];
+
+      for (let i = 0; i < lines.length; i++) {
+        if (lines[i].toLowerCase().includes(queryLower)) {
+          matches.push({
+            line: i + 1,
+            text: lines[i],
+            context_before: lines.slice(Math.max(0, i - 2), i),
+            context_after: lines.slice(i + 1, i + 3),
+          });
+        }
+      }
+
+      if (matches.length > 0) {
+        results.push({
+          path: relative(vaultRoot, filePath),
+          frontmatter: parseFrontmatter(content),
+          matches,
+        });
+      }
+    } catch {
+      /* skip unreadable files */
+    }
+  });
+
+  return results;
+}
+
+export async function listVault(
+  options?: { path?: string; recursive?: boolean; limit?: number },
+): Promise<VaultListResult> {
+  const vaultRoot = await getVaultPath();
+  const listRoot = options?.path
+    ? resolveVaultPath(vaultRoot, options.path)
+    : vaultRoot;
+  const recursive = options?.recursive ?? true;
+  const limit = options?.limit ?? 50;
+
+  const files: VaultListEntry[] = [];
+  const directories: string[] = [];
+
+  if (recursive) {
+    walkSync(listRoot, (filePath) => {
+      if (files.length >= limit) return;
+      try {
+        const content = readFileSync(filePath, "utf-8");
+        files.push({
+          path: relative(vaultRoot, filePath),
+          frontmatter: parseFrontmatter(content),
+        });
+      } catch {
+        /* skip unreadable files */
+      }
+    });
+  } else {
+    for (const entry of readdirSync(listRoot, { withFileTypes: true })) {
+      if (entry.name.startsWith(".")) continue;
+      const fullPath = join(listRoot, entry.name);
+      if (entry.isDirectory()) {
+        directories.push(relative(vaultRoot, fullPath));
+      } else if (entry.isFile() && entry.name.endsWith(".md")) {
+        if (files.length >= limit) continue;
+        try {
+          const content = readFileSync(fullPath, "utf-8");
+          files.push({
+            path: relative(vaultRoot, fullPath),
+            frontmatter: parseFrontmatter(content),
+          });
+        } catch {
+          /* skip unreadable files */
+        }
+      }
+    }
+  }
+
+  files.sort((a, b) => a.path.localeCompare(b.path));
+
+  return { files, directories: directories.sort() };
 }
