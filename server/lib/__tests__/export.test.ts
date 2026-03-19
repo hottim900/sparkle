@@ -7,6 +7,7 @@ import {
   generateFrontmatter,
   generateMarkdown,
   exportToObsidian,
+  yamlEscape,
   ExportableItem,
   ExportConfig,
 } from "../export.js";
@@ -53,6 +54,88 @@ describe("sanitizeFilename", () => {
     expect(sanitizeFilename("")).toBe("untitled");
     expect(sanitizeFilename("///")).toBe("untitled");
     expect(sanitizeFilename("...")).toBe("untitled");
+  });
+});
+
+// ============================================================
+// yamlEscape
+// ============================================================
+describe("yamlEscape", () => {
+  it("returns bare value for simple strings", () => {
+    expect(yamlEscape("hello")).toBe("hello");
+    expect(yamlEscape("web")).toBe("web");
+    expect(yamlEscape("LINE")).toBe("LINE");
+  });
+
+  it("returns quoted empty string", () => {
+    expect(yamlEscape("")).toBe('""');
+  });
+
+  it("quotes values with colons", () => {
+    expect(yamlEscape("key: value")).toBe('"key: value"');
+  });
+
+  it("quotes values with hash", () => {
+    expect(yamlEscape("tag#1")).toBe('"tag#1"');
+  });
+
+  it("escapes internal double quotes", () => {
+    expect(yamlEscape('say "hello"')).toBe('"say \\"hello\\""');
+  });
+
+  it("escapes backslashes before quotes", () => {
+    expect(yamlEscape("path\\file")).toBe('"path\\\\file"');
+  });
+
+  it("quotes values with single quotes", () => {
+    expect(yamlEscape("it's")).toBe('"it\'s"');
+  });
+
+  it("quotes values with braces and brackets", () => {
+    expect(yamlEscape("{obj}")).toBe('"{obj}"');
+    expect(yamlEscape("[arr]")).toBe('"[arr]"');
+  });
+
+  it("quotes values with leading whitespace", () => {
+    expect(yamlEscape(" leading")).toBe('" leading"');
+  });
+
+  it("quotes values with trailing whitespace", () => {
+    expect(yamlEscape("trailing ")).toBe('"trailing "');
+  });
+
+  it("escapes newlines", () => {
+    expect(yamlEscape("line1\nline2")).toBe('"line1\\nline2"');
+  });
+
+  it("escapes carriage returns", () => {
+    expect(yamlEscape("a\rb")).toBe('"a\\rb"');
+  });
+
+  it("escapes tab characters", () => {
+    expect(yamlEscape("a\tb")).toBe('"a\\tb"');
+  });
+
+  it("quotes YAML reserved words", () => {
+    expect(yamlEscape("true")).toBe('"true"');
+    expect(yamlEscape("false")).toBe('"false"');
+    expect(yamlEscape("null")).toBe('"null"');
+    expect(yamlEscape("yes")).toBe('"yes"');
+    expect(yamlEscape("no")).toBe('"no"');
+    expect(yamlEscape("on")).toBe('"on"');
+    expect(yamlEscape("off")).toBe('"off"');
+    expect(yamlEscape("~")).toBe('"~"');
+  });
+
+  it("quotes YAML reserved words case-insensitively", () => {
+    expect(yamlEscape("True")).toBe('"True"');
+    expect(yamlEscape("FALSE")).toBe('"FALSE"');
+    expect(yamlEscape("Null")).toBe('"Null"');
+  });
+
+  it("does not quote partial matches of reserved words", () => {
+    expect(yamlEscape("truthy")).toBe("truthy");
+    expect(yamlEscape("nullable")).toBe("nullable");
   });
 });
 
@@ -173,6 +256,72 @@ describe("generateFrontmatter", () => {
     expect(modifiedLine).toBeDefined();
     expect(createdLine).not.toContain("Z");
     expect(modifiedLine).not.toContain("Z");
+  });
+
+  // --- YAML escaping (DEF-021) ---
+
+  it("escapes tags containing colons", () => {
+    const fm = generateFrontmatter(makeItem({ tags: '["key: value"]' }));
+    expect(fm).toContain('  - "key: value"');
+  });
+
+  it("escapes tags containing hash", () => {
+    const fm = generateFrontmatter(makeItem({ tags: '["C#"]' }));
+    expect(fm).toContain('  - "C#"');
+  });
+
+  it("escapes aliases containing double quotes", () => {
+    const fm = generateFrontmatter(makeItem({ aliases: '["say \\"hello\\""]' }));
+    expect(fm).toContain('  - "say \\"hello\\""');
+  });
+
+  it("escapes source containing double quotes", () => {
+    const fm = generateFrontmatter(makeItem({ source: 'https://example.com/path?a="b"' }));
+    expect(fm).toContain('source: "https://example.com/path?a=\\"b\\""');
+  });
+
+  it("handles empty origin as quoted empty string", () => {
+    const fm = generateFrontmatter(makeItem({ origin: "" }));
+    expect(fm).toContain('origin: ""');
+  });
+
+  it("handles null origin as quoted empty string", () => {
+    const fm = generateFrontmatter(makeItem({ origin: null }));
+    expect(fm).toContain('origin: ""');
+  });
+
+  it("renders simple origin without quotes", () => {
+    const fm = generateFrontmatter(makeItem({ origin: "web" }));
+    expect(fm).toContain("origin: web");
+  });
+
+  it("escapes category containing double quotes", () => {
+    const fm = generateFrontmatter(makeItem({ category_name: 'My "Special" Category' }));
+    expect(fm).toContain('category: "My \\"Special\\" Category"');
+  });
+
+  // --- JSON parse errors (DEF-022) ---
+
+  it("throws on invalid tags JSON", () => {
+    expect(() => generateFrontmatter(makeItem({ tags: "not-json" }))).toThrow(
+      /Failed to parse tags JSON/,
+    );
+  });
+
+  it("throws on invalid aliases JSON", () => {
+    expect(() => generateFrontmatter(makeItem({ aliases: "{bad}" }))).toThrow(
+      /Failed to parse aliases JSON/,
+    );
+  });
+
+  it("includes item ID in tags JSON parse error", () => {
+    expect(() => generateFrontmatter(makeItem({ id: "abc-123", tags: "broken" }))).toThrow(
+      /abc-123/,
+    );
+  });
+
+  it("includes raw value in aliases JSON parse error", () => {
+    expect(() => generateFrontmatter(makeItem({ aliases: "oops" }))).toThrow(/oops/);
   });
 });
 
