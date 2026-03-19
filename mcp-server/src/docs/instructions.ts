@@ -69,6 +69,8 @@ export const SPARKLE_INSTRUCTIONS = `
 | 查看既有標籤 | sparkle_list_tags（建立新筆記前先查看，保持標籤一致性）|
 | 管理分類 | sparkle_list_categories、sparkle_create_category、sparkle_update_category、sparkle_delete_category、sparkle_reorder_categories |
 | 為項目指定分類 | sparkle_create_note / sparkle_update_note 的 category_id 參數（先用 sparkle_list_categories 查詢 UUID）|
+| 讀取 vault 檔案 | sparkle_read_obsidian（按 sparkle_id）、sparkle_read_obsidian_by_path（按路徑）|
+| 修改 vault 檔案 | sparkle_write_obsidian（按 sparkle_id）、sparkle_write_obsidian_by_path（按路徑）|
 
 ## 行為準則
 
@@ -78,6 +80,14 @@ export const SPARKLE_INSTRUCTIONS = `
 - **分類一致性**：為項目指定分類前，先用 sparkle_list_categories 查看既有分類，避免重複建立。
 - **適時建議推進**：當你觀察到筆記已達到下一階段的標準，主動建議推進，但由使用者決定。
 - **連結思考**：發現筆記之間的關聯時，指出來。知識的價值在於連結。
+
+## Obsidian Vault 存取
+
+Sparkle MCP 可直接讀寫 Obsidian vault 中的 .md 檔案（需在 Sparkle settings 啟用 Obsidian 整合）。
+
+搭配 [obsidian-skills](https://github.com/kepano/obsidian-skills) 使用以確保 Obsidian Markdown 格式正確（wikilinks、callouts、frontmatter 等）。建議安裝 obsidian-markdown skill，不需安裝 obsidian-cli（其 read/create/search 功能已由 Sparkle MCP vault tools 取代）。
+
+**工具選擇**：讀寫 vault 內容請使用 Sparkle MCP vault tools（維持 sparkle_id 連結追蹤）。obsidian-skills 提供格式參考，但實際讀寫操作應透過 MCP 工具進行。
 
 如需更深入的主題說明，可讀取 sparkle://docs/* resources 或使用 sparkle_guide tool 查詢特定主題的詳細指引。
 `.trim();

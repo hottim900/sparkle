@@ -61,6 +61,33 @@ export interface ExportResult {
   path: string;
 }
 
+/** Parsed frontmatter from an Obsidian vault .md file */
+export interface VaultFrontmatter {
+  sparkle_id?: string;
+  category?: string;
+  tags?: string[];
+  aliases?: string[];
+  source?: string;
+  created?: string;
+  modified?: string;
+  origin?: string;
+  priority?: string;
+  due?: string;
+  [key: string]: unknown;
+}
+
+/** A file read from the Obsidian vault */
+export interface VaultFile {
+  /** Relative path from vault root */
+  path: string;
+  /** Full file content including frontmatter */
+  content: string;
+  /** Parsed frontmatter key-value pairs */
+  frontmatter: VaultFrontmatter;
+  /** Content without frontmatter block */
+  body: string;
+}
+
 /** Parse JSON array fields into actual arrays */
 export function parseTags(item: SparkleItem): string[] {
   try { return JSON.parse(item.tags) as string[]; } catch { return []; }

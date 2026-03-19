@@ -13,12 +13,22 @@ vi.mock("../client.js", () => ({
   exportToObsidian: vi.fn(),
 }));
 
+// Mock vault module
+vi.mock("../vault.js", () => ({
+  readVaultFileBySparkleId: vi.fn(),
+  readVaultFileByPath: vi.fn(),
+  writeVaultFileBySparkleId: vi.fn(),
+  writeVaultFileByPath: vi.fn(),
+}));
+
 import * as client from "../client.js";
+import * as vault from "../vault.js";
 import { registerReadTools } from "../tools/read.js";
 import { registerSearchTools } from "../tools/search.js";
 import { registerWriteTools } from "../tools/write.js";
 import { registerWorkflowTools } from "../tools/workflow.js";
 import { registerMetaTools } from "../tools/meta.js";
+import { registerVaultTools } from "../tools/vault.js";
 
 const searchItems = vi.mocked(client.searchItems);
 const getItem = vi.mocked(client.getItem);
@@ -28,6 +38,10 @@ const updateItem = vi.mocked(client.updateItem);
 const getStats = vi.mocked(client.getStats);
 const getTags = vi.mocked(client.getTags);
 const exportToObsidian = vi.mocked(client.exportToObsidian);
+const readVaultFileBySparkleId = vi.mocked(vault.readVaultFileBySparkleId);
+const readVaultFileByPath = vi.mocked(vault.readVaultFileByPath);
+const writeVaultFileBySparkleId = vi.mocked(vault.writeVaultFileBySparkleId);
+const writeVaultFileByPath = vi.mocked(vault.writeVaultFileByPath);
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -307,5 +321,128 @@ describe("sparkle_list_tags", () => {
     expect(result.isError).toBeUndefined();
     expect(result.content[0].text).toContain("Found 2 tags:");
     expect(result.content[0].text).toContain("- ai");
+  });
+});
+
+// --- Vault tools ---
+
+const makeVaultFile = (overrides: Partial<import("../types.js").VaultFile> = {}): import("../types.js").VaultFile => ({
+  path: "0_Inbox/Test Note.md",
+  content: '---\nsparkle_id: "abc-123"\ntags:\n  - test\n---\n\n# Test Note\n\nBody here.',
+  frontmatter: { sparkle_id: "abc-123", tags: ["test"] },
+  body: "# Test Note\n\nBody here.",
+  ...overrides,
+});
+
+describe("sparkle_read_obsidian", () => {
+  function getHandler() {
+    const server = makeMockServer();
+    registerVaultTools(server as never);
+    return server.getHandler("sparkle_read_obsidian");
+  }
+
+  it("returns formatted vault file on success", async () => {
+    const handler = getHandler();
+    readVaultFileBySparkleId.mockResolvedValue(makeVaultFile());
+
+    const result = await handler({ sparkle_id: "abc-123" });
+    expect(result.isError).toBeUndefined();
+    expect(result.content[0].text).toContain("0_Inbox/Test Note.md");
+    expect(result.content[0].text).toContain("abc-123");
+    expect(result.content[0].text).toContain("Body here.");
+  });
+
+  it("returns error when file not found", async () => {
+    const handler = getHandler();
+    readVaultFileBySparkleId.mockRejectedValue(new Error("No vault file found with sparkle_id: xyz"));
+
+    const result = await handler({ sparkle_id: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee" });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain("No vault file found");
+  });
+});
+
+describe("sparkle_write_obsidian", () => {
+  function getHandler() {
+    const server = makeMockServer();
+    registerVaultTools(server as never);
+    return server.getHandler("sparkle_write_obsidian");
+  }
+
+  it("returns success with path", async () => {
+    const handler = getHandler();
+    writeVaultFileBySparkleId.mockResolvedValue("0_Inbox/Test Note.md");
+
+    const result = await handler({
+      sparkle_id: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+      content: "# Updated content",
+    });
+    expect(result.isError).toBeUndefined();
+    expect(result.content[0].text).toContain("0_Inbox/Test Note.md");
+    expect(result.content[0].text).toContain("updated successfully");
+  });
+
+  it("returns error on failure", async () => {
+    const handler = getHandler();
+    writeVaultFileBySparkleId.mockRejectedValue(new Error("No vault file found"));
+
+    const result = await handler({
+      sparkle_id: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+      content: "content",
+    });
+    expect(result.isError).toBe(true);
+  });
+});
+
+describe("sparkle_read_obsidian_by_path", () => {
+  function getHandler() {
+    const server = makeMockServer();
+    registerVaultTools(server as never);
+    return server.getHandler("sparkle_read_obsidian_by_path");
+  }
+
+  it("returns formatted vault file", async () => {
+    const handler = getHandler();
+    readVaultFileByPath.mockResolvedValue(makeVaultFile({ path: "Projects/note.md" }));
+
+    const result = await handler({ path: "Projects/note.md" });
+    expect(result.isError).toBeUndefined();
+    expect(result.content[0].text).toContain("Projects/note.md");
+  });
+
+  it("returns error for nonexistent file", async () => {
+    const handler = getHandler();
+    readVaultFileByPath.mockRejectedValue(new Error("File not found: nope.md"));
+
+    const result = await handler({ path: "nope.md" });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain("File not found");
+  });
+});
+
+describe("sparkle_write_obsidian_by_path", () => {
+  function getHandler() {
+    const server = makeMockServer();
+    registerVaultTools(server as never);
+    return server.getHandler("sparkle_write_obsidian_by_path");
+  }
+
+  it("returns success with path", async () => {
+    const handler = getHandler();
+    writeVaultFileByPath.mockResolvedValue("new/note.md");
+
+    const result = await handler({ path: "new/note.md", content: "# New" });
+    expect(result.isError).toBeUndefined();
+    expect(result.content[0].text).toContain("new/note.md");
+    expect(result.content[0].text).toContain("written successfully");
+  });
+
+  it("returns error on path traversal", async () => {
+    const handler = getHandler();
+    writeVaultFileByPath.mockRejectedValue(new Error("outside the vault"));
+
+    const result = await handler({ path: "../../../etc/passwd.md", content: "bad" });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain("outside the vault");
   });
 });
