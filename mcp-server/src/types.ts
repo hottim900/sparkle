@@ -88,6 +88,33 @@ export interface VaultFile {
   body: string;
 }
 
+/** A single search match within a vault file */
+export interface VaultSearchMatch {
+  line: number;
+  text: string;
+  context_before: string[];
+  context_after: string[];
+}
+
+/** Search result for a vault file containing matches */
+export interface VaultSearchResult {
+  path: string;
+  frontmatter: VaultFrontmatter;
+  matches: VaultSearchMatch[];
+}
+
+/** A file entry in vault listing */
+export interface VaultListEntry {
+  path: string;
+  frontmatter: VaultFrontmatter;
+}
+
+/** Result of listing vault contents */
+export interface VaultListResult {
+  files: VaultListEntry[];
+  directories: string[];
+}
+
 /** Parse JSON array fields into actual arrays */
 export function parseTags(item: SparkleItem): string[] {
   try { return JSON.parse(item.tags) as string[]; } catch { return []; }

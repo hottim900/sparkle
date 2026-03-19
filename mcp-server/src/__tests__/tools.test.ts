@@ -19,6 +19,8 @@ vi.mock("../vault.js", () => ({
   readVaultFileByPath: vi.fn(),
   writeVaultFileBySparkleId: vi.fn(),
   writeVaultFileByPath: vi.fn(),
+  searchVault: vi.fn(),
+  listVault: vi.fn(),
 }));
 
 import * as client from "../client.js";
@@ -42,6 +44,8 @@ const readVaultFileBySparkleId = vi.mocked(vault.readVaultFileBySparkleId);
 const readVaultFileByPath = vi.mocked(vault.readVaultFileByPath);
 const writeVaultFileBySparkleId = vi.mocked(vault.writeVaultFileBySparkleId);
 const writeVaultFileByPath = vi.mocked(vault.writeVaultFileByPath);
+const mockSearchVault = vi.mocked(vault.searchVault);
+const mockListVault = vi.mocked(vault.listVault);
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -444,5 +448,88 @@ describe("sparkle_write_obsidian_by_path", () => {
     const result = await handler({ path: "../../../etc/passwd.md", content: "bad" });
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain("outside the vault");
+  });
+});
+
+describe("sparkle_search_obsidian", () => {
+  function getHandler() {
+    const server = makeMockServer();
+    registerVaultTools(server as never);
+    return server.getHandler("sparkle_search_obsidian");
+  }
+
+  it("returns formatted search results", async () => {
+    const handler = getHandler();
+    mockSearchVault.mockResolvedValue([
+      {
+        path: "notes/research.md",
+        frontmatter: { sparkle_id: "abc-123", tags: ["ai", "ml"] },
+        matches: [
+          {
+            line: 5,
+            text: "This is about machine learning",
+            context_before: ["## Introduction"],
+            context_after: ["and deep learning"],
+          },
+        ],
+      },
+    ]);
+
+    const result = await handler({ query: "machine", limit: 20 });
+    expect(result.isError).toBeUndefined();
+    expect(result.content[0].text).toContain('1 file(s) matching "machine"');
+    expect(result.content[0].text).toContain("notes/research.md");
+    expect(result.content[0].text).toContain("sparkle_id: abc-123");
+    expect(result.content[0].text).toContain("machine learning");
+  });
+
+  it("returns friendly message when no results", async () => {
+    const handler = getHandler();
+    mockSearchVault.mockResolvedValue([]);
+
+    const result = await handler({ query: "nonexistent", limit: 20 });
+    expect(result.isError).toBeUndefined();
+    expect(result.content[0].text).toContain('No results found for "nonexistent"');
+  });
+});
+
+describe("sparkle_list_obsidian", () => {
+  function getHandler() {
+    const server = makeMockServer();
+    registerVaultTools(server as never);
+    return server.getHandler("sparkle_list_obsidian");
+  }
+
+  it("returns formatted file list", async () => {
+    const handler = getHandler();
+    mockListVault.mockResolvedValue({
+      files: [
+        { path: "notes/idea.md", frontmatter: { sparkle_id: "abc-123", tags: ["ai"] } },
+        { path: "projects/plan.md", frontmatter: {} },
+      ],
+      directories: [],
+    });
+
+    const result = await handler({ recursive: true, limit: 50 });
+    expect(result.isError).toBeUndefined();
+    expect(result.content[0].text).toContain("Files:** (2)");
+    expect(result.content[0].text).toContain("notes/idea.md");
+    expect(result.content[0].text).toContain("sparkle_id: abc-123");
+    expect(result.content[0].text).toContain("projects/plan.md");
+    expect(result.content[0].text).toContain("(no frontmatter)");
+  });
+
+  it("includes directories in non-recursive mode", async () => {
+    const handler = getHandler();
+    mockListVault.mockResolvedValue({
+      files: [{ path: "note.md", frontmatter: {} }],
+      directories: ["Projects", "Archive"],
+    });
+
+    const result = await handler({ recursive: false, limit: 50 });
+    expect(result.isError).toBeUndefined();
+    expect(result.content[0].text).toContain("Directories:** (2)");
+    expect(result.content[0].text).toContain("Projects/");
+    expect(result.content[0].text).toContain("Archive/");
   });
 });

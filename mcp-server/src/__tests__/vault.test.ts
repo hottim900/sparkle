@@ -24,6 +24,8 @@ import {
   findBySparkleId,
   readVaultFileByPath,
   writeVaultFileByPath,
+  searchVault,
+  listVault,
   _resetCache,
   _resetIndex,
 } from "../vault.js";
@@ -311,5 +313,184 @@ describe("writeVaultFileByPath", () => {
     const found = await findBySparkleId("new-id");
     expect(found).not.toBeNull();
     expect(found!.path).toBe("/vault/note.md");
+  });
+});
+
+// --- searchVault ---
+
+describe("searchVault", () => {
+  const VAULT = "/my/vault";
+
+  function setupVault() {
+    mockGetSettings.mockResolvedValue({
+      obsidian_enabled: "true",
+      obsidian_vault_path: VAULT,
+    });
+  }
+
+  function mockDirEntries(entries: { name: string; isDir: boolean }[]) {
+    mockReaddirSync.mockReturnValue(
+      entries.map((e) => ({
+        name: e.name,
+        isDirectory: () => e.isDir,
+        isFile: () => !e.isDir,
+      })) as never,
+    );
+  }
+
+  it("finds matches with context lines", async () => {
+    setupVault();
+    mockDirEntries([{ name: "note.md", isDir: false }]);
+    mockReadFileSync.mockReturnValue(
+      "---\nsparkle_id: \"abc\"\n---\n\nline one\nline two\nfind me here\nline four\nline five",
+    );
+
+    const results = await searchVault("find me");
+    expect(results).toHaveLength(1);
+    expect(results[0].path).toBe("note.md");
+    expect(results[0].matches).toHaveLength(1);
+    expect(results[0].matches[0].line).toBe(7);
+    expect(results[0].matches[0].text).toBe("find me here");
+    expect(results[0].matches[0].context_before).toEqual(["line one", "line two"]);
+    expect(results[0].matches[0].context_after).toEqual(["line four", "line five"]);
+    expect(results[0].frontmatter.sparkle_id).toBe("abc");
+  });
+
+  it("performs case-insensitive search", async () => {
+    setupVault();
+    mockDirEntries([{ name: "note.md", isDir: false }]);
+    mockReadFileSync.mockReturnValue("# Title\n\nHello WORLD");
+
+    const results = await searchVault("hello world");
+    expect(results).toHaveLength(1);
+    expect(results[0].matches[0].text).toBe("Hello WORLD");
+  });
+
+  it("respects path option for subdirectory search", async () => {
+    setupVault();
+    mockDirEntries([{ name: "sub.md", isDir: false }]);
+    mockReadFileSync.mockReturnValue("match here");
+
+    const results = await searchVault("match", { path: "Projects" });
+    expect(results).toHaveLength(1);
+    // readdirSync should have been called with the resolved subdirectory
+    expect(mockReaddirSync).toHaveBeenCalledWith(
+      "/my/vault/Projects",
+      expect.objectContaining({ withFileTypes: true }),
+    );
+  });
+
+  it("respects limit option", async () => {
+    setupVault();
+    // Return 3 files but set limit to 2
+    mockReaddirSync.mockReturnValue([
+      { name: "a.md", isDirectory: () => false, isFile: () => true },
+      { name: "b.md", isDirectory: () => false, isFile: () => true },
+      { name: "c.md", isDirectory: () => false, isFile: () => true },
+    ] as never);
+    mockReadFileSync.mockReturnValue("matching content");
+
+    const results = await searchVault("matching", { limit: 2 });
+    expect(results).toHaveLength(2);
+  });
+
+  it("returns empty array when no matches", async () => {
+    setupVault();
+    mockDirEntries([{ name: "note.md", isDir: false }]);
+    mockReadFileSync.mockReturnValue("nothing interesting here");
+
+    const results = await searchVault("nonexistent");
+    expect(results).toHaveLength(0);
+  });
+});
+
+// --- listVault ---
+
+describe("listVault", () => {
+  const VAULT = "/my/vault";
+
+  function setupVault() {
+    mockGetSettings.mockResolvedValue({
+      obsidian_enabled: "true",
+      obsidian_vault_path: VAULT,
+    });
+  }
+
+  it("lists all files recursively by default", async () => {
+    setupVault();
+    // walkSync calls readdirSync recursively — mock root then subdir
+    mockReaddirSync
+      .mockReturnValueOnce([
+        { name: "note.md", isDirectory: () => false, isFile: () => true },
+        { name: "sub", isDirectory: () => true, isFile: () => false },
+      ] as never)
+      .mockReturnValueOnce([
+        { name: "deep.md", isDirectory: () => false, isFile: () => true },
+      ] as never);
+    mockReadFileSync.mockReturnValue('---\nsparkle_id: "abc"\n---\n\n# Note');
+
+    const result = await listVault();
+    expect(result.files).toHaveLength(2);
+    expect(result.directories).toHaveLength(0);
+    // Files should be sorted by path
+    expect(result.files[0].path).toBe("note.md");
+    expect(result.files[1].path).toBe("sub/deep.md");
+    expect(result.files[0].frontmatter.sparkle_id).toBe("abc");
+  });
+
+  it("lists files non-recursively with directories", async () => {
+    setupVault();
+    mockReaddirSync.mockReturnValue([
+      { name: "note.md", isDirectory: () => false, isFile: () => true },
+      { name: "Projects", isDirectory: () => true, isFile: () => false },
+      { name: "Archive", isDirectory: () => true, isFile: () => false },
+    ] as never);
+    mockReadFileSync.mockReturnValue("# Simple note");
+
+    const result = await listVault({ recursive: false });
+    expect(result.files).toHaveLength(1);
+    expect(result.files[0].path).toBe("note.md");
+    expect(result.directories).toEqual(["Archive", "Projects"]);
+  });
+
+  it("skips dotfiles and dotdirectories", async () => {
+    setupVault();
+    mockReaddirSync.mockReturnValue([
+      { name: ".obsidian", isDirectory: () => true, isFile: () => false },
+      { name: ".DS_Store", isDirectory: () => false, isFile: () => true },
+      { name: "note.md", isDirectory: () => false, isFile: () => true },
+    ] as never);
+    mockReadFileSync.mockReturnValue("# Note");
+
+    const result = await listVault({ recursive: false });
+    expect(result.files).toHaveLength(1);
+    expect(result.directories).toHaveLength(0);
+  });
+
+  it("respects limit option", async () => {
+    setupVault();
+    mockReaddirSync.mockReturnValue([
+      { name: "a.md", isDirectory: () => false, isFile: () => true },
+      { name: "b.md", isDirectory: () => false, isFile: () => true },
+      { name: "c.md", isDirectory: () => false, isFile: () => true },
+    ] as never);
+    mockReadFileSync.mockReturnValue("content");
+
+    const result = await listVault({ limit: 2 });
+    expect(result.files).toHaveLength(2);
+  });
+
+  it("respects path option", async () => {
+    setupVault();
+    mockReaddirSync.mockReturnValue([
+      { name: "note.md", isDirectory: () => false, isFile: () => true },
+    ] as never);
+    mockReadFileSync.mockReturnValue("content");
+
+    await listVault({ path: "Projects", recursive: false });
+    expect(mockReaddirSync).toHaveBeenCalledWith(
+      "/my/vault/Projects",
+      expect.objectContaining({ withFileTypes: true }),
+    );
   });
 });
