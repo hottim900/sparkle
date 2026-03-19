@@ -111,6 +111,32 @@ describe("yamlEscape", () => {
   it("escapes carriage returns", () => {
     expect(yamlEscape("a\rb")).toBe('"a\\rb"');
   });
+
+  it("escapes tab characters", () => {
+    expect(yamlEscape("a\tb")).toBe('"a\\tb"');
+  });
+
+  it("quotes YAML reserved words", () => {
+    expect(yamlEscape("true")).toBe('"true"');
+    expect(yamlEscape("false")).toBe('"false"');
+    expect(yamlEscape("null")).toBe('"null"');
+    expect(yamlEscape("yes")).toBe('"yes"');
+    expect(yamlEscape("no")).toBe('"no"');
+    expect(yamlEscape("on")).toBe('"on"');
+    expect(yamlEscape("off")).toBe('"off"');
+    expect(yamlEscape("~")).toBe('"~"');
+  });
+
+  it("quotes YAML reserved words case-insensitively", () => {
+    expect(yamlEscape("True")).toBe('"True"');
+    expect(yamlEscape("FALSE")).toBe('"FALSE"');
+    expect(yamlEscape("Null")).toBe('"Null"');
+  });
+
+  it("does not quote partial matches of reserved words", () => {
+    expect(yamlEscape("truthy")).toBe("truthy");
+    expect(yamlEscape("nullable")).toBe("nullable");
+  });
 });
 
 // ============================================================

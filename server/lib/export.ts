@@ -41,17 +41,21 @@ function escapeYamlChars(value: string): string {
   return value
     .replace(/\\/g, "\\\\")
     .replace(/"/g, '\\"')
+    .replace(/\t/g, "\\t")
     .replace(/\n/g, "\\n")
     .replace(/\r/g, "\\r");
 }
 
+const YAML_RESERVED = /^(true|false|yes|no|on|off|null|~)$/i;
+
 /**
  * Escape a string for YAML output. Wraps in double quotes only when value
- * is empty or contains YAML-special characters.
+ * is empty, a YAML reserved word, or contains YAML-special characters.
  */
 export function yamlEscape(value: string): string {
   if (value === "") return '""';
-  const needsQuoting = /[\\:#{}"'[\]{},|>&!%@`\n\r]|^\s|\s$/;
+  if (YAML_RESERVED.test(value)) return `"${value}"`;
+  const needsQuoting = /[\\:#{}"'[\]{},|>&!%@`\t\n\r]|^\s|\s$/;
   if (!needsQuoting.test(value)) return value;
   return `"${escapeYamlChars(value)}"`;
 }
