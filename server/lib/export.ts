@@ -1,6 +1,5 @@
 import { mkdirSync, writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
-import { logger } from "./logger";
 
 /**
  * Replace forbidden filename characters with '-', collapse consecutive dashes,
@@ -37,6 +36,26 @@ function toLocalDateTime(isoString: string): string {
   return `${y}-${mo}-${da}T${h}:${mi}:${s}`;
 }
 
+/** Escape special chars for YAML double-quoted string content. */
+function escapeYamlChars(value: string): string {
+  return value
+    .replace(/\\/g, "\\\\")
+    .replace(/"/g, '\\"')
+    .replace(/\n/g, "\\n")
+    .replace(/\r/g, "\\r");
+}
+
+/**
+ * Escape a string for YAML output. Wraps in double quotes only when value
+ * is empty or contains YAML-special characters.
+ */
+export function yamlEscape(value: string): string {
+  if (value === "") return '""';
+  const needsQuoting = /[:#{}"'[\]{},|>&!%@`\n\r]|^\s|\s$/;
+  if (!needsQuoting.test(value)) return value;
+  return `"${escapeYamlChars(value)}"`;
+}
+
 export interface ExportableItem {
   id: string;
   title: string;
@@ -64,7 +83,7 @@ export function generateFrontmatter(item: ExportableItem): string {
 
   // Category — include when non-null
   if (item.category_name) {
-    lines.push(`category: "${item.category_name.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`);
+    lines.push(`category: "${escapeYamlChars(item.category_name)}"`);
   }
 
   // Tags — include when non-empty
@@ -72,12 +91,12 @@ export function generateFrontmatter(item: ExportableItem): string {
   try {
     tags = JSON.parse(item.tags);
   } catch {
-    logger.warn({ id: item.id, tags: item.tags }, "Failed to parse tags JSON during export");
+    throw new Error(`Failed to parse tags JSON for item ${item.id}: ${item.tags}`);
   }
   if (tags.length > 0) {
     lines.push("tags:");
     for (const tag of tags) {
-      lines.push(`  - ${tag}`);
+      lines.push(`  - ${yamlEscape(tag)}`);
     }
   }
 
@@ -86,21 +105,18 @@ export function generateFrontmatter(item: ExportableItem): string {
   try {
     aliases = JSON.parse(item.aliases);
   } catch {
-    logger.warn(
-      { id: item.id, aliases: item.aliases },
-      "Failed to parse aliases JSON during export",
-    );
+    throw new Error(`Failed to parse aliases JSON for item ${item.id}: ${item.aliases}`);
   }
   if (aliases.length > 0) {
     lines.push("aliases:");
     for (const alias of aliases) {
-      lines.push(`  - "${alias}"`);
+      lines.push(`  - "${escapeYamlChars(alias)}"`);
     }
   }
 
   // Source — include when non-null
   if (item.source) {
-    lines.push(`source: "${item.source}"`);
+    lines.push(`source: "${escapeYamlChars(item.source)}"`);
   }
 
   // Always present — local time, no TZ
@@ -108,7 +124,7 @@ export function generateFrontmatter(item: ExportableItem): string {
   lines.push(`modified: ${toLocalDateTime(item.modified)}`);
 
   // Always present
-  lines.push(`origin: ${item.origin || ""}`);
+  lines.push(`origin: ${yamlEscape(item.origin || "")}`);
 
   // Priority — include when non-null
   if (item.priority) {
@@ -133,10 +149,12 @@ export function generateMarkdown(item: ExportableItem): string {
   return `${frontmatter}\n\n# ${item.title}\n\n${body}\n`;
 }
 
+export type ExportMode = "new" | "overwrite";
+
 export interface ExportConfig {
   vaultPath: string;
   inboxFolder: string;
-  exportMode: string;
+  exportMode: ExportMode;
 }
 
 export interface ExportResult {

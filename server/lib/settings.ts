@@ -1,10 +1,11 @@
 import type Database from "better-sqlite3";
+import type { ExportMode } from "./export.js";
 
 export interface ObsidianSettings {
   obsidian_enabled: boolean;
   obsidian_vault_path: string;
   obsidian_inbox_folder: string;
-  obsidian_export_mode: string;
+  obsidian_export_mode: ExportMode;
 }
 
 /**
@@ -41,7 +42,7 @@ export function getObsidianSettings(sqlite: Database.Database): ObsidianSettings
     obsidian_enabled: all.obsidian_enabled === "true",
     obsidian_vault_path: all.obsidian_vault_path ?? "",
     obsidian_inbox_folder: all.obsidian_inbox_folder ?? "0_Inbox",
-    obsidian_export_mode: all.obsidian_export_mode ?? "overwrite",
+    obsidian_export_mode: (all.obsidian_export_mode ?? "overwrite") as ExportMode,
   };
 }
 
