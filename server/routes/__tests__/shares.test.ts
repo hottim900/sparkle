@@ -60,6 +60,8 @@ function insertNote(
     content: string;
     status: string;
     tags: string;
+    created: string;
+    modified: string;
   }> = {},
 ) {
   const id = overrides.id ?? "note-1";
@@ -75,8 +77,8 @@ function insertNote(
       overrides.content ?? "# Hello\n\nThis is **bold** text.",
       overrides.status ?? "fleeting",
       overrides.tags ?? '["test","share"]',
-      now,
-      now,
+      overrides.created ?? now,
+      overrides.modified ?? now,
     );
   return id;
 }
@@ -440,7 +442,8 @@ describe("SSR Public Page", () => {
     const res = await app.request(`/s/${share.token}`);
     const html = await res.text();
     expect(html).toContain("My Shared Note");
-    expect(html).toContain("<h1>Heading</h1>");
+    expect(html).toContain("<h1");
+    expect(html).toContain("Heading</h1>");
     expect(html).toContain("<strong>bold</strong>");
   });
 
@@ -536,6 +539,114 @@ describe("SSR Public Page", () => {
     expect(html).toContain("&lt;script&gt;");
   });
 
+  it("renders TOC when content has more than 3 headings", async () => {
+    const noteId = insertNote({
+      content: "# One\n\n## Two\n\n## Three\n\n## Four\n\nSome text.",
+    });
+    const createRes = await app.request(`/api/items/${noteId}/share`, {
+      method: "POST",
+      headers: jsonHeaders(),
+      body: JSON.stringify({ visibility: "unlisted" }),
+    });
+    const { share } = await createRes.json();
+
+    const res = await app.request(`/s/${share.token}`);
+    const html = await res.text();
+    expect(html).toContain('class="toc"');
+    expect(html).toContain('class="toc-toggle"');
+    expect(html).toContain('class="toc-overlay"');
+    expect(html).toContain('href="#one"');
+    expect(html).toContain('href="#two"');
+    expect(html).toContain('href="#four"');
+  });
+
+  it("does not render TOC when content has 3 or fewer headings", async () => {
+    const noteId = insertNote({
+      content: "# One\n\n## Two\n\n## Three\n\nSome text.",
+    });
+    const createRes = await app.request(`/api/items/${noteId}/share`, {
+      method: "POST",
+      headers: jsonHeaders(),
+      body: JSON.stringify({ visibility: "unlisted" }),
+    });
+    const { share } = await createRes.json();
+
+    const res = await app.request(`/s/${share.token}`);
+    const html = await res.text();
+    expect(html).not.toContain('class="toc"');
+    expect(html).not.toContain('class="toc-toggle"');
+  });
+
+  it("adds id attributes to headings for TOC navigation", async () => {
+    const noteId = insertNote({
+      content: "# First\n\n## Second\n\n## Third\n\n## Fourth\n\nText.",
+    });
+    const createRes = await app.request(`/api/items/${noteId}/share`, {
+      method: "POST",
+      headers: jsonHeaders(),
+      body: JSON.stringify({ visibility: "unlisted" }),
+    });
+    const { share } = await createRes.json();
+
+    const res = await app.request(`/s/${share.token}`);
+    const html = await res.text();
+    expect(html).toContain('id="first"');
+    expect(html).toContain('id="second"');
+    expect(html).toContain('id="fourth"');
+  });
+
+  it("renders back-to-top button", async () => {
+    const noteId = insertNote();
+    const createRes = await app.request(`/api/items/${noteId}/share`, {
+      method: "POST",
+      headers: jsonHeaders(),
+      body: JSON.stringify({ visibility: "unlisted" }),
+    });
+    const { share } = await createRes.json();
+
+    const res = await app.request(`/s/${share.token}`);
+    const html = await res.text();
+    expect(html).toContain('class="back-to-top"');
+    expect(html).toContain("回到頂部");
+  });
+
+  it("shows modified date when different from created date", async () => {
+    const noteId = insertNote({
+      created: "2026-03-01T10:00:00.000Z",
+      modified: "2026-03-19T14:30:05.000Z",
+    });
+    const createRes = await app.request(`/api/items/${noteId}/share`, {
+      method: "POST",
+      headers: jsonHeaders(),
+      body: JSON.stringify({ visibility: "unlisted" }),
+    });
+    const { share } = await createRes.json();
+
+    const res = await app.request(`/s/${share.token}`);
+    const html = await res.text();
+    expect(html).toContain("建立");
+    expect(html).toContain("更新");
+  });
+
+  it("shows single date when created and modified are same day", async () => {
+    const sameDay = "2026-03-19T10:00:00.000Z";
+    const noteId = insertNote({
+      created: sameDay,
+      modified: "2026-03-19T14:30:00.000Z",
+    });
+    const createRes = await app.request(`/api/items/${noteId}/share`, {
+      method: "POST",
+      headers: jsonHeaders(),
+      body: JSON.stringify({ visibility: "unlisted" }),
+    });
+    const { share } = await createRes.json();
+
+    const res = await app.request(`/s/${share.token}`);
+    const html = await res.text();
+    expect(html).not.toContain("建立");
+    expect(html).not.toContain("更新");
+  });
+
   it("does not load SPA JavaScript bundle", async () => {
     const noteId = insertNote();
     const createRes = await app.request(`/api/items/${noteId}/share`, {
@@ -547,7 +658,7 @@ describe("SSR Public Page", () => {
 
     const res = await app.request(`/s/${share.token}`);
     const html = await res.text();
-    // Should not reference any JS bundle
+    // Should not reference any external JS bundle (inline script for TOC/back-to-top is OK)
     expect(html).not.toMatch(/src=.*\.js/);
     expect(html).not.toContain('type="module"');
   });
