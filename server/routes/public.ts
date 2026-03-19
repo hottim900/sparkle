@@ -72,6 +72,7 @@ publicRouter.get("/s/:token", (c) => {
     content: share.item_content,
     tags,
     created: share.item_created,
+    modified: share.item_modified,
   });
 
   return c.html(html);
