@@ -305,7 +305,7 @@ Requires Obsidian integration to be enabled in Sparkle settings.`,
   );
 }
 
-function formatFrontmatterSummary(fm: VaultFrontmatter): string {
+export function formatFrontmatterSummary(fm: VaultFrontmatter): string {
   const parts: string[] = [];
   if (fm.sparkle_id) parts.push(`sparkle_id: ${fm.sparkle_id}`);
   if (fm.tags && Array.isArray(fm.tags) && fm.tags.length > 0) {
@@ -316,7 +316,7 @@ function formatFrontmatterSummary(fm: VaultFrontmatter): string {
   return parts.length > 0 ? parts.join(" | ") : "(no frontmatter)";
 }
 
-function formatSearchResults(results: VaultSearchResult[], query: string): string {
+export function formatSearchResults(results: VaultSearchResult[], query: string): string {
   if (results.length === 0) {
     return `No results found for "${query}".`;
   }
