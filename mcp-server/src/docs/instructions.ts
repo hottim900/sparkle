@@ -59,7 +59,7 @@ export const SPARKLE_INSTRUCTIONS = `
 
 | 情境 | 工具 |
 |------|------|
-| 搜尋相關筆記 | sparkle_search（Sparkle DB）、sparkle_search_obsidian（vault）、sparkle_search_all（同時搜兩邊）|
+| 搜尋相關筆記 | sparkle_search（Sparkle DB）、sparkle_search_obsidian（vault）、sparkle_search_all（同時搜兩邊）、sparkle_list_notes（篩選列表）|
 | 讀取完整內容 | sparkle_get_note |
 | 新建項目 | sparkle_create_note |
 | 更新內容 | sparkle_update_note（短筆記用全文替換；長筆記用 old_content 局部編輯）|

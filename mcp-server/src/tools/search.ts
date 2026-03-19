@@ -112,9 +112,13 @@ Returns: Results grouped by source — [Sparkle] for database items, [Vault] for
       if (sections.length === 0) {
         const errors: string[] = [];
         if (sparkleResult.status === "rejected")
-          errors.push(`Sparkle: ${(sparkleResult.reason as Error).message}`);
+          errors.push(
+            `Sparkle: ${sparkleResult.reason instanceof Error ? sparkleResult.reason.message : String(sparkleResult.reason)}`,
+          );
         if (vaultResult.status === "rejected")
-          errors.push(`Vault: ${(vaultResult.reason as Error).message}`);
+          errors.push(
+            `Vault: ${vaultResult.reason instanceof Error ? vaultResult.reason.message : String(vaultResult.reason)}`,
+          );
         if (errors.length > 0) {
           return {
             content: [{ type: "text", text: `Search failed:\n${errors.join("\n")}` }],
