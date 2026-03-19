@@ -79,6 +79,81 @@ describe("sparkle_search", () => {
   });
 });
 
+describe("sparkle_search_all", () => {
+  function getHandler() {
+    const server = makeMockServer();
+    registerSearchTools(server as never);
+    return server.getHandler("sparkle_search_all");
+  }
+
+  it("returns results from both Sparkle and Vault", async () => {
+    const handler = getHandler();
+    searchItems.mockResolvedValue({
+      results: [makeItem({ title: "DB Note", status: "developing" })],
+    });
+    mockSearchVault.mockResolvedValue([
+      {
+        path: "notes/vault-note.md",
+        frontmatter: { tags: ["ai"] },
+        matches: [{ line: 3, text: "vault match", context_before: [], context_after: [] }],
+      },
+    ]);
+
+    const result = await handler({ query: "test", limit: 20 });
+    expect(result.isError).toBeUndefined();
+    expect(result.content[0].text).toContain("[Sparkle]");
+    expect(result.content[0].text).toContain("DB Note");
+    expect(result.content[0].text).toContain("[Vault]");
+    expect(result.content[0].text).toContain("vault-note.md");
+  });
+
+  it("deduplicates exported items found in vault", async () => {
+    const handler = getHandler();
+    const exportedId = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
+    searchItems.mockResolvedValue({
+      results: [
+        makeItem({ id: exportedId, title: "Exported Note", status: "exported" }),
+        makeItem({ id: "other-id", title: "Active Note", status: "developing" }),
+      ],
+    });
+    mockSearchVault.mockResolvedValue([
+      {
+        path: "notes/exported.md",
+        frontmatter: { sparkle_id: exportedId },
+        matches: [{ line: 1, text: "match", context_before: [], context_after: [] }],
+      },
+    ]);
+
+    const result = await handler({ query: "test", limit: 20 });
+    expect(result.content[0].text).toContain("Active Note");
+    expect(result.content[0].text).not.toContain("Exported Note");
+    expect(result.content[0].text).toContain("exported.md");
+  });
+
+  it("falls back to Sparkle-only when vault is not enabled", async () => {
+    const handler = getHandler();
+    searchItems.mockResolvedValue({
+      results: [makeItem({ title: "Sparkle Result" })],
+    });
+    mockSearchVault.mockRejectedValue(new Error("Obsidian integration is not enabled"));
+
+    const result = await handler({ query: "test", limit: 20 });
+    expect(result.isError).toBeUndefined();
+    expect(result.content[0].text).toContain("Sparkle Result");
+    expect(result.content[0].text).not.toContain("[Vault]");
+  });
+
+  it("returns friendly message when both sources are empty", async () => {
+    const handler = getHandler();
+    searchItems.mockResolvedValue({ results: [] });
+    mockSearchVault.mockResolvedValue([]);
+
+    const result = await handler({ query: "nonexistent", limit: 20 });
+    expect(result.isError).toBeUndefined();
+    expect(result.content[0].text).toContain("No results found");
+  });
+});
+
 describe("sparkle_get_note", () => {
   function getReadHandler() {
     const server = makeMockServer();

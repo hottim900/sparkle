@@ -2,6 +2,8 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { searchItems } from "../client.js";
 import { formatItemList } from "../format.js";
+import { searchVault } from "../vault.js";
+import { formatSearchResults } from "./vault.js";
 
 export function registerSearchTools(server: McpServer): void {
   server.registerTool(
@@ -42,6 +44,91 @@ Returns: List of matching items with title, status, tags, and metadata.`,
           isError: true,
         };
       }
+    },
+  );
+
+  server.registerTool(
+    "sparkle_search_all",
+    {
+      title: "Search All",
+      description: `Search across both Sparkle database and Obsidian vault simultaneously.
+
+Runs both searches in parallel. Automatically deduplicates: exported notes found in the vault are only shown in the Vault section. If Obsidian integration is not enabled, gracefully falls back to Sparkle-only results.
+
+Args:
+  - query (string): Search keywords
+  - limit (number, optional): Max results per source (default 20, max 50)
+
+Returns: Results grouped by source — [Sparkle] for database items, [Vault] for vault files.`,
+      inputSchema: {
+        query: z.string().min(1).describe("Search keywords"),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(50)
+          .default(20)
+          .describe("Max results per source (default 20)"),
+      },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true,
+      },
+    },
+    async ({ query, limit }) => {
+      const [sparkleResult, vaultResult] = await Promise.allSettled([
+        searchItems(query, limit),
+        searchVault(query, { limit }),
+      ]);
+
+      const sparkleItems =
+        sparkleResult.status === "fulfilled" ? sparkleResult.value.results : [];
+      const vaultResults = vaultResult.status === "fulfilled" ? vaultResult.value : [];
+
+      // Dedup: remove exported items that appear in vault results
+      const vaultSparkleIds = new Set(
+        vaultResults
+          .map((r) => r.frontmatter.sparkle_id)
+          .filter((id): id is string => typeof id === "string"),
+      );
+      const uniqueSparkleItems = sparkleItems.filter(
+        (item) => !(item.status === "exported" && vaultSparkleIds.has(item.id)),
+      );
+
+      const sections: string[] = [];
+
+      if (uniqueSparkleItems.length > 0) {
+        sections.push(`## [Sparkle] (${uniqueSparkleItems.length} items)\n`);
+        sections.push(formatItemList(uniqueSparkleItems, uniqueSparkleItems.length));
+      }
+
+      if (vaultResults.length > 0) {
+        sections.push(`\n## [Vault] (${vaultResults.length} files)\n`);
+        sections.push(formatSearchResults(vaultResults, query));
+      }
+
+      if (sections.length === 0) {
+        const errors: string[] = [];
+        if (sparkleResult.status === "rejected")
+          errors.push(`Sparkle: ${(sparkleResult.reason as Error).message}`);
+        if (vaultResult.status === "rejected")
+          errors.push(`Vault: ${(vaultResult.reason as Error).message}`);
+        if (errors.length > 0) {
+          return {
+            content: [{ type: "text", text: `Search failed:\n${errors.join("\n")}` }],
+            isError: true,
+          };
+        }
+        return {
+          content: [
+            { type: "text", text: `No results found for "${query}" in Sparkle or Vault.` },
+          ],
+        };
+      }
+
+      return { content: [{ type: "text", text: sections.join("\n") }] };
     },
   );
 }
