@@ -51,7 +51,7 @@ function escapeYamlChars(value: string): string {
  */
 export function yamlEscape(value: string): string {
   if (value === "") return '""';
-  const needsQuoting = /[:#{}"'[\]{},|>&!%@`\n\r]|^\s|\s$/;
+  const needsQuoting = /[\\:#{}"'[\]{},|>&!%@`\n\r]|^\s|\s$/;
   if (!needsQuoting.test(value)) return value;
   return `"${escapeYamlChars(value)}"`;
 }
