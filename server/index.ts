@@ -113,11 +113,15 @@ app.use("*", async (c, next) => {
 });
 
 // Content-Security-Policy
+// Public share pages (/s/*) use inline scripts for TOC & back-to-top (server-generated, no user input)
 app.use("*", async (c, next) => {
   await next();
+  const scriptSrc = c.req.path.startsWith("/s/")
+    ? "script-src 'self' 'unsafe-inline'"
+    : "script-src 'self'";
   c.res.headers.set(
     "Content-Security-Policy",
-    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; connect-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
+    `default-src 'self'; ${scriptSrc}; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; connect-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'`,
   );
 });
 

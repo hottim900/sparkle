@@ -28,6 +28,17 @@ const TEST_TOKEN = "test-secret-token-12345";
 
 function createApp() {
   const app = new Hono();
+  // CSP middleware (mirrors production behavior in server/index.ts)
+  app.use("*", async (c, next) => {
+    await next();
+    const scriptSrc = c.req.path.startsWith("/s/")
+      ? "script-src 'self' 'unsafe-inline'"
+      : "script-src 'self'";
+    c.res.headers.set(
+      "Content-Security-Policy",
+      `default-src 'self'; ${scriptSrc}; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; connect-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'`,
+    );
+  });
   app.use("/api/*", authMiddleware);
   app.route("/api/items", itemsRouter);
   app.route("/api", sharesRouter);
@@ -645,6 +656,27 @@ describe("SSR Public Page", () => {
     const html = await res.text();
     expect(html).not.toContain("建立");
     expect(html).not.toContain("更新");
+  });
+
+  it("sets CSP with unsafe-inline for script-src on public pages", async () => {
+    const noteId = insertNote();
+    const createRes = await app.request(`/api/items/${noteId}/share`, {
+      method: "POST",
+      headers: jsonHeaders(),
+      body: JSON.stringify({ visibility: "unlisted" }),
+    });
+    const { share } = await createRes.json();
+
+    const res = await app.request(`/s/${share.token}`);
+    const csp = res.headers.get("Content-Security-Policy");
+    expect(csp).toContain("script-src 'self' 'unsafe-inline'");
+  });
+
+  it("does not allow unsafe-inline scripts on API routes", async () => {
+    const res = await app.request("/api/public");
+    const csp = res.headers.get("Content-Security-Policy");
+    expect(csp).toContain("script-src 'self';");
+    expect(csp).not.toContain("script-src 'self' 'unsafe-inline'");
   });
 
   it("does not load SPA JavaScript bundle", async () => {
