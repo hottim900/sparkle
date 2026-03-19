@@ -168,6 +168,12 @@ export async function reorderCategoriesApi(
   return sparkleApi<{ ok: boolean }>("/categories/reorder", "PATCH", { items });
 }
 
+// --- Settings ---
+
+export async function getSettings(): Promise<Record<string, string>> {
+  return sparkleApi<Record<string, string>>("/settings");
+}
+
 // --- Workflow operations ---
 
 export async function exportToObsidian(id: string): Promise<ExportResult> {

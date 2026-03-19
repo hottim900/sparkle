@@ -370,6 +370,90 @@ sparkle_update_note(id: "...", type: "note")
 - **已匯出筆記修改標題或內容**：狀態自動回退為 permanent`,
   },
 
+  "obsidian-vault": {
+    title: "Obsidian Vault 存取",
+    description: "Sparkle MCP + obsidian-skills 的互補架構、安裝指引與常見工作流",
+    content: `# Obsidian Vault 存取
+
+## 架構
+
+Sparkle MCP 與 obsidian-skills 互補：
+
+| 層 | 負責 | 來源 |
+|---|---|---|
+| **obsidian-skills** | Obsidian 格式知識（Markdown 語法、.base、.canvas） | kepano（外部） |
+| **Sparkle MCP** | 知識管理流程 + vault 讀寫 API | Sparkle |
+
+Sparkle MCP vault tools 做「薄」— 只提供 raw 讀寫，不內建格式驗證。格式正確性由 AI + obsidian-skills 保證。
+
+## 安裝指引
+
+### 必要條件
+
+1. **Sparkle settings 啟用 Obsidian 整合** — 設定 vault path、啟用匯出
+2. **安裝 obsidian-skills（格式知識）**：
+   - 必裝：\`obsidian-markdown\`（Obsidian Flavored Markdown 語法）
+   - 選裝：\`obsidian-bases\`（.base 資料庫視圖）、\`json-canvas\`（.canvas 圖譜）、\`defuddle\`（網頁擷取）
+   - 不裝：\`obsidian-cli\`（read/create/search 已由 Sparkle MCP vault tools 取代）
+
+### 安裝方式
+
+Claude Code: \`/install-skill kepano/obsidian-skills\`
+Claude.ai: 透過 plugin marketplace 安裝
+
+## 工具一覽
+
+| 工具 | 用途 |
+|------|------|
+| \`sparkle_read_obsidian\` | 按 sparkle_id 讀取已匯出的筆記 |
+| \`sparkle_write_obsidian\` | 按 sparkle_id 更新已匯出的筆記 |
+| \`sparkle_read_obsidian_by_path\` | 按相對路徑讀取 vault 任意 .md 檔 |
+| \`sparkle_write_obsidian_by_path\` | 按相對路徑寫入 .md 檔（自動建目錄） |
+
+## sparkle_id 定位
+
+匯出時，Sparkle 在 YAML frontmatter 寫入 \`sparkle_id\`（UUID）。vault tools 透過掃描 frontmatter 定位檔案，不依賴路徑。使用者在 Obsidian 裡搬移、改名都不影響定位。
+
+## 常見工作流
+
+### 匯出後讀回
+
+\`\`\`
+sparkle_export_to_obsidian(id)  → 匯出到 vault
+sparkle_read_obsidian(id)       → 讀回 vault 中的版本
+\`\`\`
+
+### 更新已匯出的筆記
+
+\`\`\`
+sparkle_read_obsidian(id)       → 取得目前內容
+（AI 修改內容，遵循 obsidian-skills 格式）
+sparkle_write_obsidian(id, content) → 寫回
+\`\`\`
+
+### 存取非 Sparkle 的 vault 檔案
+
+\`\`\`
+sparkle_read_obsidian_by_path("Projects/my-note.md")
+sparkle_write_obsidian_by_path("Projects/new-note.md", content)
+\`\`\`
+
+### 比對 Sparkle 與 vault 差異
+
+匯出後使用者可能在 Obsidian 裡編輯，AI 可同時讀取兩邊比對：
+\`\`\`
+sparkle_get_note(id)            → Sparkle DB 版本
+sparkle_read_obsidian(id)       → Vault 版本
+（AI 做 diff 比對）
+\`\`\`
+
+## 工具選擇原則
+
+- 讀寫 vault → 使用 Sparkle MCP vault tools（維持 sparkle_id 追蹤）
+- 格式參考 → 參照 obsidian-skills（Markdown 語法、frontmatter 慣例）
+- Sparkle DB 操作 → 使用 Sparkle MCP 既有工具（create/update/search/advance/export）`,
+  },
+
   tips: {
     title: "最佳實踐",
     description: "標籤策略、別名用法、知識組織與定期維護建議",
