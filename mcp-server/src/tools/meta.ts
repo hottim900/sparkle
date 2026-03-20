@@ -1,4 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { z } from "zod";
 import { getStats, getTags } from "../client.js";
 import { formatStats, formatTags } from "../format.js";
 import { formatToolError } from "../utils.js";
@@ -13,7 +14,7 @@ export function registerMetaTools(server: McpServer): void {
 No args required.
 
 Returns: Zettelkasten note counts (fleeting/developing/permanent), GTD todo counts (active/done/overdue), and activity metrics (exports/completions/creations this week and month).`,
-      inputSchema: {},
+      inputSchema: z.object({}).strict(),
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
@@ -43,7 +44,7 @@ Returns: Zettelkasten note counts (fleeting/developing/permanent), GTD todo coun
 No args required.
 
 Returns: Array of tag names. Use these for filtering with sparkle_list_notes or when creating/updating notes to maintain consistent tagging.`,
-      inputSchema: {},
+      inputSchema: z.object({}).strict(),
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,

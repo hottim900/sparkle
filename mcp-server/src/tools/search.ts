@@ -21,10 +21,10 @@ Args:
   - limit (number, optional): Max results 1-50, default 20
 
 Returns: List of matching items with title, status, tags, and metadata.`,
-      inputSchema: {
+      inputSchema: z.object({
         query: z.string().min(1).describe("Search keywords"),
         limit: z.number().int().min(1).max(50).default(20).describe("Max results to return"),
-      },
+      }).strict(),
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
@@ -58,7 +58,7 @@ Args:
   - limit (number, optional): Max results per source (default 20, max 50)
 
 Returns: Results grouped by source — [Sparkle] for database items, [Vault] for vault files.`,
-      inputSchema: {
+      inputSchema: z.object({
         query: z.string().min(1).describe("Search keywords"),
         limit: z
           .number()
@@ -67,7 +67,7 @@ Returns: Results grouped by source — [Sparkle] for database items, [Vault] for
           .max(50)
           .default(20)
           .describe("Max results per source (default 20)"),
-      },
+      }).strict(),
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,

@@ -16,9 +16,9 @@ Args:
 
 Returns: Full item with title, content, status, tags, aliases, linked items, and metadata.
 If prefix matches multiple items, returns error with candidate IDs.`,
-      inputSchema: {
+      inputSchema: z.object({
         id: z.string().min(4).describe("Item UUID or short ID prefix (min 4 chars)"),
-      },
+      }).strict(),
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
@@ -60,7 +60,7 @@ Args:
   - offset (number, optional): Pagination offset, default 0
 
 Returns: List of items with total count and pagination info.`,
-      inputSchema: {
+      inputSchema: z.object({
         status: z
           .enum([
             "fleeting",
@@ -84,7 +84,7 @@ Returns: List of items with total count and pagination info.`,
         order: z.enum(["asc", "desc"]).default("desc").describe("Sort order"),
         limit: z.number().int().min(1).max(100).default(50).describe("Max results"),
         offset: z.number().int().min(0).default(0).describe("Pagination offset"),
-      },
+      }).strict(),
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,

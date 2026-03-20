@@ -10,11 +10,11 @@ export function registerGuideTools(server: McpServer): void {
     {
       title: "Sparkle Guide",
       description: `Query Sparkle documentation by topic. Available topics: ${validTopics.join(", ")}.`,
-      inputSchema: {
+      inputSchema: z.object({
         topic: z
           .enum([validTopics[0], ...validTopics.slice(1)])
           .describe("Documentation topic to retrieve"),
-      },
+      }).strict(),
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,

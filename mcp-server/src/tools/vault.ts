@@ -47,9 +47,9 @@ Args:
 
 Returns: File path, frontmatter summary, and full body content.
 Requires Obsidian integration to be enabled in Sparkle settings.`,
-      inputSchema: {
+      inputSchema: z.object({
         sparkle_id: z.string().uuid().describe("Sparkle note UUID"),
-      },
+      }).strict(),
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
@@ -84,10 +84,10 @@ Args:
   - content (string): Full file content to write (including frontmatter)
 
 Returns: Confirmation with file path.`,
-      inputSchema: {
+      inputSchema: z.object({
         sparkle_id: z.string().uuid().describe("Sparkle note UUID"),
         content: z.string().min(1).describe("Full file content to write"),
-      },
+      }).strict(),
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,
@@ -119,12 +119,12 @@ Args:
   - path (string): Relative path from vault root (e.g. "Projects/my-note.md")
 
 Returns: File path, frontmatter summary (if any), and full body content.`,
-      inputSchema: {
+      inputSchema: z.object({
         path: z
           .string()
           .min(1)
           .describe("Relative path from vault root (e.g. 'folder/note.md')"),
-      },
+      }).strict(),
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
@@ -159,14 +159,14 @@ Args:
   - content (string): Full file content to write
 
 Returns: Confirmation with file path.`,
-      inputSchema: {
+      inputSchema: z.object({
         path: z
           .string()
           .min(1)
           .regex(/\.md$/, "Path must end with .md")
           .describe("Relative path from vault root, must end with .md"),
         content: z.string().min(1).describe("Full file content to write"),
-      },
+      }).strict(),
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,
@@ -203,7 +203,7 @@ Args:
 
 Returns: Matching files with line numbers, context, and frontmatter metadata.
 Requires Obsidian integration to be enabled in Sparkle settings.`,
-      inputSchema: {
+      inputSchema: z.object({
         query: z.string().min(1).describe("Search term (case-insensitive)"),
         path: z
           .string()
@@ -216,7 +216,7 @@ Requires Obsidian integration to be enabled in Sparkle settings.`,
           .max(100)
           .default(20)
           .describe("Max files to return (default 20)"),
-      },
+      }).strict(),
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
@@ -251,7 +251,7 @@ Args:
 
 Returns: File list with sparkle_id, tags, and modified date from frontmatter.
 Requires Obsidian integration to be enabled in Sparkle settings.`,
-      inputSchema: {
+      inputSchema: z.object({
         path: z
           .string()
           .optional()
@@ -267,7 +267,7 @@ Requires Obsidian integration to be enabled in Sparkle settings.`,
           .max(200)
           .default(50)
           .describe("Max files to return (default 50)"),
-      },
+      }).strict(),
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
