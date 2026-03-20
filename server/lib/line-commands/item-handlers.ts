@@ -94,6 +94,9 @@ const handleExport: CommandHandler = async ({ userId, command, db, sqlite }) => 
       inboxFolder: obsidian.obsidian_inbox_folder,
       exportMode: obsidian.obsidian_export_mode,
     });
+    if (result.skipped) {
+      return `⏭️ 已存在相同筆記，跳過匯出: ${result.path}`;
+    }
     updateItem(db, resolved.itemId, { status: "exported" });
     return `✅ 已匯出到 Obsidian: ${result.path}`;
   } catch (err) {

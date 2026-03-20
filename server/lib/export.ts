@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync, existsSync } from "node:fs";
+import { mkdirSync, writeFileSync, existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 /**
@@ -22,8 +22,8 @@ export function sanitizeFilename(title: string): string {
 }
 
 /**
- * Convert an ISO timestamp to local time without timezone suffix.
- * Input: "2026-02-25T06:00:00.000Z" → Output: "2026-02-25T14:00:00" (in local TZ)
+ * Convert an ISO timestamp to local time with timezone offset.
+ * Input: "2026-02-25T06:00:00.000Z" → Output: "2026-02-25T14:00:00+08:00" (in local TZ)
  */
 function toLocalDateTime(isoString: string): string {
   const d = new Date(isoString);
@@ -33,7 +33,12 @@ function toLocalDateTime(isoString: string): string {
   const h = String(d.getHours()).padStart(2, "0");
   const mi = String(d.getMinutes()).padStart(2, "0");
   const s = String(d.getSeconds()).padStart(2, "0");
-  return `${y}-${mo}-${da}T${h}:${mi}:${s}`;
+  const offsetMin = d.getTimezoneOffset();
+  const sign = offsetMin <= 0 ? "+" : "-";
+  const absOffset = Math.abs(offsetMin);
+  const offsetH = String(Math.floor(absOffset / 60)).padStart(2, "0");
+  const offsetM = String(absOffset % 60).padStart(2, "0");
+  return `${y}-${mo}-${da}T${h}:${mi}:${s}${sign}${offsetH}:${offsetM}`;
 }
 
 /** Escape special chars for YAML double-quoted string content. */
@@ -163,6 +168,33 @@ export interface ExportConfig {
 
 export interface ExportResult {
   path: string; // relative path within vault, e.g. "0_Inbox/Title.md"
+  skipped?: boolean;
+}
+
+/**
+ * Scan .md files in a directory for a matching sparkle_id in YAML frontmatter.
+ * Returns the filename if found, null otherwise.
+ */
+function findExistingBySparkleId(dir: string, sparkleId: string): string | null {
+  if (!existsSync(dir)) return null;
+  for (const file of readdirSync(dir)) {
+    if (!file.endsWith(".md")) continue;
+    try {
+      const content = readFileSync(join(dir, file), "utf-8");
+      // Quick check before parsing frontmatter
+      if (!content.includes(sparkleId)) continue;
+      // Check frontmatter for sparkle_id
+      const fmMatch = content.match(/^---\n([\s\S]*?)\n---/);
+      if (!fmMatch?.[1]) continue;
+      const sparkleIdMatch = fmMatch[1].match(/^sparkle_id:\s*"?([^"\n]+)"?/m);
+      if (sparkleIdMatch?.[1] === sparkleId) {
+        return file;
+      }
+    } catch {
+      continue;
+    }
+  }
+  return null;
 }
 
 /**
@@ -180,6 +212,20 @@ export function exportToObsidian(item: ExportableItem, config: ExportConfig): Ex
   // Ensure the target directory exists
   mkdirSync(targetDir, { recursive: true });
 
+  // Look for existing file with same sparkle_id
+  const existingFile = findExistingBySparkleId(targetDir, item.id);
+
+  if (existingFile) {
+    if (exportMode === "new") {
+      return { path: `${inboxFolder}/${existingFile}`, skipped: true };
+    }
+    // overwrite mode: write to the existing file regardless of name
+    const existingPath = join(targetDir, existingFile);
+    const content = generateMarkdown(item);
+    writeFileSync(existingPath, content, "utf-8");
+    return { path: `${inboxFolder}/${existingFile}` };
+  }
+
   const baseName = sanitizeFilename(item.title);
   let filename = `${baseName}.md`;
   const fullPath = join(targetDir, filename);
@@ -188,7 +234,7 @@ export function exportToObsidian(item: ExportableItem, config: ExportConfig): Ex
     // Check for collision when creating new files
     if (existsSync(fullPath)) {
       const now = new Date();
-      const ts = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}-${String(now.getHours()).padStart(2, "0")}${String(now.getMinutes()).padStart(2, "0")}`;
+      const ts = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}-${String(now.getHours()).padStart(2, "0")}${String(now.getMinutes()).padStart(2, "0")}${String(now.getSeconds()).padStart(2, "0")}`;
       filename = `${baseName} (${ts}).md`;
     }
   }
