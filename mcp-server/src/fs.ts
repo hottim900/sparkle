@@ -3,10 +3,4 @@
  * Exists solely to make these functions mockable in tests
  * (ESM native modules can't be mocked directly by Vitest).
  */
-export {
-  readFileSync,
-  readdirSync,
-  writeFileSync,
-  existsSync,
-  mkdirSync,
-} from "node:fs";
+export { readFile, readdir, writeFile, mkdir, access } from "node:fs/promises";

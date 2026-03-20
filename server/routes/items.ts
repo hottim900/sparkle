@@ -132,7 +132,7 @@ itemsRouter.post("/batch", async (c) => {
       const skippedIds: string[] = [];
       for (const item of eligible) {
         try {
-          const result = exportToObsidian(item as ExportableItem, exportConfig);
+          const result = await exportToObsidian(item as ExportableItem, exportConfig);
           if (result.skipped) {
             skippedIds.push(item.id);
           } else {
@@ -215,7 +215,7 @@ itemsRouter.post("/:id/export", (c) => {
   }
 
   try {
-    const result = exportToObsidian(item, {
+    const result = await exportToObsidian(item, {
       vaultPath: obsidian.obsidian_vault_path,
       inboxFolder: obsidian.obsidian_inbox_folder,
       exportMode: obsidian.obsidian_export_mode,
