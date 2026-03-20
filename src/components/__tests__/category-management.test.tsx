@@ -407,6 +407,97 @@ describe("CategoryManagement", () => {
     });
   });
 
+  describe("mutation pending guard", () => {
+    beforeEach(() => {
+      mockListCategories.mockResolvedValue({ categories: threeCategories });
+    });
+
+    it("disables create submit button while create is pending", async () => {
+      const user = userEvent.setup();
+      mockCreateCategory.mockReturnValue(new Promise(() => {}));
+
+      renderWithContext(<CategoryManagement />);
+
+      await waitFor(() => {
+        expect(screen.getByText("Work")).toBeInTheDocument();
+      });
+
+      await user.click(screen.getByRole("button", { name: /新增分類/ }));
+      await user.type(screen.getByPlaceholderText("分類名稱"), "New");
+      await user.click(screen.getByRole("button", { name: "新增" }));
+
+      await waitFor(() => {
+        expect(screen.getByRole("button", { name: "新增" })).toBeDisabled();
+      });
+    });
+
+    it("disables save button while update is pending", async () => {
+      const user = userEvent.setup();
+      mockUpdateCategory.mockReturnValue(new Promise(() => {}));
+
+      renderWithContext(<CategoryManagement />);
+
+      await waitFor(() => {
+        expect(screen.getByText("Work")).toBeInTheDocument();
+      });
+
+      const editButtons = screen.getAllByTitle("編輯");
+      await user.click(editButtons[0]);
+
+      const input = screen.getByPlaceholderText("分類名稱");
+      await user.clear(input);
+      await user.type(input, "Updated");
+      await user.click(screen.getByRole("button", { name: "儲存" }));
+
+      await waitFor(() => {
+        expect(screen.getByRole("button", { name: "儲存" })).toBeDisabled();
+      });
+    });
+
+    it("disables confirm delete button while delete is pending", async () => {
+      const user = userEvent.setup();
+      mockDeleteCategory.mockReturnValue(new Promise(() => {}));
+
+      renderWithContext(<CategoryManagement />);
+
+      await waitFor(() => {
+        expect(screen.getByText("Work")).toBeInTheDocument();
+      });
+
+      const deleteButtons = screen.getAllByTitle("刪除");
+      await user.click(deleteButtons[0]);
+      await user.click(screen.getByRole("button", { name: "刪除" }));
+
+      await waitFor(() => {
+        expect(screen.getByRole("button", { name: "刪除" })).toBeDisabled();
+      });
+    });
+
+    it("disables all action buttons while any mutation is pending", async () => {
+      const user = userEvent.setup();
+      mockReorderCategories.mockReturnValue(new Promise(() => {}));
+
+      renderWithContext(<CategoryManagement />);
+
+      await waitFor(() => {
+        expect(screen.getByText("Work")).toBeInTheDocument();
+      });
+
+      const rows = screen.getAllByTestId("category-row");
+      await user.click(within(rows[0]).getByTitle("下移"));
+
+      await waitFor(() => {
+        screen.getAllByTitle("編輯").forEach((btn) => {
+          expect(btn).toBeDisabled();
+        });
+      });
+      screen.getAllByTitle("刪除").forEach((btn) => {
+        expect(btn).toBeDisabled();
+      });
+      expect(screen.getByRole("button", { name: /新增分類/ })).toBeDisabled();
+    });
+  });
+
   describe("offline", () => {
     let originalOnLine: boolean;
 

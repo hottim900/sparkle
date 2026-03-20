@@ -97,6 +97,7 @@ export function CategoryManagement() {
   };
 
   const handleCreate = () => {
+    if (createMutation.isPending) return;
     const name = formName.trim();
     if (!name) return;
     createMutation.mutate({ name, color: formColor });
@@ -142,13 +143,21 @@ export function CategoryManagement() {
     },
   });
 
+  const anyMutating =
+    createMutation.isPending ||
+    updateMutation.isPending ||
+    reorderMutation.isPending ||
+    deleteMutation.isPending;
+
   const handleUpdate = () => {
+    if (updateMutation.isPending) return;
     const name = formName.trim();
     if (!name || !editingId) return;
     updateMutation.mutate({ id: editingId, name, color: formColor });
   };
 
   const handleMove = (index: number, direction: "up" | "down") => {
+    if (reorderMutation.isPending) return;
     const swapIndex = direction === "up" ? index - 1 : index + 1;
     const swapCat = categories[swapIndex];
     const currentCat = categories[index];
@@ -197,7 +206,10 @@ export function CategoryManagement() {
         <Button
           size="sm"
           onClick={mode === "create" ? handleCreate : handleUpdate}
-          disabled={!formName.trim()}
+          disabled={
+            !formName.trim() ||
+            (mode === "create" ? createMutation.isPending : updateMutation.isPending)
+          }
         >
           {mode === "create" ? "新增" : "儲存"}
         </Button>
@@ -247,7 +259,7 @@ export function CategoryManagement() {
                     className="h-7 w-7 shrink-0"
                     title="編輯"
                     aria-label="編輯"
-                    disabled={!isOnline}
+                    disabled={!isOnline || anyMutating}
                     onClick={() => startEdit(cat)}
                   >
                     <Pencil className="h-3.5 w-3.5" />
@@ -259,7 +271,7 @@ export function CategoryManagement() {
                       className="h-7 w-7 shrink-0"
                       title="上移"
                       aria-label="上移"
-                      disabled={!isOnline}
+                      disabled={!isOnline || anyMutating}
                       onClick={() => handleMove(index, "up")}
                     >
                       <ChevronUp className="h-3.5 w-3.5" />
@@ -272,7 +284,7 @@ export function CategoryManagement() {
                       className="h-7 w-7 shrink-0"
                       title="下移"
                       aria-label="下移"
-                      disabled={!isOnline}
+                      disabled={!isOnline || anyMutating}
                       onClick={() => handleMove(index, "down")}
                     >
                       <ChevronDown className="h-3.5 w-3.5" />
@@ -288,7 +300,7 @@ export function CategoryManagement() {
                       className="h-7 w-7 shrink-0 text-destructive"
                       title="刪除"
                       aria-label="刪除"
-                      disabled={!isOnline}
+                      disabled={!isOnline || anyMutating}
                       onClick={() => setDeleteDialogId(cat.id)}
                     >
                       <Trash2 className="h-3.5 w-3.5" />
@@ -304,7 +316,11 @@ export function CategoryManagement() {
                         <Button variant="outline" onClick={() => setDeleteDialogId(null)}>
                           取消
                         </Button>
-                        <Button variant="destructive" onClick={() => deleteMutation.mutate(cat.id)}>
+                        <Button
+                          variant="destructive"
+                          disabled={deleteMutation.isPending}
+                          onClick={() => deleteMutation.mutate(cat.id)}
+                        >
                           刪除
                         </Button>
                       </DialogFooter>
@@ -323,7 +339,7 @@ export function CategoryManagement() {
             variant="outline"
             size="sm"
             className="gap-1"
-            disabled={!isOnline}
+            disabled={!isOnline || anyMutating}
             onClick={startCreate}
           >
             <Plus className="h-4 w-4" />
