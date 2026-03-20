@@ -158,6 +158,55 @@ describe("sparkle_search_all", () => {
   });
 });
 
+describe("sparkle_list_notes", () => {
+  function getListHandler() {
+    const server = makeMockServer();
+    registerReadTools(server as never);
+    return server.getHandler("sparkle_list_notes");
+  }
+
+  it("passes category_id and order to listItems", async () => {
+    const handler = getListHandler();
+    listItems.mockResolvedValue({ items: [], total: 0 });
+
+    await handler({
+      type: "note",
+      sort: "created",
+      order: "asc",
+      category_id: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+      limit: 50,
+      offset: 0,
+    });
+    expect(listItems).toHaveBeenCalledWith({
+      status: undefined,
+      tag: undefined,
+      type: "note",
+      category_id: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+      sort: "created",
+      order: "asc",
+      limit: 50,
+      offset: 0,
+    });
+  });
+
+  it("includes pagination footer in output", async () => {
+    const handler = getListHandler();
+    listItems.mockResolvedValue({
+      items: [makeItem({ title: "Note 1" })],
+      total: 5,
+    });
+
+    const result = await handler({
+      type: "note",
+      sort: "created",
+      order: "desc",
+      limit: 1,
+      offset: 0,
+    });
+    expect(result.content[0].text).toContain("Offset: 0 | Limit: 1 | Has more: yes | Next offset: 1");
+  });
+});
+
 describe("sparkle_get_note", () => {
   function getReadHandler() {
     const server = makeMockServer();

@@ -1,3 +1,4 @@
+import { createRequire } from "node:module";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { registerSearchTools } from "./tools/search.js";
 import { registerReadTools } from "./tools/read.js";
@@ -10,9 +11,12 @@ import { registerVaultTools } from "./tools/vault.js";
 import { SPARKLE_INSTRUCTIONS } from "./docs/instructions.js";
 import { registerDocResources } from "./docs/resources.js";
 
+const require = createRequire(import.meta.url);
+const pkg = require("../package.json") as { version: string };
+
 export function createSparkleServer(): McpServer {
   const server = new McpServer(
-    { name: "sparkle", version: "1.0.0" },
+    { name: "sparkle", version: pkg.version },
     { instructions: SPARKLE_INSTRUCTIONS },
   );
 

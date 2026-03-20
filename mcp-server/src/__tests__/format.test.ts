@@ -128,6 +128,26 @@ describe("formatItemList", () => {
     expect(result).toContain("high");
     expect(result).toContain("(due: 2026-02-28)");
   });
+
+  it("appends pagination footer when pagination is provided", () => {
+    const items = [makeItem({ title: "A" }), makeItem({ title: "B" })];
+    const result = formatItemList(items, 10, { offset: 0, limit: 2 });
+    expect(result).toContain("Offset: 0 | Limit: 2 | Has more: yes | Next offset: 2");
+  });
+
+  it("does not include pagination footer when pagination is omitted", () => {
+    const items = [makeItem({ title: "A" })];
+    const result = formatItemList(items, 1);
+    expect(result).not.toContain("Offset:");
+    expect(result).not.toContain("Has more:");
+  });
+
+  it("shows has more as no when at the end", () => {
+    const items = [makeItem({ title: "A" }), makeItem({ title: "B" })];
+    const result = formatItemList(items, 5, { offset: 4, limit: 2 });
+    expect(result).toContain("Has more: no");
+    expect(result).toContain("Next offset: 6");
+  });
 });
 
 describe("formatStats", () => {
