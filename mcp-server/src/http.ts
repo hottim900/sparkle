@@ -9,16 +9,17 @@ import { requireBearerAuth } from "@modelcontextprotocol/sdk/server/auth/middlew
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import { createSparkleServer } from "./server.js";
 import { SparkleAuthProvider } from "./auth.js";
+import { logger } from "./logger.js";
 
 // --- Env validation ---
 
 if (!process.env.SPARKLE_AUTH_TOKEN) {
-  console.error("ERROR: SPARKLE_AUTH_TOKEN environment variable is required");
+  logger.fatal("SPARKLE_AUTH_TOKEN environment variable is required");
   process.exit(1);
 }
 
 if (!process.env.MCP_AUTH_PIN) {
-  console.error("ERROR: MCP_AUTH_PIN environment variable is required");
+  logger.fatal("MCP_AUTH_PIN environment variable is required");
   process.exit(1);
 }
 
@@ -26,7 +27,7 @@ const MCP_HTTP_PORT = parseInt(process.env.MCP_HTTP_PORT || "3001", 10);
 const MCP_ISSUER_URL = process.env.MCP_ISSUER_URL || `http://localhost:${MCP_HTTP_PORT}`;
 
 if (MCP_ISSUER_URL.startsWith("http://localhost")) {
-  console.warn("WARNING: MCP_ISSUER_URL is localhost. Set to public HTTPS URL for production.");
+  logger.warn("MCP_ISSUER_URL is localhost. Set to public HTTPS URL for production.");
 }
 
 // --- OAuth provider ---
@@ -40,8 +41,9 @@ app.set("trust proxy", 1); // Behind Cloudflare Tunnel
 app.use((req, res, next) => {
   const start = Date.now();
   res.on("finish", () => {
-    console.log(
-      `${req.method} ${req.path} ${res.statusCode} ${Date.now() - start}ms from=${req.ip}`,
+    logger.info(
+      { method: req.method, path: req.path, status: res.statusCode, responseTime: Date.now() - start, ip: req.ip },
+      "request completed",
     );
   });
   next();
@@ -71,7 +73,7 @@ app.post("/authorize/submit", (req, res) => {
   try {
     provider.completeAuthorization(pending_id, pin, res);
   } catch (error) {
-    console.error("Error in authorization submission:", error);
+    logger.error({ err: error }, "Error in authorization submission");
     if (!res.headersSent) {
       res.status(500).send("Internal server error");
     }
@@ -151,7 +153,10 @@ function sendSessionNotFound(req: express.Request, res: express.Response): void 
   const message = hasSessionId ? "Session not found. Please re-initialize." : "Missing session ID";
 
   if (hasSessionId) {
-    console.log(`Session expired for ${req.body?.method ?? "SSE/DELETE"}, returning 404 to trigger re-init`);
+    logger.info(
+      { method: req.body?.method ?? "SSE/DELETE" },
+      "Session expired, returning 404 to trigger re-init",
+    );
   }
 
   res.status(status).json({
@@ -186,7 +191,7 @@ app.post("/mcp", authMiddleware, async (req, res) => {
         sessionIdGenerator: () => randomUUID(),
         onsessioninitialized: (id) => {
           sessions.set(id, transport);
-          console.log(`MCP session created: ${id}`);
+          logger.info({ sessionId: id }, "MCP session created");
         },
       });
 
@@ -194,7 +199,7 @@ app.post("/mcp", authMiddleware, async (req, res) => {
         const sid = transport.sessionId;
         if (sid) {
           sessions.delete(sid);
-          console.log(`MCP session closed: ${sid}`);
+          logger.info({ sessionId: sid }, "MCP session closed");
         }
       };
 
@@ -206,7 +211,7 @@ app.post("/mcp", authMiddleware, async (req, res) => {
 
     sendSessionNotFound(req, res);
   } catch (error) {
-    console.error("Error handling MCP request:", error);
+    logger.error({ err: error }, "Error handling MCP request");
     if (!res.headersSent) {
       res.status(500).json({
         jsonrpc: "2.0",
@@ -237,7 +242,7 @@ app.delete("/mcp", authMiddleware, async (req, res) => {
   try {
     await transport.handleRequest(req, res);
   } catch (error) {
-    console.error("Error handling session termination:", error);
+    logger.error({ err: error }, "Error handling session termination");
     if (!res.headersSent) {
       res.status(500).send("Error processing session termination");
     }
@@ -257,21 +262,21 @@ const cleanupTimer = setInterval(() => {
     if (transport) {
       transport.close().catch(() => {});
       sessions.delete(sessionId);
-      console.log(`MCP session evicted (stale): ${sessionId}`);
+      logger.info({ sessionId }, "MCP session evicted (stale)");
     }
   }
 }, CLEANUP_INTERVAL_MS);
 
 // Graceful shutdown
 async function shutdown(): Promise<void> {
-  console.log("Shutting down MCP HTTP server...");
+  logger.info("Shutting down MCP HTTP server...");
   clearInterval(cleanupTimer);
   for (const [sessionId, transport] of sessions.entries()) {
     try {
       await transport.close();
       sessions.delete(sessionId);
     } catch (error) {
-      console.error(`Error closing transport for session ${sessionId}:`, error);
+      logger.error({ err: error, sessionId }, "Error closing transport for session");
     }
   }
   process.exit(0);
@@ -283,6 +288,6 @@ process.on("SIGTERM", shutdown);
 // --- Start ---
 
 app.listen(MCP_HTTP_PORT, () => {
-  console.log(`Sparkle MCP HTTP server listening on port ${MCP_HTTP_PORT}`);
-  console.log(`Issuer URL: ${MCP_ISSUER_URL}`);
+  logger.info({ port: MCP_HTTP_PORT }, "Sparkle MCP HTTP server listening");
+  logger.info({ issuerUrl: MCP_ISSUER_URL }, "Issuer URL configured");
 });
