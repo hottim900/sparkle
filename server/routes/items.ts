@@ -129,10 +129,15 @@ itemsRouter.post("/batch", async (c) => {
       // 2. Loop export (file I/O, unavoidable)
       const errors: { id: string; error: string }[] = [];
       const exportedIds: string[] = [];
+      const skippedIds: string[] = [];
       for (const item of eligible) {
         try {
-          exportToObsidian(item as ExportableItem, exportConfig);
-          exportedIds.push(item.id);
+          const result = exportToObsidian(item as ExportableItem, exportConfig);
+          if (result.skipped) {
+            skippedIds.push(item.id);
+          } else {
+            exportedIds.push(item.id);
+          }
         } catch (e) {
           errors.push({ id: item.id, error: (e as Error).message });
         }
@@ -145,7 +150,7 @@ itemsRouter.post("/batch", async (c) => {
           .run();
       }
       affected = exportedIds.length;
-      skipped = ids.length - affected - errors.length;
+      skipped = skippedIds.length + (ids.length - eligible.length);
       return c.json({ affected, skipped, errors });
     } else if (action === "done") {
       // → done (todo only, any status)
@@ -215,8 +220,10 @@ itemsRouter.post("/:id/export", (c) => {
       inboxFolder: obsidian.obsidian_inbox_folder,
       exportMode: obsidian.obsidian_export_mode,
     });
-    updateItem(db, item.id, { status: "exported" });
-    return c.json({ path: result.path });
+    if (!result.skipped) {
+      updateItem(db, item.id, { status: "exported" });
+    }
+    return c.json({ path: result.path, skipped: result.skipped });
   } catch (e) {
     return c.json({ error: (e as Error).message }, 500);
   }

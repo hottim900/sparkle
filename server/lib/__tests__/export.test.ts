@@ -246,9 +246,8 @@ describe("generateFrontmatter", () => {
     expect(catIndex).toBeLessThan(tagsIndex);
   });
 
-  it("uses local time without Z suffix", () => {
+  it("uses local time with timezone offset (no Z suffix)", () => {
     const fm = generateFrontmatter(makeItem());
-    // Should not have Z suffix in created/modified
     const lines = fm.split("\n");
     const createdLine = lines.find((l) => l.startsWith("created:"));
     const modifiedLine = lines.find((l) => l.startsWith("modified:"));
@@ -256,6 +255,9 @@ describe("generateFrontmatter", () => {
     expect(modifiedLine).toBeDefined();
     expect(createdLine).not.toContain("Z");
     expect(modifiedLine).not.toContain("Z");
+    // Should contain timezone offset like +08:00 or -05:00
+    expect(createdLine).toMatch(/[+-]\d{2}:\d{2}$/);
+    expect(modifiedLine).toMatch(/[+-]\d{2}:\d{2}$/);
   });
 
   // --- YAML escaping (DEF-021) ---
@@ -403,7 +405,7 @@ describe("exportToObsidian", () => {
 
     // Should have a timestamp suffix instead of the original filename
     expect(result.path).not.toBe("0_Inbox/Collision.md");
-    expect(result.path).toMatch(/^0_Inbox\/Collision \(\d{8}-\d{4}\)\.md$/);
+    expect(result.path).toMatch(/^0_Inbox\/Collision \(\d{8}-\d{6}\)\.md$/);
   });
 
   it("overwrites existing file in overwrite mode", () => {
@@ -433,5 +435,69 @@ describe("exportToObsidian", () => {
     config.vaultPath = "";
     const item = makeItem({ title: "No Vault" });
     expect(() => exportToObsidian(item, config)).toThrow("Obsidian vault path is not configured");
+  });
+
+  // --- Idempotent export guard (FG-005) ---
+
+  it("new mode + sparkle_id match → returns skipped and does not modify existing file", () => {
+    config.exportMode = "new";
+    const item = makeItem({ id: "unique-sparkle-id-1", title: "Original Title" });
+
+    // Pre-create a file with matching sparkle_id but different filename
+    const inboxDir = join(tempDir, "0_Inbox");
+    mkdirSync(inboxDir, { recursive: true });
+    const existingContent =
+      '---\nsparkle_id: "unique-sparkle-id-1"\n---\n\n# Old Title\n\nOld body\n';
+    writeFileSync(join(inboxDir, "Old Title.md"), existingContent, "utf-8");
+
+    const result = exportToObsidian(item, config);
+
+    expect(result.skipped).toBe(true);
+    expect(result.path).toBe("0_Inbox/Old Title.md");
+    // File content should not be modified
+    const content = readFileSync(join(inboxDir, "Old Title.md"), "utf-8");
+    expect(content).toBe(existingContent);
+  });
+
+  it("overwrite mode + sparkle_id match → overwrites the existing file even if filename differs", () => {
+    config.exportMode = "overwrite";
+    const item = makeItem({ id: "unique-sparkle-id-2", title: "New Title" });
+
+    // Pre-create a file with matching sparkle_id but different filename
+    const inboxDir = join(tempDir, "0_Inbox");
+    mkdirSync(inboxDir, { recursive: true });
+    const existingContent =
+      '---\nsparkle_id: "unique-sparkle-id-2"\n---\n\n# Old Name\n\nOld body\n';
+    writeFileSync(join(inboxDir, "Old Name.md"), existingContent, "utf-8");
+
+    const result = exportToObsidian(item, config);
+
+    expect(result.skipped).toBeUndefined();
+    expect(result.path).toBe("0_Inbox/Old Name.md");
+    // File should be overwritten with new content
+    const content = readFileSync(join(inboxDir, "Old Name.md"), "utf-8");
+    expect(content).toContain("# New Title");
+    expect(content).toContain('sparkle_id: "unique-sparkle-id-2"');
+    expect(content).not.toContain("Old body");
+  });
+
+  it("different sparkle_id but same title → creates collision-suffixed file", () => {
+    config.exportMode = "new";
+    const item = makeItem({ id: "different-sparkle-id", title: "Same Title" });
+
+    // Pre-create a file with same title but different sparkle_id
+    const inboxDir = join(tempDir, "0_Inbox");
+    mkdirSync(inboxDir, { recursive: true });
+    const existingContent =
+      '---\nsparkle_id: "other-sparkle-id"\n---\n\n# Same Title\n\nExisting body\n';
+    writeFileSync(join(inboxDir, "Same Title.md"), existingContent, "utf-8");
+
+    const result = exportToObsidian(item, config);
+
+    // Should NOT be skipped (different sparkle_id)
+    expect(result.skipped).toBeUndefined();
+    // Should have collision suffix
+    expect(result.path).not.toBe("0_Inbox/Same Title.md");
+    expect(result.path).toMatch(/^0_Inbox\/Same Title \(\d{8}-\d{6}\)\.md$/);
   });
 });
