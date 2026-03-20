@@ -1,8 +1,20 @@
 import { Hono } from "hono";
 import { sqlite } from "../db/index.js";
-import { getShareByToken, listPublicShares } from "../lib/shares.js";
+import { getShareByToken, listPublicShares, type ShareWithItem } from "../lib/shares.js";
 import { renderPublicPage, renderNotFoundPage } from "../lib/render-public-page.js";
 import { logger } from "../lib/logger.js";
+
+function parseShareTags(share: ShareWithItem): string[] {
+  try {
+    return JSON.parse(share.item_tags) as string[];
+  } catch {
+    logger.warn(
+      { token: share.token, raw: share.item_tags },
+      "Failed to parse tags in shared item",
+    );
+    return [];
+  }
+}
 
 const publicRouter = new Hono();
 
@@ -15,15 +27,7 @@ publicRouter.get("/api/public/:token", (c) => {
     return c.json({ error: "Share not found" }, 404);
   }
 
-  let tags: string[] = [];
-  try {
-    tags = JSON.parse(share.item_tags);
-  } catch {
-    logger.warn(
-      { token: share.token, raw: share.item_tags },
-      "Failed to parse tags in shared item",
-    );
-  }
+  const tags = parseShareTags(share);
 
   return c.json({
     token: share.token,
@@ -57,15 +61,7 @@ publicRouter.get("/s/:token", (c) => {
     return c.html(renderNotFoundPage(), 404);
   }
 
-  let tags: string[] = [];
-  try {
-    tags = JSON.parse(share.item_tags);
-  } catch {
-    logger.warn(
-      { token: share.token, raw: share.item_tags },
-      "Failed to parse tags in shared item",
-    );
-  }
+  const tags = parseShareTags(share);
 
   const html = renderPublicPage({
     title: share.item_title,

@@ -54,7 +54,9 @@ export function createShareToken(
     .run(id, itemId, token, visibility, now);
 
   // SAFETY: better-sqlite3 .get() returns unknown; columns match ShareTokenRow by migration schema
-  return sqlite.prepare("SELECT * FROM share_tokens WHERE id = ?").get(id) as ShareTokenRow;
+  return sqlite
+    .prepare("SELECT id, item_id, token, visibility, created FROM share_tokens WHERE id = ?")
+    .get(id) as ShareTokenRow;
 }
 
 export function getShareByToken(sqlite: Database.Database, token: string): ShareWithItem | null {
@@ -123,7 +125,9 @@ export function revokeShare(sqlite: Database.Database, shareId: string): boolean
 export function getSharesByItemId(sqlite: Database.Database, itemId: string): ShareTokenRow[] {
   return (
     sqlite
-      .prepare("SELECT * FROM share_tokens WHERE item_id = ? ORDER BY created DESC")
+      .prepare(
+        "SELECT id, item_id, token, visibility, created FROM share_tokens WHERE item_id = ? ORDER BY created DESC",
+      )
       // SAFETY: better-sqlite3 .all() returns unknown[]; columns match ShareTokenRow by migration schema
       .all(itemId) as ShareTokenRow[]
   );
