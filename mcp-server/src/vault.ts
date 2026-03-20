@@ -23,14 +23,10 @@ export async function getVaultPath(): Promise<string> {
   }
   const settings = await getSettings();
   if (settings.obsidian_enabled !== "true") {
-    throw new Error(
-      "Obsidian integration is not enabled. Configure it in Sparkle settings.",
-    );
+    throw new Error("Obsidian integration is not enabled. Configure it in Sparkle settings.");
   }
   if (!settings.obsidian_vault_path) {
-    throw new Error(
-      "Obsidian vault path is not configured. Set it in Sparkle settings.",
-    );
+    throw new Error("Obsidian vault path is not configured. Set it in Sparkle settings.");
   }
   cachedVaultPath = settings.obsidian_vault_path;
   cacheTimestamp = now;
@@ -233,10 +229,16 @@ export async function writeVaultFileBySparkleId(
   if (!result) {
     throw new Error(`No vault file found with sparkle_id: ${sparkleId}`);
   }
+  // Validate sparkle_id preserved in frontmatter before writing
+  const fm = parseFrontmatter(content);
+  if (!fm.sparkle_id) {
+    throw new Error(
+      `Content is missing sparkle_id in frontmatter. Include "sparkle_id: ${sparkleId}" in YAML frontmatter to preserve tracking.`,
+    );
+  }
   await writeFile(result.path, content, "utf-8");
   // Update index if sparkle_id changed
-  const fm = parseFrontmatter(content);
-  if (fm.sparkle_id && fm.sparkle_id !== sparkleId) {
+  if (fm.sparkle_id !== sparkleId) {
     sparkleIdIndex.delete(sparkleId);
     sparkleIdIndex.set(fm.sparkle_id, result.path);
   }
@@ -244,10 +246,7 @@ export async function writeVaultFileBySparkleId(
   return relative(vaultRoot, result.path);
 }
 
-export async function writeVaultFileByPath(
-  relativePath: string,
-  content: string,
-): Promise<string> {
+export async function writeVaultFileByPath(relativePath: string, content: string): Promise<string> {
   const vaultRoot = await getVaultPath();
   const absPath = resolveVaultPath(vaultRoot, relativePath);
   // Create parent directories if needed
@@ -271,9 +270,7 @@ export async function searchVault(
   options?: { path?: string; limit?: number },
 ): Promise<VaultSearchResult[]> {
   const vaultRoot = await getVaultPath();
-  const searchRoot = options?.path
-    ? resolveVaultPath(vaultRoot, options.path)
-    : vaultRoot;
+  const searchRoot = options?.path ? resolveVaultPath(vaultRoot, options.path) : vaultRoot;
   const limit = options?.limit ?? 20;
   const queryLower = query.toLowerCase();
 
@@ -317,13 +314,13 @@ export async function searchVault(
   return results;
 }
 
-export async function listVault(
-  options?: { path?: string; recursive?: boolean; limit?: number },
-): Promise<VaultListResult> {
+export async function listVault(options?: {
+  path?: string;
+  recursive?: boolean;
+  limit?: number;
+}): Promise<VaultListResult> {
   const vaultRoot = await getVaultPath();
-  const listRoot = options?.path
-    ? resolveVaultPath(vaultRoot, options.path)
-    : vaultRoot;
+  const listRoot = options?.path ? resolveVaultPath(vaultRoot, options.path) : vaultRoot;
   const recursive = options?.recursive ?? true;
   const limit = options?.limit ?? 50;
 

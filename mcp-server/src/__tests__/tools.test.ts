@@ -1,5 +1,4 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { z } from "zod";
 import { makeItem, makeMockServer } from "./helpers.js";
 
 // Mock client module
@@ -204,7 +203,9 @@ describe("sparkle_list_notes", () => {
       limit: 1,
       offset: 0,
     });
-    expect(result.content[0].text).toContain("Offset: 0 | Limit: 1 | Has more: yes | Next offset: 1");
+    expect(result.content[0].text).toContain(
+      "Offset: 0 | Limit: 1 | Has more: yes | Next offset: 1",
+    );
   });
 });
 
@@ -459,7 +460,9 @@ describe("sparkle_list_tags", () => {
 
 // --- Vault tools ---
 
-const makeVaultFile = (overrides: Partial<import("../types.js").VaultFile> = {}): import("../types.js").VaultFile => ({
+const makeVaultFile = (
+  overrides: Partial<import("../types.js").VaultFile> = {},
+): import("../types.js").VaultFile => ({
   path: "0_Inbox/Test Note.md",
   content: '---\nsparkle_id: "abc-123"\ntags:\n  - test\n---\n\n# Test Note\n\nBody here.',
   frontmatter: { sparkle_id: "abc-123", tags: ["test"] },
@@ -487,7 +490,9 @@ describe("sparkle_read_obsidian", () => {
 
   it("returns error when file not found", async () => {
     const handler = getHandler();
-    readVaultFileBySparkleId.mockRejectedValue(new Error("No vault file found with sparkle_id: xyz"));
+    readVaultFileBySparkleId.mockRejectedValue(
+      new Error("No vault file found with sparkle_id: xyz"),
+    );
 
     const result = await handler({ sparkle_id: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee" });
     expect(result.isError).toBe(true);
@@ -677,22 +682,39 @@ describe("error handling", () => {
   });
 });
 
+// --- Source file regression guards ---
+
+const { readdirSync, readFileSync } = require("fs");
+const { join } = require("path");
+const toolsDir = join(__dirname, "../tools");
+
+function readToolSource(filename: string): string {
+  return readFileSync(join(toolsDir, filename), "utf-8");
+}
+
 describe("strict schema validation", () => {
-  it("z.object().strict() rejects unknown parameters", () => {
-    const schema = z
-      .object({
-        id: z.string(),
-        content: z.string().optional(),
-        old_content: z.string().optional(),
-      })
-      .strict();
+  it("all tool inputSchemas use z.object().strict(), not raw shapes", () => {
+    const toolFiles = readdirSync(toolsDir).filter((f: string) => f.endsWith(".ts"));
 
-    // Correct parameters should pass
-    const valid = schema.safeParse({ id: "test", content: "hi", old_content: "old" });
-    expect(valid.success).toBe(true);
+    for (const file of toolFiles) {
+      const content = readFileSync(join(toolsDir, file), "utf-8");
+      const rawShapes = content.match(/inputSchema:\s*\{/g);
+      expect(
+        rawShapes,
+        `${file} has raw inputSchema — must use z.object({...}).strict()`,
+      ).toBeNull();
+    }
+  });
+});
 
-    // Wrong parameter name (old_string instead of old_content) should be rejected
-    const invalid = schema.safeParse({ id: "test", content: "hi", old_string: "old" });
-    expect(invalid.success).toBe(false);
+describe("tool description completeness", () => {
+  it("sparkle_update_note description warns about type conversion field clearing", () => {
+    const content = readToolSource("write.ts");
+    expect(content).toMatch(/[Tt]ype change.*scratch.*clear/);
+  });
+
+  it("sparkle_update_note description warns about exported note auto-reversion", () => {
+    const content = readToolSource("write.ts");
+    expect(content).toMatch(/exported.*permanent/i);
   });
 });

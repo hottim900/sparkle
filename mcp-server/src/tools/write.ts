@@ -25,19 +25,39 @@ Args:
   - category_id (string, optional): Category UUID to assign (null to clear)
 
 Returns: The created item with all fields including generated ID and timestamps.`,
-      inputSchema: z.object({
-        title: z.string().min(1).max(500).describe("Note title"),
-        content: z.string().max(50000).optional().describe("Note content (markdown)"),
-        tags: z.array(z.string().max(50)).max(20).optional().describe("Tags"),
-        status: z.enum(["fleeting", "developing", "permanent", "active", "draft"]).optional().describe("Initial status (default: fleeting)"),
-        type: z.enum(["note", "todo", "scratch"]).optional().describe("Item type (default: note)"),
-        priority: z.enum(["high", "medium", "low"]).optional().describe("Priority level (todo only)"),
-        due: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe("Due date YYYY-MM-DD (todo only)"),
-        source: z.string().max(2000).optional().describe("Reference URL"),
-        aliases: z.array(z.string().max(200)).max(10).optional().describe("Alternative names"),
-        linked_note_id: z.string().uuid().optional().describe("UUID of linked note (todo only)"),
-        category_id: z.string().uuid().nullable().optional().describe("Category UUID to assign (null to clear)"),
-      }).strict(),
+      inputSchema: z
+        .object({
+          title: z.string().min(1).max(500).describe("Note title"),
+          content: z.string().max(50000).optional().describe("Note content (markdown)"),
+          tags: z.array(z.string().max(50)).max(20).optional().describe("Tags"),
+          status: z
+            .enum(["fleeting", "developing", "permanent", "active", "draft"])
+            .optional()
+            .describe("Initial status (default: fleeting)"),
+          type: z
+            .enum(["note", "todo", "scratch"])
+            .optional()
+            .describe("Item type (default: note)"),
+          priority: z
+            .enum(["high", "medium", "low"])
+            .optional()
+            .describe("Priority level (todo only)"),
+          due: z
+            .string()
+            .regex(/^\d{4}-\d{2}-\d{2}$/)
+            .optional()
+            .describe("Due date YYYY-MM-DD (todo only)"),
+          source: z.string().max(2000).optional().describe("Reference URL"),
+          aliases: z.array(z.string().max(200)).max(10).optional().describe("Alternative names"),
+          linked_note_id: z.string().uuid().optional().describe("UUID of linked note (todo only)"),
+          category_id: z
+            .string()
+            .uuid()
+            .nullable()
+            .optional()
+            .describe("Category UUID to assign (null to clear)"),
+        })
+        .strict(),
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,
@@ -45,7 +65,19 @@ Returns: The created item with all fields including generated ID and timestamps.
         openWorldHint: false,
       },
     },
-    async ({ title, content, tags, status, type, priority, due, source, aliases, linked_note_id, category_id }) => {
+    async ({
+      title,
+      content,
+      tags,
+      status,
+      type,
+      priority,
+      due,
+      source,
+      aliases,
+      linked_note_id,
+      category_id,
+    }) => {
       try {
         const item = await createItem({
           title,
@@ -95,22 +127,77 @@ Returns: The updated item with all fields.
 
 Content editing modes:
   - Full replace: provide only content — replaces the entire content field.
-  - Partial edit: provide both old_content and content — finds old_content in the note and replaces it with content. Always use sparkle_get_note first to get the exact text for old_content. Set content to empty string to delete the matched section.`,
-      inputSchema: z.object({
-        id: z.string().uuid().describe("Item UUID"),
-        title: z.string().min(1).max(500).optional().describe("New title"),
-        content: z.string().max(50000).optional().describe("New content (replaces existing)"),
-        old_content: z.string().min(1).max(50000).optional().describe("Find-and-replace: text to find in existing content (use with content)"),
-        tags: z.array(z.string().max(50)).max(20).optional().describe("New tags (replaces all)"),
-        status: z.enum(["fleeting", "developing", "permanent", "exported", "active", "done", "draft", "archived"]).optional().describe("New status"),
-        type: z.enum(["note", "todo", "scratch"]).optional().describe("Change item type (status auto-maps)"),
-        priority: z.enum(["high", "medium", "low"]).nullable().optional().describe("Priority (todo only, null to clear)"),
-        due: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional().describe("Due date YYYY-MM-DD (todo only, null to clear)"),
-        aliases: z.array(z.string().max(200)).max(10).optional().describe("New aliases (replaces all)"),
-        source: z.string().max(2000).nullable().optional().describe("Reference URL (null to clear)"),
-        linked_note_id: z.string().uuid().nullable().optional().describe("Linked note UUID (todo only, null to clear)"),
-        category_id: z.string().uuid().nullable().optional().describe("Category UUID (null to clear)"),
-      }).strict(),
+  - Partial edit: provide both old_content and content — finds old_content in the note and replaces it with content. Always use sparkle_get_note first to get the exact text for old_content. Set content to empty string to delete the matched section.
+
+Side effects:
+  - Type change to note: clears linked_note_id and due (not supported on notes).
+  - Type change to scratch: clears tags, priority, due, aliases, linked_note_id (scratch only keeps title + content). category_id is preserved.
+  - Editing an exported note's title or content automatically reverts status to "permanent".`,
+      inputSchema: z
+        .object({
+          id: z.string().uuid().describe("Item UUID"),
+          title: z.string().min(1).max(500).optional().describe("New title"),
+          content: z.string().max(50000).optional().describe("New content (replaces existing)"),
+          old_content: z
+            .string()
+            .min(1)
+            .max(50000)
+            .optional()
+            .describe("Find-and-replace: text to find in existing content (use with content)"),
+          tags: z.array(z.string().max(50)).max(20).optional().describe("New tags (replaces all)"),
+          status: z
+            .enum([
+              "fleeting",
+              "developing",
+              "permanent",
+              "exported",
+              "active",
+              "done",
+              "draft",
+              "archived",
+            ])
+            .optional()
+            .describe("New status"),
+          type: z
+            .enum(["note", "todo", "scratch"])
+            .optional()
+            .describe("Change item type (status auto-maps)"),
+          priority: z
+            .enum(["high", "medium", "low"])
+            .nullable()
+            .optional()
+            .describe("Priority (todo only, null to clear)"),
+          due: z
+            .string()
+            .regex(/^\d{4}-\d{2}-\d{2}$/)
+            .nullable()
+            .optional()
+            .describe("Due date YYYY-MM-DD (todo only, null to clear)"),
+          aliases: z
+            .array(z.string().max(200))
+            .max(10)
+            .optional()
+            .describe("New aliases (replaces all)"),
+          source: z
+            .string()
+            .max(2000)
+            .nullable()
+            .optional()
+            .describe("Reference URL (null to clear)"),
+          linked_note_id: z
+            .string()
+            .uuid()
+            .nullable()
+            .optional()
+            .describe("Linked note UUID (todo only, null to clear)"),
+          category_id: z
+            .string()
+            .uuid()
+            .nullable()
+            .optional()
+            .describe("Category UUID (null to clear)"),
+        })
+        .strict(),
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,
@@ -118,12 +205,28 @@ Content editing modes:
         openWorldHint: false,
       },
     },
-    async ({ id, title, content, old_content, tags, status, type, priority, due, aliases, source, linked_note_id, category_id }) => {
+    async ({
+      id,
+      title,
+      content,
+      old_content,
+      tags,
+      status,
+      type,
+      priority,
+      due,
+      aliases,
+      source,
+      linked_note_id,
+      category_id,
+    }) => {
       try {
         // Find-and-replace mode: old_content + content
         if (old_content !== undefined && content === undefined) {
           return {
-            content: [{ type: "text", text: "Error: content is required when old_content is provided." }],
+            content: [
+              { type: "text", text: "Error: content is required when old_content is provided." },
+            ],
             isError: true,
           };
         }
@@ -135,13 +238,23 @@ Content editing modes:
           if (matchCount === 0) {
             const preview = current.content.slice(0, 200);
             return {
-              content: [{ type: "text", text: `NO_MATCH: The specified old_content was not found in the note.\nCurrent content (first 200 chars): ${preview}` }],
+              content: [
+                {
+                  type: "text",
+                  text: `NO_MATCH: The specified old_content was not found in the note.\nCurrent content (first 200 chars): ${preview}`,
+                },
+              ],
               isError: true,
             };
           }
           if (matchCount > 1) {
             return {
-              content: [{ type: "text", text: `AMBIGUOUS_MATCH: old_content was found ${matchCount} times. Provide more surrounding context to uniquely identify the section to replace.` }],
+              content: [
+                {
+                  type: "text",
+                  text: `AMBIGUOUS_MATCH: old_content was found ${matchCount} times. Provide more surrounding context to uniquely identify the section to replace.`,
+                },
+              ],
               isError: true,
             };
           }
