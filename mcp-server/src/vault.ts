@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync, writeFileSync, existsSync, mkdirSync } from "./fs.js";
+import { readFile, readdir, writeFile, mkdir, access } from "./fs.js";
 import { resolve, join, relative, dirname } from "node:path";
 import { getSettings } from "./client.js";
 import type {
@@ -115,23 +115,29 @@ export function extractBody(content: string): string {
 const sparkleIdIndex = new Map<string, string>(); // sparkle_id -> absolute path
 let indexBuilt = false;
 
-function walkSync(dir: string, callback: (filePath: string) => void): void {
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+async function walk(
+  dir: string,
+  callback: (filePath: string) => Promise<void>,
+  shouldStop?: () => boolean,
+): Promise<void> {
+  if (shouldStop?.()) return;
+  for (const entry of await readdir(dir, { withFileTypes: true })) {
+    if (shouldStop?.()) return;
     if (entry.name.startsWith(".")) continue;
     const fullPath = join(dir, entry.name);
     if (entry.isDirectory()) {
-      walkSync(fullPath, callback);
+      await walk(fullPath, callback, shouldStop);
     } else if (entry.isFile() && entry.name.endsWith(".md")) {
-      callback(fullPath);
+      await callback(fullPath);
     }
   }
 }
 
-function buildIndex(vaultRoot: string): void {
+async function buildIndex(vaultRoot: string): Promise<void> {
   sparkleIdIndex.clear();
-  walkSync(vaultRoot, (filePath) => {
+  await walk(vaultRoot, async (filePath) => {
     try {
-      const content = readFileSync(filePath, "utf-8");
+      const content = await readFile(filePath, "utf-8");
       const fm = parseFrontmatter(content);
       if (fm.sparkle_id && typeof fm.sparkle_id === "string") {
         sparkleIdIndex.set(fm.sparkle_id, filePath);
@@ -143,6 +149,16 @@ function buildIndex(vaultRoot: string): void {
   indexBuilt = true;
 }
 
+/** Helper: check if a file exists using fs/promises access */
+async function fileExists(path: string): Promise<boolean> {
+  try {
+    await access(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** Find a vault file by sparkle_id. Returns path and cached content if available. */
 export async function findBySparkleId(
   sparkleId: string,
@@ -152,19 +168,19 @@ export async function findBySparkleId(
   // Check cache first
   if (indexBuilt) {
     const cached = sparkleIdIndex.get(sparkleId);
-    if (cached && existsSync(cached)) {
+    if (cached && (await fileExists(cached))) {
       // Verify the file still has this sparkle_id
-      const content = readFileSync(cached, "utf-8");
+      const content = await readFile(cached, "utf-8");
       const fm = parseFrontmatter(content);
       if (fm.sparkle_id === sparkleId) return { path: cached, content };
     }
   }
 
   // Cache miss or stale: rebuild
-  buildIndex(vaultRoot);
+  await buildIndex(vaultRoot);
   const found = sparkleIdIndex.get(sparkleId);
   if (!found) return null;
-  const content = readFileSync(found, "utf-8");
+  const content = await readFile(found, "utf-8");
   return { path: found, content };
 }
 
@@ -194,7 +210,7 @@ export async function readVaultFileByPath(relativePath: string): Promise<VaultFi
   const vaultRoot = await getVaultPath();
   const absPath = resolveVaultPath(vaultRoot, relativePath);
   try {
-    const content = readFileSync(absPath, "utf-8");
+    const content = await readFile(absPath, "utf-8");
     return {
       path: relativePath,
       content,
@@ -217,7 +233,7 @@ export async function writeVaultFileBySparkleId(
   if (!result) {
     throw new Error(`No vault file found with sparkle_id: ${sparkleId}`);
   }
-  writeFileSync(result.path, content, "utf-8");
+  await writeFile(result.path, content, "utf-8");
   // Update index if sparkle_id changed
   const fm = parseFrontmatter(content);
   if (fm.sparkle_id && fm.sparkle_id !== sparkleId) {
@@ -236,10 +252,10 @@ export async function writeVaultFileByPath(
   const absPath = resolveVaultPath(vaultRoot, relativePath);
   // Create parent directories if needed
   const dir = dirname(absPath);
-  if (dir && !existsSync(dir)) {
-    mkdirSync(dir, { recursive: true });
+  if (dir && !(await fileExists(dir))) {
+    await mkdir(dir, { recursive: true });
   }
-  writeFileSync(absPath, content, "utf-8");
+  await writeFile(absPath, content, "utf-8");
   // Update sparkle_id index
   const fm = parseFrontmatter(content);
   if (fm.sparkle_id && typeof fm.sparkle_id === "string") {
@@ -263,36 +279,40 @@ export async function searchVault(
 
   const results: VaultSearchResult[] = [];
 
-  walkSync(searchRoot, (filePath) => {
-    if (results.length >= limit) return;
+  await walk(
+    searchRoot,
+    async (filePath) => {
+      if (results.length >= limit) return;
 
-    try {
-      const content = readFileSync(filePath, "utf-8");
-      const lines = content.split("\n");
-      const matches: VaultSearchMatch[] = [];
+      try {
+        const content = await readFile(filePath, "utf-8");
+        const lines = content.split("\n");
+        const matches: VaultSearchMatch[] = [];
 
-      for (let i = 0; i < lines.length; i++) {
-        if (lines[i].toLowerCase().includes(queryLower)) {
-          matches.push({
-            line: i + 1,
-            text: lines[i],
-            context_before: lines.slice(Math.max(0, i - 2), i),
-            context_after: lines.slice(i + 1, i + 3),
+        for (let i = 0; i < lines.length; i++) {
+          if (lines[i].toLowerCase().includes(queryLower)) {
+            matches.push({
+              line: i + 1,
+              text: lines[i],
+              context_before: lines.slice(Math.max(0, i - 2), i),
+              context_after: lines.slice(i + 1, i + 3),
+            });
+          }
+        }
+
+        if (matches.length > 0) {
+          results.push({
+            path: relative(vaultRoot, filePath),
+            frontmatter: parseFrontmatter(content),
+            matches,
           });
         }
+      } catch {
+        /* skip unreadable files */
       }
-
-      if (matches.length > 0) {
-        results.push({
-          path: relative(vaultRoot, filePath),
-          frontmatter: parseFrontmatter(content),
-          matches,
-        });
-      }
-    } catch {
-      /* skip unreadable files */
-    }
-  });
+    },
+    () => results.length >= limit,
+  );
 
   return results;
 }
@@ -311,20 +331,24 @@ export async function listVault(
   const directories: string[] = [];
 
   if (recursive) {
-    walkSync(listRoot, (filePath) => {
-      if (files.length >= limit) return;
-      try {
-        const content = readFileSync(filePath, "utf-8");
-        files.push({
-          path: relative(vaultRoot, filePath),
-          frontmatter: parseFrontmatter(content),
-        });
-      } catch {
-        /* skip unreadable files */
-      }
-    });
+    await walk(
+      listRoot,
+      async (filePath) => {
+        if (files.length >= limit) return;
+        try {
+          const content = await readFile(filePath, "utf-8");
+          files.push({
+            path: relative(vaultRoot, filePath),
+            frontmatter: parseFrontmatter(content),
+          });
+        } catch {
+          /* skip unreadable files */
+        }
+      },
+      () => files.length >= limit,
+    );
   } else {
-    for (const entry of readdirSync(listRoot, { withFileTypes: true })) {
+    for (const entry of await readdir(listRoot, { withFileTypes: true })) {
       if (entry.name.startsWith(".")) continue;
       const fullPath = join(listRoot, entry.name);
       if (entry.isDirectory()) {
@@ -332,7 +356,7 @@ export async function listVault(
       } else if (entry.isFile() && entry.name.endsWith(".md")) {
         if (files.length >= limit) continue;
         try {
-          const content = readFileSync(fullPath, "utf-8");
+          const content = await readFile(fullPath, "utf-8");
           files.push({
             path: relative(vaultRoot, fullPath),
             frontmatter: parseFrontmatter(content),

@@ -89,7 +89,7 @@ const handleExport: CommandHandler = async ({ userId, command, db, sqlite }) => 
     return "❌ Obsidian 匯出未設定，請至設定頁面啟用";
   }
   try {
-    const result = exportToObsidian(resolved.item, {
+    const result = await exportToObsidian(resolved.item, {
       vaultPath: obsidian.obsidian_vault_path,
       inboxFolder: obsidian.obsidian_inbox_folder,
       exportMode: obsidian.obsidian_export_mode,

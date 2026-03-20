@@ -1,4 +1,5 @@
-import { mkdirSync, writeFileSync, existsSync, readdirSync, readFileSync } from "node:fs";
+import { mkdir, writeFile, readdir, readFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 
 /**
@@ -175,12 +176,12 @@ export interface ExportResult {
  * Scan .md files in a directory for a matching sparkle_id in YAML frontmatter.
  * Returns the filename if found, null otherwise.
  */
-function findExistingBySparkleId(dir: string, sparkleId: string): string | null {
+async function findExistingBySparkleId(dir: string, sparkleId: string): Promise<string | null> {
   if (!existsSync(dir)) return null;
-  for (const file of readdirSync(dir)) {
+  for (const file of await readdir(dir)) {
     if (!file.endsWith(".md")) continue;
     try {
-      const content = readFileSync(join(dir, file), "utf-8");
+      const content = await readFile(join(dir, file), "utf-8");
       // Quick check before parsing frontmatter
       if (!content.includes(sparkleId)) continue;
       // Check frontmatter for sparkle_id
@@ -201,7 +202,10 @@ function findExistingBySparkleId(dir: string, sparkleId: string): string | null 
  * Write a .md file to the Obsidian vault.
  * Returns the relative path of the written file.
  */
-export function exportToObsidian(item: ExportableItem, config: ExportConfig): ExportResult {
+export async function exportToObsidian(
+  item: ExportableItem,
+  config: ExportConfig,
+): Promise<ExportResult> {
   const { vaultPath, inboxFolder, exportMode } = config;
   if (!vaultPath) {
     throw new Error("Obsidian vault path is not configured");
@@ -210,10 +214,10 @@ export function exportToObsidian(item: ExportableItem, config: ExportConfig): Ex
   const targetDir = join(vaultPath, inboxFolder);
 
   // Ensure the target directory exists
-  mkdirSync(targetDir, { recursive: true });
+  await mkdir(targetDir, { recursive: true });
 
   // Look for existing file with same sparkle_id
-  const existingFile = findExistingBySparkleId(targetDir, item.id);
+  const existingFile = await findExistingBySparkleId(targetDir, item.id);
 
   if (existingFile) {
     if (exportMode === "new") {
@@ -222,7 +226,7 @@ export function exportToObsidian(item: ExportableItem, config: ExportConfig): Ex
     // overwrite mode: write to the existing file regardless of name
     const existingPath = join(targetDir, existingFile);
     const content = generateMarkdown(item);
-    writeFileSync(existingPath, content, "utf-8");
+    await writeFile(existingPath, content, "utf-8");
     return { path: `${inboxFolder}/${existingFile}` };
   }
 
@@ -242,7 +246,7 @@ export function exportToObsidian(item: ExportableItem, config: ExportConfig): Ex
 
   const finalPath = join(targetDir, filename);
   const content = generateMarkdown(item);
-  writeFileSync(finalPath, content, "utf-8");
+  await writeFile(finalPath, content, "utf-8");
 
   return { path: `${inboxFolder}/${filename}` };
 }

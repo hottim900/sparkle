@@ -371,9 +371,9 @@ describe("exportToObsidian", () => {
     rmSync(tempDir, { recursive: true, force: true });
   });
 
-  it("writes file to vault inbox folder", () => {
+  it("writes file to vault inbox folder", async () => {
     const item = makeItem({ title: "Test Export" });
-    const result = exportToObsidian(item, config);
+    const result = await exportToObsidian(item, config);
 
     expect(result.path).toBe("0_Inbox/Test Export.md");
     const filePath = join(tempDir, "0_Inbox", "Test Export.md");
@@ -382,17 +382,17 @@ describe("exportToObsidian", () => {
     expect(content).toContain('sparkle_id: "test-id-123"');
   });
 
-  it("creates directory if it does not exist", () => {
+  it("creates directory if it does not exist", async () => {
     config.inboxFolder = "nested/deep/folder";
     const item = makeItem({ title: "Nested" });
-    const result = exportToObsidian(item, config);
+    const result = await exportToObsidian(item, config);
 
     expect(result.path).toBe("nested/deep/folder/Nested.md");
     const content = readFileSync(join(tempDir, "nested/deep/folder", "Nested.md"), "utf-8");
     expect(content).toContain("# Nested");
   });
 
-  it("handles collision in new mode by appending timestamp", () => {
+  it("handles collision in new mode by appending timestamp", async () => {
     config.exportMode = "new";
     const item = makeItem({ title: "Collision" });
 
@@ -401,14 +401,14 @@ describe("exportToObsidian", () => {
     mkdirSync(inboxDir, { recursive: true });
     writeFileSync(join(inboxDir, "Collision.md"), "existing", "utf-8");
 
-    const result = exportToObsidian(item, config);
+    const result = await exportToObsidian(item, config);
 
     // Should have a timestamp suffix instead of the original filename
     expect(result.path).not.toBe("0_Inbox/Collision.md");
     expect(result.path).toMatch(/^0_Inbox\/Collision \(\d{8}-\d{6}\)\.md$/);
   });
 
-  it("overwrites existing file in overwrite mode", () => {
+  it("overwrites existing file in overwrite mode", async () => {
     config.exportMode = "overwrite";
     const item = makeItem({ title: "Overwrite Me" });
 
@@ -417,7 +417,7 @@ describe("exportToObsidian", () => {
     mkdirSync(inboxDir, { recursive: true });
     writeFileSync(join(inboxDir, "Overwrite Me.md"), "old content", "utf-8");
 
-    const result = exportToObsidian(item, config);
+    const result = await exportToObsidian(item, config);
 
     expect(result.path).toBe("0_Inbox/Overwrite Me.md");
     const content = readFileSync(join(inboxDir, "Overwrite Me.md"), "utf-8");
@@ -425,21 +425,23 @@ describe("exportToObsidian", () => {
     expect(content).not.toContain("old content");
   });
 
-  it("returns correct relative path", () => {
+  it("returns correct relative path", async () => {
     const item = makeItem({ title: "Path Check" });
-    const result = exportToObsidian(item, config);
+    const result = await exportToObsidian(item, config);
     expect(result.path).toBe("0_Inbox/Path Check.md");
   });
 
-  it("throws when vaultPath is empty", () => {
+  it("throws when vaultPath is empty", async () => {
     config.vaultPath = "";
     const item = makeItem({ title: "No Vault" });
-    expect(() => exportToObsidian(item, config)).toThrow("Obsidian vault path is not configured");
+    await expect(exportToObsidian(item, config)).rejects.toThrow(
+      "Obsidian vault path is not configured",
+    );
   });
 
   // --- Idempotent export guard (FG-005) ---
 
-  it("new mode + sparkle_id match → returns skipped and does not modify existing file", () => {
+  it("new mode + sparkle_id match → returns skipped and does not modify existing file", async () => {
     config.exportMode = "new";
     const item = makeItem({ id: "unique-sparkle-id-1", title: "Original Title" });
 
@@ -450,7 +452,7 @@ describe("exportToObsidian", () => {
       '---\nsparkle_id: "unique-sparkle-id-1"\n---\n\n# Old Title\n\nOld body\n';
     writeFileSync(join(inboxDir, "Old Title.md"), existingContent, "utf-8");
 
-    const result = exportToObsidian(item, config);
+    const result = await exportToObsidian(item, config);
 
     expect(result.skipped).toBe(true);
     expect(result.path).toBe("0_Inbox/Old Title.md");
@@ -459,7 +461,7 @@ describe("exportToObsidian", () => {
     expect(content).toBe(existingContent);
   });
 
-  it("overwrite mode + sparkle_id match → overwrites the existing file even if filename differs", () => {
+  it("overwrite mode + sparkle_id match → overwrites the existing file even if filename differs", async () => {
     config.exportMode = "overwrite";
     const item = makeItem({ id: "unique-sparkle-id-2", title: "New Title" });
 
@@ -470,7 +472,7 @@ describe("exportToObsidian", () => {
       '---\nsparkle_id: "unique-sparkle-id-2"\n---\n\n# Old Name\n\nOld body\n';
     writeFileSync(join(inboxDir, "Old Name.md"), existingContent, "utf-8");
 
-    const result = exportToObsidian(item, config);
+    const result = await exportToObsidian(item, config);
 
     expect(result.skipped).toBeUndefined();
     expect(result.path).toBe("0_Inbox/Old Name.md");
@@ -481,7 +483,7 @@ describe("exportToObsidian", () => {
     expect(content).not.toContain("Old body");
   });
 
-  it("different sparkle_id but same title → creates collision-suffixed file", () => {
+  it("different sparkle_id but same title → creates collision-suffixed file", async () => {
     config.exportMode = "new";
     const item = makeItem({ id: "different-sparkle-id", title: "Same Title" });
 
@@ -492,7 +494,7 @@ describe("exportToObsidian", () => {
       '---\nsparkle_id: "other-sparkle-id"\n---\n\n# Same Title\n\nExisting body\n';
     writeFileSync(join(inboxDir, "Same Title.md"), existingContent, "utf-8");
 
-    const result = exportToObsidian(item, config);
+    const result = await exportToObsidian(item, config);
 
     // Should NOT be skipped (different sparkle_id)
     expect(result.skipped).toBeUndefined();
