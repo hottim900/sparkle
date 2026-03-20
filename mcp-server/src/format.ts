@@ -53,7 +53,11 @@ export function formatItem(item: SparkleItem): string {
 }
 
 /** Format a list of items as a compact markdown list */
-export function formatItemList(items: SparkleItem[], total: number): string {
+export function formatItemList(
+  items: SparkleItem[],
+  total: number,
+  pagination?: { offset: number; limit: number },
+): string {
   if (items.length === 0) return "No items found.";
 
   const lines: string[] = [`Found ${total} items (showing ${items.length}):\n`];
@@ -65,6 +69,13 @@ export function formatItemList(items: SparkleItem[], total: number): string {
     const catStr = item.category_name ? ` 📁${item.category_name}` : "";
     lines.push(`- **${item.title}** — ${item.status}${priorityStr}${dueStr}${catStr}${tagStr}`);
     lines.push(`  ID: ${item.id} | Type: ${item.type} | Modified: ${item.modified}`);
+  }
+  if (pagination) {
+    const hasMore = pagination.offset + pagination.limit < total;
+    const nextOffset = pagination.offset + pagination.limit;
+    lines.push(
+      `\nOffset: ${pagination.offset} | Limit: ${pagination.limit} | Has more: ${hasMore ? "yes" : "no"} | Next offset: ${nextOffset}`,
+    );
   }
   return lines.join("\n");
 }

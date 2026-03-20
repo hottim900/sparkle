@@ -53,7 +53,9 @@ Args:
   - status (string, optional): Filter by status
   - tag (string, optional): Filter by tag name
   - type (string, optional): "note", "todo", or "scratch", default "note"
+  - category_id (string, optional): Filter by category UUID
   - sort (string, optional): "created", "modified", "priority", or "due" (default: "created")
+  - order (string, optional): "asc" or "desc" (default: "desc")
   - limit (number, optional): Max results 1-100, default 50
   - offset (number, optional): Pagination offset, default 0
 
@@ -74,10 +76,12 @@ Returns: List of items with total count and pagination info.`,
           .describe("Filter by status"),
         tag: z.string().optional().describe("Filter by tag name"),
         type: z.enum(["note", "todo", "scratch"]).default("note").describe("Item type"),
+        category_id: z.string().uuid().optional().describe("Filter by category UUID"),
         sort: z
           .enum(["created", "modified", "priority", "due"])
           .default("created")
           .describe("Sort field"),
+        order: z.enum(["asc", "desc"]).default("desc").describe("Sort order"),
         limit: z.number().int().min(1).max(100).default(50).describe("Max results"),
         offset: z.number().int().min(0).default(0).describe("Pagination offset"),
       },
@@ -88,10 +92,10 @@ Returns: List of items with total count and pagination info.`,
         openWorldHint: false,
       },
     },
-    async ({ status, tag, type, sort, limit, offset }) => {
+    async ({ status, tag, type, category_id, sort, order, limit, offset }) => {
       try {
-        const data = await listItems({ status, tag, type, sort, limit, offset });
-        const text = formatItemList(data.items, data.total);
+        const data = await listItems({ status, tag, type, category_id, sort, order, limit, offset });
+        const text = formatItemList(data.items, data.total, { offset, limit });
         return {
           content: [{ type: "text", text }],
         };
