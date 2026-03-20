@@ -38,7 +38,7 @@ export function Settings({ onSettingsChanged }: SettingsProps) {
   const [enabled, setEnabled] = useState(false);
   const [vaultPath, setVaultPath] = useState("");
   const [inboxFolder, setInboxFolder] = useState("0_Inbox");
-  const [exportMode, setExportMode] = useState("overwrite");
+  const [exportMode, setExportMode] = useState<"new" | "overwrite">("overwrite");
 
   const { resolvedTheme, setTheme } = useTheme();
   const isOnline = useOnlineStatus();
@@ -200,7 +200,11 @@ export function Settings({ onSettingsChanged }: SettingsProps) {
             {/* Export mode */}
             <div>
               <label className="text-sm text-muted-foreground block mb-1">匯出模式</label>
-              <Select value={exportMode} onValueChange={setExportMode} disabled={!enabled}>
+              <Select
+                value={exportMode}
+                onValueChange={(v) => setExportMode(v as "new" | "overwrite")}
+                disabled={!enabled}
+              >
                 <SelectTrigger className="w-full">
                   <SelectValue />
                 </SelectTrigger>

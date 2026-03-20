@@ -123,7 +123,7 @@ export interface SettingsResponse {
   obsidian_enabled: string;
   obsidian_vault_path: string;
   obsidian_inbox_folder: string;
-  obsidian_export_mode: string;
+  obsidian_export_mode: "new" | "overwrite";
 }
 
 // Parsed item with tags and aliases as arrays
