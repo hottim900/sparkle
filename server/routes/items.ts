@@ -198,7 +198,7 @@ itemsRouter.get("/:id/linked-todos", (c) => {
 });
 
 // Export item to Obsidian
-itemsRouter.post("/:id/export", (c) => {
+itemsRouter.post("/:id/export", async (c) => {
   const item = getItem(db, c.req.param("id"));
   if (!item) {
     return c.json({ error: "Item not found" }, 404);
