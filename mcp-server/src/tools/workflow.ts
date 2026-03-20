@@ -22,10 +22,10 @@ Args:
   - target_status (string, required): "developing" or "permanent"
 
 Returns: The updated note.`,
-      inputSchema: {
+      inputSchema: z.object({
         id: z.string().uuid().describe("Note UUID"),
         target_status: z.enum(["developing", "permanent"]).describe("Target maturity status"),
-      },
+      }).strict(),
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,
@@ -83,9 +83,9 @@ Args:
   - id (string, required): Note UUID
 
 Returns: The file path where the note was written in the Obsidian vault.`,
-      inputSchema: {
+      inputSchema: z.object({
         id: z.string().uuid().describe("Note UUID"),
-      },
+      }).strict(),
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,

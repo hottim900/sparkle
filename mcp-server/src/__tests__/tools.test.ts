@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { z } from "zod";
 import { makeItem, makeMockServer } from "./helpers.js";
 
 // Mock client module
@@ -673,5 +674,25 @@ describe("error handling", () => {
     const result = await handler({ id: "a4662876-1234-5678-9abc-def012345678" });
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toBe("Error (HTTP 404): Not Found");
+  });
+});
+
+describe("strict schema validation", () => {
+  it("z.object().strict() rejects unknown parameters", () => {
+    const schema = z
+      .object({
+        id: z.string(),
+        content: z.string().optional(),
+        old_content: z.string().optional(),
+      })
+      .strict();
+
+    // Correct parameters should pass
+    const valid = schema.safeParse({ id: "test", content: "hi", old_content: "old" });
+    expect(valid.success).toBe(true);
+
+    // Wrong parameter name (old_string instead of old_content) should be rejected
+    const invalid = schema.safeParse({ id: "test", content: "hi", old_string: "old" });
+    expect(invalid.success).toBe(false);
   });
 });

@@ -48,7 +48,7 @@ export function registerCategoryTools(server: McpServer): void {
 Use this before assigning a category_id via sparkle_create_note or sparkle_update_note to find the correct UUID. Also useful for checking existing categories before creating a new one to avoid duplicates.
 
 Returns: Array of categories with name, color (hex), sort_order, and metadata.`,
-      inputSchema: {},
+      inputSchema: z.object({}).strict(),
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
@@ -82,7 +82,7 @@ Args:
   - color (string, optional): Hex color code (e.g. "#3b82f6"), must be #RRGGBB format. Null to leave unset.
 
 Returns: The created category with all fields.`,
-      inputSchema: {
+      inputSchema: z.object({
         name: z.string().min(1).max(50).describe("Category name"),
         color: z
           .string()
@@ -90,7 +90,7 @@ Returns: The created category with all fields.`,
           .nullable()
           .optional()
           .describe("Hex color code (#RRGGBB format, e.g. #3b82f6)"),
-      },
+      }).strict(),
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,
@@ -126,7 +126,7 @@ Args:
   - sort_order (number, optional): New sort position (integer >= 0)
 
 Returns: The updated category with all fields.`,
-      inputSchema: {
+      inputSchema: z.object({
         id: z.string().uuid().describe("Category UUID"),
         name: z.string().min(1).max(50).optional().describe("New name"),
         color: z
@@ -136,7 +136,7 @@ Returns: The updated category with all fields.`,
           .optional()
           .describe("Hex color code (#RRGGBB format, null to clear)"),
         sort_order: z.number().int().min(0).max(999999).optional().describe("Sort position"),
-      },
+      }).strict(),
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,
@@ -174,9 +174,9 @@ Args:
   - id (string, required): Category UUID
 
 Returns: Confirmation of deletion.`,
-      inputSchema: {
+      inputSchema: z.object({
         id: z.string().uuid().describe("Category UUID"),
-      },
+      }).strict(),
       annotations: {
         readOnlyHint: false,
         destructiveHint: true,
@@ -208,7 +208,7 @@ Args:
   - items (array, required): Array of { id: string (UUID), sort_order: number (integer >= 0) }. Min 1, max 500 items.
 
 Returns: Confirmation of reorder.`,
-      inputSchema: {
+      inputSchema: z.object({
         items: z
           .array(
             z.object({
@@ -219,7 +219,7 @@ Returns: Confirmation of reorder.`,
           .min(1)
           .max(500)
           .describe("Array of { id, sort_order } pairs"),
-      },
+      }).strict(),
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,

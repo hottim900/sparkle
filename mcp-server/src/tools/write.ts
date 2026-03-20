@@ -25,7 +25,7 @@ Args:
   - category_id (string, optional): Category UUID to assign (null to clear)
 
 Returns: The created item with all fields including generated ID and timestamps.`,
-      inputSchema: {
+      inputSchema: z.object({
         title: z.string().min(1).max(500).describe("Note title"),
         content: z.string().max(50000).optional().describe("Note content (markdown)"),
         tags: z.array(z.string().max(50)).max(20).optional().describe("Tags"),
@@ -37,7 +37,7 @@ Returns: The created item with all fields including generated ID and timestamps.
         aliases: z.array(z.string().max(200)).max(10).optional().describe("Alternative names"),
         linked_note_id: z.string().uuid().optional().describe("UUID of linked note (todo only)"),
         category_id: z.string().uuid().nullable().optional().describe("Category UUID to assign (null to clear)"),
-      },
+      }).strict(),
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,
@@ -96,7 +96,7 @@ Returns: The updated item with all fields.
 Content editing modes:
   - Full replace: provide only content — replaces the entire content field.
   - Partial edit: provide both old_content and content — finds old_content in the note and replaces it with content. Always use sparkle_get_note first to get the exact text for old_content. Set content to empty string to delete the matched section.`,
-      inputSchema: {
+      inputSchema: z.object({
         id: z.string().uuid().describe("Item UUID"),
         title: z.string().min(1).max(500).optional().describe("New title"),
         content: z.string().max(50000).optional().describe("New content (replaces existing)"),
@@ -110,7 +110,7 @@ Content editing modes:
         source: z.string().max(2000).nullable().optional().describe("Reference URL (null to clear)"),
         linked_note_id: z.string().uuid().nullable().optional().describe("Linked note UUID (todo only, null to clear)"),
         category_id: z.string().uuid().nullable().optional().describe("Category UUID (null to clear)"),
-      },
+      }).strict(),
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,
