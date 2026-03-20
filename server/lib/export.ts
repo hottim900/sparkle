@@ -1,5 +1,4 @@
-import { mkdir, writeFile, readdir, readFile } from "node:fs/promises";
-import { existsSync } from "node:fs";
+import { mkdir, writeFile, readdir, readFile, access } from "node:fs/promises";
 import { join } from "node:path";
 
 /**
@@ -176,8 +175,17 @@ export interface ExportResult {
  * Scan .md files in a directory for a matching sparkle_id in YAML frontmatter.
  * Returns the filename if found, null otherwise.
  */
+async function fileExists(path: string): Promise<boolean> {
+  try {
+    await access(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function findExistingBySparkleId(dir: string, sparkleId: string): Promise<string | null> {
-  if (!existsSync(dir)) return null;
+  if (!(await fileExists(dir))) return null;
   for (const file of await readdir(dir)) {
     if (!file.endsWith(".md")) continue;
     try {
@@ -234,9 +242,10 @@ export async function exportToObsidian(
   let filename = `${baseName}.md`;
   const fullPath = join(targetDir, filename);
 
-  if (exportMode === "new" || (exportMode === "overwrite" && !existsSync(fullPath))) {
+  const fullPathExists = await fileExists(fullPath);
+  if (exportMode === "new" || (exportMode === "overwrite" && !fullPathExists)) {
     // Check for collision when creating new files
-    if (existsSync(fullPath)) {
+    if (fullPathExists) {
       const now = new Date();
       const ts = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}-${String(now.getHours()).padStart(2, "0")}${String(now.getMinutes()).padStart(2, "0")}${String(now.getSeconds()).padStart(2, "0")}`;
       filename = `${baseName} (${ts}).md`;
