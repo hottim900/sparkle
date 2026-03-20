@@ -131,8 +131,10 @@ if [[ -n "${RESTIC_OFFSITE_REPOSITORY:-}" ]]; then
     else
         log "複製快照至異地儲存庫: $RESTIC_OFFSITE_REPOSITORY"
         if restic copy --tag sparkle \
-            --repo2 "$RESTIC_OFFSITE_REPOSITORY" \
-            --password-file2 "$OFFSITE_PW" \
+            --from-repo "$RESTIC_REPOSITORY" \
+            --from-password-file "$RESTIC_PASSWORD_FILE" \
+            --repo "$RESTIC_OFFSITE_REPOSITORY" \
+            --password-file "$OFFSITE_PW" \
             --quiet; then
             log "異地備份複製完成"
 
