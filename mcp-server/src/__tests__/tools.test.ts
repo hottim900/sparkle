@@ -2,16 +2,20 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { makeItem, makeMockServer } from "./helpers.js";
 
 // Mock client module
-vi.mock("../client.js", () => ({
-  searchItems: vi.fn(),
-  getItem: vi.fn(),
-  listItems: vi.fn(),
-  createItem: vi.fn(),
-  updateItem: vi.fn(),
-  getStats: vi.fn(),
-  getTags: vi.fn(),
-  exportToObsidian: vi.fn(),
-}));
+vi.mock("../client.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../client.js")>();
+  return {
+    ...actual,
+    searchItems: vi.fn(),
+    getItem: vi.fn(),
+    listItems: vi.fn(),
+    createItem: vi.fn(),
+    updateItem: vi.fn(),
+    getStats: vi.fn(),
+    getTags: vi.fn(),
+    exportToObsidian: vi.fn(),
+  };
+});
 
 // Mock vault module
 vi.mock("../vault.js", () => ({
@@ -606,5 +610,19 @@ describe("sparkle_list_obsidian", () => {
     expect(result.content[0].text).toContain("Directories:** (2)");
     expect(result.content[0].text).toContain("Projects/");
     expect(result.content[0].text).toContain("Archive/");
+  });
+});
+
+describe("error handling", () => {
+  it("includes HTTP status for SparkleApiError", async () => {
+    const server = makeMockServer();
+    registerReadTools(server as never);
+    const handler = server.getHandler("sparkle_get_note");
+
+    getItem.mockRejectedValue(new client.SparkleApiError("Not Found", 404));
+
+    const result = await handler({ id: "a4662876-1234-5678-9abc-def012345678" });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toBe("Error (HTTP 404): Not Found");
   });
 });

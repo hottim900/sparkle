@@ -1,6 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { getStats, getTags } from "../client.js";
 import { formatStats, formatTags } from "../format.js";
+import { formatToolError } from "../utils.js";
 
 export function registerMetaTools(server: McpServer): void {
   server.registerTool(
@@ -28,10 +29,7 @@ Returns: Zettelkasten note counts (fleeting/developing/permanent), GTD todo coun
           content: [{ type: "text", text }],
         };
       } catch (error) {
-        return {
-          content: [{ type: "text", text: `Error: ${(error as Error).message}` }],
-          isError: true,
-        };
+        return formatToolError(error);
       }
     },
   );
@@ -61,10 +59,7 @@ Returns: Array of tag names. Use these for filtering with sparkle_list_notes or 
           content: [{ type: "text", text }],
         };
       } catch (error) {
-        return {
-          content: [{ type: "text", text: `Error: ${(error as Error).message}` }],
-          isError: true,
-        };
+        return formatToolError(error);
       }
     },
   );
