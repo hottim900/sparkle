@@ -23,6 +23,7 @@ import {
   getVaultPath,
   findBySparkleId,
   readVaultFileByPath,
+  writeVaultFileBySparkleId,
   writeVaultFileByPath,
   searchVault,
   listVault,
@@ -271,6 +272,53 @@ describe("readVaultFileByPath", () => {
     mockReadFile.mockRejectedValue(enoent);
 
     await expect(readVaultFileByPath("nonexistent.md")).rejects.toThrow("File not found");
+  });
+});
+
+// --- writeVaultFileBySparkleId ---
+
+describe("writeVaultFileBySparkleId", () => {
+  const SPARKLE_ID = "cbe1a447-dd5a-405f-8959-f1bd8f699046";
+
+  function setupFindable() {
+    mockGetSettings.mockResolvedValue({
+      obsidian_enabled: "true",
+      obsidian_vault_path: "/vault",
+    });
+    // Seed the index so findBySparkleId resolves without walking the filesystem
+    mockReadFile.mockResolvedValue(
+      `---\nsparkle_id: "${SPARKLE_ID}"\n---\n\n# Old Content`,
+    );
+    // readdir for buildIndex
+    mockReaddir.mockResolvedValue([
+      { name: "note.md", isFile: () => true, isDirectory: () => false },
+    ] as never);
+  }
+
+  it("rejects content without sparkle_id in frontmatter", async () => {
+    setupFindable();
+    // Prime the index
+    await findBySparkleId(SPARKLE_ID);
+
+    await expect(
+      writeVaultFileBySparkleId(SPARKLE_ID, "# No frontmatter at all"),
+    ).rejects.toThrow("missing sparkle_id");
+
+    expect(mockWriteFile).not.toHaveBeenCalled();
+  });
+
+  it("accepts content with matching sparkle_id in frontmatter", async () => {
+    setupFindable();
+    await findBySparkleId(SPARKLE_ID);
+    mockWriteFile.mockResolvedValue(undefined);
+
+    const result = await writeVaultFileBySparkleId(
+      SPARKLE_ID,
+      `---\nsparkle_id: "${SPARKLE_ID}"\n---\n\n# Updated`,
+    );
+
+    expect(mockWriteFile).toHaveBeenCalled();
+    expect(result).toBe("note.md");
   });
 });
 
