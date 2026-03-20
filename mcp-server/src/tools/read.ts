@@ -2,6 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { getItem, listItems } from "../client.js";
 import { formatItem, formatItemList } from "../format.js";
+import { formatToolError } from "../utils.js";
 
 export function registerReadTools(server: McpServer): void {
   server.registerTool(
@@ -33,10 +34,7 @@ If prefix matches multiple items, returns error with candidate IDs.`,
           content: [{ type: "text", text }],
         };
       } catch (error) {
-        return {
-          content: [{ type: "text", text: `Error: ${(error as Error).message}` }],
-          isError: true,
-        };
+        return formatToolError(error);
       }
     },
   );
@@ -98,10 +96,7 @@ Returns: List of items with total count and pagination info.`,
           content: [{ type: "text", text }],
         };
       } catch (error) {
-        return {
-          content: [{ type: "text", text: `Error: ${(error as Error).message}` }],
-          isError: true,
-        };
+        return formatToolError(error);
       }
     },
   );

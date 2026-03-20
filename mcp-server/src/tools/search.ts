@@ -2,6 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { searchItems } from "../client.js";
 import { formatItemList } from "../format.js";
+import { formatToolError } from "../utils.js";
 import { searchVault } from "../vault.js";
 import { formatSearchResults } from "./vault.js";
 
@@ -39,10 +40,7 @@ Returns: List of matching items with title, status, tags, and metadata.`,
           content: [{ type: "text", text }],
         };
       } catch (error) {
-        return {
-          content: [{ type: "text", text: `Error searching: ${(error as Error).message}` }],
-          isError: true,
-        };
+        return formatToolError(error);
       }
     },
   );

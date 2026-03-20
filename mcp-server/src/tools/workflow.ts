@@ -2,6 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { getItem, updateItem, exportToObsidian } from "../client.js";
 import { formatItem } from "../format.js";
+import { formatToolError } from "../utils.js";
 
 export function registerWorkflowTools(server: McpServer): void {
   server.registerTool(
@@ -61,10 +62,7 @@ Returns: The updated note.`,
           content: [{ type: "text", text }],
         };
       } catch (error) {
-        return {
-          content: [{ type: "text", text: `Error: ${(error as Error).message}` }],
-          isError: true,
-        };
+        return formatToolError(error);
       }
     },
   );

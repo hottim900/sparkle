@@ -2,6 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { createItem, getItem, updateItem } from "../client.js";
 import { formatItem } from "../format.js";
+import { formatToolError } from "../utils.js";
 
 export function registerWriteTools(server: McpServer): void {
   server.registerTool(
@@ -64,10 +65,7 @@ Returns: The created item with all fields including generated ID and timestamps.
           content: [{ type: "text", text }],
         };
       } catch (error) {
-        return {
-          content: [{ type: "text", text: `Error creating note: ${(error as Error).message}` }],
-          isError: true,
-        };
+        return formatToolError(error);
       }
     },
   );
@@ -169,10 +167,7 @@ Content editing modes:
           content: [{ type: "text", text }],
         };
       } catch (error) {
-        return {
-          content: [{ type: "text", text: `Error updating note: ${(error as Error).message}` }],
-          isError: true,
-        };
+        return formatToolError(error);
       }
     },
   );

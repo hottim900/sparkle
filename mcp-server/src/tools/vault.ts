@@ -14,6 +14,7 @@ import type {
   VaultSearchResult,
   VaultListResult,
 } from "../types.js";
+import { formatToolError } from "../utils.js";
 
 function formatVaultFile(file: VaultFile): string {
   const lines: string[] = [`**Path:** ${file.path}`];
@@ -63,10 +64,7 @@ Requires Obsidian integration to be enabled in Sparkle settings.`,
           content: [{ type: "text", text: formatVaultFile(file) }],
         };
       } catch (error) {
-        return {
-          content: [{ type: "text", text: `Error: ${(error as Error).message}` }],
-          isError: true,
-        };
+        return formatToolError(error);
       }
     },
   );
@@ -104,10 +102,7 @@ Returns: Confirmation with file path.`,
           content: [{ type: "text", text: `File updated successfully.\n\n**Path:** ${path}` }],
         };
       } catch (error) {
-        return {
-          content: [{ type: "text", text: `Error: ${(error as Error).message}` }],
-          isError: true,
-        };
+        return formatToolError(error);
       }
     },
   );
@@ -144,10 +139,7 @@ Returns: File path, frontmatter summary (if any), and full body content.`,
           content: [{ type: "text", text: formatVaultFile(file) }],
         };
       } catch (error) {
-        return {
-          content: [{ type: "text", text: `Error: ${(error as Error).message}` }],
-          isError: true,
-        };
+        return formatToolError(error);
       }
     },
   );
@@ -191,10 +183,7 @@ Returns: Confirmation with file path.`,
           ],
         };
       } catch (error) {
-        return {
-          content: [{ type: "text", text: `Error: ${(error as Error).message}` }],
-          isError: true,
-        };
+        return formatToolError(error);
       }
     },
   );
@@ -242,10 +231,7 @@ Requires Obsidian integration to be enabled in Sparkle settings.`,
           content: [{ type: "text", text: formatSearchResults(results, query) }],
         };
       } catch (error) {
-        return {
-          content: [{ type: "text", text: `Error: ${(error as Error).message}` }],
-          isError: true,
-        };
+        return formatToolError(error);
       }
     },
   );
@@ -296,10 +282,7 @@ Requires Obsidian integration to be enabled in Sparkle settings.`,
           content: [{ type: "text", text: formatListResult(result) }],
         };
       } catch (error) {
-        return {
-          content: [{ type: "text", text: `Error: ${(error as Error).message}` }],
-          isError: true,
-        };
+        return formatToolError(error);
       }
     },
   );

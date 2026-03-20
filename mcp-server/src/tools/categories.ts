@@ -8,6 +8,7 @@ import {
   reorderCategoriesApi,
 } from "../client.js";
 import type { Category } from "../types.js";
+import { formatToolError } from "../utils.js";
 
 const HEX_COLOR_REGEX = /^#[0-9a-fA-F]{6}$/;
 
@@ -63,10 +64,7 @@ Returns: Array of categories with name, color (hex), sort_order, and metadata.`,
           content: [{ type: "text", text }],
         };
       } catch (error) {
-        return {
-          content: [{ type: "text", text: `Error listing categories: ${(error as Error).message}` }],
-          isError: true,
-        };
+        return formatToolError(error);
       }
     },
   );
@@ -108,12 +106,7 @@ Returns: The created category with all fields.`,
           content: [{ type: "text", text }],
         };
       } catch (error) {
-        return {
-          content: [
-            { type: "text", text: `Error creating category: ${(error as Error).message}` },
-          ],
-          isError: true,
-        };
+        return formatToolError(error);
       }
     },
   );
@@ -164,12 +157,7 @@ Returns: The updated category with all fields.`,
           content: [{ type: "text", text }],
         };
       } catch (error) {
-        return {
-          content: [
-            { type: "text", text: `Error updating category: ${(error as Error).message}` },
-          ],
-          isError: true,
-        };
+        return formatToolError(error);
       }
     },
   );
@@ -203,12 +191,7 @@ Returns: Confirmation of deletion.`,
           content: [{ type: "text", text: "Category deleted successfully." }],
         };
       } catch (error) {
-        return {
-          content: [
-            { type: "text", text: `Error deleting category: ${(error as Error).message}` },
-          ],
-          isError: true,
-        };
+        return formatToolError(error);
       }
     },
   );
@@ -253,12 +236,7 @@ Returns: Confirmation of reorder.`,
           ],
         };
       } catch (error) {
-        return {
-          content: [
-            { type: "text", text: `Error reordering categories: ${(error as Error).message}` },
-          ],
-          isError: true,
-        };
+        return formatToolError(error);
       }
     },
   );
