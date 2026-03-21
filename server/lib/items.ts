@@ -30,6 +30,7 @@ export function createItem(db: DB, input: Partial<CreateItemInput> & { title: st
     aliases: type === "scratch" ? "[]" : JSON.stringify(input.aliases ?? []),
     linked_note_id: type === "todo" ? (input.linked_note_id ?? null) : null,
     category_id: input.category_id ?? null,
+    viewed_at: !input.origin || input.origin === "app" ? now : null,
     created: now,
     modified: now,
   };
@@ -183,6 +184,7 @@ export function updateItem(db: DB, id: string, input: UpdateItemInput) {
   if (input.aliases !== undefined) updates.aliases = JSON.stringify(input.aliases);
   if (input.linked_note_id !== undefined) updates.linked_note_id = input.linked_note_id;
   if (input.category_id !== undefined) updates.category_id = input.category_id;
+  if (input.viewed_at !== undefined) updates.viewed_at = input.viewed_at;
 
   // Type conversion auto-mapping (Section 9)
   if (input.type !== undefined && input.type !== existing.type) {
