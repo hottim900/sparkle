@@ -94,6 +94,9 @@ if (lineSecret || lineToken) {
       lineToken.length,
     );
   }
+  if (!process.env.LINE_ALLOWED_USER_IDS) {
+    logger.warn("LINE_ALLOWED_USER_IDS is not set — LINE bot accepts messages from any user");
+  }
 }
 
 const app = new Hono();

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, beforeAll, vi } from "vitest";
+import { describe, it, expect, beforeEach, beforeAll, afterEach, vi } from "vitest";
 import crypto from "node:crypto";
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
@@ -1572,6 +1572,62 @@ describe("POST /api/webhook/line", () => {
       const fetchMock = vi.mocked(fetch);
       const callBody = JSON.parse(fetchMock.mock.calls[0][1]!.body as string);
       expect(callBody.messages[0].text).toContain("不存在");
+    });
+  });
+
+  // ============================================================
+  // User allowlist tests
+  // ============================================================
+
+  describe("LINE_ALLOWED_USER_IDS allowlist", () => {
+    afterEach(() => {
+      delete process.env.LINE_ALLOWED_USER_IDS;
+    });
+
+    it("blocks unauthorized user when allowlist is set", async () => {
+      process.env.LINE_CHANNEL_SECRET = TEST_LINE_SECRET;
+      process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
+      process.env.LINE_ALLOWED_USER_IDS = "allowed-user-1,allowed-user-2";
+
+      const res = await sendLineMessage(app, "Hello", "unauthorized-user");
+      expect(res.status).toBe(200);
+
+      // Should NOT create any items
+      const allItems = testDb.select().from(items).all();
+      expect(allItems).toHaveLength(0);
+
+      // Should reply with rejection message
+      const fetchMock = vi.mocked(fetch);
+      expect(fetchMock).toHaveBeenCalled();
+      const callBody = JSON.parse(fetchMock.mock.calls[0][1]!.body as string);
+      expect(callBody.messages[0].text).toContain("未授權");
+    });
+
+    it("allows authorized user when allowlist is set", async () => {
+      process.env.LINE_CHANNEL_SECRET = TEST_LINE_SECRET;
+      process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
+      process.env.LINE_ALLOWED_USER_IDS = "allowed-user-1,allowed-user-2";
+
+      const res = await sendLineMessage(app, "Buy milk", "allowed-user-1");
+      expect(res.status).toBe(200);
+
+      // Item should be created
+      const allItems = testDb.select().from(items).all();
+      expect(allItems).toHaveLength(1);
+      expect(allItems[0].title).toBe("Buy milk");
+    });
+
+    it("allows any user when allowlist is not set", async () => {
+      process.env.LINE_CHANNEL_SECRET = TEST_LINE_SECRET;
+      process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
+      delete process.env.LINE_ALLOWED_USER_IDS;
+
+      const res = await sendLineMessage(app, "Buy milk", "any-random-user");
+      expect(res.status).toBe(200);
+
+      const allItems = testDb.select().from(items).all();
+      expect(allItems).toHaveLength(1);
+      expect(allItems[0].title).toBe("Buy milk");
     });
   });
 });

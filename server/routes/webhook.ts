@@ -21,6 +21,10 @@ const lineWebhookSchema = z.object({
 
 export const webhookRouter = new Hono();
 
+function getAllowedUserIds(): string[] {
+  return process.env.LINE_ALLOWED_USER_IDS?.split(",").filter(Boolean) ?? [];
+}
+
 function verifySignature(body: string, signature: string, secret: string): boolean {
   const hash = crypto.createHmac("SHA256", secret).update(body).digest("base64");
   return safeCompare(hash, signature);
@@ -50,6 +54,7 @@ webhookRouter.post("/line", async (c) => {
     return c.json({ error: "Invalid JSON body" }, 400);
   }
   const events = parsed.events;
+  const allowedUserIds = getAllowedUserIds();
 
   for (const event of events) {
     if (event.type !== "message" || event.message?.type !== "text") {
@@ -62,6 +67,15 @@ webhookRouter.post("/line", async (c) => {
     if (!event.message?.text) continue;
     const text: string = event.message.text;
     const userId: string = event.source?.userId ?? "unknown";
+
+    if (allowedUserIds.length > 0 && !allowedUserIds.includes(userId)) {
+      logger.warn({ userId }, "LINE message from unauthorized user");
+      if (event.replyToken) {
+        await replyLine(channelToken, event.replyToken, "⛔ 未授權的使用者");
+      }
+      continue;
+    }
+
     const cmd = parseCommand(text);
 
     if (!event.replyToken) continue;
