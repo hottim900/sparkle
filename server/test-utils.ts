@@ -23,6 +23,7 @@ export function createTestDb() {
       aliases TEXT NOT NULL DEFAULT '[]',
       linked_note_id TEXT DEFAULT NULL,
       category_id TEXT DEFAULT NULL,
+      viewed_at TEXT DEFAULT NULL,
       created TEXT NOT NULL,
       modified TEXT NOT NULL,
       FOREIGN KEY (linked_note_id) REFERENCES items(id) ON DELETE SET NULL,
@@ -40,7 +41,9 @@ export function createTestDb() {
       ('obsidian_enabled', 'false'),
       ('obsidian_vault_path', ''),
       ('obsidian_inbox_folder', '0_Inbox'),
-      ('obsidian_export_mode', 'overwrite');
+      ('obsidian_export_mode', 'overwrite'),
+      ('recent_days', '7'),
+      ('stale_days', '14');
 
     CREATE TABLE share_tokens (
       id TEXT PRIMARY KEY,
