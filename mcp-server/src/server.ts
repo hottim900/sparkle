@@ -8,6 +8,7 @@ import { registerWorkflowTools } from "./tools/workflow.js";
 import { registerMetaTools } from "./tools/meta.js";
 import { registerGuideTools } from "./tools/guide.js";
 import { registerVaultTools } from "./tools/vault.js";
+import { registerDashboardTools } from "./tools/dashboard.js";
 import { SPARKLE_INSTRUCTIONS } from "./docs/instructions.js";
 import { registerDocResources } from "./docs/resources.js";
 
@@ -28,6 +29,7 @@ export function createSparkleServer(): McpServer {
   registerMetaTools(server);
   registerGuideTools(server);
   registerVaultTools(server);
+  registerDashboardTools(server);
   registerDocResources(server);
 
   return server;
