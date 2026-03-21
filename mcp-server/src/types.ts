@@ -17,6 +17,7 @@ export interface SparkleItem {
   share_visibility: "public" | "unlisted" | null;
   category_id: string | null;
   category_name: string | null;
+  viewed_at: string | null;
   created: string;
   modified: string;
 }
