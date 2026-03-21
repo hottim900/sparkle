@@ -35,6 +35,7 @@ const handleTrack: CommandHandler = async ({ userId, command, db }) => {
     title: `處理：${resolved.item.title}`,
     type: "todo",
     status: "active",
+    origin: "LINE",
     tags: noteTags,
     linked_note_id: resolved.item.id,
   };
