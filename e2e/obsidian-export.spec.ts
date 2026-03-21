@@ -34,8 +34,8 @@ test.describe("Obsidian Export", () => {
     const vaultPathInput = page.getByPlaceholder("/home/user/obsidian-vault");
     await vaultPathInput.fill(VAULT_PATH);
 
-    // Save settings
-    await page.getByRole("button", { name: "儲存設定" }).click();
+    // Save settings (first button is Obsidian settings, second is Dashboard settings)
+    await page.getByRole("button", { name: "儲存設定" }).first().click();
     await expect(page.getByText("設定已儲存")).toBeVisible({ timeout: 5_000 });
 
     // Reload and verify persistence

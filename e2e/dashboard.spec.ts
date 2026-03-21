@@ -10,8 +10,8 @@ test.describe("Dashboard", () => {
     await expect(heading).toBeVisible({ timeout: 10_000 });
 
     const main = page.locator(".max-w-2xl");
-    await expect(main.getByText("未處理")).toBeVisible();
-    await expect(main.getByText("最近新增")).toBeVisible();
+    await expect(main.getByText("未處理", { exact: true })).toBeVisible();
+    await expect(main.getByText("最近新增", { exact: true })).toBeVisible();
     await expect(main.getByText("需要關注", { exact: true })).toBeVisible();
     await expect(main.getByText("Zettelkasten 管道")).toBeVisible();
     await expect(main.getByText("本月活動")).toBeVisible();
@@ -35,7 +35,7 @@ test.describe("Dashboard", () => {
 
     const main = page.locator(".max-w-2xl");
     await expect(main.getByText("需要關注", { exact: true })).toBeVisible();
-    await expect(main.getByText(title)).toBeVisible();
+    await expect(main.getByText(title).first()).toBeVisible();
     await expect(main.getByText("逾期").first()).toBeVisible();
   });
 });
