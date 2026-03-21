@@ -90,7 +90,7 @@ const MAX_SESSIONS = 10;
 
 class SessionStore {
   private transports = new Map<string, StreamableHTTPServerTransport>();
-  private createdAt = new Map<string, number>();
+  private lastUsedAt = new Map<string, number>();
 
   get size(): number {
     return this.transports.size;
@@ -103,22 +103,45 @@ class SessionStore {
   }
   set(id: string, transport: StreamableHTTPServerTransport): void {
     this.transports.set(id, transport);
-    this.createdAt.set(id, Date.now());
+    this.lastUsedAt.set(id, Date.now());
+  }
+  touch(id: string): void {
+    this.lastUsedAt.set(id, Date.now());
   }
   delete(id: string): boolean {
-    this.createdAt.delete(id);
+    this.lastUsedAt.delete(id);
     return this.transports.delete(id);
   }
   entries(): IterableIterator<[string, StreamableHTTPServerTransport]> {
     return this.transports.entries();
   }
-  staleSessionIds(maxAgeMs: number): string[] {
+  staleSessionIds(maxIdleMs: number): string[] {
     const now = Date.now();
     const stale: string[] = [];
-    for (const [id, created] of this.createdAt) {
-      if (now - created > maxAgeMs) stale.push(id);
+    for (const [id, lastUsed] of this.lastUsedAt) {
+      if (now - lastUsed > maxIdleMs) stale.push(id);
     }
     return stale;
+  }
+  async evictLRU(): Promise<void> {
+    let oldestId: string | null = null;
+    let oldestTime = Infinity;
+    for (const [id, lastUsed] of this.lastUsedAt) {
+      if (lastUsed < oldestTime) {
+        oldestTime = lastUsed;
+        oldestId = id;
+      }
+    }
+    if (oldestId) {
+      const transport = this.transports.get(oldestId);
+      if (transport) {
+        await transport.close().catch((err) => {
+          logger.debug({ err, sessionId: oldestId }, "Transport close failed during LRU eviction");
+        });
+      }
+      this.delete(oldestId);
+      logger.info({ sessionId: oldestId }, "MCP session evicted (LRU)");
+    }
   }
 }
 
@@ -126,7 +149,11 @@ const sessions = new SessionStore();
 
 function getSessionTransport(req: express.Request): StreamableHTTPServerTransport | undefined {
   const sessionId = req.headers["mcp-session-id"] as string | undefined;
-  return sessionId ? sessions.get(sessionId) : undefined;
+  if (sessionId && sessions.has(sessionId)) {
+    sessions.touch(sessionId);
+    return sessions.get(sessionId);
+  }
+  return undefined;
 }
 
 /**
@@ -179,12 +206,7 @@ app.post("/mcp", authMiddleware, async (req, res) => {
     // This saves a round-trip vs returning 409 first.
     if (isInitializeRequest(req.body)) {
       if (sessions.size >= MAX_SESSIONS) {
-        res.status(503).json({
-          jsonrpc: "2.0",
-          error: { code: -32000, message: "Too many active sessions" },
-          id: null,
-        });
-        return;
+        await sessions.evictLRU();
       }
 
       const transport = new StreamableHTTPServerTransport({
@@ -251,18 +273,20 @@ app.delete("/mcp", authMiddleware, async (req, res) => {
 
 // --- Cleanup & lifecycle ---
 
-const CLEANUP_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
-const SESSION_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
+const CLEANUP_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+const SESSION_IDLE_MS = 30 * 60 * 1000; // 30 minutes idle
 
 const cleanupTimer = setInterval(() => {
   provider.cleanup();
 
-  for (const sessionId of sessions.staleSessionIds(SESSION_MAX_AGE_MS)) {
+  for (const sessionId of sessions.staleSessionIds(SESSION_IDLE_MS)) {
     const transport = sessions.get(sessionId);
     if (transport) {
-      transport.close().catch(() => {});
+      transport.close().catch((err) => {
+        logger.debug({ err, sessionId }, "Transport close failed during idle cleanup");
+      });
       sessions.delete(sessionId);
-      logger.info({ sessionId }, "MCP session evicted (stale)");
+      logger.info({ sessionId }, "MCP session evicted (idle)");
     }
   }
 }, CLEANUP_INTERVAL_MS);
