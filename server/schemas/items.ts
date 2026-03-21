@@ -53,6 +53,7 @@ export const updateItemSchema = z.object({
   aliases: z.array(z.string().max(200)).max(10).optional(),
   linked_note_id: z.string().uuid().nullable().optional(),
   category_id: z.string().uuid().nullable().optional(),
+  viewed_at: z.string().nullable().optional(),
 });
 
 export const listItemsSchema = z.object({

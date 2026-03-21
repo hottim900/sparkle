@@ -10,8 +10,8 @@ statsRouter.get("/", (c) => {
 });
 
 statsRouter.get("/stale", (c) => {
-  const items = getStaleNotes(sqlite);
-  return c.json({ items });
+  const result = getStaleNotes(sqlite);
+  return c.json(result);
 });
 
 statsRouter.get("/category-distribution", (c) => {

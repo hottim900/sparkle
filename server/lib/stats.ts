@@ -88,6 +88,26 @@ export function getStats(sqlite: Database.Database): Stats {
   return row;
 }
 
+export interface DashboardItem {
+  id: string;
+  type: string;
+  title: string;
+  status: string;
+  priority: string | null;
+  due: string | null;
+  tags: string;
+  origin: string;
+  category_id: string | null;
+  category_name: string | null;
+  created: string;
+  modified: string;
+  viewed_at: string | null;
+}
+
+export interface AttentionItem extends DashboardItem {
+  attention_reason: "overdue" | "high_priority";
+}
+
 export interface StaleItem {
   id: string;
   title: string;
@@ -96,19 +116,124 @@ export interface StaleItem {
   days_stale: number;
 }
 
-export function getStaleNotes(sqlite: Database.Database): StaleItem[] {
-  return sqlite
+export function getStaleNotes(
+  sqlite: Database.Database,
+  days = 7,
+  limit = 10,
+): { items: StaleItem[]; total: number } {
+  const items = sqlite
     .prepare(
       `SELECT i.id, i.title, c.name AS category_name, i.modified,
         CAST(julianday('now') - julianday(i.modified) AS INTEGER) AS days_stale
        FROM items i
        LEFT JOIN categories c ON i.category_id = c.id
        WHERE i.status = 'developing'
-         AND i.modified < datetime('now', '-7 days')
+         AND i.modified < datetime('now', '-' || ? || ' days')
        ORDER BY i.modified ASC
-       LIMIT 10`,
+       LIMIT ?`,
     )
-    .all() as StaleItem[];
+    .all(days, limit) as StaleItem[];
+
+  const countRow = sqlite
+    .prepare(
+      `SELECT COUNT(*) AS count
+       FROM items i
+       WHERE i.status = 'developing'
+         AND i.modified < datetime('now', '-' || ? || ' days')`,
+    )
+    .get(days) as { count: number };
+
+  return { items, total: countRow.count };
+}
+
+export function getUnreviewedItems(
+  sqlite: Database.Database,
+  limit = 5,
+  offset = 0,
+): { items: DashboardItem[]; total: number } {
+  const items = sqlite
+    .prepare(
+      `SELECT i.*, c.name AS category_name
+       FROM items i
+       LEFT JOIN categories c ON i.category_id = c.id
+       WHERE i.viewed_at IS NULL
+         AND i.status NOT IN ('archived', 'done')
+       ORDER BY i.created DESC
+       LIMIT ? OFFSET ?`,
+    )
+    .all(limit, offset) as DashboardItem[];
+
+  const countRow = sqlite
+    .prepare(
+      `SELECT COUNT(*) AS count
+       FROM items i
+       WHERE i.viewed_at IS NULL
+         AND i.status NOT IN ('archived', 'done')`,
+    )
+    .get() as { count: number };
+
+  return { items, total: countRow.count };
+}
+
+export function getRecentItems(
+  sqlite: Database.Database,
+  days: number,
+  limit = 5,
+  offset = 0,
+): { items: DashboardItem[]; total: number } {
+  const items = sqlite
+    .prepare(
+      `SELECT i.*, c.name AS category_name
+       FROM items i
+       LEFT JOIN categories c ON i.category_id = c.id
+       WHERE i.created >= datetime('now', '-' || ? || ' days')
+         AND i.status != 'archived'
+       ORDER BY i.created DESC
+       LIMIT ? OFFSET ?`,
+    )
+    .all(days, limit, offset) as DashboardItem[];
+
+  const countRow = sqlite
+    .prepare(
+      `SELECT COUNT(*) AS count
+       FROM items i
+       WHERE i.created >= datetime('now', '-' || ? || ' days')
+         AND i.status != 'archived'`,
+    )
+    .get(days) as { count: number };
+
+  return { items, total: countRow.count };
+}
+
+export function getAttentionItems(
+  sqlite: Database.Database,
+  limit = 5,
+): { items: AttentionItem[]; total: number } {
+  const today = getTodayDate();
+
+  const items = sqlite
+    .prepare(
+      `SELECT i.*, c.name AS category_name,
+        CASE WHEN i.type = 'todo' AND i.due < :today THEN 'overdue' ELSE 'high_priority' END AS attention_reason
+       FROM items i
+       LEFT JOIN categories c ON i.category_id = c.id
+       WHERE i.status NOT IN ('done', 'archived') AND i.type != 'scratch'
+         AND ((i.type = 'todo' AND i.due < :today) OR i.priority = 'high')
+       ORDER BY attention_reason ASC, i.due ASC, i.created DESC
+       LIMIT :limit`,
+    )
+    .all({ today, limit }) as AttentionItem[];
+
+  const countRow = sqlite
+    .prepare(
+      `SELECT COUNT(*) AS count
+       FROM items i
+       WHERE i.status NOT IN ('done', 'archived') AND i.type != 'scratch'
+         AND ((i.type = 'todo' AND i.due < :today) OR i.priority = 'high')`,
+    )
+    .get({ today }) as { count: number };
+
+  return { items, total: countRow.count };
 }
 
 export interface CategoryDistribution {

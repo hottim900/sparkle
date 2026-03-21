@@ -116,7 +116,7 @@ export async function createItem(input: {
   linked_note_id?: string | null;
   category_id?: string | null;
 }): Promise<SparkleItem> {
-  return sparkleApi<SparkleItem>("/items", "POST", { type: "note", ...input });
+  return sparkleApi<SparkleItem>("/items", "POST", { type: "note", origin: "mcp", ...input });
 }
 
 export async function updateItem(
@@ -166,6 +166,57 @@ export async function reorderCategoriesApi(
   items: { id: string; sort_order: number }[],
 ): Promise<{ ok: boolean }> {
   return sparkleApi<{ ok: boolean }>("/categories/reorder", "PATCH", { items });
+}
+
+// --- Dashboard operations ---
+
+export async function getUnreviewed(
+  limit = 20,
+  offset = 0,
+): Promise<{ items: SparkleItem[]; total: number }> {
+  const params = new URLSearchParams();
+  if (limit !== 20) params.set("limit", String(limit));
+  if (offset) params.set("offset", String(offset));
+  const qs = params.toString();
+  return sparkleApi(`/dashboard/unreviewed${qs ? `?${qs}` : ""}`);
+}
+
+export async function getRecent(
+  limit = 20,
+  offset = 0,
+): Promise<{ items: SparkleItem[]; total: number }> {
+  const params = new URLSearchParams();
+  if (limit !== 20) params.set("limit", String(limit));
+  if (offset) params.set("offset", String(offset));
+  const qs = params.toString();
+  return sparkleApi(`/dashboard/recent${qs ? `?${qs}` : ""}`);
+}
+
+export async function getAttention(
+  limit = 10,
+): Promise<{ items: SparkleItem[]; total: number }> {
+  const params = new URLSearchParams();
+  if (limit !== 10) params.set("limit", String(limit));
+  const qs = params.toString();
+  return sparkleApi(`/dashboard/attention${qs ? `?${qs}` : ""}`);
+}
+
+export async function getDashboardStale(
+  limit = 10,
+): Promise<{
+  items: {
+    id: string;
+    title: string;
+    category_name: string | null;
+    modified: string;
+    days_stale: number;
+  }[];
+  total: number;
+}> {
+  const params = new URLSearchParams();
+  if (limit !== 10) params.set("limit", String(limit));
+  const qs = params.toString();
+  return sparkleApi(`/dashboard/stale${qs ? `?${qs}` : ""}`);
 }
 
 // --- Settings ---

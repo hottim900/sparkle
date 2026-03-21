@@ -24,6 +24,7 @@ import { webhookRouter } from "./routes/webhook.js";
 import { settingsRouter } from "./routes/settings.js";
 import { sharesRouter } from "./routes/shares.js";
 import { categoriesRouter } from "./routes/categories.js";
+import { dashboardRouter } from "./routes/dashboard.js";
 import { publicRouter } from "./routes/public.js";
 import { db, sqlite, DB_PATH } from "./db/index.js";
 import { items } from "./db/schema.js";
@@ -171,6 +172,7 @@ app.route("/api/stats", statsRouter);
 app.route("/api/webhook", webhookRouter);
 app.route("/api/settings", settingsRouter);
 app.route("/api/categories", categoriesRouter);
+app.route("/api/dashboard", dashboardRouter);
 app.route("/api", sharesRouter);
 
 // Health check endpoint (unauthenticated — skipped in auth middleware)
