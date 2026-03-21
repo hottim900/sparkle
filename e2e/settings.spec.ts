@@ -8,7 +8,7 @@ test.describe("Settings", () => {
     await page.getByTestId("sidebar").getByRole("link", { name: "設定" }).click();
 
     // Verify page heading (lazy-loaded)
-    await expect(page.getByRole("heading", { name: "設定" })).toBeVisible({
+    await expect(page.getByRole("heading", { name: "設定", exact: true })).toBeVisible({
       timeout: 10_000,
     });
 
@@ -24,7 +24,7 @@ test.describe("Settings", () => {
   test("toggles theme between light and dark", async ({ page }) => {
     await page.goto("/");
     await page.getByTestId("sidebar").getByRole("link", { name: "設定" }).click();
-    await expect(page.getByRole("heading", { name: "設定" })).toBeVisible({
+    await expect(page.getByRole("heading", { name: "設定", exact: true })).toBeVisible({
       timeout: 10_000,
     });
 
@@ -62,7 +62,7 @@ test.describe("Settings", () => {
   test("exports data as JSON download", async ({ page }) => {
     await page.goto("/");
     await page.getByTestId("sidebar").getByRole("link", { name: "設定" }).click();
-    await expect(page.getByRole("heading", { name: "設定" })).toBeVisible({
+    await expect(page.getByRole("heading", { name: "設定", exact: true })).toBeVisible({
       timeout: 10_000,
     });
 
