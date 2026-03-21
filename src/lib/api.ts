@@ -15,6 +15,9 @@ import type {
   SettingsResponse,
   ShareResponse,
   ListSharesResponse,
+  DashboardItemsResponse,
+  AttentionResponse,
+  DashboardStaleResponse,
 } from "./types";
 
 const API_BASE = "/api";
@@ -221,6 +224,7 @@ export async function createItem(input: {
   due?: string | null;
   tags?: string[];
   source?: string | null;
+  origin?: string;
   linked_note_id?: string | null;
   category_id?: string | null;
 }): Promise<Item> {
@@ -248,6 +252,7 @@ export async function updateItem(
     aliases?: string[];
     linked_note_id?: string | null;
     category_id?: string | null;
+    viewed_at?: string | null;
   },
 ): Promise<Item> {
   return request<Item>(`/items/${id}`, {
@@ -403,6 +408,45 @@ export async function reorderCategories(
     method: "PATCH",
     body: JSON.stringify({ items }),
   });
+}
+
+// Dashboard API
+export async function getUnreviewed(params?: {
+  limit?: number;
+  offset?: number;
+}): Promise<DashboardItemsResponse> {
+  const search = new URLSearchParams();
+  if (params?.limit) search.set("limit", String(params.limit));
+  if (params?.offset) search.set("offset", String(params.offset));
+  const qs = search.toString();
+  return request<DashboardItemsResponse>(`/dashboard/unreviewed${qs ? `?${qs}` : ""}`);
+}
+
+export async function getRecent(params?: {
+  limit?: number;
+  offset?: number;
+}): Promise<DashboardItemsResponse> {
+  const search = new URLSearchParams();
+  if (params?.limit) search.set("limit", String(params.limit));
+  if (params?.offset) search.set("offset", String(params.offset));
+  const qs = search.toString();
+  return request<DashboardItemsResponse>(`/dashboard/recent${qs ? `?${qs}` : ""}`);
+}
+
+export async function getAttention(params?: { limit?: number }): Promise<AttentionResponse> {
+  const search = new URLSearchParams();
+  if (params?.limit) search.set("limit", String(params.limit));
+  const qs = search.toString();
+  return request<AttentionResponse>(`/dashboard/attention${qs ? `?${qs}` : ""}`);
+}
+
+export async function getDashboardStale(params?: {
+  limit?: number;
+}): Promise<DashboardStaleResponse> {
+  const search = new URLSearchParams();
+  if (params?.limit) search.set("limit", String(params.limit));
+  const qs = search.toString();
+  return request<DashboardStaleResponse>(`/dashboard/stale${qs ? `?${qs}` : ""}`);
 }
 
 export { ApiClientError };

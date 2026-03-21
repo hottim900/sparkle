@@ -39,6 +39,9 @@ export function Settings({ onSettingsChanged }: SettingsProps) {
   const [vaultPath, setVaultPath] = useState("");
   const [inboxFolder, setInboxFolder] = useState("0_Inbox");
   const [exportMode, setExportMode] = useState<"new" | "overwrite">("overwrite");
+  const [recentDays, setRecentDays] = useState("7");
+  const [staleDays, setStaleDays] = useState("14");
+  const [savingDashboard, setSavingDashboard] = useState(false);
 
   const { resolvedTheme, setTheme } = useTheme();
   const isOnline = useOnlineStatus();
@@ -56,6 +59,8 @@ export function Settings({ onSettingsChanged }: SettingsProps) {
         setVaultPath(settingsData.obsidian_vault_path);
         setInboxFolder(settingsData.obsidian_inbox_folder);
         setExportMode(settingsData.obsidian_export_mode);
+        setRecentDays(settingsData.recent_days ?? "7");
+        setStaleDays(settingsData.stale_days ?? "14");
       } catch {
         if (!cancelled) {
           toast.error("無法載入設定");
@@ -127,12 +132,33 @@ export function Settings({ onSettingsChanged }: SettingsProps) {
     }
   }
 
+  async function handleSaveDashboard() {
+    setSavingDashboard(true);
+    try {
+      const data = await updateSettings({
+        recent_days: recentDays,
+        stale_days: staleDays,
+      });
+      setSettings(data);
+      toast.success("Dashboard 設定已儲存");
+      onSettingsChanged();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "儲存設定失敗");
+    } finally {
+      setSavingDashboard(false);
+    }
+  }
+
   const hasChanges =
     settings !== null &&
     (enabled !== (settings.obsidian_enabled === "true") ||
       vaultPath !== settings.obsidian_vault_path ||
       inboxFolder !== settings.obsidian_inbox_folder ||
       exportMode !== settings.obsidian_export_mode);
+
+  const hasDashboardChanges =
+    settings !== null &&
+    (recentDays !== (settings.recent_days ?? "7") || staleDays !== (settings.stale_days ?? "14"));
 
   if (loading) {
     return (
@@ -233,7 +259,58 @@ export function Settings({ onSettingsChanged }: SettingsProps) {
           </div>
         </section>
 
-        {/* Section 2: Category Management */}
+        {/* Section 2: Dashboard Settings */}
+        <section className="space-y-4">
+          <div className="flex items-center gap-2">
+            <SettingsIcon className="h-4 w-4 text-muted-foreground" />
+            <h2 className="text-sm font-semibold text-muted-foreground">Dashboard 設定</h2>
+          </div>
+
+          <div className="border rounded-lg p-4 space-y-4">
+            <div>
+              <label className="text-sm text-muted-foreground block mb-1">最近新增天數</label>
+              <Input
+                type="number"
+                min={1}
+                max={365}
+                value={recentDays}
+                onChange={(e) => setRecentDays(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Dashboard「最近新增」卡片顯示最近幾天的項目
+              </p>
+            </div>
+
+            <div>
+              <label className="text-sm text-muted-foreground block mb-1">過期筆記天數</label>
+              <Input
+                type="number"
+                min={1}
+                max={365}
+                value={staleDays}
+                onChange={(e) => setStaleDays(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground mt-1">發展中筆記超過幾天未更新視為過期</p>
+            </div>
+
+            <div className="flex justify-end">
+              <Button
+                onClick={handleSaveDashboard}
+                disabled={savingDashboard || !hasDashboardChanges || !isOnline}
+                className="gap-1.5"
+              >
+                {savingDashboard ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Save className="h-4 w-4" />
+                )}
+                儲存設定
+              </Button>
+            </div>
+          </div>
+        </section>
+
+        {/* Section 3: Category Management */}
         <CategoryManagement />
 
         {/* Section 3: General */}

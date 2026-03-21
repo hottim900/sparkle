@@ -38,6 +38,8 @@ function makeSettings(overrides: Partial<SettingsResponse> = {}): SettingsRespon
     obsidian_vault_path: "/home/user/vault",
     obsidian_inbox_folder: "0_Inbox",
     obsidian_export_mode: "overwrite",
+    recent_days: "7",
+    stale_days: "14",
     ...overrides,
   };
 }
@@ -113,8 +115,9 @@ describe("Settings", () => {
     // Toggle enable → makes hasChanges = true
     await user.click(screen.getByText("已停用"));
 
-    // Click save
-    await user.click(screen.getByText("儲存設定"));
+    // Click save (first "儲存設定" button = Obsidian section)
+    const saveBtns = screen.getAllByText("儲存設定");
+    await user.click(saveBtns[0]);
 
     await waitFor(() => {
       expect(mockUpdateSettings).toHaveBeenCalledWith(
@@ -138,7 +141,8 @@ describe("Settings", () => {
     });
 
     await user.click(screen.getByText("已停用"));
-    await user.click(screen.getByText("儲存設定"));
+    const saveBtns = screen.getAllByText("儲存設定");
+    await user.click(saveBtns[0]);
 
     await waitFor(() => {
       expect(toast.error).toHaveBeenCalledWith("Server error");
@@ -214,8 +218,9 @@ describe("Settings", () => {
       // Toggle to create a change
       await user.click(screen.getByText("已停用"));
 
-      const saveBtn = screen.getByRole("button", { name: /儲存設定/ });
-      expect(saveBtn).toBeDisabled();
+      // Both save buttons should be disabled when offline
+      const saveBtns = screen.getAllByRole("button", { name: /儲存設定/ });
+      expect(saveBtns[0]).toBeDisabled();
     });
 
     it("keeps export button enabled when offline", async () => {

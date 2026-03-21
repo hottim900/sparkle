@@ -1,69 +1,127 @@
-import { useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { getStats, getFocus, getStaleNotes, getCategoryDistribution } from "@/lib/api";
-import { parseItems } from "@/lib/types";
+import {
+  getStats,
+  getUnreviewed,
+  getRecent,
+  getAttention,
+  getDashboardStale,
+  getCategoryDistribution,
+} from "@/lib/api";
+import { parseItems, type ParsedItem } from "@/lib/types";
+import type { AttentionItem, DashboardStaleItem } from "@/lib/types";
 import { queryKeys } from "@/lib/query-keys";
+import { formatRelativeTime } from "@/lib/date-utils";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import {
   LayoutDashboard,
-  Target,
   TrendingUp,
   AlertTriangle,
   ChevronRight,
+  ChevronDown,
+  ChevronUp,
   Sparkles,
   Clock,
   Loader2,
+  Inbox,
+  CalendarPlus,
+  AlertCircle,
 } from "lucide-react";
 
-function isOverdue(due: string | null): boolean {
-  if (!due) return false;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const dueDate = new Date(due);
-  dueDate.setHours(0, 0, 0, 0);
-  return dueDate < today;
+function typeLabel(item: ParsedItem): string {
+  const labels: Record<string, string> = {
+    note: "筆記",
+    todo: "待辦",
+    scratch: "暫存",
+  };
+  return labels[item.type] ?? item.type;
 }
 
-function formatDueDate(due: string): string {
-  const date = new Date(due);
-  return date.toLocaleDateString("zh-TW", {
-    month: "short",
-    day: "numeric",
-  });
+function getItemRoute(item: ParsedItem): string {
+  if (item.type === "todo") return item.status === "done" ? "/todos/done" : "/todos";
+  if (item.type === "scratch") return "/scratch";
+  return `/notes/${item.status}`;
 }
 
-function priorityLabel(priority: string | null): string {
-  switch (priority) {
-    case "high":
-      return "高";
-    case "medium":
-      return "中";
-    case "low":
-      return "低";
-    default:
-      return "";
-  }
+interface DashboardCardProps {
+  title: string;
+  icon: React.ReactNode;
+  count: number | undefined;
+  items: ParsedItem[];
+  borderColor: string;
+  loading: boolean;
+  viewAllPath: string;
+  renderItem: (item: ParsedItem) => React.ReactNode;
+  onItemClick: (item: ParsedItem) => void;
+  emptyText: string;
 }
 
-function priorityVariant(
-  priority: string | null,
-): "destructive" | "default" | "secondary" | "outline" {
-  switch (priority) {
-    case "high":
-      return "destructive";
-    case "medium":
-      return "default";
-    case "low":
-      return "secondary";
-    default:
-      return "outline";
-  }
+function DashboardCard({
+  title,
+  icon,
+  count,
+  items,
+  borderColor,
+  loading,
+  viewAllPath,
+  renderItem,
+  onItemClick,
+  emptyText,
+}: DashboardCardProps) {
+  const navigate = useNavigate();
+
+  return (
+    <div className={`border rounded-lg border-l-4 ${borderColor} overflow-hidden`}>
+      <div className="p-3 pb-2 flex items-center justify-between">
+        <div className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground">
+          {icon}
+          {title}
+        </div>
+        {count !== undefined && count > 0 && (
+          <Badge variant="secondary" className="text-xs">
+            {count}
+          </Badge>
+        )}
+      </div>
+
+      <div className="px-3 pb-3 space-y-1">
+        {loading ? (
+          <div className="flex justify-center py-4">
+            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+          </div>
+        ) : items.length === 0 ? (
+          <p className="text-xs text-muted-foreground py-3 text-center">{emptyText}</p>
+        ) : (
+          <>
+            {items.map((item) => (
+              <button
+                key={item.id}
+                className="w-full text-left rounded-md px-2 py-1.5 text-sm hover:bg-accent transition-colors"
+                onClick={() => onItemClick(item)}
+              >
+                {renderItem(item)}
+              </button>
+            ))}
+            {count !== undefined && count > items.length && (
+              <button
+                className="w-full text-center text-xs text-muted-foreground hover:text-foreground py-1"
+                onClick={() => navigate({ to: viewAllPath })}
+              >
+                查看全部 ({count})
+              </button>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
 }
 
 export function Dashboard() {
   const navigate = useNavigate();
+  const [staleExpanded, setStaleExpanded] = useState(false);
 
   const {
     data: stats,
@@ -74,14 +132,24 @@ export function Dashboard() {
     queryFn: getStats,
   });
 
-  const { data: focusItems = [], isLoading: focusLoading } = useQuery({
-    queryKey: queryKeys.focus,
-    queryFn: () => getFocus().then((r) => parseItems(r.items).slice(0, 5)),
+  const { data: unreviewedData, isLoading: unreviewedLoading } = useQuery({
+    queryKey: queryKeys.unreviewed,
+    queryFn: () => getUnreviewed({ limit: 5 }),
   });
 
-  const { data: staleItems = [], isLoading: staleLoading } = useQuery({
-    queryKey: queryKeys.stale,
-    queryFn: () => getStaleNotes().then((r) => r.items),
+  const { data: recentData, isLoading: recentLoading } = useQuery({
+    queryKey: queryKeys.recent,
+    queryFn: () => getRecent({ limit: 5 }),
+  });
+
+  const { data: attentionData, isLoading: attentionLoading } = useQuery({
+    queryKey: queryKeys.attention,
+    queryFn: () => getAttention({ limit: 5 }),
+  });
+
+  const { data: staleData, isLoading: staleLoading } = useQuery({
+    queryKey: queryKeys.dashboardStale,
+    queryFn: () => getDashboardStale({ limit: 10 }),
   });
 
   const { data: categoryDist = [], isLoading: categoryLoading } = useQuery({
@@ -93,7 +161,12 @@ export function Dashboard() {
     if (statsError) toast.error("無法載入總覽資料");
   }, [statsError]);
 
-  if (statsLoading || focusLoading || staleLoading || categoryLoading) {
+  const unreviewedItems = unreviewedData ? parseItems(unreviewedData.items) : [];
+  const recentItems = recentData ? parseItems(recentData.items) : [];
+  const attentionItems = attentionData ? parseItems(attentionData.items as AttentionItem[]) : [];
+  const attentionRawItems = attentionData?.items ?? [];
+
+  if (statsLoading || categoryLoading) {
     return (
       <div className="flex items-center justify-center py-12">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -103,8 +176,11 @@ export function Dashboard() {
 
   if (!stats) return null;
 
-  const hasAttentionItems = focusItems.length > 0 || staleItems.length > 0;
   const maxCategoryCount = Math.max(...categoryDist.map((d) => d.count), 1);
+
+  function navigateToItem(item: ParsedItem) {
+    navigate({ to: getItemRoute(item), search: { item: item.id } });
+  }
 
   return (
     <div className="flex-1 overflow-y-auto pb-4">
@@ -115,70 +191,125 @@ export function Dashboard() {
           <h1 className="text-xl font-bold">總覽</h1>
         </div>
 
-        {/* Section 1: Needs Attention */}
+        {/* Section 1: Dashboard Cards */}
         <section className="space-y-3">
-          <div className="flex items-center gap-2">
-            <Target className="h-4 w-4 text-muted-foreground" />
-            <h2 className="text-sm font-semibold text-muted-foreground">需要關注</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {/* Unreviewed card */}
+            <DashboardCard
+              title="未處理"
+              icon={<Inbox className="h-4 w-4" />}
+              count={unreviewedData?.total}
+              items={unreviewedItems}
+              borderColor="border-l-amber-500"
+              loading={unreviewedLoading}
+              viewAllPath="/unreviewed"
+              emptyText="沒有未處理的項目"
+              renderItem={(item) => (
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline" className="text-xs shrink-0">
+                    {typeLabel(item)}
+                  </Badge>
+                  <span className="truncate">{item.title}</span>
+                </div>
+              )}
+              onItemClick={navigateToItem}
+            />
+
+            {/* Recently created card */}
+            <DashboardCard
+              title="最近新增"
+              icon={<CalendarPlus className="h-4 w-4" />}
+              count={recentData?.total}
+              items={recentItems}
+              borderColor="border-l-blue-500"
+              loading={recentLoading}
+              viewAllPath="/recent"
+              emptyText="最近沒有新增項目"
+              renderItem={(item) => (
+                <div className="flex items-center justify-between gap-2">
+                  <span className="truncate">{item.title}</span>
+                  <span className="text-xs text-muted-foreground shrink-0">
+                    {formatRelativeTime(item.created)}
+                  </span>
+                </div>
+              )}
+              onItemClick={navigateToItem}
+            />
+
+            {/* Needs attention card */}
+            <DashboardCard
+              title="需要關注"
+              icon={<AlertCircle className="h-4 w-4" />}
+              count={attentionData?.total}
+              items={attentionItems}
+              borderColor="border-l-red-500"
+              loading={attentionLoading}
+              viewAllPath="/attention"
+              emptyText="沒有需要關注的項目"
+              renderItem={(item) => {
+                const rawItem = attentionRawItems.find((r) => r.id === item.id);
+                const reason = rawItem ? (rawItem as AttentionItem).attention_reason : undefined;
+                return (
+                  <div className="flex items-center gap-2">
+                    {reason === "overdue" && (
+                      <Badge variant="destructive" className="text-xs shrink-0">
+                        逾期
+                      </Badge>
+                    )}
+                    {reason === "high_priority" && (
+                      <Badge className="text-xs shrink-0 bg-orange-500 hover:bg-orange-600">
+                        高優先
+                      </Badge>
+                    )}
+                    <span className="truncate">{item.title}</span>
+                  </div>
+                );
+              }}
+              onItemClick={navigateToItem}
+            />
           </div>
 
-          {!hasAttentionItems ? (
-            <div className="border rounded-lg p-6 text-center text-sm text-muted-foreground">
-              沒有需要關注的項目，做得好！
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {/* Focus items */}
-              {focusItems.map((item) => {
-                const overdue = isOverdue(item.due);
-                return (
-                  <button
-                    key={item.id}
-                    className={`w-full border rounded-lg p-3 text-left hover:bg-accent transition-colors ${
-                      overdue ? "border-red-300 dark:border-red-800" : ""
-                    }`}
-                    onClick={() => navigate({ to: "/all", search: { item: item.id } })}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <span className="text-sm font-medium truncate flex-1">{item.title}</span>
-                      <div className="flex items-center gap-1 flex-shrink-0">
-                        {item.priority && (
-                          <Badge variant={priorityVariant(item.priority)}>
-                            {priorityLabel(item.priority)}
-                          </Badge>
-                        )}
+          {/* Stale notes collapsible row */}
+          {!staleLoading && staleData && staleData.total > 0 && (
+            <div>
+              <button
+                className="w-full border rounded-lg px-4 py-2 text-sm text-muted-foreground hover:bg-accent transition-colors flex items-center justify-between"
+                onClick={() => setStaleExpanded(!staleExpanded)}
+              >
+                <span>
+                  <Clock className="h-3.5 w-3.5 inline mr-1.5" />
+                  {staleData.total} 個發展中筆記超過設定天數未更新
+                </span>
+                {staleExpanded ? (
+                  <ChevronUp className="h-4 w-4" />
+                ) : (
+                  <ChevronDown className="h-4 w-4" />
+                )}
+              </button>
+              {staleExpanded && (
+                <div className="mt-2 space-y-1">
+                  {staleData.items.map((item: DashboardStaleItem) => (
+                    <button
+                      key={item.id}
+                      className="w-full border rounded-lg p-3 text-left hover:bg-accent transition-colors"
+                      onClick={() =>
+                        navigate({
+                          to: "/notes/developing",
+                          search: { item: item.id },
+                        })
+                      }
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="text-sm font-medium truncate flex-1">{item.title}</span>
+                        <Badge variant="outline" className="text-amber-600 dark:text-amber-400">
+                          <Clock className="h-3 w-3 mr-1" />
+                          {item.days_stale} 天未更新
+                        </Badge>
                       </div>
-                    </div>
-                    {item.due && (
-                      <p
-                        className={`text-xs mt-1 ${
-                          overdue ? "text-red-500" : "text-muted-foreground"
-                        }`}
-                      >
-                        {overdue ? "已逾期 - " : "到期日 "}
-                        {formatDueDate(item.due)}
-                      </p>
-                    )}
-                  </button>
-                );
-              })}
-
-              {/* Stale notes */}
-              {staleItems.map((item) => (
-                <button
-                  key={item.id}
-                  className="w-full border rounded-lg p-3 text-left hover:bg-accent transition-colors"
-                  onClick={() => navigate({ to: "/all", search: { item: item.id } })}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <span className="text-sm font-medium truncate flex-1">{item.title}</span>
-                    <Badge variant="outline" className="text-amber-600 dark:text-amber-400">
-                      <Clock className="h-3 w-3 mr-1" />
-                      {item.days_stale} 天未更新
-                    </Badge>
-                  </div>
-                </button>
-              ))}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </section>
