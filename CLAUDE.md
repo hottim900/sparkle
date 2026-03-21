@@ -26,7 +26,7 @@ Notes: `fleeting` → `developing` → `permanent` → `exported` → `archived`
 
 Type conversion auto-maps status server-side. `category_id` preserved; `due`/`linked_note_id` cleared on todo→note; tags/priority/aliases cleared on →scratch.
 
-DB migration version 0→13, idempotent. Migration safety enforced by PostToolUse hook.
+DB migration version 0→14, idempotent. Migration safety enforced by PostToolUse hook.
 
 ## Conventions
 
