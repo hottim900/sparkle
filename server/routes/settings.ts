@@ -11,6 +11,8 @@ const ALLOWED_KEYS = [
   "obsidian_vault_path",
   "obsidian_inbox_folder",
   "obsidian_export_mode",
+  "recent_days",
+  "stale_days",
 ] as const;
 
 const updateSettingsSchema = z
@@ -43,6 +45,18 @@ const updateSettingsSchema = z
       return true;
     },
     { message: 'obsidian_export_mode must be "overwrite" or "new"' },
+  )
+  .refine(
+    (obj) => {
+      for (const key of ["recent_days", "stale_days"] as const) {
+        if (key in obj) {
+          const n = parseInt(obj[key] ?? "", 10);
+          if (isNaN(n) || n < 1 || n > 365) return false;
+        }
+      }
+      return true;
+    },
+    { message: "recent_days and stale_days must be integers between 1 and 365" },
   );
 
 // GET /api/settings — return all settings

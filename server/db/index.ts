@@ -8,7 +8,7 @@ import { logger } from "../lib/logger.js";
 
 const DB_PATH = process.env.DATABASE_URL || "./data/todo.db";
 
-const TARGET_VERSION = 13;
+const TARGET_VERSION = 14;
 
 function getSchemaVersion(sqlite: Database.Database): number {
   // Check if schema_version table exists
@@ -271,6 +271,30 @@ function runMigrations(sqlite: Database.Database) {
 
     setSchemaVersion(sqlite, 13);
   }
+
+  // Step 13→14: Add viewed_at column + dashboard settings
+  if (version < 14) {
+    try {
+      sqlite.exec("ALTER TABLE items ADD COLUMN viewed_at TEXT DEFAULT NULL");
+    } catch (e: unknown) {
+      const msg = (e as Error).message || "";
+      if (!msg.includes("duplicate column")) throw e;
+    }
+
+    sqlite.exec("CREATE INDEX IF NOT EXISTS idx_items_viewed_at ON items(viewed_at)");
+    sqlite.exec("CREATE INDEX IF NOT EXISTS idx_items_status_modified ON items(status, modified)");
+
+    // Mark all existing items as viewed (start with clean inbox)
+    sqlite.exec("UPDATE items SET viewed_at = created WHERE viewed_at IS NULL");
+
+    // Dashboard settings
+    sqlite.exec(`
+      INSERT OR IGNORE INTO settings (key, value) VALUES ('recent_days', '7');
+      INSERT OR IGNORE INTO settings (key, value) VALUES ('stale_days', '14');
+    `);
+
+    setSchemaVersion(sqlite, 14);
+  }
 }
 
 function createDb() {
@@ -305,6 +329,7 @@ function createDb() {
         aliases TEXT NOT NULL DEFAULT '[]',
         linked_note_id TEXT DEFAULT NULL,
         category_id TEXT DEFAULT NULL,
+        viewed_at TEXT DEFAULT NULL,
         created TEXT NOT NULL,
         modified TEXT NOT NULL,
         FOREIGN KEY (linked_note_id) REFERENCES items(id) ON DELETE SET NULL,
@@ -314,6 +339,8 @@ function createDb() {
       CREATE INDEX idx_items_status ON items(status);
       CREATE INDEX idx_items_type ON items(type);
       CREATE INDEX idx_items_created ON items(created DESC);
+      CREATE INDEX idx_items_viewed_at ON items(viewed_at);
+      CREATE INDEX idx_items_status_modified ON items(status, modified);
 
       CREATE TABLE settings (
         key TEXT PRIMARY KEY,
@@ -323,7 +350,9 @@ function createDb() {
         ('obsidian_enabled', 'false'),
         ('obsidian_vault_path', ''),
         ('obsidian_inbox_folder', '0_Inbox'),
-        ('obsidian_export_mode', 'overwrite');
+        ('obsidian_export_mode', 'overwrite'),
+        ('recent_days', '7'),
+        ('stale_days', '14');
 
       CREATE TABLE share_tokens (
         id TEXT PRIMARY KEY,

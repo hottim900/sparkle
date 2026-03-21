@@ -46,6 +46,22 @@ export function getObsidianSettings(sqlite: Database.Database): ObsidianSettings
   };
 }
 
+export interface DashboardSettings {
+  recentDays: number;
+  staleDays: number;
+}
+
+/**
+ * Get dashboard-specific settings with typed conversions.
+ */
+export function getDashboardSettings(sqlite: Database.Database): DashboardSettings {
+  const all = getSettings(sqlite);
+  return {
+    recentDays: parseInt(all.recent_days ?? "7", 10) || 7,
+    staleDays: parseInt(all.stale_days ?? "14", 10) || 14,
+  };
+}
+
 /**
  * Update one or more settings. Uses upsert (INSERT OR REPLACE).
  */

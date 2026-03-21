@@ -1716,6 +1716,8 @@ describe("GET /api/settings", () => {
       obsidian_vault_path: "",
       obsidian_inbox_folder: "0_Inbox",
       obsidian_export_mode: "overwrite",
+      recent_days: "7",
+      stale_days: "14",
     });
   });
 });
