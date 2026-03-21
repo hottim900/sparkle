@@ -24,6 +24,7 @@ export interface Item {
   share_visibility: "unlisted" | "public" | null;
   category_id: string | null;
   category_name: string | null;
+  viewed_at: string | null;
   created: string;
   modified: string;
 }
@@ -124,6 +125,36 @@ export interface SettingsResponse {
   obsidian_vault_path: string;
   obsidian_inbox_folder: string;
   obsidian_export_mode: "new" | "overwrite";
+  recent_days: string;
+  stale_days: string;
+}
+
+// Dashboard types
+export interface DashboardItemsResponse {
+  items: Item[];
+  total: number;
+}
+
+export interface AttentionItem extends Item {
+  attention_reason: "overdue" | "high_priority";
+}
+
+export interface AttentionResponse {
+  items: AttentionItem[];
+  total: number;
+}
+
+export interface DashboardStaleItem {
+  id: string;
+  title: string;
+  category_name: string | null;
+  modified: string;
+  days_stale: number;
+}
+
+export interface DashboardStaleResponse {
+  items: DashboardStaleItem[];
+  total: number;
 }
 
 // Parsed item with tags and aliases as arrays

@@ -26,4 +26,8 @@ export const queryKeys = {
   stale: ["stale"] as const,
   categoryDistribution: ["categoryDistribution"] as const,
   config: ["config"] as const,
+  unreviewed: ["unreviewed"] as const,
+  recent: ["recent"] as const,
+  attention: ["attention"] as const,
+  dashboardStale: ["dashboardStale"] as const,
 } as const;

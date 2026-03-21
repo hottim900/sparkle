@@ -93,6 +93,7 @@ export function QuickCapture() {
         priority: priority === "none" ? null : priority,
         tags: selectedTags,
         source: source.trim() || null,
+        origin: "app",
       });
       setTitle("");
       setSelectedTags([]);

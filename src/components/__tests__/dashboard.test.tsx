@@ -2,17 +2,21 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Dashboard } from "../dashboard";
 import { renderWithContext } from "@/test-utils";
-import type { StatsResponse, StaleItem, CategoryDistribution } from "@/lib/types";
+import type { StatsResponse, CategoryDistribution } from "@/lib/types";
 
 const mockGetStats = vi.fn();
-const mockGetFocus = vi.fn();
-const mockGetStaleNotes = vi.fn();
+const mockGetUnreviewed = vi.fn();
+const mockGetRecent = vi.fn();
+const mockGetAttention = vi.fn();
+const mockGetDashboardStale = vi.fn();
 const mockGetCategoryDistribution = vi.fn();
 
 vi.mock("@/lib/api", () => ({
   getStats: (...args: unknown[]) => mockGetStats(...args),
-  getFocus: (...args: unknown[]) => mockGetFocus(...args),
-  getStaleNotes: (...args: unknown[]) => mockGetStaleNotes(...args),
+  getUnreviewed: (...args: unknown[]) => mockGetUnreviewed(...args),
+  getRecent: (...args: unknown[]) => mockGetRecent(...args),
+  getAttention: (...args: unknown[]) => mockGetAttention(...args),
+  getDashboardStale: (...args: unknown[]) => mockGetDashboardStale(...args),
   getCategoryDistribution: (...args: unknown[]) => mockGetCategoryDistribution(...args),
 }));
 
@@ -44,18 +48,18 @@ function makeStats(overrides: Partial<StatsResponse> = {}): StatsResponse {
   };
 }
 
-function makeFocusItem(overrides: Record<string, unknown> = {}) {
+function makeDashboardItem(overrides: Record<string, unknown> = {}) {
   return {
-    id: "focus-1",
-    type: "todo",
-    title: "Urgent Task",
+    id: "item-1",
+    type: "note",
+    title: "Test Item",
     content: "",
-    status: "active",
-    priority: "high",
-    due: "2026-03-01",
+    status: "fleeting",
+    priority: null,
+    due: null,
     tags: "[]",
     source: null,
-    origin: "web",
+    origin: "mcp",
     aliases: "[]",
     linked_note_id: null,
     linked_note_title: null,
@@ -63,19 +67,9 @@ function makeFocusItem(overrides: Record<string, unknown> = {}) {
     share_visibility: null,
     category_id: null,
     category_name: null,
-    created: "2026-01-01T00:00:00Z",
-    modified: "2026-01-01T00:00:00Z",
-    ...overrides,
-  };
-}
-
-function makeStaleItem(overrides: Partial<StaleItem> = {}): StaleItem {
-  return {
-    id: "stale-1",
-    title: "Stale Note",
-    category_name: null,
-    modified: "2026-02-20T00:00:00Z",
-    days_stale: 12,
+    viewed_at: null,
+    created: "2026-03-20T00:00:00Z",
+    modified: "2026-03-20T00:00:00Z",
     ...overrides,
   };
 }
@@ -92,8 +86,10 @@ function makeCategoryDist(overrides: Partial<CategoryDistribution> = {}): Catego
 
 function setupDefaultMocks() {
   mockGetStats.mockResolvedValue(makeStats());
-  mockGetFocus.mockResolvedValue({ items: [] });
-  mockGetStaleNotes.mockResolvedValue({ items: [] });
+  mockGetUnreviewed.mockResolvedValue({ items: [], total: 0 });
+  mockGetRecent.mockResolvedValue({ items: [], total: 0 });
+  mockGetAttention.mockResolvedValue({ items: [], total: 0 });
+  mockGetDashboardStale.mockResolvedValue({ items: [], total: 0 });
   mockGetCategoryDistribution.mockResolvedValue({ distribution: [] });
 }
 
@@ -105,8 +101,10 @@ describe("Dashboard", () => {
   // --- Loading ---
   it("shows loading spinner initially", () => {
     mockGetStats.mockReturnValue(new Promise(() => {}));
-    mockGetFocus.mockReturnValue(new Promise(() => {}));
-    mockGetStaleNotes.mockReturnValue(new Promise(() => {}));
+    mockGetUnreviewed.mockResolvedValue({ items: [], total: 0 });
+    mockGetRecent.mockResolvedValue({ items: [], total: 0 });
+    mockGetAttention.mockResolvedValue({ items: [], total: 0 });
+    mockGetDashboardStale.mockResolvedValue({ items: [], total: 0 });
     mockGetCategoryDistribution.mockReturnValue(new Promise(() => {}));
 
     renderWithContext(<Dashboard />);
@@ -114,91 +112,170 @@ describe("Dashboard", () => {
     expect(spinner).toBeInTheDocument();
   });
 
-  // --- Section 1: Needs Attention ---
-  describe("需要關注 section", () => {
-    it("shows focus items with priority badge", async () => {
+  // --- Section 1: Dashboard Cards ---
+  describe("Dashboard cards section", () => {
+    it("shows unreviewed items with type badge", async () => {
       mockGetStats.mockResolvedValue(makeStats());
-      mockGetFocus.mockResolvedValue({
-        items: [makeFocusItem({ title: "High Priority Task", priority: "high" })],
+      mockGetUnreviewed.mockResolvedValue({
+        items: [makeDashboardItem({ id: "ur-1", title: "Unreviewed Note", type: "note" })],
+        total: 1,
       });
-      mockGetStaleNotes.mockResolvedValue({ items: [] });
+      mockGetRecent.mockResolvedValue({ items: [], total: 0 });
+      mockGetAttention.mockResolvedValue({ items: [], total: 0 });
+      mockGetDashboardStale.mockResolvedValue({ items: [], total: 0 });
       mockGetCategoryDistribution.mockResolvedValue({ distribution: [] });
 
       renderWithContext(<Dashboard />);
 
       await waitFor(() => {
-        expect(screen.getByText("High Priority Task")).toBeInTheDocument();
+        expect(screen.getByText("Unreviewed Note")).toBeInTheDocument();
       });
-      expect(screen.getByText("高")).toBeInTheDocument();
+      expect(screen.getByText("筆記")).toBeInTheDocument();
     });
 
-    it("shows focus item due date", async () => {
+    it("shows recent items with relative time", async () => {
       mockGetStats.mockResolvedValue(makeStats());
-      mockGetFocus.mockResolvedValue({
-        items: [makeFocusItem({ title: "Due Task", due: "2026-03-10" })],
+      mockGetUnreviewed.mockResolvedValue({ items: [], total: 0 });
+      mockGetRecent.mockResolvedValue({
+        items: [
+          makeDashboardItem({
+            id: "rc-1",
+            title: "Recent Item",
+            created: new Date(Date.now() - 3600000).toISOString(),
+          }),
+        ],
+        total: 1,
       });
-      mockGetStaleNotes.mockResolvedValue({ items: [] });
+      mockGetAttention.mockResolvedValue({ items: [], total: 0 });
+      mockGetDashboardStale.mockResolvedValue({ items: [], total: 0 });
       mockGetCategoryDistribution.mockResolvedValue({ distribution: [] });
 
       renderWithContext(<Dashboard />);
 
       await waitFor(() => {
-        expect(screen.getByText("Due Task")).toBeInTheDocument();
+        expect(screen.getByText("Recent Item")).toBeInTheDocument();
       });
-      // Should show formatted due date
-      expect(screen.getByText(/3月10日/)).toBeInTheDocument();
+      expect(screen.getByText("1 小時前")).toBeInTheDocument();
     });
 
-    it("shows stale notes with days badge", async () => {
+    it("shows attention items with overdue badge", async () => {
       mockGetStats.mockResolvedValue(makeStats());
-      mockGetFocus.mockResolvedValue({ items: [] });
-      mockGetStaleNotes.mockResolvedValue({
-        items: [makeStaleItem({ title: "Old Developing Note", days_stale: 14 })],
+      mockGetUnreviewed.mockResolvedValue({ items: [], total: 0 });
+      mockGetRecent.mockResolvedValue({ items: [], total: 0 });
+      mockGetAttention.mockResolvedValue({
+        items: [
+          {
+            ...makeDashboardItem({
+              id: "at-1",
+              title: "Overdue Task",
+              type: "todo",
+              status: "active",
+              due: "2026-03-01",
+            }),
+            attention_reason: "overdue",
+          },
+        ],
+        total: 1,
       });
+      mockGetDashboardStale.mockResolvedValue({ items: [], total: 0 });
       mockGetCategoryDistribution.mockResolvedValue({ distribution: [] });
 
       renderWithContext(<Dashboard />);
 
       await waitFor(() => {
-        expect(screen.getByText("Old Developing Note")).toBeInTheDocument();
+        expect(screen.getByText("Overdue Task")).toBeInTheDocument();
       });
-      expect(screen.getByText("14 天未更新")).toBeInTheDocument();
+      expect(screen.getByText("逾期")).toBeInTheDocument();
     });
 
-    it("shows empty state when no focus items and no stale notes", async () => {
+    it("shows attention items with high priority badge", async () => {
+      mockGetStats.mockResolvedValue(makeStats());
+      mockGetUnreviewed.mockResolvedValue({ items: [], total: 0 });
+      mockGetRecent.mockResolvedValue({ items: [], total: 0 });
+      mockGetAttention.mockResolvedValue({
+        items: [
+          {
+            ...makeDashboardItem({
+              id: "at-2",
+              title: "High Priority Item",
+              priority: "high",
+            }),
+            attention_reason: "high_priority",
+          },
+        ],
+        total: 1,
+      });
+      mockGetDashboardStale.mockResolvedValue({ items: [], total: 0 });
+      mockGetCategoryDistribution.mockResolvedValue({ distribution: [] });
+
+      renderWithContext(<Dashboard />);
+
+      await waitFor(() => {
+        expect(screen.getByText("High Priority Item")).toBeInTheDocument();
+      });
+      expect(screen.getByText("高優先")).toBeInTheDocument();
+    });
+
+    it("shows empty state text when cards have no items", async () => {
       setupDefaultMocks();
 
       renderWithContext(<Dashboard />);
 
       await waitFor(() => {
-        expect(screen.getByText("沒有需要關注的項目，做得好！")).toBeInTheDocument();
+        expect(screen.getByText("沒有未處理的項目")).toBeInTheDocument();
       });
+      expect(screen.getByText("最近沒有新增項目")).toBeInTheDocument();
+      expect(screen.getByText("沒有需要關注的項目")).toBeInTheDocument();
     });
 
-    it("calls navigate when focus item is clicked", async () => {
+    it("navigates to item route when unreviewed item is clicked", async () => {
       mockGetStats.mockResolvedValue(makeStats());
-      mockGetFocus.mockResolvedValue({
-        items: [makeFocusItem({ title: "Click Me Focus" })],
+      mockGetUnreviewed.mockResolvedValue({
+        items: [
+          makeDashboardItem({
+            id: "nav-1",
+            title: "Click Me",
+            type: "note",
+            status: "fleeting",
+          }),
+        ],
+        total: 1,
       });
-      mockGetStaleNotes.mockResolvedValue({ items: [] });
+      mockGetRecent.mockResolvedValue({ items: [], total: 0 });
+      mockGetAttention.mockResolvedValue({ items: [], total: 0 });
+      mockGetDashboardStale.mockResolvedValue({ items: [], total: 0 });
       mockGetCategoryDistribution.mockResolvedValue({ distribution: [] });
 
       const user = userEvent.setup();
       renderWithContext(<Dashboard />);
 
       await waitFor(() => {
-        expect(screen.getByText("Click Me Focus")).toBeInTheDocument();
+        expect(screen.getByText("Click Me")).toBeInTheDocument();
       });
 
-      await user.click(screen.getByText("Click Me Focus"));
-      expect(mockNavigate).toHaveBeenCalledWith({ to: "/all", search: { item: "focus-1" } });
+      await user.click(screen.getByText("Click Me"));
+      expect(mockNavigate).toHaveBeenCalledWith({
+        to: "/notes/fleeting",
+        search: { item: "nav-1" },
+      });
     });
 
-    it("calls navigate when stale note is clicked", async () => {
+    it("shows stale notes collapsed row", async () => {
       mockGetStats.mockResolvedValue(makeStats());
-      mockGetFocus.mockResolvedValue({ items: [] });
-      mockGetStaleNotes.mockResolvedValue({
-        items: [makeStaleItem({ id: "stale-nav", title: "Navigate To This" })],
+      mockGetUnreviewed.mockResolvedValue({ items: [], total: 0 });
+      mockGetRecent.mockResolvedValue({ items: [], total: 0 });
+      mockGetAttention.mockResolvedValue({ items: [], total: 0 });
+      mockGetDashboardStale.mockResolvedValue({
+        items: [
+          {
+            id: "stale-1",
+            title: "Stale Note",
+            category_name: null,
+            modified: "2026-03-01T00:00:00Z",
+            days_stale: 14,
+          },
+        ],
+        total: 1,
       });
       mockGetCategoryDistribution.mockResolvedValue({ distribution: [] });
 
@@ -206,11 +283,16 @@ describe("Dashboard", () => {
       renderWithContext(<Dashboard />);
 
       await waitFor(() => {
-        expect(screen.getByText("Navigate To This")).toBeInTheDocument();
+        expect(screen.getByText(/1 個發展中筆記超過設定天數未更新/)).toBeInTheDocument();
       });
 
-      await user.click(screen.getByText("Navigate To This"));
-      expect(mockNavigate).toHaveBeenCalledWith({ to: "/all", search: { item: "stale-nav" } });
+      // Initially collapsed - stale note title not visible
+      expect(screen.queryByText("Stale Note")).not.toBeInTheDocument();
+
+      // Click to expand
+      await user.click(screen.getByText(/1 個發展中筆記超過設定天數未更新/));
+      expect(screen.getByText("Stale Note")).toBeInTheDocument();
+      expect(screen.getByText("14 天未更新")).toBeInTheDocument();
     });
   });
 
@@ -220,8 +302,10 @@ describe("Dashboard", () => {
       mockGetStats.mockResolvedValue(
         makeStats({ fleeting_count: 7, developing_count: 4, permanent_count: 20 }),
       );
-      mockGetFocus.mockResolvedValue({ items: [] });
-      mockGetStaleNotes.mockResolvedValue({ items: [] });
+      mockGetUnreviewed.mockResolvedValue({ items: [], total: 0 });
+      mockGetRecent.mockResolvedValue({ items: [], total: 0 });
+      mockGetAttention.mockResolvedValue({ items: [], total: 0 });
+      mockGetDashboardStale.mockResolvedValue({ items: [], total: 0 });
       mockGetCategoryDistribution.mockResolvedValue({ distribution: [] });
 
       renderWithContext(<Dashboard />);
@@ -301,8 +385,10 @@ describe("Dashboard", () => {
       mockGetStats.mockResolvedValue(
         makeStats({ created_this_month: 25, done_this_month: 18, exported_this_month: 6 }),
       );
-      mockGetFocus.mockResolvedValue({ items: [] });
-      mockGetStaleNotes.mockResolvedValue({ items: [] });
+      mockGetUnreviewed.mockResolvedValue({ items: [], total: 0 });
+      mockGetRecent.mockResolvedValue({ items: [], total: 0 });
+      mockGetAttention.mockResolvedValue({ items: [], total: 0 });
+      mockGetDashboardStale.mockResolvedValue({ items: [], total: 0 });
       mockGetCategoryDistribution.mockResolvedValue({ distribution: [] });
 
       renderWithContext(<Dashboard />);
@@ -320,8 +406,10 @@ describe("Dashboard", () => {
   describe("分類分布 section", () => {
     it("shows category distribution bars", async () => {
       mockGetStats.mockResolvedValue(makeStats());
-      mockGetFocus.mockResolvedValue({ items: [] });
-      mockGetStaleNotes.mockResolvedValue({ items: [] });
+      mockGetUnreviewed.mockResolvedValue({ items: [], total: 0 });
+      mockGetRecent.mockResolvedValue({ items: [], total: 0 });
+      mockGetAttention.mockResolvedValue({ items: [], total: 0 });
+      mockGetDashboardStale.mockResolvedValue({ items: [], total: 0 });
       mockGetCategoryDistribution.mockResolvedValue({
         distribution: [
           makeCategoryDist({ category_name: "程式設計", count: 10, color: "#3b82f6" }),
@@ -360,8 +448,10 @@ describe("Dashboard", () => {
     it("shows toast on stats error", async () => {
       const { toast } = await import("sonner");
       mockGetStats.mockRejectedValue(new Error("Network error"));
-      mockGetFocus.mockResolvedValue({ items: [] });
-      mockGetStaleNotes.mockResolvedValue({ items: [] });
+      mockGetUnreviewed.mockResolvedValue({ items: [], total: 0 });
+      mockGetRecent.mockResolvedValue({ items: [], total: 0 });
+      mockGetAttention.mockResolvedValue({ items: [], total: 0 });
+      mockGetDashboardStale.mockResolvedValue({ items: [], total: 0 });
       mockGetCategoryDistribution.mockResolvedValue({ distribution: [] });
 
       renderWithContext(<Dashboard />);

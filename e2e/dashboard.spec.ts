@@ -10,12 +10,14 @@ test.describe("Dashboard", () => {
     await expect(heading).toBeVisible({ timeout: 10_000 });
 
     const main = page.locator(".max-w-2xl");
+    await expect(main.getByText("未處理", { exact: true })).toBeVisible();
+    await expect(main.getByText("最近新增", { exact: true })).toBeVisible();
     await expect(main.getByText("需要關注", { exact: true })).toBeVisible();
     await expect(main.getByText("Zettelkasten 管道")).toBeVisible();
     await expect(main.getByText("本月活動")).toBeVisible();
   });
 
-  test("focus section shows overdue todos", async ({ page, request }) => {
+  test("attention section shows overdue todos", async ({ page, request }) => {
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
     const dueDate = yesterday.toISOString().split("T")[0];
@@ -32,8 +34,8 @@ test.describe("Dashboard", () => {
     await expect(page.getByRole("heading", { name: "總覽" })).toBeVisible({ timeout: 10_000 });
 
     const main = page.locator(".max-w-2xl");
-    await expect(main.getByText("需要關注")).toBeVisible();
-    await expect(main.getByText(title)).toBeVisible();
-    await expect(main.getByText("已逾期").first()).toBeVisible();
+    await expect(main.getByText("需要關注", { exact: true })).toBeVisible();
+    await expect(main.getByText(title).first()).toBeVisible();
+    await expect(main.getByText("逾期").first()).toBeVisible();
   });
 });

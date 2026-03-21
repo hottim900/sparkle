@@ -19,6 +19,10 @@ function invalidateItemFields(queryClient: QueryClient, field?: string) {
     queryClient.invalidateQueries({ queryKey: queryKeys.items.all });
     queryClient.invalidateQueries({ queryKey: queryKeys.tags });
     queryClient.invalidateQueries({ queryKey: queryKeys.stats });
+    queryClient.invalidateQueries({ queryKey: queryKeys.unreviewed });
+    queryClient.invalidateQueries({ queryKey: queryKeys.recent });
+    queryClient.invalidateQueries({ queryKey: queryKeys.attention });
+    queryClient.invalidateQueries({ queryKey: queryKeys.dashboardStale });
     return;
   }
 

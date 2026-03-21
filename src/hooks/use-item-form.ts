@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { updateItem, getItem, getTags } from "@/lib/api";
 import { parseItem, type ParsedItem } from "@/lib/types";
 import { useAppContext } from "@/lib/app-context";
@@ -8,6 +8,7 @@ import { queryKeys } from "@/lib/query-keys";
 import { useInvalidateAfterItemMutation } from "@/hooks/use-invalidate";
 
 export function useItemForm(itemId: string) {
+  const queryClient = useQueryClient();
   const invalidateAfterSave = useInvalidateAfterItemMutation();
   const { isOnline } = useAppContext();
   const [item, setItem] = useState<ParsedItem | null>(null);
@@ -48,6 +49,22 @@ export function useItemForm(itemId: string) {
   useEffect(() => {
     if (serverItem && !isDirty) setItem(serverItem);
   }, [serverItem, isDirty]);
+
+  // Auto-mark viewed_at when opening an unviewed item
+  const markedViewedRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (serverItem && serverItem.viewed_at === null && markedViewedRef.current !== serverItem.id) {
+      markedViewedRef.current = serverItem.id;
+      updateItem(serverItem.id, { viewed_at: new Date().toISOString() })
+        .then(() => {
+          queryClient.invalidateQueries({ queryKey: queryKeys.unreviewed });
+        })
+        .catch(() => {
+          // Silently ignore — viewed_at is best-effort
+        });
+    }
+  }, [serverItem, queryClient]);
 
   const saveField = useCallback(
     async (field: string, value: unknown) => {
