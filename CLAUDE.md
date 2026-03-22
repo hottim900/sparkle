@@ -45,7 +45,7 @@ Detailed module conventions (API retry, PWA, Logging, Sentry, CSP, Offline UI, S
 
 ## Quality Management
 
-品質追蹤系統（Defect / Tech Debt / Feature Gap）。**操作前必須載入 `/quality` skill**。
+品質追蹤系統（Defect / Tech Debt / Feature Gap / Test Infrastructure）。**操作前必須載入 `/quality` skill**。
 
 ## Skills Reference
 
@@ -61,4 +61,4 @@ Detailed module conventions (API retry, PWA, Logging, Sentry, CSP, Offline UI, S
 
 ## Maintenance
 
-Update docs in same commit: **CLAUDE.md** (core conventions), **`docs/plans/quality/README.md`** (quality items). Skills (`.claude/skills/`) are local-only (gitignored).
+Update docs in same commit: **CLAUDE.md** (core conventions). Skills (`.claude/skills/`) are local-only (gitignored).
