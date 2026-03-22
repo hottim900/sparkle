@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef, lazy, Suspense } from "react";
+import { PrivateOverlay } from "@/components/private-overlay";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
@@ -1022,32 +1023,87 @@ function ListHeader({
 
 function PrivatePage() {
   const [sessionToken, setSessionToken] = useState<string | null>(null);
+  const [overlayVisible, setOverlayVisible] = useState(false);
 
   const { data: status, isLoading: statusLoading } = useQuery({
     queryKey: queryKeys.private.status,
     queryFn: getPrivateStatus,
   });
 
-  if (statusLoading) {
-    return (
-      <div className="flex-1 flex items-center justify-center">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
+  // visibilitychange: lock when page becomes hidden (before OS screenshot)
+  useEffect(() => {
+    if (!sessionToken) return;
+    const handleVisibility = () => {
+      if (document.visibilityState === "hidden") {
+        setOverlayVisible(true); // Sync render before OS takes screenshot
+        const token = localStorage.getItem("auth_token");
+        fetch("/api/private/lock", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "X-Private-Token": sessionToken,
+          },
+          keepalive: true,
+        });
+        setSessionToken(null);
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
+  }, [sessionToken]);
 
-  // State 1: Not configured
-  if (status && !status.configured) {
-    return <PinSetupView onSetupComplete={setSessionToken} />;
-  }
+  // Route leave: lock on unmount (navigation away from /private)
+  useEffect(() => {
+    if (!sessionToken) return;
+    return () => {
+      const token = localStorage.getItem("auth_token");
+      fetch("/api/private/lock", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "X-Private-Token": sessionToken,
+        },
+        keepalive: true,
+      });
+    };
+  }, [sessionToken]);
 
-  // State 2: Locked
-  if (!sessionToken) {
-    return <PinUnlockView onUnlocked={setSessionToken} />;
-  }
+  const content = (() => {
+    if (statusLoading) {
+      return (
+        <div className="flex-1 flex items-center justify-center">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      );
+    }
 
-  // State 3: Unlocked
-  return <PrivateItemsList token={sessionToken} />;
+    // State 1: Not configured
+    if (status && !status.configured) {
+      return <PinSetupView onSetupComplete={setSessionToken} />;
+    }
+
+    // State 2: Locked
+    if (!sessionToken) {
+      return (
+        <PinUnlockView
+          onUnlocked={(token) => {
+            setOverlayVisible(false);
+            setSessionToken(token);
+          }}
+        />
+      );
+    }
+
+    // State 3: Unlocked
+    return <PrivateItemsList token={sessionToken} />;
+  })();
+
+  return (
+    <>
+      {content}
+      <PrivateOverlay visible={overlayVisible} />
+    </>
+  );
 }
 
 export const Route = createFileRoute("/private")({
