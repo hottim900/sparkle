@@ -36,6 +36,9 @@ import { getObsidianSettings } from "./lib/settings.js";
 import { ZodError } from "zod";
 import { importSchema } from "./schemas/items.js";
 import { clearExpiredSessions } from "./lib/line-session.js";
+import { privateRouter } from "./routes/private.js";
+import { privateTokenMiddleware } from "./middleware/private-token.js";
+import { clearExpiredPrivateSessions } from "./lib/private-session.js";
 
 // --- Startup validation ---
 function shannonEntropy(s: string): number {
@@ -172,7 +175,16 @@ app.use(
 // Auth on all /api routes
 app.use("/api/*", authMiddleware);
 
+// Private token middleware — must be registered BEFORE app.route() for Hono middleware to apply
+app.use("/api/private/items", privateTokenMiddleware);
+app.use("/api/private/items/*", privateTokenMiddleware);
+app.use("/api/private/search", privateTokenMiddleware);
+app.use("/api/private/tags", privateTokenMiddleware);
+app.use("/api/private/pin", privateTokenMiddleware);
+app.use("/api/private/lock", privateTokenMiddleware);
+
 // Mount API routes
+app.route("/api/private", privateRouter);
 app.route("/api/items", itemsRouter);
 app.route("/api/search", searchRouter);
 app.route("/api/stats", statsRouter);
@@ -355,5 +367,9 @@ setupGracefulShutdown(httpServer as Server, sqlite);
 // Periodically clean up expired LINE Bot sessions (in-memory, 10-min TTL)
 const sessionCleanupTimer = setInterval(clearExpiredSessions, 60_000);
 sessionCleanupTimer.unref();
+
+// Periodically clean up expired private sessions (in-memory, 30-min TTL)
+const privateSessionCleanupTimer = setInterval(clearExpiredPrivateSessions, 60_000);
+privateSessionCleanupTimer.unref();
 
 export default app;
