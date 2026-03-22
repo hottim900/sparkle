@@ -1,5 +1,6 @@
 import { useState, useCallback } from "react";
 import { useNavigate, type NavigateOptions } from "@tanstack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -22,6 +23,8 @@ import { LinkedItemsSection } from "@/components/linked-items-section";
 import { ItemContentEditor } from "@/components/item-content-editor";
 import { CategorySelect } from "@/components/category-select";
 import { useItemForm } from "@/hooks/use-item-form";
+import { updateItem } from "@/lib/api";
+import { queryKeys } from "@/lib/query-keys";
 
 interface ItemDetailProps {
   itemId: string;
@@ -71,6 +74,7 @@ export function ItemDetail({ itemId, onDeleted }: ItemDetailProps) {
   } = useItemForm(itemId);
 
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { obsidianEnabled, isOnline } = useAppContext();
   const { handleDelete, handleExport, exporting } = useItemActions(item, {
     isOnline,
@@ -81,6 +85,26 @@ export function ItemDetail({ itemId, onDeleted }: ItemDetailProps) {
   const [shareOpen, setShareOpen] = useState(false);
   const [aliasInput, setAliasInput] = useState("");
   const [createTodoRequested, setCreateTodoRequested] = useState(false);
+  const [markingAsPrivate, setMarkingAsPrivate] = useState(false);
+
+  const handleMarkAsPrivate = useCallback(async () => {
+    if (!item) return;
+    setMarkingAsPrivate(true);
+    try {
+      await updateItem(item.id, { is_private: true });
+      queryClient.invalidateQueries({ queryKey: queryKeys.items.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.tags });
+      queryClient.invalidateQueries({ queryKey: queryKeys.stats });
+      toast.success("已標記為私密");
+      navigate({
+        search: (prev) => ({ ...prev, item: undefined }),
+      } as NavigateOptions);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "標記失敗");
+    } finally {
+      setMarkingAsPrivate(false);
+    }
+  }, [item, queryClient, navigate]);
 
   const handleBack = useCallback(() => {
     navigate({
@@ -133,6 +157,8 @@ export function ItemDetail({ itemId, onDeleted }: ItemDetailProps) {
         onDelete={handleDelete}
         onOpenCreateTodo={() => setCreateTodoRequested(true)}
         onOpenShare={() => setShareOpen(true)}
+        onMarkAsPrivate={handleMarkAsPrivate}
+        markingAsPrivate={markingAsPrivate}
       />
 
       {/* Content */}

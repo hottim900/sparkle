@@ -253,6 +253,7 @@ export async function updateItem(
     linked_note_id?: string | null;
     category_id?: string | null;
     viewed_at?: string | null;
+    is_private?: boolean;
   },
 ): Promise<Item> {
   return request<Item>(`/items/${id}`, {

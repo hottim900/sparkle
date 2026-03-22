@@ -25,6 +25,7 @@ export interface Item {
   category_id: string | null;
   category_name: string | null;
   viewed_at: string | null;
+  is_private: boolean;
   created: string;
   modified: string;
 }

@@ -1,4 +1,5 @@
 import { request } from "./api";
+import type { Item } from "./types";
 
 function privateHeaders(token: string) {
   return { "X-Private-Token": token };
@@ -34,19 +35,19 @@ export async function lockPrivate(token: string): Promise<void> {
 export async function listPrivateItems(
   token: string,
   params?: Record<string, string>,
-): Promise<{ items: any[]; total: number }> {
+): Promise<{ items: Item[]; total: number }> {
   const query = params ? "?" + new URLSearchParams(params).toString() : "";
   return request(`/private/items${query}`, { headers: privateHeaders(token) });
 }
 
-export async function getPrivateItem(token: string, id: string): Promise<any> {
+export async function getPrivateItem(token: string, id: string): Promise<Item> {
   return request(`/private/items/${id}`, { headers: privateHeaders(token) });
 }
 
 export async function createPrivateItem(
   token: string,
   body: Record<string, unknown>,
-): Promise<any> {
+): Promise<Item> {
   return request("/private/items", {
     method: "POST",
     body: JSON.stringify(body),
@@ -58,7 +59,7 @@ export async function updatePrivateItem(
   token: string,
   id: string,
   body: Record<string, unknown>,
-): Promise<any> {
+): Promise<Item> {
   return request(`/private/items/${id}`, {
     method: "PATCH",
     body: JSON.stringify(body),
@@ -73,7 +74,11 @@ export async function deletePrivateItem(token: string, id: string): Promise<void
   });
 }
 
-export async function searchPrivateItems(token: string, query: string, limit = 20): Promise<any[]> {
+export async function searchPrivateItems(
+  token: string,
+  query: string,
+  limit = 20,
+): Promise<Item[]> {
   return request(`/private/search?q=${encodeURIComponent(query)}&limit=${limit}`, {
     headers: privateHeaders(token),
   });
