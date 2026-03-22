@@ -318,7 +318,7 @@ export function searchItems(
     `);
     // SAFETY: better-sqlite3 returns unknown[]; columns match items schema by migration
     const rows = stmt.all(pattern, pattern, limit) as (typeof items.$inferSelect)[];
-    return resolveLinkedInfo(db, rows, enrich, includePrivate);
+    return resolveLinkedInfo(db, rows, enrich, !!includePrivate);
   }
 
   const escaped = escapeFts5Query(query);
@@ -333,7 +333,7 @@ export function searchItems(
 
   // SAFETY: better-sqlite3 returns unknown[]; columns match items schema by migration
   const rows = stmt.all(escaped, limit) as (typeof items.$inferSelect)[];
-  return resolveLinkedInfo(db, rows, enrich, includePrivate);
+  return resolveLinkedInfo(db, rows, enrich, !!includePrivate);
 }
 
 export function getAllTags(sqlite: Database.Database, includePrivate = false): string[] {
