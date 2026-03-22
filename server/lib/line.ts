@@ -12,7 +12,7 @@ export function parseLineMessage(text: string, isForwarded?: boolean): ParsedLin
   const trimmed = text.trim();
 
   if (trimmed === "") {
-    return { title: "", content: "", type: "note", priority: null, source };
+    return { title: "", content: "", type: "note", priority: null, source, is_private: false };
   }
 
   // Split into first line and remaining content
