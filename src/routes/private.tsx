@@ -1081,25 +1081,25 @@ function PrivatePage() {
       );
     }
 
+    // State 3 first: if we have a token, go straight to unlocked (covers post-setup)
+    if (sessionToken) {
+      return <PrivateItemsList token={sessionToken} />;
+    }
+
     // State 1: Not configured
     if (status && !status.configured) {
       return <PinSetupView onSetupComplete={setSessionToken} />;
     }
 
-    // State 2: Locked
-    if (!sessionToken) {
-      return (
-        <PinUnlockView
-          onUnlocked={(token) => {
-            setOverlayVisible(false);
-            setSessionToken(token);
-          }}
-        />
-      );
-    }
-
-    // State 3: Unlocked
-    return <PrivateItemsList token={sessionToken} />;
+    // State 2: Locked (configured but no token)
+    return (
+      <PinUnlockView
+        onUnlocked={(token) => {
+          setOverlayVisible(false);
+          setSessionToken(token);
+        }}
+      />
+    );
   })();
 
   return (
