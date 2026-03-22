@@ -21,12 +21,16 @@ export const apiRateLimiter = rateLimiter({
 });
 
 // Auth failure rate limit: 5 failures/min per IP (brute-force protection)
-// skipSuccessfulRequests means only non-2xx responses count toward the limit
+// Only 401/403 count as failures — 404s and other client errors are not auth failures
 export const authFailRateLimiter = rateLimiter({
   windowMs: 60 * 1000,
   limit: 5,
   keyGenerator: getClientIp,
   skipSuccessfulRequests: true,
+  requestWasSuccessful: (c: Context) => {
+    const status = c.res.status;
+    return status !== 401 && status !== 403;
+  },
   standardHeaders: "draft-7",
   requestPropertyName: "authRateLimit",
   message: { error: "Too many failed attempts, please try again later" },
