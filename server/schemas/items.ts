@@ -80,5 +80,46 @@ export const searchSchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20),
 });
 
+// Import schema — accepts JSON string arrays from export files
+export const jsonStringArray = z.preprocess(
+  (val) => {
+    if (typeof val === "string") {
+      try {
+        return JSON.parse(val);
+      } catch {
+        return val;
+      }
+    }
+    return val;
+  },
+  z.array(z.string().min(1).max(200)).max(20),
+);
+
+export const importItemSchema = z
+  .object({
+    id: z.string().uuid(),
+    type: z.enum(["note", "todo", "scratch"]).default("note"),
+    title: z.string().min(1).max(500),
+    content: z.string().max(50000).default(""),
+    status: statusEnum.default("fleeting"),
+    priority: z.enum(["low", "medium", "high"]).nullable().default(null),
+    due: z.string().nullable().default(null),
+    tags: jsonStringArray.default([]),
+    origin: z.string().default(""),
+    source: z.string().nullable().default(null),
+    aliases: jsonStringArray.default([]),
+    linked_note_id: z.string().nullable().default(null),
+    created: z.string().min(1),
+    modified: z.string().min(1),
+  })
+  .refine((data) => isValidTypeStatus(data.type, data.status), {
+    message: "Invalid status for the given type",
+    path: ["status"],
+  });
+
+export const importSchema = z.object({
+  items: z.array(importItemSchema).max(10000),
+});
+
 export type CreateItemInput = z.infer<typeof createItemSchema>;
 export type UpdateItemInput = z.infer<typeof updateItemSchema>;
