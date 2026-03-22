@@ -35,6 +35,7 @@ import { getAllTags } from "./lib/items.js";
 import { getObsidianSettings } from "./lib/settings.js";
 import { z, ZodError } from "zod";
 import { statusEnum } from "./schemas/items.js";
+import { isValidTypeStatus } from "./lib/item-type-system.js";
 import { clearExpiredSessions } from "./lib/line-session.js";
 
 // --- Startup validation ---
@@ -225,25 +226,30 @@ const jsonStringArray = z.preprocess(
     }
     return val;
   },
-  z.array(z.string().max(200)).max(20),
+  z.array(z.string().min(1).max(200)).max(20),
 );
 
-const importItemSchema = z.object({
-  id: z.string().uuid(),
-  type: z.enum(["note", "todo", "scratch"]).default("note"),
-  title: z.string().min(1).max(500),
-  content: z.string().max(50000).default(""),
-  status: statusEnum.default("fleeting"),
-  priority: z.enum(["low", "medium", "high"]).nullable().default(null),
-  due: z.string().nullable().default(null),
-  tags: jsonStringArray.default([]),
-  origin: z.string().default(""),
-  source: z.string().nullable().default(null),
-  aliases: jsonStringArray.default([]),
-  linked_note_id: z.string().nullable().default(null),
-  created: z.string().min(1),
-  modified: z.string().min(1),
-});
+const importItemSchema = z
+  .object({
+    id: z.string().uuid(),
+    type: z.enum(["note", "todo", "scratch"]).default("note"),
+    title: z.string().min(1).max(500),
+    content: z.string().max(50000).default(""),
+    status: statusEnum.default("fleeting"),
+    priority: z.enum(["low", "medium", "high"]).nullable().default(null),
+    due: z.string().nullable().default(null),
+    tags: jsonStringArray.default([]),
+    origin: z.string().default(""),
+    source: z.string().nullable().default(null),
+    aliases: jsonStringArray.default([]),
+    linked_note_id: z.string().nullable().default(null),
+    created: z.string().min(1),
+    modified: z.string().min(1),
+  })
+  .refine((data) => isValidTypeStatus(data.type, data.status), {
+    message: "Invalid status for the given type",
+    path: ["status"],
+  });
 
 const importSchema = z.object({
   items: z.array(importItemSchema).max(10000),
