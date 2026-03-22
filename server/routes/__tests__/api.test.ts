@@ -42,24 +42,44 @@ import { items } from "../../db/schema.js";
 import { eq } from "drizzle-orm";
 import { z, ZodError } from "zod";
 import { statusEnum } from "../../schemas/items.js";
+import { isValidTypeStatus } from "../../lib/item-type-system.js";
 
 const TEST_TOKEN = "test-secret-token-12345";
 
-const importItemSchema = z.object({
-  id: z.string().min(1),
-  type: z.enum(["note", "todo"]).default("note"),
-  title: z.string().min(1).max(500),
-  content: z.string().default(""),
-  status: statusEnum.default("fleeting"),
-  priority: z.enum(["low", "medium", "high"]).nullable().default(null),
-  due: z.string().nullable().default(null),
-  tags: z.string().default("[]"),
-  origin: z.string().default(""),
-  source: z.string().nullable().default(null),
-  aliases: z.string().default("[]"),
-  created: z.string().min(1),
-  modified: z.string().min(1),
-});
+const jsonStringArray = z.preprocess(
+  (val) => {
+    if (typeof val === "string") {
+      try {
+        return JSON.parse(val);
+      } catch {
+        return val;
+      }
+    }
+    return val;
+  },
+  z.array(z.string().min(1).max(200)).max(20),
+);
+
+const importItemSchema = z
+  .object({
+    id: z.string().min(1),
+    type: z.enum(["note", "todo", "scratch"]).default("note"),
+    title: z.string().min(1).max(500),
+    content: z.string().default(""),
+    status: statusEnum.default("fleeting"),
+    priority: z.enum(["low", "medium", "high"]).nullable().default(null),
+    due: z.string().nullable().default(null),
+    tags: jsonStringArray.default([]),
+    origin: z.string().default(""),
+    source: z.string().nullable().default(null),
+    aliases: jsonStringArray.default([]),
+    created: z.string().min(1),
+    modified: z.string().min(1),
+  })
+  .refine((data) => isValidTypeStatus(data.type, data.status), {
+    message: "Invalid status for the given type",
+    path: ["status"],
+  });
 
 const importSchema = z.object({
   items: z.array(importItemSchema),
@@ -160,10 +180,10 @@ function createApp() {
               status: item.status,
               priority: item.priority,
               due: item.due,
-              tags: item.tags,
+              tags: JSON.stringify(item.tags),
               origin: item.origin,
               source: item.source,
-              aliases: item.aliases,
+              aliases: JSON.stringify(item.aliases),
               created: item.created,
               modified: item.modified,
             })
@@ -171,7 +191,14 @@ function createApp() {
             .run();
           updated++;
         } else {
-          testDb.insert(items).values(item).run();
+          testDb
+            .insert(items)
+            .values({
+              ...item,
+              tags: JSON.stringify(item.tags),
+              aliases: JSON.stringify(item.aliases),
+            })
+            .run();
           imported++;
         }
       }
@@ -1936,6 +1963,110 @@ describe("POST /api/import — old format rejection", () => {
     expect(res.status).toBe(400);
     const body = await res.json();
     expect(body.error).toMatch(/Unrecognized field names/);
+  });
+});
+
+// ============================================================
+// Import Validation Tests
+// ============================================================
+describe("POST /api/import — validation", () => {
+  it("rejects import with invalid type-status combination", async () => {
+    const now = new Date().toISOString();
+    const res = await app.request("/api/import", {
+      method: "POST",
+      headers: jsonHeaders(),
+      body: JSON.stringify({
+        items: [
+          {
+            id: "550e8400-e29b-41d4-a716-446655440099",
+            title: "Invalid combo",
+            type: "todo",
+            status: "fleeting",
+            content: "",
+            priority: null,
+            due: null,
+            tags: "[]",
+            origin: "",
+            source: null,
+            aliases: "[]",
+            created: now,
+            modified: now,
+          },
+        ],
+      }),
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toMatch(/Invalid status/i);
+  });
+
+  it("rejects import with empty string in tags", async () => {
+    const now = new Date().toISOString();
+    const res = await app.request("/api/import", {
+      method: "POST",
+      headers: jsonHeaders(),
+      body: JSON.stringify({
+        items: [
+          {
+            id: "550e8400-e29b-41d4-a716-446655440098",
+            title: "Empty tag",
+            type: "note",
+            status: "fleeting",
+            content: "",
+            priority: null,
+            due: null,
+            tags: '["", "valid"]',
+            origin: "",
+            source: null,
+            aliases: "[]",
+            created: now,
+            modified: now,
+          },
+        ],
+      }),
+    });
+    expect(res.status).toBe(400);
+  });
+});
+
+// ============================================================
+// Tag/Alias Validation Tests
+// ============================================================
+describe("Tag and alias validation", () => {
+  it("rejects creating item with empty string tag", async () => {
+    const res = await app.request("/api/items", {
+      method: "POST",
+      headers: jsonHeaders(),
+      body: JSON.stringify({
+        title: "Empty tag test",
+        tags: ["", "valid"],
+      }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects creating item with empty string alias", async () => {
+    const res = await app.request("/api/items", {
+      method: "POST",
+      headers: jsonHeaders(),
+      body: JSON.stringify({
+        title: "Empty alias test",
+        aliases: [""],
+      }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("allows creating item with valid non-empty tags", async () => {
+    const res = await app.request("/api/items", {
+      method: "POST",
+      headers: jsonHeaders(),
+      body: JSON.stringify({
+        title: "Valid tags test",
+        tags: ["work", "important"],
+      }),
+    });
+    expect(res.status).toBe(201);
   });
 });
 
