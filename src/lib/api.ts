@@ -170,6 +170,9 @@ export async function request<T>(path: string, options: RequestInit = {}): Promi
     throw new ApiClientError((body as { error?: string }).error ?? "Request failed", res.status);
   }
 
+  if (res.status === 204 || res.headers.get("content-length") === "0") {
+    return undefined as T;
+  }
   return res.json() as Promise<T>;
 }
 
