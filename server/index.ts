@@ -109,6 +109,13 @@ app.use("*", async (c, next) => {
   await next();
   c.res.headers.set("X-Sparkle", "1");
 });
+// Security hardening headers (defense-in-depth alongside Cloudflare)
+app.use("*", async (c, next) => {
+  await next();
+  c.res.headers.set("X-Content-Type-Options", "nosniff");
+  c.res.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+  c.res.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+});
 app.use("*", compress());
 app.use("*", async (c, next) => {
   await next();

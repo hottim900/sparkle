@@ -8,7 +8,10 @@ import type { Context } from "hono";
 
 function getClientIp(c: Context): string {
   return (
-    c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ?? c.req.header("x-real-ip") ?? "unknown"
+    c.req.header("cf-connecting-ip") ??
+    c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ??
+    c.req.header("x-real-ip") ??
+    "unknown"
   );
 }
 
@@ -98,6 +101,27 @@ describe("Rate limiting", () => {
         headers: { "x-forwarded-for": "1.2.3.4, 10.0.0.2" },
       });
       expect(res.status).toBe(429);
+    });
+
+    it("prefers cf-connecting-ip over x-forwarded-for", async () => {
+      // Exhaust limit for the CF IP
+      for (let i = 0; i < 5; i++) {
+        await app.request("/api/test", {
+          headers: { "cf-connecting-ip": "203.0.113.1", "x-forwarded-for": "10.0.0.99" },
+        });
+      }
+
+      // CF IP is blocked even though x-forwarded-for differs
+      const blocked = await app.request("/api/test", {
+        headers: { "cf-connecting-ip": "203.0.113.1", "x-forwarded-for": "10.0.0.100" },
+      });
+      expect(blocked.status).toBe(429);
+
+      // Different CF IP is still allowed
+      const allowed = await app.request("/api/test", {
+        headers: { "cf-connecting-ip": "203.0.113.2", "x-forwarded-for": "10.0.0.99" },
+      });
+      expect(allowed.status).toBe(200);
     });
 
     it("falls back to x-real-ip when x-forwarded-for is absent", async () => {
