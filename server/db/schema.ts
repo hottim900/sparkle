@@ -32,6 +32,7 @@ export const items = sqliteTable(
     linked_note_id: text("linked_note_id"),
     category_id: text("category_id"),
     viewed_at: text("viewed_at"),
+    is_private: integer("is_private").default(0),
     created: text("created").notNull(),
     modified: text("modified").notNull(),
   },
@@ -42,6 +43,8 @@ export const items = sqliteTable(
     index("idx_items_category_id").on(table.category_id),
     index("idx_items_viewed_at").on(table.viewed_at),
     index("idx_items_status_modified").on(table.status, table.modified),
+    index("idx_items_private_status").on(table.is_private, table.status),
+    index("idx_items_private_status_modified").on(table.is_private, table.status, table.modified),
   ],
 );
 
