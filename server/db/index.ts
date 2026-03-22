@@ -8,7 +8,7 @@ import { logger } from "../lib/logger.js";
 
 const DB_PATH = process.env.DATABASE_URL || "./data/todo.db";
 
-const TARGET_VERSION = 14;
+const TARGET_VERSION = 15;
 
 function getSchemaVersion(sqlite: Database.Database): number {
   // Check if schema_version table exists
@@ -295,18 +295,26 @@ function runMigrations(sqlite: Database.Database) {
 
     setSchemaVersion(sqlite, 14);
   }
+
+  // Step 14→15: Add is_private column + composite indexes
+  if (version < 15) {
+    try {
+      sqlite.exec("ALTER TABLE items ADD COLUMN is_private INTEGER DEFAULT 0");
+    } catch (e: unknown) {
+      const msg = (e as Error).message || "";
+      if (!msg.includes("duplicate column")) throw e;
+    }
+
+    sqlite.exec("CREATE INDEX IF NOT EXISTS idx_items_private_status ON items(is_private, status)");
+    sqlite.exec(
+      "CREATE INDEX IF NOT EXISTS idx_items_private_status_modified ON items(is_private, status, modified)",
+    );
+
+    setSchemaVersion(sqlite, 15);
+  }
 }
 
-function createDb() {
-  mkdirSync(dirname(DB_PATH), { recursive: true });
-  const sqlite = new Database(DB_PATH);
-  sqlite.pragma("journal_mode = WAL");
-  sqlite.pragma("foreign_keys = ON");
-  sqlite.pragma("synchronous = NORMAL");
-  sqlite.pragma("journal_size_limit = 67108864");
-
-  const db = drizzle(sqlite, { schema });
-
+export function initializeDatabase(sqlite: Database.Database) {
   // Check if the items table exists
   const tableExists = sqlite
     .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='items'")
@@ -330,6 +338,7 @@ function createDb() {
         linked_note_id TEXT DEFAULT NULL,
         category_id TEXT DEFAULT NULL,
         viewed_at TEXT DEFAULT NULL,
+        is_private INTEGER DEFAULT 0,
         created TEXT NOT NULL,
         modified TEXT NOT NULL,
         FOREIGN KEY (linked_note_id) REFERENCES items(id) ON DELETE SET NULL,
@@ -341,6 +350,8 @@ function createDb() {
       CREATE INDEX idx_items_created ON items(created DESC);
       CREATE INDEX idx_items_viewed_at ON items(viewed_at);
       CREATE INDEX idx_items_status_modified ON items(status, modified);
+      CREATE INDEX idx_items_private_status ON items(is_private, status);
+      CREATE INDEX idx_items_private_status_modified ON items(is_private, status, modified);
 
       CREATE TABLE settings (
         key TEXT PRIMARY KEY,
@@ -394,6 +405,19 @@ function createDb() {
   }
 
   setupFTS(sqlite);
+}
+
+function createDb() {
+  mkdirSync(dirname(DB_PATH), { recursive: true });
+  const sqlite = new Database(DB_PATH);
+  sqlite.pragma("journal_mode = WAL");
+  sqlite.pragma("foreign_keys = ON");
+  sqlite.pragma("synchronous = NORMAL");
+  sqlite.pragma("journal_size_limit = 67108864");
+
+  const db = drizzle(sqlite, { schema });
+
+  initializeDatabase(sqlite);
 
   // Checkpoint and truncate WAL to reclaim space from previous sessions
   try {

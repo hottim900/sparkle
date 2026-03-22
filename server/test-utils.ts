@@ -24,6 +24,7 @@ export function createTestDb() {
       linked_note_id TEXT DEFAULT NULL,
       category_id TEXT DEFAULT NULL,
       viewed_at TEXT DEFAULT NULL,
+      is_private INTEGER DEFAULT 0,
       created TEXT NOT NULL,
       modified TEXT NOT NULL,
       FOREIGN KEY (linked_note_id) REFERENCES items(id) ON DELETE SET NULL,
