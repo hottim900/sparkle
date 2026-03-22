@@ -36,6 +36,9 @@ import { getObsidianSettings } from "./lib/settings.js";
 import { ZodError } from "zod";
 import { importSchema } from "./schemas/items.js";
 import { clearExpiredSessions } from "./lib/line-session.js";
+import { privateRouter } from "./routes/private.js";
+import { privateTokenMiddleware } from "./middleware/private-token.js";
+import { clearExpiredPrivateSessions } from "./lib/private-session.js";
 
 // --- Startup validation ---
 function shannonEntropy(s: string): number {
@@ -172,7 +175,16 @@ app.use(
 // Auth on all /api routes
 app.use("/api/*", authMiddleware);
 
+// Private token middleware — must be registered BEFORE app.route() for Hono middleware to apply
+app.use("/api/private/items", privateTokenMiddleware);
+app.use("/api/private/items/*", privateTokenMiddleware);
+app.use("/api/private/search", privateTokenMiddleware);
+app.use("/api/private/tags", privateTokenMiddleware);
+app.use("/api/private/pin", privateTokenMiddleware);
+app.use("/api/private/lock", privateTokenMiddleware);
+
 // Mount API routes
+app.route("/api/private", privateRouter);
 app.route("/api/items", itemsRouter);
 app.route("/api/search", searchRouter);
 app.route("/api/stats", statsRouter);
@@ -202,13 +214,14 @@ app.get("/api/config", (c) => {
   });
 });
 
-// Export all items (new field names)
+// Export all items (new field names) — excludes private items
 app.get("/api/export", (c) => {
   const EXPORT_LIMIT = 50000;
-  const allItems = db.select().from(items).limit(EXPORT_LIMIT).all();
+  const allItems = db.select().from(items).where(eq(items.is_private, 0)).limit(EXPORT_LIMIT).all();
   const total = db
     .select({ count: sql<number>`count(*)` })
     .from(items)
+    .where(eq(items.is_private, 0))
     .get();
   const totalCount = total?.count ?? allItems.length;
   return c.json({
@@ -254,10 +267,17 @@ app.post("/api/import", async (c) => {
     let imported = 0;
     let updated = 0;
 
+    let skipped = 0;
+
     for (const item of importItems) {
       const existing = db.select().from(items).where(eq(items.id, item.id)).get();
 
       if (existing) {
+        // Skip private items — don't overwrite private content via import
+        if (existing.is_private) {
+          skipped++;
+          continue;
+        }
         db.update(items)
           .set({
             type: item.type,
@@ -278,18 +298,20 @@ app.post("/api/import", async (c) => {
           .run();
         updated++;
       } else {
+        // Strip is_private from imported data — imports always create public items
         db.insert(items)
           .values({
             ...item,
             tags: JSON.stringify(item.tags),
             aliases: JSON.stringify(item.aliases),
+            is_private: 0,
           })
           .run();
         imported++;
       }
     }
 
-    return c.json({ imported, updated });
+    return c.json({ imported, updated, skipped });
   } catch (e) {
     if (e instanceof ZodError) {
       return c.json({ error: e.issues[0]?.message ?? "Validation error" }, 400);
@@ -355,5 +377,9 @@ setupGracefulShutdown(httpServer as Server, sqlite);
 // Periodically clean up expired LINE Bot sessions (in-memory, 10-min TTL)
 const sessionCleanupTimer = setInterval(clearExpiredSessions, 60_000);
 sessionCleanupTimer.unref();
+
+// Periodically clean up expired private sessions (in-memory, 30-min TTL)
+const privateSessionCleanupTimer = setInterval(clearExpiredPrivateSessions, 60_000);
+privateSessionCleanupTimer.unref();
 
 export default app;

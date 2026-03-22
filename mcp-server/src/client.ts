@@ -115,6 +115,7 @@ export async function createItem(input: {
   aliases?: string[];
   linked_note_id?: string | null;
   category_id?: string | null;
+  is_private?: boolean;
 }): Promise<SparkleItem> {
   return sparkleApi<SparkleItem>("/items", "POST", { type: "note", origin: "mcp", ...input });
 }
@@ -133,6 +134,7 @@ export async function updateItem(
     source?: string | null;
     linked_note_id?: string | null;
     category_id?: string | null;
+    is_private?: boolean;
   },
 ): Promise<SparkleItem> {
   return sparkleApi<SparkleItem>(`/items/${id}`, "PATCH", input);

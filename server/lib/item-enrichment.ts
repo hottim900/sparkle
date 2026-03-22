@@ -16,6 +16,7 @@ export function resolveLinkedInfo(
   db: DB,
   rows: (typeof items.$inferSelect)[],
   enrich = true,
+  includePrivate = false,
 ): ItemWithLinkedInfo[] {
   if (rows.length === 0) return [];
 
@@ -38,7 +39,12 @@ export function resolveLinkedInfo(
     const linkedItems = db
       .select({ id: items.id, title: items.title })
       .from(items)
-      .where(inArray(items.id, uniqueIds))
+      .where(
+        and(
+          inArray(items.id, uniqueIds),
+          includePrivate ? undefined : sql`${items.is_private} = 0`,
+        ),
+      )
       .all();
     for (const li of linkedItems) {
       titleMap.set(li.id, li.title);
@@ -57,7 +63,13 @@ export function resolveLinkedInfo(
         count: sql<number>`count(*)`,
       })
       .from(items)
-      .where(and(inArray(items.linked_note_id, uniqueNoteIds), sql`${items.status} != 'archived'`))
+      .where(
+        and(
+          inArray(items.linked_note_id, uniqueNoteIds),
+          sql`${items.status} != 'archived'`,
+          includePrivate ? undefined : sql`${items.is_private} = 0`,
+        ),
+      )
       .groupBy(items.linked_note_id)
       .all();
     for (const c of counts) {

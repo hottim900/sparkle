@@ -16,6 +16,9 @@ const handleSave: CommandHandler = async ({ command, db }) => {
       priority: cmd.parsed.priority,
       origin: cmd.parsed.source,
     });
+    if (cmd.parsed.is_private) {
+      return "✅ 已記錄";
+    }
     const typeLabel = item.type === "todo" ? "待辦" : item.type === "scratch" ? "暫存" : "閃念筆記";
     const priorityLabel = cmd.parsed.priority === "high" ? " [高優先]" : "";
     return `✅ 已存入（${typeLabel}${priorityLabel}）\n${item.title}`;

@@ -34,11 +34,11 @@ export function createShareToken(
   itemId: string,
   visibility: "unlisted" | "public" = "unlisted",
 ): ShareTokenRow | null {
-  // Verify item exists and is a note
+  // Verify item exists, is a note, and is not private
   // SAFETY: better-sqlite3 .get() returns unknown; schema enforced by migration
-  const item = sqlite.prepare("SELECT id, type FROM items WHERE id = ?").get(itemId) as
-    | { id: string; type: string }
-    | undefined;
+  const item = sqlite
+    .prepare("SELECT id, type FROM items WHERE id = ? AND is_private = 0")
+    .get(itemId) as { id: string; type: string } | undefined;
 
   if (!item) return null;
   if (item.type !== "note") return null;
@@ -74,7 +74,7 @@ export function getShareByToken(sqlite: Database.Database, token: string): Share
         i.modified AS item_modified
       FROM share_tokens s
       JOIN items i ON i.id = s.item_id
-      WHERE s.token = ?`,
+      WHERE s.token = ? AND i.is_private = 0`,
     )
     // SAFETY: better-sqlite3 .get() returns unknown; columns match ShareWithItem by query + migration schema
     .get(token) as ShareWithItem | undefined;
@@ -91,6 +91,7 @@ export function listShares(sqlite: Database.Database): ShareListItem[] {
         i.title AS item_title
       FROM share_tokens s
       JOIN items i ON i.id = s.item_id
+      WHERE i.is_private = 0
       ORDER BY s.created DESC
       LIMIT 1000`,
       )
@@ -108,7 +109,7 @@ export function listPublicShares(sqlite: Database.Database): ShareListItem[] {
         i.title AS item_title
       FROM share_tokens s
       JOIN items i ON i.id = s.item_id
-      WHERE s.visibility = 'public'
+      WHERE s.visibility = 'public' AND i.is_private = 0
       ORDER BY s.created DESC
       LIMIT 1000`,
       )
@@ -120,6 +121,11 @@ export function listPublicShares(sqlite: Database.Database): ShareListItem[] {
 export function revokeShare(sqlite: Database.Database, shareId: string): boolean {
   const result = sqlite.prepare("DELETE FROM share_tokens WHERE id = ?").run(shareId);
   return result.changes > 0;
+}
+
+export function revokeSharesByItemId(sqlite: Database.Database, itemId: string): number {
+  const result = sqlite.prepare("DELETE FROM share_tokens WHERE item_id = ?").run(itemId);
+  return result.changes;
 }
 
 export function getSharesByItemId(sqlite: Database.Database, itemId: string): ShareTokenRow[] {

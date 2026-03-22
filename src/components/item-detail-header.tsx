@@ -23,6 +23,7 @@ import {
   Share2,
   Link,
   Globe,
+  Lock,
 } from "lucide-react";
 
 interface ItemDetailHeaderProps {
@@ -38,6 +39,8 @@ interface ItemDetailHeaderProps {
   onDelete: () => void;
   onOpenCreateTodo: () => void;
   onOpenShare: () => void;
+  onMarkAsPrivate: () => void;
+  markingAsPrivate?: boolean;
 }
 
 export function ItemDetailHeader({
@@ -53,6 +56,8 @@ export function ItemDetailHeader({
   onOpenCreateTodo,
   isOnline = true,
   onOpenShare,
+  onMarkAsPrivate,
+  markingAsPrivate = false,
 }: ItemDetailHeaderProps) {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const showExportButton = obsidianEnabled && item.type === "note" && item.status === "permanent";
@@ -146,6 +151,23 @@ export function ItemDetailHeader({
                 : item.share_visibility === "unlisted"
                   ? "已分享"
                   : "分享"}
+            </Button>
+          )}
+          {item.type !== "scratch" && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1 text-xs"
+              onClick={onMarkAsPrivate}
+              disabled={markingAsPrivate || !isOnline}
+              title="標記為私密"
+            >
+              {markingAsPrivate ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <Lock className="h-3 w-3" />
+              )}
+              標記為私密
             </Button>
           )}
           <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>

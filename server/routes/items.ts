@@ -14,6 +14,7 @@ import {
 import { exportToObsidian } from "../lib/export.js";
 import { getObsidianSettings } from "../lib/settings.js";
 import { ZodError } from "zod";
+import { revokeSharesByItemId } from "../lib/shares.js";
 
 const itemsRouter = new Hono();
 
@@ -70,7 +71,10 @@ itemsRouter.post("/batch", async (c) => {
     const now = new Date().toISOString();
 
     if (action === "delete") {
-      const result = db.delete(items).where(inArray(items.id, ids)).run();
+      const result = db
+        .delete(items)
+        .where(and(inArray(items.id, ids), eq(items.is_private, 0)))
+        .run();
       affected = result.changes;
       skipped = ids.length - affected;
     } else if (action === "develop") {
@@ -78,7 +82,14 @@ itemsRouter.post("/batch", async (c) => {
       const result = db
         .update(items)
         .set({ status: "developing", modified: now })
-        .where(and(inArray(items.id, ids), eq(items.type, "note"), eq(items.status, "fleeting")))
+        .where(
+          and(
+            inArray(items.id, ids),
+            eq(items.type, "note"),
+            eq(items.status, "fleeting"),
+            eq(items.is_private, 0),
+          ),
+        )
         .run();
       affected = result.changes;
       skipped = ids.length - affected;
@@ -87,7 +98,14 @@ itemsRouter.post("/batch", async (c) => {
       const result = db
         .update(items)
         .set({ status: "permanent", modified: now })
-        .where(and(inArray(items.id, ids), eq(items.type, "note"), eq(items.status, "developing")))
+        .where(
+          and(
+            inArray(items.id, ids),
+            eq(items.type, "note"),
+            eq(items.status, "developing"),
+            eq(items.is_private, 0),
+          ),
+        )
         .run();
       affected = result.changes;
       skipped = ids.length - affected;
@@ -124,7 +142,14 @@ itemsRouter.post("/batch", async (c) => {
         })
         .from(items)
         .leftJoin(categories, eq(items.category_id, categories.id))
-        .where(and(inArray(items.id, ids), eq(items.type, "note"), eq(items.status, "permanent")))
+        .where(
+          and(
+            inArray(items.id, ids),
+            eq(items.type, "note"),
+            eq(items.status, "permanent"),
+            eq(items.is_private, 0),
+          ),
+        )
         .all();
       // 2. Loop export (file I/O, unavoidable)
       const errors: { id: string; error: string }[] = [];
@@ -157,7 +182,7 @@ itemsRouter.post("/batch", async (c) => {
       const result = db
         .update(items)
         .set({ status: "done", modified: now })
-        .where(and(inArray(items.id, ids), eq(items.type, "todo")))
+        .where(and(inArray(items.id, ids), eq(items.type, "todo"), eq(items.is_private, 0)))
         .run();
       affected = result.changes;
       skipped = ids.length - affected;
@@ -166,7 +191,7 @@ itemsRouter.post("/batch", async (c) => {
       const result = db
         .update(items)
         .set({ status: "active", modified: now })
-        .where(and(inArray(items.id, ids), eq(items.type, "todo")))
+        .where(and(inArray(items.id, ids), eq(items.type, "todo"), eq(items.is_private, 0)))
         .run();
       affected = result.changes;
       skipped = ids.length - affected;
@@ -175,7 +200,7 @@ itemsRouter.post("/batch", async (c) => {
       const result = db
         .update(items)
         .set({ status: "archived", modified: now })
-        .where(inArray(items.id, ids))
+        .where(and(inArray(items.id, ids), eq(items.is_private, 0)))
         .run();
       affected = result.changes;
       skipped = ids.length - affected;
@@ -193,6 +218,9 @@ itemsRouter.post("/batch", async (c) => {
 // Get linked todos for a note
 itemsRouter.get("/:id/linked-todos", (c) => {
   const id = c.req.param("id");
+  // Verify the note exists and is not private (prevents confirming private note IDs exist)
+  const note = getItem(db, id, false);
+  if (!note) return c.json({ error: "Item not found" }, 404);
   const result = listItems(db, { linked_note_id: id });
   return c.json({ items: result.items });
 });
@@ -263,6 +291,11 @@ itemsRouter.patch("/:id", async (c) => {
       return c.json({ error: "Item not found" }, 404);
     }
 
+    // Private items cannot be converted to scratch
+    if (input.type === "scratch" && (existing.is_private || input.is_private)) {
+      return c.json({ error: "Private items cannot be converted to scratch" }, 400);
+    }
+
     // Determine effective type and status after update
     const effectiveType = input.type ?? existing.type;
     let effectiveStatus = input.status ?? existing.status;
@@ -284,10 +317,18 @@ itemsRouter.patch("/:id", async (c) => {
       );
     }
 
-    const updated = updateItem(db, id, input);
+    // When marking as private, use includePrivate for the return value
+    const markingPrivate = input.is_private === true && !existing.is_private;
+    const updated = updateItem(db, id, input, markingPrivate);
     if (!updated) {
       return c.json({ error: "Item not found" }, 404);
     }
+
+    // When marking an item as private, revoke all existing share tokens
+    if (markingPrivate) {
+      revokeSharesByItemId(sqlite, id);
+    }
+
     return c.json(updated);
   } catch (e) {
     if (e instanceof ZodError) {
@@ -299,7 +340,13 @@ itemsRouter.patch("/:id", async (c) => {
 
 // Delete item
 itemsRouter.delete("/:id", (c) => {
-  const deleted = deleteItem(db, c.req.param("id"));
+  const id = c.req.param("id");
+  // Guard: private items cannot be deleted through public API
+  const existing = getItem(db, id, false);
+  if (!existing) {
+    return c.json({ error: "Item not found" }, 404);
+  }
+  const deleted = deleteItem(db, id);
   if (!deleted) {
     return c.json({ error: "Item not found" }, 404);
   }

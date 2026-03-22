@@ -30,6 +30,7 @@ export const createItemSchema = z
     aliases: z.array(z.string().min(1).max(200)).max(10).default([]),
     linked_note_id: z.string().uuid().nullable().default(null),
     category_id: z.string().uuid().nullable().default(null),
+    is_private: z.boolean().optional(),
   })
   .refine((data) => !data.status || isValidTypeStatus(data.type ?? "note", data.status), {
     message: "Invalid status for the given type",
@@ -54,6 +55,7 @@ export const updateItemSchema = z.object({
   linked_note_id: z.string().uuid().nullable().optional(),
   category_id: z.string().uuid().nullable().optional(),
   viewed_at: z.string().nullable().optional(),
+  is_private: z.boolean().optional(),
 });
 
 export const listItemsSchema = z.object({

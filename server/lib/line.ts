@@ -4,6 +4,7 @@ export interface ParsedLineMessage {
   type: "note" | "todo" | "scratch";
   priority: "high" | null;
   source: string;
+  is_private: boolean;
 }
 
 export function parseLineMessage(text: string, isForwarded?: boolean): ParsedLineMessage {
@@ -11,7 +12,7 @@ export function parseLineMessage(text: string, isForwarded?: boolean): ParsedLin
   const trimmed = text.trim();
 
   if (trimmed === "") {
-    return { title: "", content: "", type: "note", priority: null, source };
+    return { title: "", content: "", type: "note", priority: null, source, is_private: false };
   }
 
   // Split into first line and remaining content
@@ -30,6 +31,7 @@ export function parseLineMessage(text: string, isForwarded?: boolean): ParsedLin
   // Parse prefix commands from the first line
   let type: "note" | "todo" = "note";
   let priority: "high" | null = null;
+  let is_private = false;
   let remaining = firstLine;
 
   // Process prefixes iteratively (order-independent)
@@ -48,6 +50,16 @@ export function parseLineMessage(text: string, isForwarded?: boolean): ParsedLin
       remaining = remaining.slice(5).trimStart();
       changed = true;
     }
+
+    if (remaining.toLowerCase().startsWith("!private")) {
+      is_private = true;
+      remaining = remaining.slice(8).trimStart();
+      changed = true;
+    } else if (remaining.toLowerCase().startsWith("!p ") || remaining.toLowerCase() === "!p") {
+      is_private = true;
+      remaining = remaining.slice(2).trimStart();
+      changed = true;
+    }
   }
 
   return {
@@ -56,6 +68,7 @@ export function parseLineMessage(text: string, isForwarded?: boolean): ParsedLin
     type,
     priority,
     source,
+    is_private,
   };
 }
 
@@ -249,6 +262,7 @@ export function parseCommand(text: string): LineCommand {
           type: "scratch" as const,
           priority: null,
           source: "LINE",
+          is_private: false,
         },
       };
     }
@@ -270,8 +284,14 @@ export function parseCommand(text: string): LineCommand {
       return !isNaN(num) && num > 0 ? { type: "upgrade", index: num } : { type: "unknown" };
     }
 
-    // !todo / !high → save command (existing behavior)
-    if (lower.startsWith("!todo") || lower.startsWith("!high")) {
+    // !todo / !high / !private / !p → save command (existing behavior)
+    if (
+      lower.startsWith("!todo") ||
+      lower.startsWith("!high") ||
+      lower.startsWith("!private") ||
+      lower === "!p" ||
+      lower.startsWith("!p ")
+    ) {
       return { type: "save", parsed: parseLineMessage(trimmed) };
     }
 

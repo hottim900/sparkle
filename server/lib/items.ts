@@ -10,7 +10,10 @@ import { resolveLinkedInfo, type ItemWithLinkedInfo } from "./item-enrichment.js
 
 type DB = BetterSQLite3Database<typeof schema>;
 
-export function createItem(db: DB, input: Partial<CreateItemInput> & { title: string }) {
+export function createItem(
+  db: DB,
+  input: Partial<CreateItemInput> & { title: string } & { is_private?: boolean },
+) {
   const now = new Date().toISOString();
   const id = uuidv4();
   const type = input.type ?? "note";
@@ -31,6 +34,7 @@ export function createItem(db: DB, input: Partial<CreateItemInput> & { title: st
     linked_note_id: type === "todo" ? (input.linked_note_id ?? null) : null,
     category_id: input.category_id ?? null,
     viewed_at: !input.origin || input.origin === "app" ? now : null,
+    is_private: input.is_private ? 1 : 0,
     created: now,
     modified: now,
   };
@@ -42,20 +46,30 @@ export function createItem(db: DB, input: Partial<CreateItemInput> & { title: st
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const LIKE_SAFE_RE = /^[^%_]{4,36}$/;
 
-export function getItem(db: DB, id: string, enrich = true): ItemWithLinkedInfo | null {
+export function getItem(
+  db: DB,
+  id: string,
+  enrich = true,
+  includePrivate = false,
+): ItemWithLinkedInfo | null {
   // Full UUID — exact match (fast path)
   if (UUID_RE.test(id)) {
     const row = db.select().from(items).where(eq(items.id, id)).get() ?? null;
     if (!row) return null;
-    return resolveLinkedInfo(db, [row], enrich)[0]!;
+    if (!includePrivate && row.is_private) return null;
+    return resolveLinkedInfo(db, [row], enrich, includePrivate)[0]!;
   }
 
   // Short prefix — LIKE match (hex only, 4–36 chars)
   if (!LIKE_SAFE_RE.test(id)) return null;
+  const conditions = [like(items.id, `${id}%`)];
+  if (!includePrivate) {
+    conditions.push(eq(items.is_private, 0));
+  }
   const rows = db
     .select()
     .from(items)
-    .where(like(items.id, `${id}%`))
+    .where(and(...conditions))
     .orderBy(asc(items.id))
     .limit(2)
     .all();
@@ -69,7 +83,7 @@ export function getItem(db: DB, id: string, enrich = true): ItemWithLinkedInfo |
     error.matches = rows.map((r) => r.id);
     throw error;
   }
-  return resolveLinkedInfo(db, [rows[0]!], enrich)[0]!;
+  return resolveLinkedInfo(db, [rows[0]!], enrich, includePrivate)[0]!;
 }
 
 export function listItems(
@@ -85,10 +99,14 @@ export function listItems(
     order?: "asc" | "desc";
     limit?: number;
     offset?: number;
+    is_private?: 0 | 1;
   },
   enrich = true,
 ) {
   const conditions = [];
+
+  // Default: show public items only. Pass is_private=1 to see private items.
+  conditions.push(eq(items.is_private, filters?.is_private ?? 0));
 
   if (filters?.status) {
     // SAFETY: Drizzle requires literal union type; value is validated by Zod in route layer
@@ -166,8 +184,13 @@ export function listItems(
   return { items: resolveLinkedInfo(db, rows, enrich), total };
 }
 
-export function updateItem(db: DB, id: string, input: UpdateItemInput) {
-  const existing = getItem(db, id, false);
+export function updateItem(
+  db: DB,
+  id: string,
+  input: UpdateItemInput & { is_private?: boolean },
+  includePrivate = false,
+) {
+  const existing = getItem(db, id, false, includePrivate);
   if (!existing) return null;
 
   const now = new Date().toISOString();
@@ -185,6 +208,7 @@ export function updateItem(db: DB, id: string, input: UpdateItemInput) {
   if (input.linked_note_id !== undefined) updates.linked_note_id = input.linked_note_id;
   if (input.category_id !== undefined) updates.category_id = input.category_id;
   if (input.viewed_at !== undefined) updates.viewed_at = input.viewed_at;
+  if (input.is_private !== undefined) updates.is_private = input.is_private ? 1 : 0;
 
   // Type conversion auto-mapping (Section 9)
   if (input.type !== undefined && input.type !== existing.type) {
@@ -248,7 +272,7 @@ export function updateItem(db: DB, id: string, input: UpdateItemInput) {
 
   db.update(items).set(updates).where(eq(items.id, id)).run();
 
-  return getItem(db, id);
+  return getItem(db, id, true, includePrivate);
 }
 
 export function deleteItem(db: DB, id: string): boolean {
@@ -274,19 +298,27 @@ export function searchItems(
   query: string,
   limit = 20,
   enrich = true,
+  includePrivate: boolean | "only" = false,
 ): ItemWithLinkedInfo[] {
+  const privateClause =
+    includePrivate === "only"
+      ? "AND items.is_private = 1"
+      : includePrivate
+        ? ""
+        : "AND items.is_private = 0";
+
   // Trigram tokenizer requires at least 3 characters; fall back to LIKE for shorter queries
   if (query.length < 3) {
     const pattern = `%${query}%`;
     const stmt = sqlite.prepare(`
       SELECT * FROM items
-      WHERE title LIKE ? OR content LIKE ?
+      WHERE (title LIKE ? OR content LIKE ?) ${privateClause}
       ORDER BY created DESC
       LIMIT ?
     `);
     // SAFETY: better-sqlite3 returns unknown[]; columns match items schema by migration
     const rows = stmt.all(pattern, pattern, limit) as (typeof items.$inferSelect)[];
-    return resolveLinkedInfo(db, rows, enrich);
+    return resolveLinkedInfo(db, rows, enrich, !!includePrivate);
   }
 
   const escaped = escapeFts5Query(query);
@@ -294,21 +326,22 @@ export function searchItems(
     SELECT items.*
     FROM items_fts
     JOIN items ON items.rowid = items_fts.rowid
-    WHERE items_fts MATCH ?
+    WHERE items_fts MATCH ? ${privateClause}
     ORDER BY rank
     LIMIT ?
   `);
 
   // SAFETY: better-sqlite3 returns unknown[]; columns match items schema by migration
   const rows = stmt.all(escaped, limit) as (typeof items.$inferSelect)[];
-  return resolveLinkedInfo(db, rows, enrich);
+  return resolveLinkedInfo(db, rows, enrich, !!includePrivate);
 }
 
-export function getAllTags(sqlite: Database.Database): string[] {
+export function getAllTags(sqlite: Database.Database, includePrivate = false): string[] {
+  const privateClause = includePrivate ? "" : "AND items.is_private = 0";
   const stmt = sqlite.prepare(`
     SELECT DISTINCT value as tag
     FROM items, json_each(items.tags)
-    WHERE value != ''
+    WHERE value != '' ${privateClause}
     ORDER BY value
   `);
 

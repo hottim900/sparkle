@@ -15,10 +15,10 @@ sharesRouter.post("/items/:id/share", async (c) => {
 
     const share = createShareToken(sqlite, itemId, visibility);
     if (!share) {
-      // Check why it failed — item not found or not a note
-      const item = sqlite.prepare("SELECT id, type FROM items WHERE id = ?").get(itemId) as
-        | { id: string; type: string }
-        | undefined;
+      // Check why it failed — item not found, private, or not a note
+      const item = sqlite
+        .prepare("SELECT id, type FROM items WHERE id = ? AND is_private = 0")
+        .get(itemId) as { id: string; type: string } | undefined;
 
       if (!item) {
         return c.json({ error: "Item not found" }, 404);

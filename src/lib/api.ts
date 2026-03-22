@@ -142,7 +142,7 @@ export async function fetchWithRetry(url: string, options: RequestInit = {}): Pr
   throw lastError;
 }
 
-async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+export async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = getToken();
   const headers: Record<string, string> = {
     ...((options.headers as Record<string, string>) ?? {}),
@@ -253,6 +253,7 @@ export async function updateItem(
     linked_note_id?: string | null;
     category_id?: string | null;
     viewed_at?: string | null;
+    is_private?: boolean;
   },
 ): Promise<Item> {
   return request<Item>(`/items/${id}`, {

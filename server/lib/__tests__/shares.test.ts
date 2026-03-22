@@ -28,6 +28,7 @@ function createTestDb() {
       source TEXT DEFAULT NULL,
       aliases TEXT NOT NULL DEFAULT '[]',
       linked_note_id TEXT DEFAULT NULL,
+      is_private INTEGER DEFAULT 0,
       created TEXT NOT NULL,
       modified TEXT NOT NULL,
       FOREIGN KEY (linked_note_id) REFERENCES items(id) ON DELETE SET NULL

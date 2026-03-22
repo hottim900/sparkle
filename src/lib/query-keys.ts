@@ -30,4 +30,11 @@ export const queryKeys = {
   recent: ["recent"] as const,
   attention: ["attention"] as const,
   dashboardStale: ["dashboardStale"] as const,
+  private: {
+    status: ["private", "status"] as const,
+    list: (filters?: Record<string, string>) => ["private", "items", filters ?? {}] as const,
+    detail: (id: string) => ["private", "items", id] as const,
+    tags: ["private", "tags"] as const,
+    search: (q: string) => ["private", "search", q] as const,
+  },
 } as const;

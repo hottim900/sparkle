@@ -23,6 +23,7 @@ Args:
   - aliases (string[], optional): Alternative names for Obsidian linking
   - linked_note_id (string, optional): UUID of a note to link this todo to (todo only)
   - category_id (string, optional): Category UUID to assign (null to clear)
+  - is_private (boolean, optional): Mark as private note, hidden from default views (default: false)
 
 Returns: The created item with all fields including generated ID and timestamps.`,
       inputSchema: z
@@ -56,6 +57,10 @@ Returns: The created item with all fields including generated ID and timestamps.
             .nullable()
             .optional()
             .describe("Category UUID to assign (null to clear)"),
+          is_private: z
+            .boolean()
+            .optional()
+            .describe("標記為私密筆記 (default: false)"),
         })
         .strict(),
       annotations: {
@@ -77,6 +82,7 @@ Returns: The created item with all fields including generated ID and timestamps.
       aliases,
       linked_note_id,
       category_id,
+      is_private,
     }) => {
       try {
         const item = await createItem({
@@ -91,6 +97,7 @@ Returns: The created item with all fields including generated ID and timestamps.
           aliases,
           linked_note_id: linked_note_id ?? null,
           category_id: category_id ?? null,
+          is_private,
         });
         const text = `Note created successfully.\n\n${formatItem(item)}`;
         return {
@@ -122,6 +129,7 @@ Args:
   - source (string, optional): Reference URL (set to null to clear)
   - linked_note_id (string, optional): UUID of linked note, or null to clear (todo only)
   - category_id (string, optional): Category UUID to assign, or null to clear
+  - is_private (boolean, optional): Mark item as private (true only; already-private items return 404 from normal API)
 
 Returns: The updated item with all fields.
 
@@ -196,6 +204,10 @@ Side effects:
             .nullable()
             .optional()
             .describe("Category UUID (null to clear)"),
+          is_private: z
+            .boolean()
+            .optional()
+            .describe("標記為私密筆記 (true to mark as private)"),
         })
         .strict(),
       annotations: {
@@ -219,6 +231,7 @@ Side effects:
       source,
       linked_note_id,
       category_id,
+      is_private,
     }) => {
       try {
         // Find-and-replace mode: old_content + content
@@ -273,6 +286,7 @@ Side effects:
         if (source !== undefined) update.source = source;
         if (linked_note_id !== undefined) update.linked_note_id = linked_note_id;
         if (category_id !== undefined) update.category_id = category_id;
+        if (is_private !== undefined) update.is_private = is_private;
 
         const item = await updateItem(id, update);
         const text = `Note updated successfully.\n\n${formatItem(item)}`;

@@ -21,6 +21,7 @@ import {
   Settings,
   StickyNote,
   Share2,
+  Lock,
 } from "lucide-react";
 
 type NavItem = { id: string; label: string; icon: React.ReactNode; path: string };
@@ -82,6 +83,12 @@ const navGroups: NavGroup[] = [
     label: "暫存",
     items: [
       { id: "draft", label: "暫存區", icon: <StickyNote className="h-4 w-4" />, path: "/scratch" },
+    ],
+  },
+  {
+    label: "私密",
+    items: [
+      { id: "private", label: "私密筆記", icon: <Lock className="h-4 w-4" />, path: "/private" },
     ],
   },
   {
