@@ -298,9 +298,14 @@ export function searchItems(
   query: string,
   limit = 20,
   enrich = true,
-  includePrivate = false,
+  includePrivate: boolean | "only" = false,
 ): ItemWithLinkedInfo[] {
-  const privateClause = includePrivate ? "" : "AND items.is_private = 0";
+  const privateClause =
+    includePrivate === "only"
+      ? "AND items.is_private = 1"
+      : includePrivate
+        ? ""
+        : "AND items.is_private = 0";
 
   // Trigram tokenizer requires at least 3 characters; fall back to LIKE for shorter queries
   if (query.length < 3) {

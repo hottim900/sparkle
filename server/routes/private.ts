@@ -214,9 +214,7 @@ privateRouter.get("/search", (c) => {
       limit: c.req.query("limit"),
     });
 
-    // Search with includePrivate=true, then filter to only private items
-    const allResults = searchItems(sqlite, db, query.q, query.limit, true, true);
-    const results = allResults.filter((item) => item.is_private);
+    const results = searchItems(sqlite, db, query.q, query.limit, true, "only");
     return c.json({ results });
   } catch (e) {
     if (e instanceof ZodError) {

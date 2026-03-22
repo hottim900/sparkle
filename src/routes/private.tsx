@@ -1030,43 +1030,47 @@ function PrivatePage() {
     queryFn: getPrivateStatus,
   });
 
+  // Lock helper: fires lock API and clears token. Uses ref to prevent double-lock.
+  const lockedRef = useRef(false);
+  useEffect(() => {
+    if (sessionToken) lockedRef.current = false;
+  }, [sessionToken]);
+
+  const fireLock = useCallback((tokenToLock: string) => {
+    if (lockedRef.current) return;
+    lockedRef.current = true;
+    const authToken = localStorage.getItem("auth_token");
+    fetch("/api/private/lock", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+        "X-Private-Token": tokenToLock,
+      },
+      keepalive: true,
+    });
+  }, []);
+
   // visibilitychange: lock when page becomes hidden (before OS screenshot)
   useEffect(() => {
     if (!sessionToken) return;
     const handleVisibility = () => {
       if (document.visibilityState === "hidden") {
         setOverlayVisible(true); // Sync render before OS takes screenshot
-        const token = localStorage.getItem("auth_token");
-        fetch("/api/private/lock", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "X-Private-Token": sessionToken,
-          },
-          keepalive: true,
-        });
+        fireLock(sessionToken);
         setSessionToken(null);
       }
     };
     document.addEventListener("visibilitychange", handleVisibility);
     return () => document.removeEventListener("visibilitychange", handleVisibility);
-  }, [sessionToken]);
+  }, [sessionToken, fireLock]);
 
   // Route leave: lock on unmount (navigation away from /private)
   useEffect(() => {
     if (!sessionToken) return;
     return () => {
-      const token = localStorage.getItem("auth_token");
-      fetch("/api/private/lock", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "X-Private-Token": sessionToken,
-        },
-        keepalive: true,
-      });
+      fireLock(sessionToken);
     };
-  }, [sessionToken]);
+  }, [sessionToken, fireLock]);
 
   const content = (() => {
     if (statusLoading) {

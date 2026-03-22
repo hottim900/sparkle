@@ -13,7 +13,6 @@ export async function setupPin(pin: string): Promise<void> {
   return request("/private/setup", {
     method: "POST",
     body: JSON.stringify({ pin }),
-    headers: { "Content-Type": "application/json" },
   });
 }
 
@@ -21,7 +20,6 @@ export async function unlockPrivate(pin: string): Promise<{ token: string }> {
   return request("/private/unlock", {
     method: "POST",
     body: JSON.stringify({ pin }),
-    headers: { "Content-Type": "application/json" },
   });
 }
 
@@ -51,7 +49,7 @@ export async function createPrivateItem(
   return request("/private/items", {
     method: "POST",
     body: JSON.stringify(body),
-    headers: { ...privateHeaders(token), "Content-Type": "application/json" },
+    headers: privateHeaders(token),
   });
 }
 
@@ -63,7 +61,7 @@ export async function updatePrivateItem(
   return request(`/private/items/${id}`, {
     method: "PATCH",
     body: JSON.stringify(body),
-    headers: { ...privateHeaders(token), "Content-Type": "application/json" },
+    headers: privateHeaders(token),
   });
 }
 
@@ -92,6 +90,6 @@ export async function changePin(token: string, oldPin: string, newPin: string): 
   return request("/private/pin", {
     method: "PATCH",
     body: JSON.stringify({ old_pin: oldPin, new_pin: newPin }),
-    headers: { ...privateHeaders(token), "Content-Type": "application/json" },
+    headers: privateHeaders(token),
   });
 }
