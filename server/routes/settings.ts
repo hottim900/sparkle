@@ -89,7 +89,7 @@ settingsRouter.put("/", async (c) => {
       try {
         accessSync(vaultPath, constants.W_OK);
       } catch {
-        return c.json({ error: `Vault path is not writable: ${vaultPath}` }, 400);
+        return c.json({ error: "Vault path is not accessible or not writable" }, 400);
       }
     }
 

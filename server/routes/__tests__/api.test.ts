@@ -73,6 +73,13 @@ function createApp() {
       c.res.headers.set("Vary", "Accept-Encoding");
     }
   });
+  // Security hardening headers (mirrors server/index.ts)
+  app.use("*", async (c, next) => {
+    await next();
+    c.res.headers.set("X-Content-Type-Options", "nosniff");
+    c.res.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+    c.res.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  });
   app.use(
     "/api/*",
     bodyLimit({
@@ -1824,7 +1831,7 @@ describe("PUT /api/settings", () => {
     });
     expect(res.status).toBe(400);
     const body = await res.json();
-    expect(body.error).toMatch(/not writable/);
+    expect(body.error).toBe("Vault path is not accessible or not writable");
   });
 
   it("enables obsidian with valid writable vault path", async () => {
@@ -1975,5 +1982,25 @@ describe("Vary header", () => {
     });
     expect(res.status).toBe(200);
     expect(res.headers.get("Vary")).toBe("Accept-Encoding");
+  });
+});
+
+// ============================================================
+// Security Headers Tests
+// ============================================================
+describe("Security hardening headers", () => {
+  it("sets X-Content-Type-Options: nosniff", async () => {
+    const res = await app.request("/api/items", { headers: authHeaders() });
+    expect(res.headers.get("X-Content-Type-Options")).toBe("nosniff");
+  });
+
+  it("sets Referrer-Policy", async () => {
+    const res = await app.request("/api/items", { headers: authHeaders() });
+    expect(res.headers.get("Referrer-Policy")).toBe("strict-origin-when-cross-origin");
+  });
+
+  it("sets Permissions-Policy", async () => {
+    const res = await app.request("/api/items", { headers: authHeaders() });
+    expect(res.headers.get("Permissions-Policy")).toBe("camera=(), microphone=(), geolocation=()");
   });
 });
