@@ -142,7 +142,7 @@ export async function fetchWithRetry(url: string, options: RequestInit = {}): Pr
   throw lastError;
 }
 
-async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+export async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = getToken();
   const headers: Record<string, string> = {
     ...((options.headers as Record<string, string>) ?? {}),
