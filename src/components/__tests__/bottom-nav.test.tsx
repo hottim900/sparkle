@@ -68,6 +68,7 @@ describe("BottomNav", () => {
 
     await user.click(screen.getByText("更多"));
 
+    expect(screen.getByText("私密筆記")).toBeInTheDocument();
     expect(screen.getByText("全部")).toBeInTheDocument();
     expect(screen.getByText("已封存")).toBeInTheDocument();
     expect(screen.getByText("分享管理")).toBeInTheDocument();
@@ -99,6 +100,14 @@ describe("BottomNav", () => {
 
   it("highlights 更多 button when a more-menu view is active", () => {
     mockPathname = "/settings";
+    renderWithContext(<BottomNav />);
+
+    const moreButton = screen.getByText("更多").closest("button")!;
+    expect(moreButton.className).toContain("text-primary");
+  });
+
+  it("highlights 更多 button when on private notes page", () => {
+    mockPathname = "/private";
     renderWithContext(<BottomNav />);
 
     const moreButton = screen.getByText("更多").closest("button")!;
