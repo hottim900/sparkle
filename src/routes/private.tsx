@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef, lazy, Suspense } from "react";
 import { PrivateOverlay } from "@/components/private-overlay";
+import { usePrivateLock } from "@/hooks/use-private-lock";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
@@ -1023,54 +1024,16 @@ function ListHeader({
 
 function PrivatePage() {
   const [sessionToken, setSessionToken] = useState<string | null>(null);
-  const [overlayVisible, setOverlayVisible] = useState(false);
 
   const { data: status, isLoading: statusLoading } = useQuery({
     queryKey: queryKeys.private.status,
     queryFn: getPrivateStatus,
   });
 
-  // Lock helper: fires lock API and clears token. Uses ref to prevent double-lock.
-  const lockedRef = useRef(false);
-  useEffect(() => {
-    if (sessionToken) lockedRef.current = false;
-  }, [sessionToken]);
-
-  const fireLock = useCallback((tokenToLock: string) => {
-    if (lockedRef.current) return;
-    lockedRef.current = true;
-    const authToken = localStorage.getItem("auth_token");
-    fetch("/api/private/lock", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${authToken}`,
-        "X-Private-Token": tokenToLock,
-      },
-      keepalive: true,
-    });
-  }, []);
-
-  // visibilitychange: lock when page becomes hidden (before OS screenshot)
-  useEffect(() => {
-    if (!sessionToken) return;
-    const handleVisibility = () => {
-      if (document.visibilityState === "hidden") {
-        setOverlayVisible(true); // Sync render before OS takes screenshot
-        fireLock(sessionToken);
-        setSessionToken(null);
-      }
-    };
-    document.addEventListener("visibilitychange", handleVisibility);
-    return () => document.removeEventListener("visibilitychange", handleVisibility);
-  }, [sessionToken, fireLock]);
-
-  // Route leave: lock on unmount (navigation away from /private)
-  useEffect(() => {
-    if (!sessionToken) return;
-    return () => {
-      fireLock(sessionToken);
-    };
-  }, [sessionToken, fireLock]);
+  const { overlayVisible, clearOverlay } = usePrivateLock({
+    sessionToken,
+    onLock: () => setSessionToken(null),
+  });
 
   const content = (() => {
     if (statusLoading) {
@@ -1095,7 +1058,7 @@ function PrivatePage() {
     return (
       <PinUnlockView
         onUnlocked={(token) => {
-          setOverlayVisible(false);
+          clearOverlay();
           setSessionToken(token);
         }}
       />
