@@ -1068,7 +1068,7 @@ function PrivatePage() {
   return (
     <>
       {content}
-      <PrivateOverlay visible={overlayVisible} />
+      <PrivateOverlay visible={overlayVisible} onDismiss={clearOverlay} />
     </>
   );
 }

@@ -165,6 +165,13 @@ export function usePrivateLock({
     };
   }, [sessionToken, fireLock]);
 
+  // Auto-clear overlay after full lock: content is now PinUnlockView (safe to show)
+  useEffect(() => {
+    if (!sessionToken && overlayVisible) {
+      setOverlayVisible(false);
+    }
+  }, [sessionToken, overlayVisible]);
+
   // --- clearOverlay: called on successful PIN unlock ---
   const clearOverlay = useCallback(() => {
     setOverlayVisible(false);

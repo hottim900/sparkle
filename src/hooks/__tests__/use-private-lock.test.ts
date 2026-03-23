@@ -387,6 +387,36 @@ describe("usePrivateLock", () => {
       expect(result.current.overlayVisible).toBe(false);
     });
 
+    it("auto-clears overlay when sessionToken becomes null after full lock", () => {
+      const onLock = vi.fn();
+      const { result, rerender } = renderHook(
+        ({ token }) => usePrivateLock({ sessionToken: token, onLock }),
+        { initialProps: { token: "tok" as string | null } },
+      );
+
+      // Full lock — overlay visible
+      act(() => fireVisibilityChange("hidden"));
+      expect(result.current.overlayVisible).toBe(true);
+
+      // Parent sets sessionToken to null (simulating onLock callback effect)
+      rerender({ token: null });
+      expect(result.current.overlayVisible).toBe(false);
+    });
+
+    it("does NOT auto-clear overlay when sessionToken is still set (blur-only)", () => {
+      const { result } = renderHook(() =>
+        usePrivateLock({ sessionToken: "tok", onLock: vi.fn(), blurGraceMs: 200 }),
+      );
+
+      // Blur-only overlay — sessionToken still set
+      act(() => window.dispatchEvent(new Event("blur")));
+      act(() => vi.advanceTimersByTime(200));
+      expect(result.current.overlayVisible).toBe(true);
+
+      // Auto-clear should NOT fire because sessionToken is still "tok"
+      // (overlay should only be cleared by focus handler)
+    });
+
     it("allows re-locking after clearOverlay + new token", () => {
       const onLock = vi.fn();
       const { result, rerender } = renderHook(
