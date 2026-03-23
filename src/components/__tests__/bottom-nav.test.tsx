@@ -98,16 +98,8 @@ describe("BottomNav", () => {
     expect(screen.queryByText("全部")).not.toBeInTheDocument();
   });
 
-  it("highlights 更多 button when a more-menu view is active", () => {
-    mockPathname = "/settings";
-    renderWithContext(<BottomNav />);
-
-    const moreButton = screen.getByText("更多").closest("button")!;
-    expect(moreButton.className).toContain("text-primary");
-  });
-
-  it("highlights 更多 button when on private notes page", () => {
-    mockPathname = "/private";
+  it.each(["/settings", "/private"])("highlights 更多 button when on %s", (path) => {
+    mockPathname = path;
     renderWithContext(<BottomNav />);
 
     const moreButton = screen.getByText("更多").closest("button")!;
