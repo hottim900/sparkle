@@ -14,6 +14,7 @@ const VIEW_TO_PATH: Record<string, string> = {
   archived: "/archived",
   settings: "/settings",
   shares: "/shares",
+  private: "/private",
   search: "/", // search is a non-routed overlay, fallback to root
 };
 
@@ -30,6 +31,7 @@ const PATH_TO_VIEW: Record<string, string> = {
   "/archived": "archived",
   "/settings": "settings",
   "/shares": "shares",
+  "/private": "private",
 };
 
 export function viewToPath(view: string): string {

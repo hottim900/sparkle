@@ -11,6 +11,7 @@ import {
   Settings,
   StickyNote,
   Share2,
+  Lock,
 } from "lucide-react";
 
 const mainNavItems = [
@@ -27,6 +28,7 @@ const mainNavItems = [
 ];
 
 const moreItems = [
+  { id: "private", label: "私密筆記", icon: <Lock className="h-4 w-4" />, path: "/private" },
   { id: "all", label: "全部", icon: <FileText className="h-4 w-4" />, path: "/all" },
   { id: "archived", label: "已封存", icon: <Archive className="h-4 w-4" />, path: "/archived" },
   { id: "shares", label: "分享管理", icon: <Share2 className="h-4 w-4" />, path: "/shares" },
