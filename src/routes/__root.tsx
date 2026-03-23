@@ -1,5 +1,5 @@
 import { Suspense, useMemo, useState, useCallback } from "react";
-import { createRootRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
+import { createRootRoute, Link, Outlet } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Sidebar } from "@/components/sidebar";
 import { BottomNav } from "@/components/bottom-nav";
@@ -12,7 +12,6 @@ import { getConfig } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
 import { AppContext } from "@/lib/app-context";
 import { rootSearchSchema } from "@/lib/search-params";
-import { isListRoute } from "@/lib/navigation";
 import { LoadingFallback } from "@/components/loading-fallback";
 import { X } from "lucide-react";
 
@@ -51,9 +50,7 @@ function NotFoundPage() {
 
 function RootLayout() {
   const isOnline = useOnlineStatus();
-  const { item: selectedId } = Route.useSearch();
   const navigate = Route.useNavigate();
-  const pathname = useRouterState({ select: (s) => s.location.pathname });
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
 
   const { data: obsidianEnabled = false } = useQuery({
@@ -93,8 +90,6 @@ function RootLayout() {
 
   useKeyboardShortcuts(keyboardHandlers);
 
-  const hideBottomNav = !!(selectedId && isListRoute(pathname));
-
   return (
     <AppContext.Provider value={{ obsidianEnabled, isOnline }}>
       <div className="h-dvh flex flex-col overflow-hidden">
@@ -107,8 +102,8 @@ function RootLayout() {
             <Sidebar />
           </div>
 
-          {/* Main content area */}
-          <div className="flex-1 flex flex-col md:flex-row min-w-0 overflow-hidden">
+          {/* Main content area — relative for mobile detail panel positioning */}
+          <div className="relative flex-1 flex flex-col md:flex-row min-w-0 overflow-hidden">
             <Suspense fallback={<LoadingFallback />}>
               <Outlet />
             </Suspense>
@@ -125,8 +120,7 @@ function RootLayout() {
           />
         )}
 
-        {/* Mobile Bottom Nav - hidden when detail panel is open on list routes */}
-        {!hideBottomNav && <BottomNav onSearchClick={() => setMobileSearchOpen(true)} />}
+        <BottomNav onSearchClick={() => setMobileSearchOpen(true)} />
       </div>
     </AppContext.Provider>
   );
