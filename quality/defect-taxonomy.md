@@ -20,20 +20,20 @@
 
 ## 分類總覽
 
-| 代號      | 缺陷類別                | 層級              | 已知實例                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | 搜查狀態      |
-| --------- | ----------------------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| 代號      | 缺陷類別                | 層級              | 已知實例                                                                       | 搜查狀態      |
+| --------- | ----------------------- | ----------------- | ------------------------------------------------------------------------------ | ------------- |
 | D-SILENT  | 靜默失敗與可觀測性缺口  | 全層              | DEF-001, DEF-011, DEF-012, DEF-018, DEF-019, DEF-022, DEF-025, DEF-026, TD-026 | ✅ 2026-03-20 |
-| D-VALID   | 輸入驗證缺口            | API               | DEF-003, DEF-004, DEF-005, DEF-013, DEF-021, DEF-025                                                                                                                                                                                                          | ✅ 2026-03-20 |
-| D-STATE   | 前端狀態管理不一致      | Frontend          | DEF-002, DEF-015, DEF-016                                                                                                                                                                                                                                                                                                                                                                          | ✅ 2026-03-20 |
-| D-OFFLINE | 離線同步與 PWA 問題     | Frontend / SW     | (DEF-001)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | ✅ 2026-03-20 |
-| D-QUERY   | 查詢語意錯誤            | Server            | DEF-010                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | ✅ 2026-03-20 |
-| D-MIGRATE | DB Migration 安全性     | Server            | —                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | ✅ 2026-03-20 |
-| D-AUTH    | 認證、授權與安全防線    | API / 全層        | —                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | ✅ 2026-03-20 |
-| D-EDGE    | 邊界條件與資源限制      | 全層              | DEF-006, DEF-007                                                                                                                                                                                                                                                                                                                                                                                                                                                                | ✅ 2026-03-20 |
-| D-TYPE    | TypeScript 型別安全漏洞 | Frontend / Server | DEF-008, TD-001, TD-004, TD-005, TD-006                                                                                                                                                                                                                                                                  | ✅ 2026-03-20 |
-| D-PERF    | 效能問題                | 全層              | DEF-009, DEF-014, TD-002, TD-003, FG-001                                                                                                                                                                                                                                                                                            | ✅ 2026-03-20 |
-| D-DEPLOY  | Build/Deploy 一致性     | DevOps            | TD-027                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | ✅ 2026-03-20 |
-| D-RACE    | 競態條件與並發問題      | Frontend / Server | DEF-024                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | ✅ 2026-03-20 |
+| D-VALID   | 輸入驗證缺口            | API               | DEF-003, DEF-004, DEF-005, DEF-013, DEF-021, DEF-025                           | ✅ 2026-03-20 |
+| D-STATE   | 前端狀態管理不一致      | Frontend          | DEF-002, DEF-015, DEF-016                                                      | ✅ 2026-03-20 |
+| D-OFFLINE | 離線同步與 PWA 問題     | Frontend / SW     | (DEF-001)                                                                      | ✅ 2026-03-20 |
+| D-QUERY   | 查詢語意錯誤            | Server            | DEF-010                                                                        | ✅ 2026-03-20 |
+| D-MIGRATE | DB Migration 安全性     | Server            | —                                                                              | ✅ 2026-03-20 |
+| D-AUTH    | 認證、授權與安全防線    | API / 全層        | —                                                                              | ✅ 2026-03-20 |
+| D-EDGE    | 邊界條件與資源限制      | 全層              | DEF-006, DEF-007                                                               | ✅ 2026-03-20 |
+| D-TYPE    | TypeScript 型別安全漏洞 | Frontend / Server | DEF-008, TD-001, TD-004, TD-005, TD-006                                        | ✅ 2026-03-20 |
+| D-PERF    | 效能問題                | 全層              | DEF-009, DEF-014, TD-002, TD-003, FG-001                                       | ✅ 2026-03-20 |
+| D-DEPLOY  | Build/Deploy 一致性     | DevOps            | TD-027                                                                         | ✅ 2026-03-20 |
+| D-RACE    | 競態條件與並發問題      | Frontend / Server | DEF-024                                                                        | ✅ 2026-03-20 |
 
 ---
 
@@ -132,7 +132,13 @@ grep -rn "z\.object" server/ --include="*.ts"
 - DEF-005 — LINE !tag 繞過 Zod max(20) 限制
 - DEF-013 — Short ID prefix lookup 無 max 長度驗證、LIKE 查詢缺 ORDER BY（High / S2-Major）
 
-**審查但判定合理：** 路徑參數 :id 未顯式驗證但由 DB lookup 保護、FTS5 轉義正確。
+**增量搜查（2026-03-22 資料層/輸入層安全評估）：**
+
+- Issue #182（Defect, High / S2-Major）— Import API 未驗證 type-status 組合（`importItemSchema` 缺 `.refine()`），可寫入 `{type: "todo", status: "fleeting"}` 等無效狀態
+- Issue #183（Defect, Low / S4-Trivial）— Tags/aliases 陣列元素允許空字串，缺 `.min(1)`
+- Issue #184（Tech Debt, Low）— Import 未驗證 FK 參照完整性（linked_note_id / category_id），可能觸發 FK constraint error 500
+
+**審查但判定合理：** 路徑參數 :id 未顯式驗證但由 DB lookup 保護、FTS5 轉義正確。UUID format 由 Zod `.uuid()` 嚴格檢查。Short ID prefix lookup 已有 `LIKE_SAFE_RE` 防止 LIKE wildcards 注入。MCP vault `readVaultFileByPath` 不限副檔名但有 `resolveVaultPath()` 路徑邊界檢查。Zod v3 預設 strip unknown keys（無 `.passthrough()`），prototype pollution 不適用。日期格式 regex 不做語意驗證（`"9999-99-99"` 可通過），SQLite TEXT 儲存不受影響。
 
 ---
 
@@ -314,13 +320,23 @@ grep -rn "eval(\|new Function(" src/ server/ --include="*.ts" --include="*.tsx"
 
 **範圍：** 認證、secret 儲存、CSP/XSS 全面搜查。
 
-**發現：** 無缺陷。
+**發現：**
 
-**認證與授權：** Bearer token timing-safe 比較正確、全域 authMiddleware 覆蓋所有 /api/\* 路由、公開路由正確過濾 visibility、LINE webhook HMAC-SHA256 驗證正確。
+- Issue #180（Defect, Low）— `server/routes/settings.ts:92` 錯誤回應洩漏伺服器檔案系統路徑（`Vault path is not writable: ${vaultPath}`）
 
-**Secret 儲存：** localStorage auth_token 是 SPA 標準做法（CF Access 已在前端保護）。SW token 透過 MessageChannel 安全傳遞（非 localStorage 暴露）。.env 正確 gitignored。
+**增量搜查（2026-03-22 全專案安全性評估）：**
 
-**內容注入：** CSP `script-src 'self'` 阻擋 inline script。`style-src 'unsafe-inline'` 為 Tailwind 所需。無 dangerouslySetInnerHTML、無 eval。react-markdown 安全渲染（不執行 HTML）。
+- Issue #178（Tech Debt, High）— Rate limiter IP 提取依賴 `X-Forwarded-For`（`server/middleware/rate-limit.ts:4-8`），可被偽造繞過。屬 D-EDGE 交叉，但根因在安全防線設計。
+- Issue #179（Tech Debt, Medium）— 缺少 HSTS / `X-Content-Type-Options: nosniff` / `Referrer-Policy` / `Permissions-Policy` 安全標頭
+- Issue #181（Tech Debt, Low）— `/s/*` 公開分享頁 CSP 使用 `unsafe-inline` script
+
+**認證與授權：** Bearer token timing-safe 比較正確、全域 authMiddleware 覆蓋所有 /api/\* 路由、公開路由正確過濾 visibility、LINE webhook HMAC-SHA256 驗證正確。Auth token 啟動時驗證 entropy ≥ 3.0、長度 ≥ 32。暴露面僅 4 個無 auth 入口（health、public、webhook、share page），全部有速率限制。
+
+**Secret 儲存：** localStorage auth_token 是 SPA 標準做法（CF Access 已在前端保護）。SW token 透過 MessageChannel 安全傳遞（非 localStorage 暴露）。.env 正確 gitignored，從未 commit 到 git。Share token 使用 `randomBytes(9)`（72-bit entropy），不可暴力猜測。
+
+**內容注入：** CSP `script-src 'self'` 阻擋 inline script（`/s/*` 例外，見 Issue #181）。`style-src 'unsafe-inline'` 為 Tailwind 所需。無 dangerouslySetInnerHTML、無 eval。react-markdown 安全渲染（不執行 HTML）。SSR 公開頁使用 `escapeHtml()` 處理所有使用者輸入。
+
+**輸入驗證（D-VALID 交叉確認）：** Zod 全覆蓋所有 API 路由、FTS5 `escapeFts5Query()` 防搜尋注入、body size limit 1MB。Drizzle ORM + prepared statements 零原生 SQL 拼接。`sanitizeFilename()` 防路徑遍歷。零 `exec()`/`spawn()` 呼叫。
 
 ---
 
