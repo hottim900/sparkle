@@ -41,20 +41,3 @@ export function viewToPath(view: string): string {
 export function pathToView(path: string): string | undefined {
   return PATH_TO_VIEW[path];
 }
-
-/** Routes that use the list+detail split panel layout */
-export const LIST_ROUTE_PREFIXES = [
-  "/notes",
-  "/todos",
-  "/scratch",
-  "/all",
-  "/archived",
-  "/unreviewed",
-  "/recent",
-  "/attention",
-  "/stale",
-] as const;
-
-export function isListRoute(path: string): boolean {
-  return LIST_ROUTE_PREFIXES.some((prefix) => path === prefix || path.startsWith(prefix + "/"));
-}

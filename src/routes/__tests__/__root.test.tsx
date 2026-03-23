@@ -6,7 +6,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 const mockNavigate = vi.fn();
 let mockSearchParams: Record<string, unknown> = {};
-let mockPathname = "/notes/fleeting";
 
 vi.mock("@tanstack/react-router", () => ({
   createRootRoute: (opts: { component: React.FC }) => ({
@@ -14,8 +13,6 @@ vi.mock("@tanstack/react-router", () => ({
     useSearch: () => mockSearchParams,
     useNavigate: () => mockNavigate,
   }),
-  useRouterState: ({ select }: { select: (s: unknown) => unknown }) =>
-    select({ location: { pathname: mockPathname, search: mockSearchParams } }),
   Link: ({
     children,
     to,
@@ -75,7 +72,6 @@ const RootLayout = Route.component!;
 beforeEach(() => {
   vi.clearAllMocks();
   mockSearchParams = {};
-  mockPathname = "/notes/fleeting";
   mockGetConfig.mockResolvedValue({ obsidian_export_enabled: false });
 });
 
@@ -114,29 +110,5 @@ describe("RootLayout", () => {
       item: undefined,
       tag: "idea",
     });
-  });
-
-  it("hides bottom nav when item selected on list route", () => {
-    mockSearchParams = { item: "abc-123" };
-    mockPathname = "/notes/fleeting";
-    renderRoot();
-
-    expect(screen.queryByTestId("bottom-nav")).not.toBeInTheDocument();
-  });
-
-  it("shows bottom nav when no item selected", () => {
-    mockSearchParams = {};
-    mockPathname = "/notes/fleeting";
-    renderRoot();
-
-    expect(screen.getByTestId("bottom-nav")).toBeInTheDocument();
-  });
-
-  it("shows bottom nav when item selected on non-list route", () => {
-    mockSearchParams = { item: "abc-123" };
-    mockPathname = "/settings";
-    renderRoot();
-
-    expect(screen.getByTestId("bottom-nav")).toBeInTheDocument();
   });
 });

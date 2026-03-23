@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { viewToPath, pathToView, isListRoute } from "../navigation";
+import { viewToPath, pathToView } from "../navigation";
 
 describe("viewToPath", () => {
   it("maps known views to paths", () => {
@@ -42,24 +42,5 @@ describe("pathToView", () => {
   it("returns undefined for unknown paths", () => {
     expect(pathToView("/unknown")).toBeUndefined();
     expect(pathToView("/")).toBeUndefined();
-  });
-});
-
-describe("isListRoute", () => {
-  it("identifies list routes", () => {
-    expect(isListRoute("/notes/fleeting")).toBe(true);
-    expect(isListRoute("/notes/developing")).toBe(true);
-    expect(isListRoute("/todos")).toBe(true);
-    expect(isListRoute("/todos/done")).toBe(true);
-    expect(isListRoute("/scratch")).toBe(true);
-    expect(isListRoute("/all")).toBe(true);
-    expect(isListRoute("/archived")).toBe(true);
-  });
-
-  it("rejects non-list routes", () => {
-    expect(isListRoute("/dashboard")).toBe(false);
-    expect(isListRoute("/settings")).toBe(false);
-    expect(isListRoute("/shares")).toBe(false);
-    expect(isListRoute("/")).toBe(false);
   });
 });
