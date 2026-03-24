@@ -412,9 +412,6 @@ export function getWeekData(sqlite: Database.Database, startDate: string): WeekD
     });
   }
 
-  // Week-level Set for deduplicating notes that appear in both created and modified
-  const notesCreatedIds = new Set<string>();
-
   // Query 1: Todos due in this week range
   // due is stored as bare YYYY-MM-DD (implicitly local), so compare directly
   const todosDueWithDate = sqlite
@@ -448,6 +445,7 @@ export function getWeekData(sqlite: Database.Database, startDate: string): WeekD
        FROM items
        WHERE type = 'note'
          AND created >= ? AND created < ?
+         AND status != 'archived'
          AND is_private = 0`,
     )
     .all(rangeStart, dayAfterEnd) as {
@@ -462,7 +460,6 @@ export function getWeekData(sqlite: Database.Database, startDate: string): WeekD
     const day = dayMap.get(localDate);
     if (day) {
       day.notes_created.push({ id: note.id, title: note.title, status: note.status });
-      notesCreatedIds.add(note.id);
     }
   }
 
@@ -474,6 +471,7 @@ export function getWeekData(sqlite: Database.Database, startDate: string): WeekD
        FROM items
        WHERE type = 'note'
          AND modified >= ? AND modified < ?
+         AND status != 'archived'
          AND is_private = 0`,
     )
     .all(rangeStart, dayAfterEnd) as {
@@ -486,8 +484,12 @@ export function getWeekData(sqlite: Database.Database, startDate: string): WeekD
   for (const note of notesModified) {
     const localDate = toLocalDateStr(new Date(note.modified));
     const day = dayMap.get(localDate);
-    if (day && !notesCreatedIds.has(note.id)) {
-      day.notes_modified.push({ id: note.id, title: note.title, status: note.status });
+    if (day) {
+      // Only dedup on the same day: skip if this note also appears in this day's notes_created
+      const isCreatedSameDay = day.notes_created.some((n) => n.id === note.id);
+      if (!isCreatedSameDay) {
+        day.notes_modified.push({ id: note.id, title: note.title, status: note.status });
+      }
     }
   }
 

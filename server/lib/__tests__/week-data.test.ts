@@ -178,6 +178,46 @@ describe("getWeekData", () => {
     expect(result.days[3]!.notes_modified[0]!.title).toBe("Note modified Thu");
   });
 
+  it("shows cross-day modifications — note created Monday, modified Friday", () => {
+    const mondayCreated = new Date(2026, 2, 23, 10, 0, 0);
+    const fridayModified = new Date(2026, 2, 27, 14, 0, 0);
+    const noteId = crypto.randomUUID();
+
+    insertRawItem(sqlite, {
+      id: noteId,
+      type: "note",
+      title: "Cross-day note",
+      status: "developing",
+      created: mondayCreated.toISOString(),
+      modified: fridayModified.toISOString(),
+    });
+
+    const result = getWeekData(sqlite, monday);
+
+    // Monday: should appear in notes_created
+    expect(result.days[0]!.notes_created).toHaveLength(1);
+    expect(result.days[0]!.notes_created[0]!.title).toBe("Cross-day note");
+
+    // Friday: should appear in notes_modified (different day, no dedup)
+    expect(result.days[4]!.notes_modified).toHaveLength(1);
+    expect(result.days[4]!.notes_modified[0]!.title).toBe("Cross-day note");
+  });
+
+  it("excludes archived notes from notes_created and notes_modified", () => {
+    const tuesdayLocal = new Date(2026, 2, 24, 10, 0, 0);
+    insertRawItem(sqlite, {
+      type: "note",
+      title: "Archived note",
+      status: "archived",
+      created: tuesdayLocal.toISOString(),
+      modified: tuesdayLocal.toISOString(),
+    });
+
+    const result = getWeekData(sqlite, monday);
+    expect(result.days[1]!.notes_created).toHaveLength(0);
+    expect(result.days[1]!.notes_modified).toHaveLength(0);
+  });
+
   it("excludes private items from all results", () => {
     // Public todo
     insertRawItem(sqlite, {
