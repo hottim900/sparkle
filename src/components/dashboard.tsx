@@ -15,6 +15,7 @@ import { queryKeys } from "@/lib/query-keys";
 import { formatRelativeTime } from "@/lib/date-utils";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
+import { WeekView } from "@/components/week-view";
 import {
   LayoutDashboard,
   TrendingUp,
@@ -332,7 +333,10 @@ export function Dashboard() {
           )}
         </section>
 
-        {/* Section 2: Zettelkasten Pipeline */}
+        {/* Section 2: Week View */}
+        <WeekView />
+
+        {/* Section 3: Zettelkasten Pipeline */}
         <section className="space-y-3">
           <div className="flex items-center gap-2">
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
