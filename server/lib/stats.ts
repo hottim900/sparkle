@@ -3,7 +3,7 @@ import type Database from "better-sqlite3";
 /**
  * Format a Date as local YYYY-MM-DD.
  */
-function toLocalDateStr(date: Date): string {
+export function toLocalDateStr(date: Date): string {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, "0");
   const d = String(date.getDate()).padStart(2, "0");
@@ -339,4 +339,195 @@ export function getFocusItems(sqlite: Database.Database): FocusItem[] {
 
   // Strip the computed columns before returning
   return rows.map(({ focus_rank: _, focus_sort: __, ...item }) => item);
+}
+
+// --- Week Data for Temporal Bridge ---
+
+export interface WeekTodoItem {
+  id: string;
+  title: string;
+  priority: string | null;
+}
+
+export interface WeekNoteItem {
+  id: string;
+  title: string;
+  status: string;
+}
+
+export interface WeekDay {
+  date: string;
+  todos_due: WeekTodoItem[];
+  notes_created: WeekNoteItem[];
+  notes_modified: WeekNoteItem[];
+  overdue_count: number;
+}
+
+export interface WeekData {
+  days: WeekDay[];
+}
+
+/**
+ * Get a local day boundary as a UTC ISO string.
+ * Computes local midnight of the given date, then converts to ISO string for UTC comparison.
+ */
+function getLocalDayBoundary(dateStr: string): string {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  return new Date(y!, m! - 1, d!).toISOString();
+}
+
+/**
+ * Return 7-day data for the week starting at `startDate` (a Monday YYYY-MM-DD).
+ * Uses 3 range queries (todos_due, notes_created, notes_modified) and buckets into days in JS.
+ */
+export function getWeekData(sqlite: Database.Database, startDate: string): WeekData {
+  // Build 7-day date array
+  const [startY, startM, startD] = startDate.split("-").map(Number);
+  const dates: string[] = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(startY!, startM! - 1, startD! + i);
+    dates.push(toLocalDateStr(d));
+  }
+
+  // Compute range boundaries for created/modified (UTC ISO strings)
+  const rangeStart = getLocalDayBoundary(dates[0]!);
+  const dayAfterEnd = getLocalDayBoundary(
+    toLocalDateStr(new Date(startY!, startM! - 1, startD! + 7)),
+  );
+
+  // Initialize day map
+  const dayMap = new Map<
+    string,
+    {
+      todos_due: WeekTodoItem[];
+      notes_created: WeekNoteItem[];
+      notes_modified: WeekNoteItem[];
+    }
+  >();
+  for (const date of dates) {
+    dayMap.set(date, {
+      todos_due: [],
+      notes_created: [],
+      notes_modified: [],
+    });
+  }
+
+  // Query 1: Todos due in this week range
+  // due is stored as bare YYYY-MM-DD (implicitly local), so compare directly
+  const todosDueWithDate = sqlite
+    .prepare(
+      `SELECT id, title, priority, due
+       FROM items
+       WHERE type = 'todo'
+         AND status NOT IN ('archived')
+         AND due >= ? AND due <= ?
+         AND is_private = 0`,
+    )
+    .all(dates[0], dates[6]) as {
+    id: string;
+    title: string;
+    priority: string | null;
+    due: string;
+  }[];
+
+  for (const todo of todosDueWithDate) {
+    const day = dayMap.get(todo.due);
+    if (day) {
+      day.todos_due.push({ id: todo.id, title: todo.title, priority: todo.priority });
+    }
+  }
+
+  // Query 2: Notes created in this week range
+  // created is stored as UTC ISO string; compare with UTC boundaries
+  const notesCreated = sqlite
+    .prepare(
+      `SELECT id, title, status, created
+       FROM items
+       WHERE type = 'note'
+         AND created >= ? AND created < ?
+         AND status != 'archived'
+         AND is_private = 0`,
+    )
+    .all(rangeStart, dayAfterEnd) as {
+    id: string;
+    title: string;
+    status: string;
+    created: string;
+  }[];
+
+  for (const note of notesCreated) {
+    const localDate = toLocalDateStr(new Date(note.created));
+    const day = dayMap.get(localDate);
+    if (day) {
+      day.notes_created.push({ id: note.id, title: note.title, status: note.status });
+    }
+  }
+
+  // Query 3: Notes modified in this week range
+  // Dedup: exclude items that appear in notes_created for the same day
+  const notesModified = sqlite
+    .prepare(
+      `SELECT id, title, status, modified
+       FROM items
+       WHERE type = 'note'
+         AND modified >= ? AND modified < ?
+         AND status != 'archived'
+         AND is_private = 0`,
+    )
+    .all(rangeStart, dayAfterEnd) as {
+    id: string;
+    title: string;
+    status: string;
+    modified: string;
+  }[];
+
+  for (const note of notesModified) {
+    const localDate = toLocalDateStr(new Date(note.modified));
+    const day = dayMap.get(localDate);
+    if (day) {
+      // Only dedup on the same day: skip if this note also appears in this day's notes_created
+      const isCreatedSameDay = day.notes_created.some((n) => n.id === note.id);
+      if (!isCreatedSameDay) {
+        day.notes_modified.push({ id: note.id, title: note.title, status: note.status });
+      }
+    }
+  }
+
+  // Compute overdue_count per day (historical: relative to each day, not today)
+  // An active todo is overdue on a given day if its due date is strictly before that day
+  // Upper bound: only fetch todos due before the last day of the week (optimization)
+  const activeTodosWithDue = sqlite
+    .prepare(
+      `SELECT due
+       FROM items
+       WHERE type = 'todo'
+         AND status NOT IN ('done', 'exported', 'archived')
+         AND due IS NOT NULL
+         AND due < ?
+         AND is_private = 0`,
+    )
+    .all(dates[6]) as { due: string }[];
+
+  // Build result
+  const days: WeekDay[] = dates.map((date) => {
+    const day = dayMap.get(date)!;
+
+    // Count todos overdue relative to this historical date
+    let overdueCount = 0;
+    for (const todo of activeTodosWithDue) {
+      if (todo.due < date) {
+        overdueCount++;
+      }
+    }
+
+    return {
+      date,
+      todos_due: day.todos_due,
+      notes_created: day.notes_created,
+      notes_modified: day.notes_modified,
+      overdue_count: overdueCount,
+    };
+  });
+
+  return { days };
 }
