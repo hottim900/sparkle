@@ -368,6 +368,7 @@ export function WeekView() {
         return;
       } else if (e.key === "Escape") {
         e.preventDefault();
+        e.stopPropagation();
         setSelectedDay(null);
         return;
       }
