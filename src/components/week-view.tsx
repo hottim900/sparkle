@@ -65,6 +65,10 @@ function formatMonthHeader(monday: string): string {
   const [, , d] = monday.split("-").map(Number);
   const sundayDate = new Date(y!, m! - 1, d! + 6);
   const sundayMonth = sundayDate.getMonth() + 1;
+  const sundayYear = sundayDate.getFullYear();
+  if (sundayYear !== y) {
+    return `${y}年${m}月—${sundayYear}年${sundayMonth}月`;
+  }
   if (sundayMonth !== m) {
     return `${y}年${m}月—${sundayMonth}月`;
   }
@@ -225,7 +229,7 @@ function DayDetail({
           <div className="space-y-0.5">
             {notesCreated.slice(0, MAX_ITEMS).map((note: WeekNoteItem) => (
               <button
-                key={note.id}
+                key={`created-${note.id}`}
                 className="w-full text-left rounded-md px-2 py-1.5 text-sm hover:bg-accent transition-colors flex items-center gap-2"
                 onClick={() => onItemClick(note.id, "note", note.status)}
               >
@@ -243,7 +247,7 @@ function DayDetail({
             ))}
             {notesModified.slice(0, MAX_ITEMS).map((note: WeekNoteItem) => (
               <button
-                key={note.id}
+                key={`modified-${note.id}`}
                 className="w-full text-left rounded-md px-2 py-1.5 text-sm hover:bg-accent transition-colors flex items-center gap-2"
                 onClick={() => onItemClick(note.id, "note", note.status)}
               >
