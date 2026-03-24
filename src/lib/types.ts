@@ -169,6 +169,31 @@ export interface DashboardStaleResponse {
   total: number;
 }
 
+// Week data types for temporal bridge
+export interface WeekTodoItem {
+  id: string;
+  title: string;
+  priority: string | null;
+}
+
+export interface WeekNoteItem {
+  id: string;
+  title: string;
+  status: string;
+}
+
+export interface WeekDay {
+  date: string;
+  todos_due: WeekTodoItem[];
+  notes_created: WeekNoteItem[];
+  notes_modified: WeekNoteItem[];
+  overdue_count: number;
+}
+
+export interface WeekDataResponse {
+  days: WeekDay[];
+}
+
 // Parsed item with tags and aliases as arrays
 export interface ParsedItem extends Omit<Item, "tags" | "aliases"> {
   tags: string[];

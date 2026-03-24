@@ -19,6 +19,7 @@ import type {
   RecentActivityResponse,
   AttentionResponse,
   DashboardStaleResponse,
+  WeekDataResponse,
 } from "./types";
 
 const API_BASE = "/api";
@@ -452,6 +453,11 @@ export async function getDashboardStale(params?: {
   if (params?.limit) search.set("limit", String(params.limit));
   const qs = search.toString();
   return request<DashboardStaleResponse>(`/dashboard/stale${qs ? `?${qs}` : ""}`);
+}
+
+// Dashboard Week API
+export async function getDashboardWeek(start: string): Promise<WeekDataResponse> {
+  return request<WeekDataResponse>(`/dashboard/week?start=${encodeURIComponent(start)}`);
 }
 
 export { ApiClientError };
