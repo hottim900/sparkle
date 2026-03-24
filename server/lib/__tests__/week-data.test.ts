@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterAll } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import Database from "better-sqlite3";
 import { createTestDb } from "../../test-utils.js";
 import { getWeekData } from "../stats.js";
@@ -52,7 +52,7 @@ describe("getWeekData", () => {
     sqlite = testDb.sqlite;
   });
 
-  afterAll(() => {
+  afterEach(() => {
     sqlite?.close();
   });
 
@@ -105,6 +105,7 @@ describe("getWeekData", () => {
     expect(result.days[0]!.todos_due).toHaveLength(1);
     expect(result.days[0]!.todos_due[0]!.title).toBe("Todo Mon");
     expect(result.days[0]!.todos_due[0]!.priority).toBe("high");
+    expect(result.days[0]!.todos_due[0]!.status).toBe("active");
 
     // Wednesday
     expect(result.days[2]!.todos_due).toHaveLength(1);

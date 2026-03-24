@@ -347,6 +347,7 @@ export interface WeekTodoItem {
   id: string;
   title: string;
   priority: string | null;
+  status: string;
 }
 
 export interface WeekNoteItem {
@@ -416,7 +417,7 @@ export function getWeekData(sqlite: Database.Database, startDate: string): WeekD
   // due is stored as bare YYYY-MM-DD (implicitly local), so compare directly
   const todosDueWithDate = sqlite
     .prepare(
-      `SELECT id, title, priority, due
+      `SELECT id, title, priority, status, due
        FROM items
        WHERE type = 'todo'
          AND status NOT IN ('archived')
@@ -427,13 +428,19 @@ export function getWeekData(sqlite: Database.Database, startDate: string): WeekD
     id: string;
     title: string;
     priority: string | null;
+    status: string;
     due: string;
   }[];
 
   for (const todo of todosDueWithDate) {
     const day = dayMap.get(todo.due);
     if (day) {
-      day.todos_due.push({ id: todo.id, title: todo.title, priority: todo.priority });
+      day.todos_due.push({
+        id: todo.id,
+        title: todo.title,
+        priority: todo.priority,
+        status: todo.status,
+      });
     }
   }
 
@@ -493,8 +500,8 @@ export function getWeekData(sqlite: Database.Database, startDate: string): WeekD
     }
   }
 
-  // Compute overdue_count per day (historical: relative to each day, not today)
-  // An active todo is overdue on a given day if its due date is strictly before that day
+  // Compute overdue_count per day: counts currently-active todos that were already
+  // overdue by each day. Uses current status, not historical snapshots.
   // Upper bound: only fetch todos due before the last day of the week (optimization)
   const activeTodosWithDue = sqlite
     .prepare(

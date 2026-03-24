@@ -174,6 +174,7 @@ export interface WeekTodoItem {
   id: string;
   title: string;
   priority: string | null;
+  status: string;
 }
 
 export interface WeekNoteItem {
