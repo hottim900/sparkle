@@ -11,7 +11,7 @@ test.describe("Dashboard", () => {
 
     const main = page.locator(".max-w-2xl");
     await expect(main.getByText("未處理", { exact: true })).toBeVisible();
-    await expect(main.getByText("最近新增", { exact: true })).toBeVisible();
+    await expect(main.getByText("最近活動", { exact: true })).toBeVisible();
     await expect(main.getByText("需要關注", { exact: true })).toBeVisible();
     await expect(main.getByText("Zettelkasten 管道")).toBeVisible();
     await expect(main.getByText("本月活動")).toBeVisible();

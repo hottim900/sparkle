@@ -131,6 +131,17 @@ export interface SettingsResponse {
 }
 
 // Dashboard types
+export type ActivityType = "created" | "updated";
+
+export interface RecentActivityItem extends Item {
+  activity: ActivityType;
+}
+
+export interface RecentActivityResponse {
+  items: RecentActivityItem[];
+  total: number;
+}
+
 export interface DashboardItemsResponse {
   items: Item[];
   total: number;
@@ -176,7 +187,9 @@ function safeParseStringArray(json: string): string[] {
   return [];
 }
 
-export function parseItem(item: Item): ParsedItem {
+export function parseItem<T extends Item>(
+  item: T,
+): Omit<T, "tags" | "aliases"> & { tags: string[]; aliases: string[] } {
   return {
     ...item,
     tags: safeParseStringArray(item.tags),
@@ -184,7 +197,9 @@ export function parseItem(item: Item): ParsedItem {
   };
 }
 
-export function parseItems(items: Item[]): ParsedItem[] {
+export function parseItems<T extends Item>(
+  items: T[],
+): (Omit<T, "tags" | "aliases"> & { tags: string[]; aliases: string[] })[] {
   return items.map(parseItem);
 }
 

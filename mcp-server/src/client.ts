@@ -186,7 +186,7 @@ export async function getUnreviewed(
 export async function getRecent(
   limit = 20,
   offset = 0,
-): Promise<{ items: SparkleItem[]; total: number }> {
+): Promise<{ items: (SparkleItem & { activity: "created" | "updated" })[]; total: number }> {
   const params = new URLSearchParams();
   if (limit !== 20) params.set("limit", String(limit));
   if (offset) params.set("offset", String(offset));
