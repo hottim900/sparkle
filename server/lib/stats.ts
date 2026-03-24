@@ -402,7 +402,6 @@ export function getWeekData(sqlite: Database.Database, startDate: string): WeekD
       todos_due: WeekTodoItem[];
       notes_created: WeekNoteItem[];
       notes_modified: WeekNoteItem[];
-      notes_created_ids: Set<string>;
     }
   >();
   for (const date of dates) {
@@ -410,9 +409,11 @@ export function getWeekData(sqlite: Database.Database, startDate: string): WeekD
       todos_due: [],
       notes_created: [],
       notes_modified: [],
-      notes_created_ids: new Set(),
     });
   }
+
+  // Week-level Set for deduplicating notes that appear in both created and modified
+  const notesCreatedIds = new Set<string>();
 
   // Query 1: Todos due in this week range
   // due is stored as bare YYYY-MM-DD (implicitly local), so compare directly
@@ -461,7 +462,7 @@ export function getWeekData(sqlite: Database.Database, startDate: string): WeekD
     const day = dayMap.get(localDate);
     if (day) {
       day.notes_created.push({ id: note.id, title: note.title, status: note.status });
-      day.notes_created_ids.add(note.id);
+      notesCreatedIds.add(note.id);
     }
   }
 
@@ -485,13 +486,14 @@ export function getWeekData(sqlite: Database.Database, startDate: string): WeekD
   for (const note of notesModified) {
     const localDate = toLocalDateStr(new Date(note.modified));
     const day = dayMap.get(localDate);
-    if (day && !day.notes_created_ids.has(note.id)) {
+    if (day && !notesCreatedIds.has(note.id)) {
       day.notes_modified.push({ id: note.id, title: note.title, status: note.status });
     }
   }
 
   // Compute overdue_count per day (historical: relative to each day, not today)
   // An active todo is overdue on a given day if its due date is strictly before that day
+  // Upper bound: only fetch todos due before the last day of the week (optimization)
   const activeTodosWithDue = sqlite
     .prepare(
       `SELECT due
@@ -499,9 +501,10 @@ export function getWeekData(sqlite: Database.Database, startDate: string): WeekD
        WHERE type = 'todo'
          AND status NOT IN ('done', 'exported', 'archived')
          AND due IS NOT NULL
+         AND due < ?
          AND is_private = 0`,
     )
-    .all() as { due: string }[];
+    .all(dates[6]) as { due: string }[];
 
   // Build result
   const days: WeekDay[] = dates.map((date) => {
