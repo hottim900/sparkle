@@ -10,7 +10,7 @@ import {
   getCategoryDistribution,
 } from "@/lib/api";
 import { parseItems, type ParsedItem } from "@/lib/types";
-import type { AttentionItem, DashboardStaleItem } from "@/lib/types";
+import type { ActivityType, DashboardStaleItem } from "@/lib/types";
 import { queryKeys } from "@/lib/query-keys";
 import { formatRelativeTime } from "@/lib/date-utils";
 import { toast } from "sonner";
@@ -26,7 +26,7 @@ import {
   Clock,
   Loader2,
   Inbox,
-  CalendarPlus,
+  Activity,
   AlertCircle,
 } from "lucide-react";
 
@@ -39,26 +39,46 @@ function typeLabel(item: ParsedItem): string {
   return labels[item.type] ?? item.type;
 }
 
+const ACTIVITY_STYLES: Record<ActivityType, { className: string; label: string }> = {
+  created: {
+    className: "text-green-600 border-green-300 dark:text-green-400 dark:border-green-700",
+    label: "新增",
+  },
+  updated: {
+    className: "text-blue-600 border-blue-300 dark:text-blue-400 dark:border-blue-700",
+    label: "更新",
+  },
+};
+
+export function ActivityBadge({ activity }: { activity: ActivityType }) {
+  const style = ACTIVITY_STYLES[activity];
+  return (
+    <Badge variant="outline" className={`text-xs shrink-0 ${style.className}`}>
+      {style.label}
+    </Badge>
+  );
+}
+
 function getItemRoute(item: ParsedItem): string {
   if (item.type === "todo") return item.status === "done" ? "/todos/done" : "/todos";
   if (item.type === "scratch") return "/scratch";
   return `/notes/${item.status}`;
 }
 
-interface DashboardCardProps {
+interface DashboardCardProps<T extends ParsedItem> {
   title: string;
   icon: React.ReactNode;
   count: number | undefined;
-  items: ParsedItem[];
+  items: T[];
   borderColor: string;
   loading: boolean;
   viewAllPath: string;
-  renderItem: (item: ParsedItem) => React.ReactNode;
-  onItemClick: (item: ParsedItem) => void;
+  renderItem: (item: T) => React.ReactNode;
+  onItemClick: (item: T) => void;
   emptyText: string;
 }
 
-function DashboardCard({
+function DashboardCard<T extends ParsedItem>({
   title,
   icon,
   count,
@@ -69,7 +89,7 @@ function DashboardCard({
   renderItem,
   onItemClick,
   emptyText,
-}: DashboardCardProps) {
+}: DashboardCardProps<T>) {
   const navigate = useNavigate();
 
   return (
@@ -163,8 +183,7 @@ export function Dashboard() {
 
   const unreviewedItems = unreviewedData ? parseItems(unreviewedData.items) : [];
   const recentItems = recentData ? parseItems(recentData.items) : [];
-  const attentionItems = attentionData ? parseItems(attentionData.items as AttentionItem[]) : [];
-  const attentionRawItems = attentionData?.items ?? [];
+  const attentionItems = attentionData ? parseItems(attentionData.items) : [];
 
   if (statsLoading || categoryLoading) {
     return (
@@ -215,21 +234,24 @@ export function Dashboard() {
               onItemClick={navigateToItem}
             />
 
-            {/* Recently created card */}
+            {/* Recent activity card */}
             <DashboardCard
-              title="最近新增"
-              icon={<CalendarPlus className="h-4 w-4" />}
+              title="最近活動"
+              icon={<Activity className="h-4 w-4" />}
               count={recentData?.total}
               items={recentItems}
               borderColor="border-l-blue-500"
               loading={recentLoading}
               viewAllPath="/recent"
-              emptyText="最近沒有新增項目"
+              emptyText="最近沒有活動"
               renderItem={(item) => (
                 <div className="flex items-center justify-between gap-2">
-                  <span className="truncate">{item.title}</span>
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <ActivityBadge activity={item.activity} />
+                    <span className="truncate">{item.title}</span>
+                  </div>
                   <span className="text-xs text-muted-foreground shrink-0">
-                    {formatRelativeTime(item.created)}
+                    {formatRelativeTime(item.modified)}
                   </span>
                 </div>
               )}
@@ -246,25 +268,21 @@ export function Dashboard() {
               loading={attentionLoading}
               viewAllPath="/attention"
               emptyText="沒有需要關注的項目"
-              renderItem={(item) => {
-                const rawItem = attentionRawItems.find((r) => r.id === item.id);
-                const reason = rawItem ? (rawItem as AttentionItem).attention_reason : undefined;
-                return (
-                  <div className="flex items-center gap-2">
-                    {reason === "overdue" && (
-                      <Badge variant="destructive" className="text-xs shrink-0">
-                        逾期
-                      </Badge>
-                    )}
-                    {reason === "high_priority" && (
-                      <Badge className="text-xs shrink-0 bg-orange-500 hover:bg-orange-600">
-                        高優先
-                      </Badge>
-                    )}
-                    <span className="truncate">{item.title}</span>
-                  </div>
-                );
-              }}
+              renderItem={(item) => (
+                <div className="flex items-center gap-2">
+                  {item.attention_reason === "overdue" && (
+                    <Badge variant="destructive" className="text-xs shrink-0">
+                      逾期
+                    </Badge>
+                  )}
+                  {item.attention_reason === "high_priority" && (
+                    <Badge className="text-xs shrink-0 bg-orange-500 hover:bg-orange-600">
+                      高優先
+                    </Badge>
+                  )}
+                  <span className="truncate">{item.title}</span>
+                </div>
+              )}
               onItemClick={navigateToItem}
             />
           </div>

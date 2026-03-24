@@ -133,18 +133,32 @@ describe("Dashboard", () => {
       expect(screen.getByText("筆記")).toBeInTheDocument();
     });
 
-    it("shows recent items with relative time", async () => {
+    it("shows recent items with activity badge and relative time", async () => {
       mockGetStats.mockResolvedValue(makeStats());
       mockGetUnreviewed.mockResolvedValue({ items: [], total: 0 });
+      const oneHourAgo = new Date(Date.now() - 3600000).toISOString();
       mockGetRecent.mockResolvedValue({
         items: [
-          makeDashboardItem({
-            id: "rc-1",
-            title: "Recent Item",
-            created: new Date(Date.now() - 3600000).toISOString(),
-          }),
+          {
+            ...makeDashboardItem({
+              id: "rc-1",
+              title: "Recent Item",
+              created: oneHourAgo,
+              modified: oneHourAgo,
+            }),
+            activity: "created",
+          },
+          {
+            ...makeDashboardItem({
+              id: "rc-2",
+              title: "Updated Item",
+              created: "2026-03-01T00:00:00Z",
+              modified: oneHourAgo,
+            }),
+            activity: "updated",
+          },
         ],
-        total: 1,
+        total: 2,
       });
       mockGetAttention.mockResolvedValue({ items: [], total: 0 });
       mockGetDashboardStale.mockResolvedValue({ items: [], total: 0 });
@@ -155,7 +169,9 @@ describe("Dashboard", () => {
       await waitFor(() => {
         expect(screen.getByText("Recent Item")).toBeInTheDocument();
       });
-      expect(screen.getByText("1 小時前")).toBeInTheDocument();
+      expect(screen.getByText("新增")).toBeInTheDocument();
+      expect(screen.getByText("更新")).toBeInTheDocument();
+      expect(screen.getAllByText("1 小時前")).toHaveLength(2);
     });
 
     it("shows attention items with overdue badge", async () => {
@@ -224,7 +240,7 @@ describe("Dashboard", () => {
       await waitFor(() => {
         expect(screen.getByText("沒有未處理的項目")).toBeInTheDocument();
       });
-      expect(screen.getByText("最近沒有新增項目")).toBeInTheDocument();
+      expect(screen.getByText("最近沒有活動")).toBeInTheDocument();
       expect(screen.getByText("沒有需要關注的項目")).toBeInTheDocument();
     });
 

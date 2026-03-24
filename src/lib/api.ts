@@ -16,6 +16,7 @@ import type {
   ShareResponse,
   ListSharesResponse,
   DashboardItemsResponse,
+  RecentActivityResponse,
   AttentionResponse,
   DashboardStaleResponse,
 } from "./types";
@@ -429,12 +430,12 @@ export async function getUnreviewed(params?: {
 export async function getRecent(params?: {
   limit?: number;
   offset?: number;
-}): Promise<DashboardItemsResponse> {
+}): Promise<RecentActivityResponse> {
   const search = new URLSearchParams();
   if (params?.limit) search.set("limit", String(params.limit));
   if (params?.offset) search.set("offset", String(params.offset));
   const qs = search.toString();
-  return request<DashboardItemsResponse>(`/dashboard/recent${qs ? `?${qs}` : ""}`);
+  return request<RecentActivityResponse>(`/dashboard/recent${qs ? `?${qs}` : ""}`);
 }
 
 export async function getAttention(params?: { limit?: number }): Promise<AttentionResponse> {

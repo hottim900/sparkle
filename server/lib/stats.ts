@@ -105,6 +105,12 @@ export interface DashboardItem {
   viewed_at: string | null;
 }
 
+export type ActivityType = "created" | "updated";
+
+export interface RecentActivityItem extends DashboardItem {
+  activity: ActivityType;
+}
+
 export interface AttentionItem extends DashboardItem {
   attention_reason: "overdue" | "high_priority";
 }
@@ -185,25 +191,29 @@ export function getRecentItems(
   days: number,
   limit = 5,
   offset = 0,
-): { items: DashboardItem[]; total: number } {
+): { items: RecentActivityItem[]; total: number } {
   const items = sqlite
     .prepare(
-      `SELECT i.*, c.name AS category_name
+      `SELECT i.*, c.name AS category_name,
+        CASE
+          WHEN (julianday(i.modified) - julianday(i.created)) * 1440 < 1 THEN 'created'
+          ELSE 'updated'
+        END AS activity
        FROM items i
        LEFT JOIN categories c ON i.category_id = c.id
-       WHERE i.created >= datetime('now', '-' || ? || ' days')
+       WHERE i.modified >= datetime('now', '-' || ? || ' days')
          AND i.status != 'archived'
          AND i.is_private = 0
-       ORDER BY i.created DESC
+       ORDER BY i.modified DESC
        LIMIT ? OFFSET ?`,
     )
-    .all(days, limit, offset) as DashboardItem[];
+    .all(days, limit, offset) as RecentActivityItem[];
 
   const countRow = sqlite
     .prepare(
       `SELECT COUNT(*) AS count
        FROM items i
-       WHERE i.created >= datetime('now', '-' || ? || ' days')
+       WHERE i.modified >= datetime('now', '-' || ? || ' days')
          AND i.status != 'archived'
          AND i.is_private = 0`,
     )
