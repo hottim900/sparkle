@@ -6,16 +6,3 @@ if [ "$branch" = "main" ]; then
   echo ""
   exit 1
 fi
-
-# === Coverage threshold check (mirrors CI) ===
-if [ "$SKIP_COVERAGE" != "1" ]; then
-  echo "Running tests with coverage..."
-  npx vitest run --coverage 2>&1 | tee /tmp/coverage-check.txt
-  if grep -q "does not meet global threshold" /tmp/coverage-check.txt; then
-    echo ""
-    echo "  ERROR: Coverage thresholds not met. Fix before pushing."
-    echo "  Skip with: SKIP_COVERAGE=1 git push"
-    echo ""
-    exit 1
-  fi
-fi
