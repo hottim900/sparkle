@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.2.1] - 2026-03-25
+
+### Added
+
+- Obsidian daily note generator — auto-generates daily notes from Sparkle activity at configurable time
+- Subfolder mode writes to `{vault}/Daily/Sparkle/{date}.md`; append mode merges into existing daily notes
+- Manual trigger API (`POST /api/daily-note/generate?date=YYYY-MM-DD`) for on-demand generation
+- Server-side scheduler (60s interval) with dedup via `last_daily_note_date` setting
+- Daily note settings: `obsidian_daily_folder`, `daily_note_time`, `daily_note_mode`
+- Path traversal protection, wikilink/YAML injection safety, impossible date validation
+- DB migration v15→16 for daily note settings defaults
+
 ## [1.2.0] - 2026-03-25
 
 ### Added

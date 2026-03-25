@@ -62,6 +62,27 @@ export function getDashboardSettings(sqlite: Database.Database): DashboardSettin
   };
 }
 
+export type DailyNoteMode = "subfolder" | "append";
+
+export interface DailyNoteSettings {
+  obsidian_daily_folder: string;
+  daily_note_time: string;
+  daily_note_mode: DailyNoteMode;
+}
+
+/**
+ * Get daily note settings with typed conversions.
+ */
+export function getDailyNoteSettings(sqlite: Database.Database): DailyNoteSettings {
+  const all = getSettings(sqlite);
+  const mode = all.daily_note_mode;
+  return {
+    obsidian_daily_folder: all.obsidian_daily_folder ?? "Daily",
+    daily_note_time: all.daily_note_time ?? "23:00",
+    daily_note_mode: mode === "append" ? "append" : "subfolder",
+  };
+}
+
 /**
  * Update one or more settings. Uses upsert (INSERT OR REPLACE).
  */

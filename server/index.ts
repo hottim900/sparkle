@@ -39,6 +39,8 @@ import { clearExpiredSessions } from "./lib/line-session.js";
 import { privateRouter } from "./routes/private.js";
 import { privateTokenMiddleware } from "./middleware/private-token.js";
 import { clearExpiredPrivateSessions } from "./lib/private-session.js";
+import { dailyNoteRouter } from "./routes/daily-note.js";
+import { checkAndGenerateDailyNote } from "./lib/daily-note-scheduler.js";
 
 // --- Startup validation ---
 function shannonEntropy(s: string): number {
@@ -192,6 +194,7 @@ app.route("/api/webhook", webhookRouter);
 app.route("/api/settings", settingsRouter);
 app.route("/api/categories", categoriesRouter);
 app.route("/api/dashboard", dashboardRouter);
+app.route("/api/daily-note", dailyNoteRouter);
 app.route("/api", sharesRouter);
 
 // Health check endpoint (unauthenticated — skipped in auth middleware)
@@ -381,5 +384,9 @@ sessionCleanupTimer.unref();
 // Periodically clean up expired private sessions (in-memory, 30-min TTL)
 const privateSessionCleanupTimer = setInterval(clearExpiredPrivateSessions, 60_000);
 privateSessionCleanupTimer.unref();
+
+// Daily note scheduler — checks every 60s if it's time to generate
+const dailyNoteTimer = setInterval(() => checkAndGenerateDailyNote(sqlite), 60_000);
+dailyNoteTimer.unref();
 
 export default app;
