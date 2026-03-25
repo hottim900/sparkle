@@ -8,7 +8,7 @@ import { logger } from "../lib/logger.js";
 
 const DB_PATH = process.env.DATABASE_URL || "./data/todo.db";
 
-const TARGET_VERSION = 15;
+const TARGET_VERSION = 16;
 
 function getSchemaVersion(sqlite: Database.Database): number {
   // Check if schema_version table exists
@@ -312,6 +312,16 @@ function runMigrations(sqlite: Database.Database) {
 
     setSchemaVersion(sqlite, 15);
   }
+
+  // Step 15→16: Add daily note settings defaults
+  if (version < 16) {
+    sqlite.exec(`
+      INSERT OR IGNORE INTO settings (key, value) VALUES ('obsidian_daily_folder', 'Daily');
+      INSERT OR IGNORE INTO settings (key, value) VALUES ('daily_note_time', '23:00');
+      INSERT OR IGNORE INTO settings (key, value) VALUES ('daily_note_mode', 'subfolder');
+    `);
+    setSchemaVersion(sqlite, 16);
+  }
 }
 
 export function initializeDatabase(sqlite: Database.Database) {
@@ -363,7 +373,10 @@ export function initializeDatabase(sqlite: Database.Database) {
         ('obsidian_inbox_folder', '0_Inbox'),
         ('obsidian_export_mode', 'overwrite'),
         ('recent_days', '7'),
-        ('stale_days', '14');
+        ('stale_days', '14'),
+        ('obsidian_daily_folder', 'Daily'),
+        ('daily_note_time', '23:00'),
+        ('daily_note_mode', 'subfolder');
 
       CREATE TABLE share_tokens (
         id TEXT PRIMARY KEY,

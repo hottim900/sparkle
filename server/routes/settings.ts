@@ -11,6 +11,9 @@ const ALLOWED_KEYS = [
   "obsidian_vault_path",
   "obsidian_inbox_folder",
   "obsidian_export_mode",
+  "obsidian_daily_folder",
+  "daily_note_time",
+  "daily_note_mode",
   "recent_days",
   "stale_days",
 ] as const;
@@ -45,6 +48,40 @@ const updateSettingsSchema = z
       return true;
     },
     { message: 'obsidian_export_mode must be "overwrite" or "new"' },
+  )
+  .refine(
+    (obj) => {
+      if (
+        "daily_note_mode" in obj &&
+        obj.daily_note_mode !== "subfolder" &&
+        obj.daily_note_mode !== "append"
+      ) {
+        return false;
+      }
+      return true;
+    },
+    { message: 'daily_note_mode must be "subfolder" or "append"' },
+  )
+  .refine(
+    (obj) => {
+      if ("daily_note_time" in obj) {
+        return /^([01]\d|2[0-3]):[0-5]\d$/.test(obj.daily_note_time ?? "");
+      }
+      return true;
+    },
+    { message: "daily_note_time must be in HH:MM format" },
+  )
+  .refine(
+    (obj) => {
+      if ("obsidian_daily_folder" in obj) {
+        const v = obj.obsidian_daily_folder ?? "";
+        if (v.includes("..") || v.startsWith("/") || v.includes("\0") || v.length > 255) {
+          return false;
+        }
+      }
+      return true;
+    },
+    { message: "obsidian_daily_folder must be a relative path without '..' (max 255 chars)" },
   )
   .refine(
     (obj) => {
