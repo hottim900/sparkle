@@ -199,7 +199,9 @@ function generateDailyNoteMarkdown(data: DayData): string {
     lines.push("", "## 待辦");
     for (const todo of todos_due) {
       const priorityTag = todo.priority ? ` (${todo.priority.toUpperCase()})` : "";
-      lines.push(`- [ ] ${todo.title.replace(/\n/g, " ")}${priorityTag} \`sparkle:${shortId(todo.id)}\``);
+      lines.push(
+        `- [ ] ${todo.title.replace(/\n/g, " ")}${priorityTag} \`sparkle:${shortId(todo.id)}\``,
+      );
     }
   }
 
@@ -208,7 +210,9 @@ function generateDailyNoteMarkdown(data: DayData): string {
     lines.push("", "## 逾期");
     for (const todo of overdue) {
       const dueTag = todo.due ? ` (due: ${todo.due})` : "";
-      lines.push(`- [ ] ${todo.title.replace(/\n/g, " ")}${dueTag} \`sparkle:${shortId(todo.id)}\``);
+      lines.push(
+        `- [ ] ${todo.title.replace(/\n/g, " ")}${dueTag} \`sparkle:${shortId(todo.id)}\``,
+      );
     }
   }
 
@@ -247,7 +251,9 @@ function generateAppendSection(data: DayData): string {
     lines.push("### 待辦");
     for (const todo of todos_due) {
       const priorityTag = todo.priority ? ` (${todo.priority.toUpperCase()})` : "";
-      lines.push(`- [ ] ${todo.title.replace(/\n/g, " ")}${priorityTag} \`sparkle:${shortId(todo.id)}\``);
+      lines.push(
+        `- [ ] ${todo.title.replace(/\n/g, " ")}${priorityTag} \`sparkle:${shortId(todo.id)}\``,
+      );
     }
     lines.push("");
   }
@@ -256,7 +262,9 @@ function generateAppendSection(data: DayData): string {
     lines.push("### 逾期");
     for (const todo of overdue) {
       const dueTag = todo.due ? ` (due: ${todo.due})` : "";
-      lines.push(`- [ ] ${todo.title.replace(/\n/g, " ")}${dueTag} \`sparkle:${shortId(todo.id)}\``);
+      lines.push(
+        `- [ ] ${todo.title.replace(/\n/g, " ")}${dueTag} \`sparkle:${shortId(todo.id)}\``,
+      );
     }
     lines.push("");
   }
