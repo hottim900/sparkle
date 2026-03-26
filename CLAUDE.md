@@ -1,6 +1,6 @@
 # Sparkle — Project Guide
 
-Self-hosted PWA: idea capture + task management with Zettelkasten maturity flow, LINE Bot, Obsidian export.
+Self-hosted PWA: idea capture + task management with Zettelkasten maturity flow, LINE Bot, Obsidian vault integration, daily note generation.
 
 ## Development
 
@@ -26,7 +26,7 @@ Notes: `fleeting` → `developing` → `permanent` → `exported` → `archived`
 
 Type conversion auto-maps status server-side. `category_id` preserved; `due`/`linked_note_id` cleared on todo→note; tags/priority/aliases cleared on →scratch.
 
-DB migration version 0→14, idempotent. Migration safety enforced by PostToolUse hook.
+DB migration version 0→15, idempotent. Migration safety enforced by PostToolUse hook.
 
 ## Conventions
 
@@ -55,6 +55,8 @@ Detailed module conventions (API retry, PWA, Logging, Sentry, CSP, Offline UI, S
 3. Review：`/autoplan` 或個別 review skills（在 feature branch 上跑，review log 才會對齊）
 4. 實作 + 測試
 5. `/ship` 出 PR → `gh pr merge --squash --auto`
+
+**Ship 前檢查**：`/ship` 內建 pre-landing review，但大功能（500+ LOC）建議先跑 `/review` 再 `/ship`，減少 ship 後的 fix commits。
 
 ## Quality Management
 
