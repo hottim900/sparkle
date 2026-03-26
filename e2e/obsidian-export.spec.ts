@@ -26,9 +26,11 @@ test.describe("Obsidian Export", () => {
       timeout: 10_000,
     });
 
-    // Wait for settings to load, then enable Obsidian export toggle
-    await expect(page.getByRole("button", { name: "已停用" })).toBeVisible({ timeout: 5_000 });
-    await page.getByRole("button", { name: "已停用" }).click();
+    // Wait for settings to load, then enable Obsidian export toggle (first "已停用" = Obsidian section)
+    await expect(page.getByRole("button", { name: "已停用" }).first()).toBeVisible({
+      timeout: 5_000,
+    });
+    await page.getByRole("button", { name: "已停用" }).first().click();
 
     // Fill vault path
     const vaultPathInput = page.getByPlaceholder("/home/user/obsidian-vault");
