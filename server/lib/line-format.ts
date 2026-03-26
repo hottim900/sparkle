@@ -132,3 +132,32 @@ export async function replyLine(
     logger.error({ err }, "Failed to reply LINE message");
   }
 }
+
+/**
+ * Push a text message to a specific LINE user.
+ * Returns true on success, false on failure.
+ */
+export async function pushLine(token: string, userId: string, text: string): Promise<boolean> {
+  try {
+    const res = await fetch("https://api.line.me/v2/bot/message/push", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        to: userId,
+        messages: [{ type: "text", text }],
+      }),
+    });
+    if (!res.ok) {
+      const body = await res.text();
+      logger.error({ status: res.status, body, userId }, "LINE push API error");
+      return false;
+    }
+    return true;
+  } catch (err) {
+    logger.error({ err, userId }, "Failed to push LINE message");
+    return false;
+  }
+}

@@ -41,6 +41,7 @@ import { privateTokenMiddleware } from "./middleware/private-token.js";
 import { clearExpiredPrivateSessions } from "./lib/private-session.js";
 import { dailyNoteRouter } from "./routes/daily-note.js";
 import { checkAndGenerateDailyNote } from "./lib/daily-note-scheduler.js";
+import { checkAndSendLineBrief } from "./lib/line-brief-scheduler.js";
 
 // --- Startup validation ---
 function shannonEntropy(s: string): number {
@@ -388,5 +389,9 @@ privateSessionCleanupTimer.unref();
 // Daily note scheduler — checks every 60s if it's time to generate
 const dailyNoteTimer = setInterval(() => checkAndGenerateDailyNote(sqlite), 60_000);
 dailyNoteTimer.unref();
+
+// LINE daily brief scheduler — checks every 60s if it's time to push
+const lineBriefTimer = setInterval(() => checkAndSendLineBrief(sqlite), 60_000);
+lineBriefTimer.unref();
 
 export default app;
