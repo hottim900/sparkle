@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.2.1.1] - 2026-03-26
+
+### Added
+
+- 45 unit tests for daily note generator (daily-note.ts, daily-note-scheduler.ts, routes/daily-note.ts)
+- Coverage: daily-note-scheduler.ts 100%, routes/daily-note.ts 100%, daily-note.ts 90.7%/79.7%
+
+### Changed
+
+- Remove daily note files from vitest coverage exclusions — now count toward CI thresholds
+
 ## [1.2.1] - 2026-03-25
 
 ### Added
