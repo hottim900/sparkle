@@ -1,6 +1,6 @@
 # Sparkle — Project Guide
 
-Self-hosted PWA: idea capture + task management with Zettelkasten maturity flow, LINE Bot, Obsidian vault integration, daily note generation.
+Self-hosted PKM frontend for Obsidian: quick capture (LINE Bot / PWA) → Zettelkasten maturity → vault export. Includes task management, daily note generation, and temporal bridge (week view + LINE daily brief).
 
 ## Development
 
