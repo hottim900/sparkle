@@ -16,6 +16,8 @@ const ALLOWED_KEYS = [
   "daily_note_mode",
   "recent_days",
   "stale_days",
+  "line_brief_enabled",
+  "line_brief_time",
 ] as const;
 
 const updateSettingsSchema = z
@@ -70,6 +72,28 @@ const updateSettingsSchema = z
       return true;
     },
     { message: "daily_note_time must be in HH:MM format" },
+  )
+  .refine(
+    (obj) => {
+      if (
+        "line_brief_enabled" in obj &&
+        obj.line_brief_enabled !== "true" &&
+        obj.line_brief_enabled !== "false"
+      ) {
+        return false;
+      }
+      return true;
+    },
+    { message: 'line_brief_enabled must be "true" or "false"' },
+  )
+  .refine(
+    (obj) => {
+      if ("line_brief_time" in obj) {
+        return /^([01]\d|2[0-3]):[0-5]\d$/.test(obj.line_brief_time ?? "");
+      }
+      return true;
+    },
+    { message: "line_brief_time must be in HH:MM format" },
   )
   .refine(
     (obj) => {

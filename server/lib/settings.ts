@@ -83,6 +83,22 @@ export function getDailyNoteSettings(sqlite: Database.Database): DailyNoteSettin
   };
 }
 
+export interface LineBriefSettings {
+  line_brief_enabled: boolean;
+  line_brief_time: string;
+}
+
+/**
+ * Get LINE daily brief settings with typed conversions.
+ */
+export function getLineBriefSettings(sqlite: Database.Database): LineBriefSettings {
+  const all = getSettings(sqlite);
+  return {
+    line_brief_enabled: all.line_brief_enabled !== "false", // default true
+    line_brief_time: all.line_brief_time ?? "21:00",
+  };
+}
+
 /**
  * Update one or more settings. Uses upsert (INSERT OR REPLACE).
  */
