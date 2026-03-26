@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.2.2.0] - 2026-03-26
+
+### Added
+
+- LINE daily brief manual trigger endpoint (`POST /api/line-brief/send?date=YYYY-MM-DD`)
+- Settings UI: LINE brief section with enable toggle, push time input, and manual send button
+- Semantic date validation for line-brief endpoint (rejects invalid month/day)
+- Frontend API client `sendLineBrief()` with `LineBriefSendResponse` type
+- 28 new tests: route validation (10), settings validation (9), component tests (9)
+
+### Changed
+
+- `line_brief_enabled` defaults to `false` (opt-in) instead of `true` — prevents unintended push notifications on deploy
+- Extract `saveSection()` helper in Settings to deduplicate 3 near-identical save handlers
+- Skipped brief toast uses neutral `toast()` instead of misleading `toast.success()`
+
 ## [1.2.1.1] - 2026-03-26
 
 ### Added
