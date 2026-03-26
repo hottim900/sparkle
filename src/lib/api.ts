@@ -20,6 +20,7 @@ import type {
   AttentionResponse,
   DashboardStaleResponse,
   WeekDataResponse,
+  LineBriefSendResponse,
 } from "./types";
 
 const API_BASE = "/api";
@@ -453,6 +454,14 @@ export async function getDashboardStale(params?: {
   if (params?.limit) search.set("limit", String(params.limit));
   const qs = search.toString();
   return request<DashboardStaleResponse>(`/dashboard/stale${qs ? `?${qs}` : ""}`);
+}
+
+// LINE Brief API
+export async function sendLineBrief(date?: string): Promise<LineBriefSendResponse> {
+  const qs = date ? `?date=${encodeURIComponent(date)}` : "";
+  return request<LineBriefSendResponse>(`/line-brief/send${qs}`, {
+    method: "POST",
+  });
 }
 
 // Dashboard Week API

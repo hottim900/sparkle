@@ -128,6 +128,15 @@ export interface SettingsResponse {
   obsidian_export_mode: "new" | "overwrite";
   recent_days: string;
   stale_days: string;
+  line_brief_enabled: string;
+  line_brief_time: string;
+}
+
+export interface LineBriefSendResponse {
+  sent: boolean;
+  skipped?: boolean;
+  reason?: string;
+  message?: string;
 }
 
 // Dashboard types

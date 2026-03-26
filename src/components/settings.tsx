@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useTheme } from "next-themes";
 import { toast } from "sonner";
-import { getSettings, updateSettings, exportData, importData } from "@/lib/api";
+import { getSettings, updateSettings, exportData, importData, sendLineBrief } from "@/lib/api";
 import type { SettingsResponse } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,6 +23,8 @@ import {
   Download,
   Upload,
   ExternalLink,
+  MessageSquare,
+  Send,
 } from "lucide-react";
 
 interface SettingsProps {
@@ -42,6 +44,10 @@ export function Settings({ onSettingsChanged }: SettingsProps) {
   const [recentDays, setRecentDays] = useState("7");
   const [staleDays, setStaleDays] = useState("14");
   const [savingDashboard, setSavingDashboard] = useState(false);
+  const [lineBriefEnabled, setLineBriefEnabled] = useState(false);
+  const [lineBriefTime, setLineBriefTime] = useState("21:00");
+  const [savingLineBrief, setSavingLineBrief] = useState(false);
+  const [sendingBrief, setSendingBrief] = useState(false);
 
   const { resolvedTheme, setTheme } = useTheme();
   const isOnline = useOnlineStatus();
@@ -61,6 +67,8 @@ export function Settings({ onSettingsChanged }: SettingsProps) {
         setExportMode(settingsData.obsidian_export_mode);
         setRecentDays(settingsData.recent_days ?? "7");
         setStaleDays(settingsData.stale_days ?? "14");
+        setLineBriefEnabled(settingsData.line_brief_enabled === "true");
+        setLineBriefTime(settingsData.line_brief_time ?? "21:00");
       } catch {
         if (!cancelled) {
           toast.error("無法載入設定");
@@ -78,23 +86,35 @@ export function Settings({ onSettingsChanged }: SettingsProps) {
     };
   }, []);
 
-  async function handleSave() {
-    setSaving(true);
+  async function saveSection(
+    setSavingFn: (v: boolean) => void,
+    fields: Record<string, string>,
+    successMessage: string,
+  ) {
+    setSavingFn(true);
     try {
-      const data = await updateSettings({
-        obsidian_enabled: enabled ? "true" : "false",
-        obsidian_vault_path: vaultPath,
-        obsidian_inbox_folder: inboxFolder,
-        obsidian_export_mode: exportMode,
-      });
+      const data = await updateSettings(fields);
       setSettings(data);
-      toast.success("設定已儲存");
+      toast.success(successMessage);
       onSettingsChanged();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "儲存設定失敗");
     } finally {
-      setSaving(false);
+      setSavingFn(false);
     }
+  }
+
+  async function handleSave() {
+    await saveSection(
+      setSaving,
+      {
+        obsidian_enabled: enabled ? "true" : "false",
+        obsidian_vault_path: vaultPath,
+        obsidian_inbox_folder: inboxFolder,
+        obsidian_export_mode: exportMode,
+      },
+      "設定已儲存",
+    );
   }
 
   async function handleExport() {
@@ -133,19 +153,42 @@ export function Settings({ onSettingsChanged }: SettingsProps) {
   }
 
   async function handleSaveDashboard() {
-    setSavingDashboard(true);
-    try {
-      const data = await updateSettings({
+    await saveSection(
+      setSavingDashboard,
+      {
         recent_days: recentDays,
         stale_days: staleDays,
-      });
-      setSettings(data);
-      toast.success("Dashboard 設定已儲存");
-      onSettingsChanged();
+      },
+      "Dashboard 設定已儲存",
+    );
+  }
+
+  async function handleSaveLineBrief() {
+    await saveSection(
+      setSavingLineBrief,
+      {
+        line_brief_enabled: lineBriefEnabled ? "true" : "false",
+        line_brief_time: lineBriefTime,
+      },
+      "LINE 簡報設定已儲存",
+    );
+  }
+
+  async function handleSendBrief() {
+    setSendingBrief(true);
+    try {
+      const result = await sendLineBrief();
+      if (result.sent) {
+        toast.success("LINE 簡報已發送");
+      } else if (result.skipped) {
+        toast(`簡報已跳過：${result.reason}`);
+      } else {
+        toast.error(`發送失敗：${result.reason ?? "未知原因"}`);
+      }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "儲存設定失敗");
+      toast.error(err instanceof Error ? err.message : "發送失敗");
     } finally {
-      setSavingDashboard(false);
+      setSendingBrief(false);
     }
   }
 
@@ -159,6 +202,11 @@ export function Settings({ onSettingsChanged }: SettingsProps) {
   const hasDashboardChanges =
     settings !== null &&
     (recentDays !== (settings.recent_days ?? "7") || staleDays !== (settings.stale_days ?? "14"));
+
+  const hasLineBriefChanges =
+    settings !== null &&
+    (lineBriefEnabled !== (settings.line_brief_enabled === "true") ||
+      lineBriefTime !== (settings.line_brief_time ?? "21:00"));
 
   if (loading) {
     return (
@@ -310,10 +358,76 @@ export function Settings({ onSettingsChanged }: SettingsProps) {
           </div>
         </section>
 
-        {/* Section 3: Category Management */}
+        {/* Section 3: LINE Brief */}
+        <section className="space-y-4">
+          <div className="flex items-center gap-2">
+            <MessageSquare className="h-4 w-4 text-muted-foreground" />
+            <h2 className="text-sm font-semibold text-muted-foreground">LINE 每日簡報</h2>
+          </div>
+
+          <div className="border rounded-lg p-4 space-y-4">
+            {/* Enable toggle */}
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium">啟用每日簡報</p>
+                <p className="text-xs text-muted-foreground">每日自動透過 LINE 推送活動摘要</p>
+              </div>
+              <Button
+                variant={lineBriefEnabled ? "default" : "outline"}
+                size="sm"
+                onClick={() => setLineBriefEnabled(!lineBriefEnabled)}
+              >
+                {lineBriefEnabled ? "已啟用" : "已停用"}
+              </Button>
+            </div>
+
+            {/* Brief time */}
+            <div>
+              <label className="text-sm text-muted-foreground block mb-1">推送時間</label>
+              <Input
+                type="time"
+                value={lineBriefTime}
+                onChange={(e) => setLineBriefTime(e.target.value)}
+                disabled={!lineBriefEnabled}
+              />
+              <p className="text-xs text-muted-foreground mt-1">每日簡報推送時間（伺服器時區）</p>
+            </div>
+
+            {/* Save + Send buttons */}
+            <div className="flex justify-between">
+              <Button
+                variant="outline"
+                onClick={handleSendBrief}
+                disabled={sendingBrief || !isOnline}
+                className="gap-1.5"
+              >
+                {sendingBrief ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Send className="h-4 w-4" />
+                )}
+                立即發送
+              </Button>
+              <Button
+                onClick={handleSaveLineBrief}
+                disabled={savingLineBrief || !hasLineBriefChanges || !isOnline}
+                className="gap-1.5"
+              >
+                {savingLineBrief ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Save className="h-4 w-4" />
+                )}
+                儲存設定
+              </Button>
+            </div>
+          </div>
+        </section>
+
+        {/* Section 4: Category Management */}
         <CategoryManagement />
 
-        {/* Section 3: General */}
+        {/* Section 5: General */}
         <section className="space-y-4">
           <div className="flex items-center gap-2">
             <SettingsIcon className="h-4 w-4 text-muted-foreground" />
