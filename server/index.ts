@@ -40,6 +40,7 @@ import { privateRouter } from "./routes/private.js";
 import { privateTokenMiddleware } from "./middleware/private-token.js";
 import { clearExpiredPrivateSessions } from "./lib/private-session.js";
 import { dailyNoteRouter } from "./routes/daily-note.js";
+import { lineBriefRouter } from "./routes/line-brief.js";
 import { checkAndGenerateDailyNote } from "./lib/daily-note-scheduler.js";
 import { checkAndSendLineBrief } from "./lib/line-brief-scheduler.js";
 
@@ -196,6 +197,7 @@ app.route("/api/settings", settingsRouter);
 app.route("/api/categories", categoriesRouter);
 app.route("/api/dashboard", dashboardRouter);
 app.route("/api/daily-note", dailyNoteRouter);
+app.route("/api/line-brief", lineBriefRouter);
 app.route("/api", sharesRouter);
 
 // Health check endpoint (unauthenticated — skipped in auth middleware)

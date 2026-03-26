@@ -94,7 +94,7 @@ export interface LineBriefSettings {
 export function getLineBriefSettings(sqlite: Database.Database): LineBriefSettings {
   const all = getSettings(sqlite);
   return {
-    line_brief_enabled: all.line_brief_enabled !== "false", // default true
+    line_brief_enabled: all.line_brief_enabled === "true", // default false — requires explicit opt-in
     line_brief_time: all.line_brief_time ?? "21:00",
   };
 }
