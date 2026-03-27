@@ -9,10 +9,10 @@ const MarkdownPreview = lazy(() =>
 );
 
 /** Default number of rows for content textarea. */
-export const CONTENT_TEXTAREA_ROWS = 10;
+const CONTENT_TEXTAREA_ROWS = 10;
 
 /** Minimum height (Tailwind class) for the markdown preview container. */
-export const CONTENT_PREVIEW_MIN_HEIGHT = "min-h-[240px]";
+const CONTENT_PREVIEW_MIN_HEIGHT = "min-h-[240px]";
 
 interface ItemContentEditorProps {
   content: string;

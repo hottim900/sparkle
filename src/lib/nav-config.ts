@@ -24,6 +24,14 @@ export interface NavItemConfig {
   path: string;
 }
 
+/** A non-routed action item (e.g. search) — path is always null. */
+export interface NavActionConfig {
+  id: string;
+  label: string;
+  icon: LucideIcon;
+  path: null;
+}
+
 export interface NavGroupConfig {
   label?: string;
   items: NavItemConfig[];
@@ -74,10 +82,7 @@ export const sidebarNavGroups: NavGroupConfig[] = [
  * Bottom nav main items — shown in the mobile bottom bar.
  * `path: null` means a non-routed action (e.g. search).
  */
-export const bottomNavMainItems: (
-  | NavItemConfig
-  | { id: string; label: string; icon: LucideIcon; path: null }
-)[] = [
+export const bottomNavMainItems: (NavItemConfig | NavActionConfig)[] = [
   { id: "notes", label: "筆記", icon: FileText, path: "/notes/fleeting" },
   { id: "todos", label: "待辦", icon: ListTodo, path: "/todos" },
   { id: "scratch", label: "暫存", icon: StickyNote, path: "/scratch" },
