@@ -108,11 +108,7 @@ if (lineSecret || lineToken) {
   }
 }
 
-type AppEnv = {
-  Variables: {
-    cspNonce: string;
-  };
-};
+import type { AppEnv } from "./types.js";
 
 const app = new Hono<AppEnv>();
 

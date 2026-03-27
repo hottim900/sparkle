@@ -24,14 +24,9 @@ import { authMiddleware } from "../../middleware/auth.js";
 import { sharesRouter } from "../shares.js";
 import { publicRouter } from "../public.js";
 import { itemsRouter } from "../items.js";
+import type { AppEnv } from "../../types.js";
 
 const TEST_TOKEN = "test-secret-token-12345";
-
-type AppEnv = {
-  Variables: {
-    cspNonce: string;
-  };
-};
 
 function createApp() {
   const app = new Hono<AppEnv>();
