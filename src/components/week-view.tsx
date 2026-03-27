@@ -245,6 +245,11 @@ function DayDetail({
                 <span className="text-xs text-muted-foreground shrink-0">新增</span>
               </button>
             ))}
+            {notesCreated.length > MAX_ITEMS && (
+              <p className="text-xs text-muted-foreground text-center py-1">
+                還有 {notesCreated.length - MAX_ITEMS} 個筆記
+              </p>
+            )}
             {notesModified.slice(0, MAX_ITEMS).map((note: WeekNoteItem) => (
               <button
                 key={`modified-${note.id}`}
@@ -263,6 +268,11 @@ function DayDetail({
                 <span className="text-xs text-muted-foreground shrink-0">修改</span>
               </button>
             ))}
+            {notesModified.length > MAX_ITEMS && (
+              <p className="text-xs text-muted-foreground text-center py-1">
+                還有 {notesModified.length - MAX_ITEMS} 個筆記
+              </p>
+            )}
           </div>
         </div>
       )}
@@ -301,6 +311,8 @@ export function WeekView() {
   const today = getToday();
   const [startDate, setStartDate] = useState(() => getMonday(new Date()));
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  // #228: Track pending focus date for cross-week keyboard navigation
+  const [pendingFocusDate, setPendingFocusDate] = useState<string | null>(null);
   const cellRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
 
   const { data, isLoading, error, refetch } = useQuery({
@@ -308,9 +320,33 @@ export function WeekView() {
     queryFn: () => getDashboardWeek(startDate),
   });
 
+  // #231: Use ID-based dedup to prevent duplicate toasts on remount
   useEffect(() => {
-    if (error) toast.error("無法載入週檢視資料");
+    if (error) toast.error("無法載入週檢視資料", { id: "weekview-fetch-error" });
   }, [error]);
+
+  // #228: Focus the pending date cell after cross-week navigation renders new data
+  useEffect(() => {
+    if (pendingFocusDate && data?.days) {
+      const el = cellRefs.current.get(pendingFocusDate);
+      if (el) {
+        el.focus();
+        setPendingFocusDate(null);
+      }
+    }
+  }, [pendingFocusDate, data]);
+
+  // #230: Clean up stale cellRefs entries when data changes
+  useEffect(() => {
+    if (data?.days) {
+      const validDates = new Set(data.days.map((d) => d.date));
+      for (const key of cellRefs.current.keys()) {
+        if (!validDates.has(key)) {
+          cellRefs.current.delete(key);
+        }
+      }
+    }
+  }, [data]);
 
   const goToPrevWeek = useCallback(() => {
     setStartDate((s) => shiftWeek(s, -1));
@@ -356,15 +392,25 @@ export function WeekView() {
         e.preventDefault();
         targetIndex = dayIndex > 0 ? dayIndex - 1 : null;
         if (targetIndex === null) {
-          // Go to previous week, select Sunday
-          setStartDate((s) => shiftWeek(s, -1));
-          // Can't focus yet, but set selected day
+          // #228: Go to previous week, focus Sunday after data renders
+          setStartDate((s) => {
+            const prevMonday = shiftWeek(s, -1);
+            const [y, m, d] = prevMonday.split("-").map(Number);
+            const sunday = new Date(y!, m! - 1, d! + 6);
+            setPendingFocusDate(toDateStr(sunday));
+            return prevMonday;
+          });
         }
       } else if (e.key === "ArrowRight") {
         e.preventDefault();
         targetIndex = dayIndex < 6 ? dayIndex + 1 : null;
         if (targetIndex === null) {
-          setStartDate((s) => shiftWeek(s, 1));
+          // #228: Go to next week, focus Monday after data renders
+          setStartDate((s) => {
+            const nextMonday = shiftWeek(s, 1);
+            setPendingFocusDate(nextMonday);
+            return nextMonday;
+          });
         }
       } else if (e.key === "Enter" || e.key === " ") {
         e.preventDefault();
