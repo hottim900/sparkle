@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, beforeAll, vi } from "vitest";
+import { randomBytes } from "node:crypto";
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { createTestDb } from "../../test-utils.js";
@@ -23,17 +24,25 @@ import { authMiddleware } from "../../middleware/auth.js";
 import { sharesRouter } from "../shares.js";
 import { publicRouter } from "../public.js";
 import { itemsRouter } from "../items.js";
+import type { AppEnv } from "../../types.js";
 
 const TEST_TOKEN = "test-secret-token-12345";
 
 function createApp() {
-  const app = new Hono();
+  const app = new Hono<AppEnv>();
   // CSP middleware (mirrors production behavior in server/index.ts)
   app.use("*", async (c, next) => {
+    let scriptSrc = "script-src 'self'";
+    if (c.req.path.startsWith("/s/")) {
+      try {
+        const nonce = randomBytes(16).toString("base64");
+        c.set("cspNonce", nonce);
+        scriptSrc = `script-src 'self' 'nonce-${nonce}'`;
+      } catch {
+        scriptSrc = "script-src 'self' 'unsafe-inline'";
+      }
+    }
     await next();
-    const scriptSrc = c.req.path.startsWith("/s/")
-      ? "script-src 'self' 'unsafe-inline'"
-      : "script-src 'self'";
     c.res.headers.set(
       "Content-Security-Policy",
       `default-src 'self'; ${scriptSrc}; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; connect-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'`,
@@ -658,7 +667,7 @@ describe("SSR Public Page", () => {
     expect(html).not.toContain("更新");
   });
 
-  it("sets CSP with unsafe-inline for script-src on public pages", async () => {
+  it("sets CSP with nonce-based script-src on public pages", async () => {
     const noteId = insertNote();
     const createRes = await app.request(`/api/items/${noteId}/share`, {
       method: "POST",
@@ -669,14 +678,39 @@ describe("SSR Public Page", () => {
 
     const res = await app.request(`/s/${share.token}`);
     const csp = res.headers.get("Content-Security-Policy");
-    expect(csp).toContain("script-src 'self' 'unsafe-inline'");
+    expect(csp).toMatch(/script-src 'self' 'nonce-[A-Za-z0-9+/]+=*'/);
+    // Verify script-src does not use unsafe-inline (style-src still does, so check specifically)
+    expect(csp).not.toMatch(/script-src[^;]*unsafe-inline/);
   });
 
-  it("does not allow unsafe-inline scripts on API routes", async () => {
+  it("includes matching nonce attribute on inline script tags", async () => {
+    const noteId = insertNote();
+    const createRes = await app.request(`/api/items/${noteId}/share`, {
+      method: "POST",
+      headers: jsonHeaders(),
+      body: JSON.stringify({ visibility: "unlisted" }),
+    });
+    const { share } = await createRes.json();
+
+    const res = await app.request(`/s/${share.token}`);
+    const csp = res.headers.get("Content-Security-Policy")!;
+    const html = await res.text();
+
+    // Extract nonce from CSP header
+    const nonceMatch = csp.match(/nonce-([A-Za-z0-9+/]+=*)/);
+    expect(nonceMatch).toBeTruthy();
+    const nonce = nonceMatch![1];
+
+    // Verify the script tag contains the same nonce
+    expect(html).toContain(`<script nonce="${nonce}">`);
+  });
+
+  it("does not allow unsafe-inline or nonce on API routes", async () => {
     const res = await app.request("/api/public");
     const csp = res.headers.get("Content-Security-Policy");
     expect(csp).toContain("script-src 'self';");
-    expect(csp).not.toContain("script-src 'self' 'unsafe-inline'");
+    expect(csp).not.toMatch(/script-src[^;]*unsafe-inline/);
+    expect(csp).not.toMatch(/script-src[^;]*nonce-/);
   });
 
   it("does not load SPA JavaScript bundle", async () => {

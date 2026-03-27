@@ -3,6 +3,7 @@ import { sqlite } from "../db/index.js";
 import { getShareByToken, listPublicShares, type ShareWithItem } from "../lib/shares.js";
 import { renderPublicPage, renderNotFoundPage } from "../lib/render-public-page.js";
 import { logger } from "../lib/logger.js";
+import type { AppEnv } from "../types.js";
 
 function parseShareTags(share: ShareWithItem): string[] {
   try {
@@ -16,7 +17,7 @@ function parseShareTags(share: ShareWithItem): string[] {
   }
 }
 
-const publicRouter = new Hono();
+const publicRouter = new Hono<AppEnv>();
 
 // Get shared note by token (JSON API)
 publicRouter.get("/api/public/:token", (c) => {
@@ -63,13 +64,19 @@ publicRouter.get("/s/:token", (c) => {
 
   const tags = parseShareTags(share);
 
-  const html = renderPublicPage({
-    title: share.item_title,
-    content: share.item_content,
-    tags,
-    created: share.item_created,
-    modified: share.item_modified,
-  });
+  // Nonce is set by CSP middleware in server/index.ts
+  const nonce = c.get("cspNonce");
+
+  const html = renderPublicPage(
+    {
+      title: share.item_title,
+      content: share.item_content,
+      tags,
+      created: share.item_created,
+      modified: share.item_modified,
+    },
+    { nonce },
+  );
 
   return c.html(html);
 });
