@@ -83,18 +83,31 @@ export const searchSchema = z.object({
 });
 
 // Import schema — accepts JSON string arrays from export files
-export const jsonStringArray = z.preprocess(
-  (val) => {
-    if (typeof val === "string") {
-      try {
-        return JSON.parse(val);
-      } catch {
-        return val;
-      }
+// Separate preprocessors for tags (max 50 chars) and aliases (max 200 chars) to match create/update schemas
+function jsonStringArrayPreprocess(val: unknown) {
+  if (typeof val === "string") {
+    try {
+      return JSON.parse(val);
+    } catch {
+      return val;
     }
-    return val;
-  },
+  }
+  return val;
+}
+
+export const jsonStringArray = z.preprocess(
+  jsonStringArrayPreprocess,
   z.array(z.string().min(1).max(200)).max(20),
+);
+
+const importTagsSchema = z.preprocess(
+  jsonStringArrayPreprocess,
+  z.array(z.string().min(1).max(50)).max(20),
+);
+
+const importAliasesSchema = z.preprocess(
+  jsonStringArrayPreprocess,
+  z.array(z.string().min(1).max(200)).max(10),
 );
 
 export const importItemSchema = z
@@ -105,12 +118,17 @@ export const importItemSchema = z
     content: z.string().max(50000).default(""),
     status: statusEnum.default("fleeting"),
     priority: z.enum(["low", "medium", "high"]).nullable().default(null),
-    due: z.string().nullable().default(null),
-    tags: jsonStringArray.default([]),
+    due: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, "Must be YYYY-MM-DD format")
+      .nullable()
+      .default(null),
+    tags: importTagsSchema.default([]),
     origin: z.string().default(""),
     source: z.string().nullable().default(null),
-    aliases: jsonStringArray.default([]),
-    linked_note_id: z.string().nullable().default(null),
+    aliases: importAliasesSchema.default([]),
+    linked_note_id: z.string().uuid().nullable().default(null),
+    category_id: z.string().uuid().nullable().default(null),
     created: z.string().min(1),
     modified: z.string().min(1),
   })

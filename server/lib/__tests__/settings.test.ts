@@ -1,7 +1,13 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import Database from "better-sqlite3";
 import { createTestDb } from "../../test-utils.js";
-import { getSetting, getSettings, getObsidianSettings, updateSettings } from "../settings.js";
+import {
+  getSetting,
+  getSettings,
+  getObsidianSettings,
+  getDailyNoteSettings,
+  updateSettings,
+} from "../settings.js";
 
 describe("Settings", () => {
   let sqlite: Database.Database;
@@ -80,6 +86,32 @@ describe("Settings", () => {
       updateSettings(sqlite, { obsidian_vault_path: "/home/user/vault" });
       const settings = getObsidianSettings(sqlite);
       expect(settings.obsidian_vault_path).toBe("/home/user/vault");
+    });
+  });
+
+  // ============================================================
+  // getDailyNoteSettings
+  // ============================================================
+  describe("getDailyNoteSettings", () => {
+    it("returns daily_note_enabled false when key missing from DB", () => {
+      const settings = getDailyNoteSettings(sqlite);
+      expect(settings.daily_note_enabled).toBe(false);
+    });
+
+    it("returns daily_note_enabled true when set", () => {
+      updateSettings(sqlite, { daily_note_enabled: "true" });
+      const settings = getDailyNoteSettings(sqlite);
+      expect(settings.daily_note_enabled).toBe(true);
+    });
+
+    it("returns defaults for all fields", () => {
+      const settings = getDailyNoteSettings(sqlite);
+      expect(settings).toEqual({
+        daily_note_enabled: false,
+        obsidian_daily_folder: "Daily",
+        daily_note_time: "23:00",
+        daily_note_mode: "subfolder",
+      });
     });
   });
 

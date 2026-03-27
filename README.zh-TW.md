@@ -12,6 +12,10 @@
 
 - **Zettelkasten 筆記流程** -- 筆記依成熟度逐步推進：閃念 -> 發展中 -> 永久 -> 匯出至 Obsidian
 - **GTD 任務管理** -- 快速捕捉待辦事項，支援優先度、到期日與標籤分類
+- **分類管理** -- 以色彩標示分類整理筆記與待辦事項，支援拖曳排序
+- **儀表板與週檢視** -- 活動總覽，含每週筆記與待辦事項的分日統計
+- **私人筆記** -- PIN 碼保護的筆記，不顯示於預設列表與搜尋結果中
+- **每日筆記生成** -- 自動從 Sparkle 活動產生 Obsidian 每日筆記；LINE 推播每日摘要
 - **PWA 離線支援** -- 可安裝至任何裝置；離線時自動排入佇列，連線後同步
 - **LINE Bot 整合** -- 直接在 LINE 聊天中捕捉靈感、管理任務
 - **Obsidian 匯出** -- 將永久筆記匯出為帶有 YAML frontmatter 的 Markdown 檔案，直接寫入 Obsidian vault
@@ -21,14 +25,14 @@
 
 ## 技術棧
 
-| 類別 | 技術 |
-|------|------|
+| 類別 | 技術                                                  |
+| ---- | ----------------------------------------------------- |
 | 前端 | React 19, TypeScript, Tailwind CSS, shadcn/ui (Radix) |
-| 後端 | Hono, Node.js, Drizzle ORM, better-sqlite3 |
-| PWA | vite-plugin-pwa, Workbox, IndexedDB 離線佇列 |
-| 驗證 | Zod（API + 前端） |
-| 搜尋 | SQLite FTS5（trigram tokenizer） |
-| 建置 | Vite |
+| 後端 | Hono, Node.js, Drizzle ORM, better-sqlite3            |
+| PWA  | vite-plugin-pwa, Workbox, IndexedDB 離線佇列          |
+| 驗證 | Zod（API + 前端）                                     |
+| 搜尋 | SQLite FTS5（trigram tokenizer）                      |
+| 建置 | Vite                                                  |
 
 ## 快速開始
 

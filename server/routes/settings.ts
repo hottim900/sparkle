@@ -6,6 +6,16 @@ import { getSettings, updateSettings } from "../lib/settings.js";
 
 const settingsRouter = new Hono();
 
+/**
+ * Whitelist of settings keys that can be updated through the public API.
+ *
+ * Internal-only keys are intentionally excluded (not a bug):
+ * - `last_daily_note_date` — written by the daily note scheduler to track dedup state
+ * - `last_brief_sent_date` — written by the LINE brief scheduler to track dedup state
+ *
+ * These scheduler dedup keys must not be user-editable to prevent skipping or
+ * double-triggering scheduled jobs.
+ */
 const ALLOWED_KEYS = [
   "obsidian_enabled",
   "obsidian_vault_path",
@@ -13,9 +23,12 @@ const ALLOWED_KEYS = [
   "obsidian_export_mode",
   "obsidian_daily_folder",
   "daily_note_time",
+  "daily_note_enabled",
   "daily_note_mode",
   "recent_days",
   "stale_days",
+  "line_brief_enabled",
+  "line_brief_time",
 ] as const;
 
 const updateSettingsSchema = z
@@ -52,6 +65,19 @@ const updateSettingsSchema = z
   .refine(
     (obj) => {
       if (
+        "daily_note_enabled" in obj &&
+        obj.daily_note_enabled !== "true" &&
+        obj.daily_note_enabled !== "false"
+      ) {
+        return false;
+      }
+      return true;
+    },
+    { message: 'daily_note_enabled must be "true" or "false"' },
+  )
+  .refine(
+    (obj) => {
+      if (
         "daily_note_mode" in obj &&
         obj.daily_note_mode !== "subfolder" &&
         obj.daily_note_mode !== "append"
@@ -70,6 +96,28 @@ const updateSettingsSchema = z
       return true;
     },
     { message: "daily_note_time must be in HH:MM format" },
+  )
+  .refine(
+    (obj) => {
+      if (
+        "line_brief_enabled" in obj &&
+        obj.line_brief_enabled !== "true" &&
+        obj.line_brief_enabled !== "false"
+      ) {
+        return false;
+      }
+      return true;
+    },
+    { message: 'line_brief_enabled must be "true" or "false"' },
+  )
+  .refine(
+    (obj) => {
+      if ("line_brief_time" in obj) {
+        return /^([01]\d|2[0-3]):[0-5]\d$/.test(obj.line_brief_time ?? "");
+      }
+      return true;
+    },
+    { message: "line_brief_time must be in HH:MM format" },
   )
   .refine(
     (obj) => {

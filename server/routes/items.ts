@@ -3,6 +3,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { db, sqlite } from "../db/index.js";
 import { items, categories } from "../db/schema.js";
 import { createItem, getItem, listItems, updateItem, deleteItem } from "../lib/items.js";
+import { resolveLinkedInfo } from "../lib/item-enrichment.js";
 import { isValidTypeStatus, getAutoMappedStatus } from "../lib/item-type-system.js";
 import type { ExportableItem } from "../lib/export.js";
 import {
@@ -49,7 +50,7 @@ itemsRouter.post("/", async (c) => {
     const input = createItemSchema.parse(body);
 
     const created = createItem(db, input);
-    const item = getItem(db, created.id)!;
+    const [item] = resolveLinkedInfo(db, [created]);
     return c.json(item, 201);
   } catch (e) {
     if (e instanceof ZodError) {
@@ -319,7 +320,8 @@ itemsRouter.patch("/:id", async (c) => {
 
     // When marking as private, use includePrivate for the return value
     const markingPrivate = input.is_private === true && !existing.is_private;
-    const updated = updateItem(db, id, input, markingPrivate);
+    // Pass pre-fetched existing to avoid redundant getItem inside updateItem
+    const updated = updateItem(db, id, input, markingPrivate, existing);
     if (!updated) {
       return c.json({ error: "Item not found" }, 404);
     }
