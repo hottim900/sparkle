@@ -93,6 +93,39 @@ describe("POST /api/daily-note/generate", () => {
     expect(mockGenerateDailyNote).not.toHaveBeenCalled();
   });
 
+  it("returns 400 for semantically invalid date (month 99)", async () => {
+    const res = await app.request("/api/daily-note/generate?date=2026-99-01", {
+      method: "POST",
+    });
+    expect(res.status).toBe(400);
+
+    const body = await res.json();
+    expect(body.error).toContain("Invalid date");
+    expect(mockGenerateDailyNote).not.toHaveBeenCalled();
+  });
+
+  it("returns 400 for semantically invalid date (Feb 30)", async () => {
+    const res = await app.request("/api/daily-note/generate?date=2026-02-30", {
+      method: "POST",
+    });
+    expect(res.status).toBe(400);
+
+    const body = await res.json();
+    expect(body.error).toContain("Invalid date");
+    expect(mockGenerateDailyNote).not.toHaveBeenCalled();
+  });
+
+  it("returns 400 for semantically invalid date (day 00)", async () => {
+    const res = await app.request("/api/daily-note/generate?date=2026-03-00", {
+      method: "POST",
+    });
+    expect(res.status).toBe(400);
+
+    const body = await res.json();
+    expect(body.error).toContain("Invalid date");
+    expect(mockGenerateDailyNote).not.toHaveBeenCalled();
+  });
+
   it("updates last_daily_note_date when generating for today", async () => {
     mockToLocalDateStr.mockReturnValue("2026-03-24");
     mockGenerateDailyNote.mockResolvedValue({
