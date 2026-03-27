@@ -38,8 +38,8 @@ import { settingsRouter } from "../settings.js";
 import { getAllTags } from "../../lib/items.js";
 import { logger } from "../../lib/logger.js";
 import { getObsidianSettings } from "../../lib/settings.js";
-import { items } from "../../db/schema.js";
-import { eq } from "drizzle-orm";
+import { items, categories } from "../../db/schema.js";
+import { eq, inArray } from "drizzle-orm";
 import { ZodError } from "zod";
 import { importSchema } from "../../schemas/items.js";
 
@@ -126,44 +126,123 @@ function createApp() {
 
       let imported = 0;
       let updated = 0;
+      let skipped = 0;
+      const warnings: string[] = [];
 
-      for (const item of importItems) {
-        const existing = testDb.select().from(items).where(eq(items.id, item.id)).get();
+      // Bulk pre-fetch valid FK references to avoid N+1 queries
+      const referencedCategoryIds = [
+        ...new Set(importItems.map((i) => i.category_id).filter(Boolean)),
+      ] as string[];
+      const validCategoryIds = new Set(
+        referencedCategoryIds.length > 0
+          ? testDb
+              .select({ id: categories.id })
+              .from(categories)
+              .where(inArray(categories.id, referencedCategoryIds))
+              .all()
+              .map((r) => r.id)
+          : [],
+      );
 
-        if (existing) {
-          testDb
-            .update(items)
-            .set({
-              type: item.type,
-              title: item.title,
-              content: item.content,
-              status: item.status,
-              priority: item.priority,
-              due: item.due,
-              tags: JSON.stringify(item.tags),
-              origin: item.origin,
-              source: item.source,
-              aliases: JSON.stringify(item.aliases),
-              created: item.created,
-              modified: item.modified,
-            })
-            .where(eq(items.id, item.id))
-            .run();
-          updated++;
-        } else {
-          testDb
-            .insert(items)
-            .values({
-              ...item,
-              tags: JSON.stringify(item.tags),
-              aliases: JSON.stringify(item.aliases),
-            })
-            .run();
-          imported++;
+      const referencedLinkedIds = [
+        ...new Set(importItems.map((i) => i.linked_note_id).filter(Boolean)),
+      ] as string[];
+      const existingLinkedIds = new Set(
+        referencedLinkedIds.length > 0
+          ? testDb
+              .select({ id: items.id })
+              .from(items)
+              .where(inArray(items.id, referencedLinkedIds))
+              .all()
+              .map((r) => r.id)
+          : [],
+      );
+
+      const processedIds = new Set<string>();
+
+      // Wrap entire import in a transaction for atomicity
+      const txResult = testSqlite.transaction(() => {
+        for (const item of importItems) {
+          // Validate linked_note_id FK reference
+          if (item.linked_note_id) {
+            const linkedExists =
+              processedIds.has(item.linked_note_id) || existingLinkedIds.has(item.linked_note_id);
+            if (!linkedExists) {
+              logger.warn(
+                { itemId: item.id, linked_note_id: item.linked_note_id },
+                "Import: linked_note_id references non-existent item, skipping",
+              );
+              warnings.push(
+                `Item ${item.id}: linked_note_id "${item.linked_note_id}" not found, skipped`,
+              );
+              skipped++;
+              continue;
+            }
+          }
+
+          // Validate category_id FK reference
+          if (item.category_id) {
+            if (!validCategoryIds.has(item.category_id)) {
+              logger.warn(
+                { itemId: item.id, category_id: item.category_id },
+                "Import: category_id references non-existent category, skipping",
+              );
+              warnings.push(
+                `Item ${item.id}: category_id "${item.category_id}" not found, skipped`,
+              );
+              skipped++;
+              continue;
+            }
+          }
+
+          const existing = testDb.select().from(items).where(eq(items.id, item.id)).get();
+
+          if (existing) {
+            // Skip private items — don't overwrite private content via import
+            if (existing.is_private) {
+              skipped++;
+              continue;
+            }
+            testDb
+              .update(items)
+              .set({
+                type: item.type,
+                title: item.title,
+                content: item.content,
+                status: item.status,
+                priority: item.priority,
+                due: item.due,
+                tags: JSON.stringify(item.tags),
+                origin: item.origin,
+                source: item.source,
+                aliases: JSON.stringify(item.aliases),
+                linked_note_id: item.linked_note_id,
+                category_id: item.category_id,
+                created: item.created,
+                modified: item.modified,
+              })
+              .where(eq(items.id, item.id))
+              .run();
+            updated++;
+          } else {
+            // Strip is_private from imported data — imports always create public items
+            testDb
+              .insert(items)
+              .values({
+                ...item,
+                tags: JSON.stringify(item.tags),
+                aliases: JSON.stringify(item.aliases),
+                is_private: 0,
+              })
+              .run();
+            imported++;
+          }
+          processedIds.add(item.id);
         }
-      }
+        return { imported, updated, skipped };
+      })();
 
-      return c.json({ imported, updated });
+      return c.json({ ...txResult, warnings: warnings.length > 0 ? warnings : undefined });
     } catch (e) {
       if (e instanceof ZodError) {
         return c.json({ error: e.issues[0]?.message ?? "Validation error" }, 400);

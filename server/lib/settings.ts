@@ -10,6 +10,13 @@ export interface ObsidianSettings {
 
 /**
  * Get a single setting value by key.
+ *
+ * Note: Some keys are internal-only and not exposed through the settings API:
+ * - `last_daily_note_date` — tracks the last date a daily note was generated (used by the scheduler)
+ * - `last_brief_sent_date` — tracks the last date a LINE daily brief was sent (used by the scheduler)
+ *
+ * These are written by server-side schedulers and intentionally excluded from
+ * the ALLOWED_KEYS whitelist in the settings route.
  */
 export function getSetting(sqlite: Database.Database, key: string): string | null {
   const row = sqlite.prepare("SELECT value FROM settings WHERE key = ?").get(key) as
@@ -65,6 +72,7 @@ export function getDashboardSettings(sqlite: Database.Database): DashboardSettin
 export type DailyNoteMode = "subfolder" | "append";
 
 export interface DailyNoteSettings {
+  daily_note_enabled: boolean;
   obsidian_daily_folder: string;
   daily_note_time: string;
   daily_note_mode: DailyNoteMode;
@@ -77,9 +85,26 @@ export function getDailyNoteSettings(sqlite: Database.Database): DailyNoteSettin
   const all = getSettings(sqlite);
   const mode = all.daily_note_mode;
   return {
+    daily_note_enabled: all.daily_note_enabled === "true",
     obsidian_daily_folder: all.obsidian_daily_folder ?? "Daily",
     daily_note_time: all.daily_note_time ?? "23:00",
     daily_note_mode: mode === "append" ? "append" : "subfolder",
+  };
+}
+
+export interface LineBriefSettings {
+  line_brief_enabled: boolean;
+  line_brief_time: string;
+}
+
+/**
+ * Get LINE daily brief settings with typed conversions.
+ */
+export function getLineBriefSettings(sqlite: Database.Database): LineBriefSettings {
+  const all = getSettings(sqlite);
+  return {
+    line_brief_enabled: all.line_brief_enabled === "true", // default false — requires explicit opt-in
+    line_brief_time: all.line_brief_time ?? "21:00",
   };
 }
 

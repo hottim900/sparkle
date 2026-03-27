@@ -8,7 +8,7 @@ import { logger } from "../lib/logger.js";
 
 const DB_PATH = process.env.DATABASE_URL || "./data/todo.db";
 
-const TARGET_VERSION = 16;
+const TARGET_VERSION = 17;
 
 function getSchemaVersion(sqlite: Database.Database): number {
   // Check if schema_version table exists
@@ -322,6 +322,15 @@ function runMigrations(sqlite: Database.Database) {
     `);
     setSchemaVersion(sqlite, 16);
   }
+
+  // Step 16→17: Add LINE brief settings defaults
+  if (version < 17) {
+    sqlite.exec(`
+      INSERT OR IGNORE INTO settings (key, value) VALUES ('line_brief_enabled', 'false');
+      INSERT OR IGNORE INTO settings (key, value) VALUES ('line_brief_time', '21:00');
+    `);
+    setSchemaVersion(sqlite, 17);
+  }
 }
 
 export function initializeDatabase(sqlite: Database.Database) {
@@ -376,7 +385,9 @@ export function initializeDatabase(sqlite: Database.Database) {
         ('stale_days', '14'),
         ('obsidian_daily_folder', 'Daily'),
         ('daily_note_time', '23:00'),
-        ('daily_note_mode', 'subfolder');
+        ('daily_note_mode', 'subfolder'),
+        ('line_brief_enabled', 'false'),
+        ('line_brief_time', '21:00');
 
       CREATE TABLE share_tokens (
         id TEXT PRIMARY KEY,

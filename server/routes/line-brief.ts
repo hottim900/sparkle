@@ -1,15 +1,15 @@
 import { Hono } from "hono";
 import { sqlite } from "../db/index.js";
-import { generateDailyNote } from "../lib/daily-note.js";
+import { generateAndPushBrief } from "../lib/line-brief.js";
 import { updateSettings } from "../lib/settings.js";
 import { toLocalDateStr } from "../lib/stats.js";
 import { logger } from "../lib/logger.js";
 import { validateDateParam } from "../lib/date-utils.js";
 
-const dailyNoteRouter = new Hono();
+const lineBriefRouter = new Hono();
 
-// POST /api/daily-note/generate?date=YYYY-MM-DD
-dailyNoteRouter.post("/generate", async (c) => {
+// POST /api/line-brief/send?date=YYYY-MM-DD
+lineBriefRouter.post("/send", async (c) => {
   const dateParam = c.req.query("date");
 
   // Validate date format and semantic correctness if provided
@@ -21,19 +21,19 @@ dailyNoteRouter.post("/generate", async (c) => {
   }
 
   try {
-    const result = await generateDailyNote(sqlite, dateParam || undefined);
+    const result = await generateAndPushBrief(sqlite, dateParam);
 
-    // Update dedup state when generating for today (prevents scheduler from re-generating)
+    // Update dedup state when sending for today (prevents scheduler from re-sending)
     const today = toLocalDateStr(new Date());
-    if (!result.skipped && result.date === today) {
-      updateSettings(sqlite, { last_daily_note_date: today });
+    if (result.sent && (!dateParam || dateParam === today)) {
+      updateSettings(sqlite, { last_brief_sent_date: today });
     }
 
     return c.json(result);
   } catch (err) {
-    logger.error({ err, date: dateParam }, "Failed to generate daily note");
-    return c.json({ error: "Failed to generate daily note" }, 500);
+    logger.error({ err, date: dateParam }, "Failed to send LINE brief");
+    return c.json({ error: "Failed to send LINE brief" }, 500);
   }
 });
 
-export { dailyNoteRouter };
+export { lineBriefRouter };

@@ -51,6 +51,7 @@ beforeEach(() => {
 
   enableObsidian();
   mockGetDailyNoteSettings.mockReturnValue({
+    daily_note_enabled: true,
     obsidian_daily_folder: "Daily",
     daily_note_time: "23:00",
     daily_note_mode: "subfolder",
@@ -84,6 +85,19 @@ describe("checkAndGenerateDailyNote — early returns", () => {
       obsidian_vault_path: "",
     });
 
+    checkAndGenerateDailyNote(fakeSqlite);
+    expect(mockGenerateDailyNote).not.toHaveBeenCalled();
+  });
+
+  it("returns early when daily_note_enabled is false", () => {
+    mockGetDailyNoteSettings.mockReturnValue({
+      daily_note_enabled: false,
+      obsidian_daily_folder: "Daily",
+      daily_note_time: "23:00",
+      daily_note_mode: "subfolder",
+    });
+
+    setTime("23", "01");
     checkAndGenerateDailyNote(fakeSqlite);
     expect(mockGenerateDailyNote).not.toHaveBeenCalled();
   });

@@ -21,7 +21,7 @@ function createApp() {
   return app;
 }
 
-describe("PUT /api/settings — daily note validation", () => {
+describe("PUT /api/settings — LINE brief validation", () => {
   let app: ReturnType<typeof createApp>;
 
   beforeEach(() => {
@@ -31,108 +31,86 @@ describe("PUT /api/settings — daily note validation", () => {
     app = createApp();
   });
 
-  it("accepts valid daily_note_mode", async () => {
+  it("accepts valid line_brief_enabled (true)", async () => {
     const res = await app.request("/api/settings", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ daily_note_mode: "append" }),
+      body: JSON.stringify({ line_brief_enabled: "true" }),
     });
     expect(res.status).toBe(200);
   });
 
-  it("rejects invalid daily_note_mode", async () => {
+  it("accepts valid line_brief_enabled (false)", async () => {
     const res = await app.request("/api/settings", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ daily_note_mode: "invalid" }),
+      body: JSON.stringify({ line_brief_enabled: "false" }),
+    });
+    expect(res.status).toBe(200);
+  });
+
+  it("rejects invalid line_brief_enabled", async () => {
+    const res = await app.request("/api/settings", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ line_brief_enabled: "yes" }),
     });
     expect(res.status).toBe(400);
     const body = await res.json();
-    expect(body.error).toContain("daily_note_mode");
+    expect(body.error).toContain("line_brief_enabled");
   });
 
-  it("accepts valid daily_note_time", async () => {
+  it("accepts valid line_brief_time", async () => {
     const res = await app.request("/api/settings", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ daily_note_time: "08:30" }),
+      body: JSON.stringify({ line_brief_time: "21:00" }),
     });
     expect(res.status).toBe(200);
   });
 
-  it("rejects invalid daily_note_time (out of range)", async () => {
+  it("accepts line_brief_time at boundary (00:00)", async () => {
     const res = await app.request("/api/settings", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ daily_note_time: "25:00" }),
-    });
-    expect(res.status).toBe(400);
-  });
-
-  it("rejects invalid daily_note_time (wrong format)", async () => {
-    const res = await app.request("/api/settings", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ daily_note_time: "8:30" }),
-    });
-    expect(res.status).toBe(400);
-  });
-
-  it("accepts valid obsidian_daily_folder", async () => {
-    const res = await app.request("/api/settings", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ obsidian_daily_folder: "Daily/Notes" }),
+      body: JSON.stringify({ line_brief_time: "00:00" }),
     });
     expect(res.status).toBe(200);
   });
 
-  it("rejects obsidian_daily_folder with path traversal", async () => {
+  it("accepts line_brief_time at boundary (23:59)", async () => {
     const res = await app.request("/api/settings", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ obsidian_daily_folder: "../../etc" }),
-    });
-    expect(res.status).toBe(400);
-    const body = await res.json();
-    expect(body.error).toContain("obsidian_daily_folder");
-  });
-
-  it("rejects obsidian_daily_folder with absolute path", async () => {
-    const res = await app.request("/api/settings", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ obsidian_daily_folder: "/etc/passwd" }),
-    });
-    expect(res.status).toBe(400);
-  });
-
-  it("accepts valid daily_note_enabled 'true'", async () => {
-    const res = await app.request("/api/settings", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ daily_note_enabled: "true" }),
+      body: JSON.stringify({ line_brief_time: "23:59" }),
     });
     expect(res.status).toBe(200);
   });
 
-  it("accepts valid daily_note_enabled 'false'", async () => {
+  it("rejects invalid line_brief_time (out of range)", async () => {
     const res = await app.request("/api/settings", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ daily_note_enabled: "false" }),
-    });
-    expect(res.status).toBe(200);
-  });
-
-  it("rejects invalid daily_note_enabled", async () => {
-    const res = await app.request("/api/settings", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ daily_note_enabled: "yes" }),
+      body: JSON.stringify({ line_brief_time: "25:00" }),
     });
     expect(res.status).toBe(400);
-    const body = await res.json();
-    expect(body.error).toContain("daily_note_enabled");
+  });
+
+  it("rejects invalid line_brief_time (wrong format)", async () => {
+    const res = await app.request("/api/settings", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ line_brief_time: "9:30" }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects invalid line_brief_time (non-time string)", async () => {
+    const res = await app.request("/api/settings", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ line_brief_time: "morning" }),
+    });
+    expect(res.status).toBe(400);
   });
 });

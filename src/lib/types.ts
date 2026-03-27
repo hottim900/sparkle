@@ -126,8 +126,28 @@ export interface SettingsResponse {
   obsidian_vault_path: string;
   obsidian_inbox_folder: string;
   obsidian_export_mode: "new" | "overwrite";
+  daily_note_enabled: string;
+  daily_note_time: string;
+  daily_note_mode: "subfolder" | "append";
+  obsidian_daily_folder: string;
   recent_days: string;
   stale_days: string;
+  line_brief_enabled: string;
+  line_brief_time: string;
+}
+
+export interface DailyNoteGenerateResponse {
+  date: string;
+  path: string;
+  skipped?: boolean;
+  reason?: string;
+}
+
+export interface LineBriefSendResponse {
+  sent: boolean;
+  skipped?: boolean;
+  reason?: string;
+  message?: string;
 }
 
 // Dashboard types
