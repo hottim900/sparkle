@@ -312,23 +312,34 @@ claude mcp add sparkle --transport stdio --scope user \
 
 ### 可用工具
 
-| 工具                         | 說明                   |
-| ---------------------------- | ---------------------- |
-| `sparkle_search`             | 全文搜尋               |
-| `sparkle_get_note`           | 讀取單一筆記           |
-| `sparkle_list_notes`         | 列出筆記（含篩選條件） |
-| `sparkle_create_note`        | 建立新筆記或待辦事項   |
-| `sparkle_update_note`        | 更新現有項目           |
-| `sparkle_advance_note`       | 推進筆記成熟度階段     |
-| `sparkle_export_to_obsidian` | 將筆記匯出至 Obsidian  |
-| `sparkle_get_stats`          | 取得統計資料           |
-| `sparkle_list_tags`          | 列出所有標籤           |
-| `sparkle_list_categories`    | 列出分類               |
-| `sparkle_create_category`    | 建立分類               |
-| `sparkle_update_category`    | 更新分類               |
-| `sparkle_delete_category`    | 刪除分類               |
-| `sparkle_reorder_categories` | 重新排序分類           |
-| `sparkle_guide`              | 查詢 Sparkle 文件      |
+| 工具                             | 說明                               |
+| -------------------------------- | ---------------------------------- |
+| `sparkle_search`                 | Sparkle 資料庫全文搜尋             |
+| `sparkle_search_all`             | 同時搜尋 Sparkle 與 Obsidian vault |
+| `sparkle_get_note`               | 讀取單一筆記                       |
+| `sparkle_list_notes`             | 列出筆記（含篩選條件）             |
+| `sparkle_create_note`            | 建立新筆記或待辦事項               |
+| `sparkle_update_note`            | 更新現有項目                       |
+| `sparkle_advance_note`           | 推進筆記成熟度階段                 |
+| `sparkle_export_to_obsidian`     | 將筆記匯出至 Obsidian              |
+| `sparkle_get_stats`              | 取得統計資料                       |
+| `sparkle_list_tags`              | 列出所有標籤                       |
+| `sparkle_list_categories`        | 列出分類                           |
+| `sparkle_create_category`        | 建立分類                           |
+| `sparkle_update_category`        | 更新分類                           |
+| `sparkle_delete_category`        | 刪除分類                           |
+| `sparkle_reorder_categories`     | 重新排序分類                       |
+| `sparkle_list_unreviewed`        | 儀表板：未檢視項目                 |
+| `sparkle_list_recent`            | 儀表板：近期活躍項目               |
+| `sparkle_list_attention`         | 儀表板：需關注項目                 |
+| `sparkle_list_stale`             | 儀表板：過期未更新項目             |
+| `sparkle_read_obsidian`          | 依 Sparkle ID 讀取 vault 檔案      |
+| `sparkle_write_obsidian`         | 依 Sparkle ID 寫入 vault 檔案      |
+| `sparkle_read_obsidian_by_path`  | 依路徑讀取 vault 檔案              |
+| `sparkle_write_obsidian_by_path` | 依路徑寫入 vault 檔案              |
+| `sparkle_search_obsidian`        | 搜尋 Obsidian vault                |
+| `sparkle_list_obsidian`          | 列出 Obsidian vault 中的檔案       |
+| `sparkle_guide`                  | 查詢 Sparkle 文件                  |
 
 ### 測試
 

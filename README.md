@@ -12,6 +12,10 @@ Self-hosted PWA for personal idea capture and task management with Zettelkasten 
 
 - **Zettelkasten Note Flow** -- Notes mature through stages: Fleeting -> Developing -> Permanent -> Exported to Obsidian
 - **GTD Task Management** -- Quick-capture todos with priority levels, due dates, and tag organization
+- **Categories** -- Organize notes and todos into color-coded categories with drag-and-drop reordering
+- **Dashboard & Week View** -- Activity overview with weekly breakdown of notes and todos
+- **Private Notes** -- PIN-protected notes hidden from default views and search
+- **Daily Note Generation** -- Auto-generate Obsidian daily notes from Sparkle activity; LINE push notifications for daily briefs
 - **PWA with Offline Support** -- Install on any device; captures queue offline and sync when reconnected
 - **LINE Bot Integration** -- Capture ideas and manage tasks directly from LINE chat
 - **Obsidian Export** -- Export permanent notes as Markdown files with YAML frontmatter into your Obsidian vault
@@ -21,14 +25,14 @@ Self-hosted PWA for personal idea capture and task management with Zettelkasten 
 
 ## Tech Stack
 
-| Category | Technology |
-|----------|-----------|
-| Frontend | React 19, TypeScript, Tailwind CSS, shadcn/ui (Radix) |
-| Backend | Hono, Node.js, Drizzle ORM, better-sqlite3 |
-| PWA | vite-plugin-pwa, Workbox, IndexedDB offline queue |
-| Validation | Zod (API + frontend) |
-| Search | SQLite FTS5 (trigram tokenizer) |
-| Build | Vite |
+| Category   | Technology                                            |
+| ---------- | ----------------------------------------------------- |
+| Frontend   | React 19, TypeScript, Tailwind CSS, shadcn/ui (Radix) |
+| Backend    | Hono, Node.js, Drizzle ORM, better-sqlite3            |
+| PWA        | vite-plugin-pwa, Workbox, IndexedDB offline queue     |
+| Validation | Zod (API + frontend)                                  |
+| Search     | SQLite FTS5 (trigram tokenizer)                       |
+| Build      | Vite                                                  |
 
 ## Quick Start
 
