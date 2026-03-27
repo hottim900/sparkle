@@ -126,11 +126,42 @@ export interface SettingsResponse {
   obsidian_vault_path: string;
   obsidian_inbox_folder: string;
   obsidian_export_mode: "new" | "overwrite";
+  daily_note_enabled: string;
+  daily_note_time: string;
+  daily_note_mode: "subfolder" | "append";
+  obsidian_daily_folder: string;
   recent_days: string;
   stale_days: string;
+  line_brief_enabled: string;
+  line_brief_time: string;
+}
+
+export interface DailyNoteGenerateResponse {
+  date: string;
+  path: string;
+  skipped?: boolean;
+  reason?: string;
+}
+
+export interface LineBriefSendResponse {
+  sent: boolean;
+  skipped?: boolean;
+  reason?: string;
+  message?: string;
 }
 
 // Dashboard types
+export type ActivityType = "created" | "updated";
+
+export interface RecentActivityItem extends Item {
+  activity: ActivityType;
+}
+
+export interface RecentActivityResponse {
+  items: RecentActivityItem[];
+  total: number;
+}
+
 export interface DashboardItemsResponse {
   items: Item[];
   total: number;
@@ -158,6 +189,32 @@ export interface DashboardStaleResponse {
   total: number;
 }
 
+// Week data types for temporal bridge
+export interface WeekTodoItem {
+  id: string;
+  title: string;
+  priority: string | null;
+  status: string;
+}
+
+export interface WeekNoteItem {
+  id: string;
+  title: string;
+  status: string;
+}
+
+export interface WeekDay {
+  date: string;
+  todos_due: WeekTodoItem[];
+  notes_created: WeekNoteItem[];
+  notes_modified: WeekNoteItem[];
+  overdue_count: number;
+}
+
+export interface WeekDataResponse {
+  days: WeekDay[];
+}
+
 // Parsed item with tags and aliases as arrays
 export interface ParsedItem extends Omit<Item, "tags" | "aliases"> {
   tags: string[];
@@ -176,7 +233,9 @@ function safeParseStringArray(json: string): string[] {
   return [];
 }
 
-export function parseItem(item: Item): ParsedItem {
+export function parseItem<T extends Item>(
+  item: T,
+): Omit<T, "tags" | "aliases"> & { tags: string[]; aliases: string[] } {
   return {
     ...item,
     tags: safeParseStringArray(item.tags),
@@ -184,7 +243,9 @@ export function parseItem(item: Item): ParsedItem {
   };
 }
 
-export function parseItems(items: Item[]): ParsedItem[] {
+export function parseItems<T extends Item>(
+  items: T[],
+): (Omit<T, "tags" | "aliases"> & { tags: string[]; aliases: string[] })[] {
   return items.map(parseItem);
 }
 

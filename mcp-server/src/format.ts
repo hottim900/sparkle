@@ -53,21 +53,31 @@ export function formatItem(item: SparkleItem): string {
 }
 
 /** Format a list of items as a compact markdown list */
-export function formatItemList(
-  items: SparkleItem[],
+export function formatItemList<T extends SparkleItem>(
+  items: T[],
   total: number,
   pagination?: { offset: number; limit: number },
+  options?: {
+    emptyMessage?: string;
+    formatLine?: (item: T, shared: { tagStr: string; catStr: string }) => string;
+  },
 ): string {
-  if (items.length === 0) return "No items found.";
+  if (items.length === 0) return options?.emptyMessage ?? "No items found.";
 
   const lines: string[] = [`Found ${total} items (showing ${items.length}):\n`];
   for (const item of items) {
     const tags = parseTags(item);
     const tagStr = tags.length > 0 ? ` [${tags.join(", ")}]` : "";
-    const dueStr = item.due ? ` (due: ${item.due})` : "";
-    const priorityStr = item.priority ? ` ⚡${item.priority}` : "";
     const catStr = item.category_name ? ` 📁${item.category_name}` : "";
-    lines.push(`- **${item.title}** — ${item.status}${priorityStr}${dueStr}${catStr}${tagStr}`);
+    if (options?.formatLine) {
+      lines.push(options.formatLine(item, { tagStr, catStr }));
+    } else {
+      const dueStr = item.due ? ` (due: ${item.due})` : "";
+      const priorityStr = item.priority ? ` ⚡${item.priority}` : "";
+      lines.push(
+        `- **${item.title}** — ${item.status}${priorityStr}${dueStr}${catStr}${tagStr}`,
+      );
+    }
     lines.push(`  ID: ${item.id} | Type: ${item.type} | Modified: ${item.modified}`);
   }
   if (pagination) {

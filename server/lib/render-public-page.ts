@@ -152,7 +152,11 @@ interface PublicPageData {
   modified: string;
 }
 
-export function renderPublicPage(data: PublicPageData): string {
+interface RenderOptions {
+  nonce?: string;
+}
+
+export function renderPublicPage(data: PublicPageData, options?: RenderOptions): string {
   const titleEscaped = escapeHtml(data.title);
   const description = escapeHtml(stripMarkdown(data.content, 200));
 
@@ -304,8 +308,10 @@ export function renderPublicPage(data: PublicPageData): string {
       .back-to-top:hover { background: #333; }
     }`;
 
+  const nonceAttr = options?.nonce ? ` nonce="${escapeHtml(options.nonce)}"` : "";
+
   const inlineJs = `
-  <script>
+  <script${nonceAttr}>
     (function() {
       const backToTop = document.querySelector('.back-to-top');
       if (backToTop) {

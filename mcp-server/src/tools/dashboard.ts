@@ -44,9 +44,9 @@ export function registerDashboardTools(server: McpServer): void {
   server.registerTool(
     "sparkle_list_recent",
     {
-      title: "List Recently Created Items",
+      title: "List Recent Activity",
       description:
-        "列出最近 N 天內建立的項目（天數由 Sparkle settings 的 recent_days 控制，預設 7 天）。",
+        "列出最近 N 天內有活動的項目（新建或修改），按修改時間排序。每筆標示 activity: created 或 updated。天數由 recent_days 設定控制（預設 7 天）。",
       inputSchema: z
         .object({
           limit: z
@@ -69,7 +69,13 @@ export function registerDashboardTools(server: McpServer): void {
     async ({ limit, offset }) => {
       try {
         const data = await getRecent(limit, offset);
-        const text = formatItemList(data.items, data.total, { offset, limit });
+        const text = formatItemList(data.items, data.total, { offset, limit }, {
+          emptyMessage: "No recent activity found.",
+          formatLine: (item, { tagStr, catStr }) => {
+            const label = item.activity === "updated" ? "🔄 updated" : "✨ created";
+            return `- **${item.title}** — ${label} | ${item.status}${catStr}${tagStr}`;
+          },
+        });
         return { content: [{ type: "text", text }] };
       } catch (error) {
         return formatToolError(error);

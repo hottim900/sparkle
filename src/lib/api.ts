@@ -16,8 +16,12 @@ import type {
   ShareResponse,
   ListSharesResponse,
   DashboardItemsResponse,
+  RecentActivityResponse,
   AttentionResponse,
   DashboardStaleResponse,
+  WeekDataResponse,
+  LineBriefSendResponse,
+  DailyNoteGenerateResponse,
 } from "./types";
 
 const API_BASE = "/api";
@@ -429,12 +433,12 @@ export async function getUnreviewed(params?: {
 export async function getRecent(params?: {
   limit?: number;
   offset?: number;
-}): Promise<DashboardItemsResponse> {
+}): Promise<RecentActivityResponse> {
   const search = new URLSearchParams();
   if (params?.limit) search.set("limit", String(params.limit));
   if (params?.offset) search.set("offset", String(params.offset));
   const qs = search.toString();
-  return request<DashboardItemsResponse>(`/dashboard/recent${qs ? `?${qs}` : ""}`);
+  return request<RecentActivityResponse>(`/dashboard/recent${qs ? `?${qs}` : ""}`);
 }
 
 export async function getAttention(params?: { limit?: number }): Promise<AttentionResponse> {
@@ -451,6 +455,27 @@ export async function getDashboardStale(params?: {
   if (params?.limit) search.set("limit", String(params.limit));
   const qs = search.toString();
   return request<DashboardStaleResponse>(`/dashboard/stale${qs ? `?${qs}` : ""}`);
+}
+
+// LINE Brief API
+export async function sendLineBrief(date?: string): Promise<LineBriefSendResponse> {
+  const qs = date ? `?date=${encodeURIComponent(date)}` : "";
+  return request<LineBriefSendResponse>(`/line-brief/send${qs}`, {
+    method: "POST",
+  });
+}
+
+// Daily Note API
+export async function generateDailyNote(date?: string): Promise<DailyNoteGenerateResponse> {
+  const qs = date ? `?date=${encodeURIComponent(date)}` : "";
+  return request<DailyNoteGenerateResponse>(`/daily-note/generate${qs}`, {
+    method: "POST",
+  });
+}
+
+// Dashboard Week API
+export async function getDashboardWeek(start: string): Promise<WeekDataResponse> {
+  return request<WeekDataResponse>(`/dashboard/week?start=${encodeURIComponent(start)}`);
 }
 
 export { ApiClientError };

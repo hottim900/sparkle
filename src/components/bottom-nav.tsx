@@ -1,49 +1,8 @@
 import { useState } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import { pathToView } from "@/lib/navigation";
-import {
-  FileText,
-  ListTodo,
-  LayoutDashboard,
-  Search,
-  Menu,
-  Archive,
-  Settings,
-  StickyNote,
-  Share2,
-} from "lucide-react";
-
-const mainNavItems = [
-  { id: "notes", label: "筆記", icon: <FileText className="h-5 w-5" />, path: "/notes/fleeting" },
-  { id: "todos", label: "待辦", icon: <ListTodo className="h-5 w-5" />, path: "/todos" },
-  { id: "scratch", label: "暫存", icon: <StickyNote className="h-5 w-5" />, path: "/scratch" },
-  {
-    id: "dashboard",
-    label: "儀表板",
-    icon: <LayoutDashboard className="h-5 w-5" />,
-    path: "/dashboard",
-  },
-  { id: "search", label: "搜尋", icon: <Search className="h-5 w-5" />, path: null },
-];
-
-const moreItems = [
-  { id: "all", label: "全部", icon: <FileText className="h-4 w-4" />, path: "/all" },
-  { id: "archived", label: "已封存", icon: <Archive className="h-4 w-4" />, path: "/archived" },
-  { id: "shares", label: "分享管理", icon: <Share2 className="h-4 w-4" />, path: "/shares" },
-  { id: "settings", label: "設定", icon: <Settings className="h-4 w-4" />, path: "/settings" },
-];
-
-function isViewActive(pathname: string, itemId: string): boolean {
-  const currentView = pathToView(pathname);
-  if (currentView === itemId) return true;
-
-  // Aggregate view matching: "notes" is active for any /notes/* path
-  if (itemId === "notes" && pathname.startsWith("/notes")) return true;
-  if (itemId === "todos" && pathname.startsWith("/todos")) return true;
-  if (itemId === "scratch" && pathname.startsWith("/scratch")) return true;
-
-  return false;
-}
+import { bottomNavMainItems, bottomNavMoreItems, isViewActive } from "@/lib/nav-config";
+import { Menu } from "lucide-react";
 
 interface BottomNavProps {
   onSearchClick?: () => void;
@@ -53,7 +12,9 @@ export function BottomNav({ onSearchClick }: BottomNavProps) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const [moreOpen, setMoreOpen] = useState(false);
 
-  const isMoreActive = moreItems.some((item) => isViewActive(pathname, item.id));
+  const isMoreActive = bottomNavMoreItems.some((item) =>
+    isViewActive(pathname, item.id, pathToView),
+  );
 
   return (
     <nav className="relative bg-card border-t md:hidden pb-[env(safe-area-inset-bottom)]">
@@ -69,28 +30,33 @@ export function BottomNav({ onSearchClick }: BottomNavProps) {
             className="absolute bottom-full right-2 mb-2 z-40 bg-popover border rounded-lg shadow-lg p-2 min-w-[120px]"
             onClick={(e) => e.stopPropagation()}
           >
-            {moreItems.map((item) => (
-              <Link
-                key={item.id}
-                to={item.path}
-                search={{}}
-                className={`flex items-center gap-2 w-full px-3 py-2 rounded text-sm ${
-                  isViewActive(pathname, item.id)
-                    ? "text-primary bg-accent"
-                    : "text-muted-foreground hover:bg-accent"
-                }`}
-                onClick={() => setMoreOpen(false)}
-              >
-                {item.icon}
-                {item.label}
-              </Link>
-            ))}
+            {bottomNavMoreItems.map((item) => {
+              const Icon = item.icon;
+              return (
+                <Link
+                  key={item.id}
+                  to={item.path}
+                  search={{}}
+                  className={`flex items-center gap-2 w-full px-3 py-2 rounded text-sm ${
+                    isViewActive(pathname, item.id, pathToView)
+                      ? "text-primary bg-accent"
+                      : "text-muted-foreground hover:bg-accent"
+                  }`}
+                  onClick={() => setMoreOpen(false)}
+                >
+                  <Icon className="h-4 w-4" />
+                  {item.label}
+                </Link>
+              );
+            })}
           </div>
         </>
       )}
 
       <div className="flex justify-around">
-        {mainNavItems.map((item) => {
+        {bottomNavMainItems.map((item) => {
+          const Icon = item.icon;
+
           if (item.path === null) {
             // Search is a non-routed action
             return (
@@ -108,7 +74,7 @@ export function BottomNav({ onSearchClick }: BottomNavProps) {
                   }
                 }}
               >
-                {item.icon}
+                <Icon className="h-5 w-5" />
                 <span className="text-xs mt-0.5">{item.label}</span>
               </button>
             );
@@ -120,10 +86,12 @@ export function BottomNav({ onSearchClick }: BottomNavProps) {
               to={item.path}
               search={{}}
               className={`flex flex-col items-center py-2 px-3 flex-1 ${
-                isViewActive(pathname, item.id) ? "text-primary" : "text-muted-foreground"
+                isViewActive(pathname, item.id, pathToView)
+                  ? "text-primary"
+                  : "text-muted-foreground"
               }`}
             >
-              {item.icon}
+              <Icon className="h-5 w-5" />
               <span className="text-xs mt-0.5">{item.label}</span>
             </Link>
           );

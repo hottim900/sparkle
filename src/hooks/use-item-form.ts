@@ -7,7 +7,16 @@ import { toast } from "sonner";
 import { queryKeys } from "@/lib/query-keys";
 import { useInvalidateAfterItemMutation } from "@/hooks/use-invalidate";
 
-export function useItemForm(itemId: string) {
+export interface UseItemFormOptions {
+  /**
+   * When true, saveField("is_private", ...) will additionally
+   * invalidate private-related query keys.
+   */
+  enablePrivateToggle?: boolean;
+}
+
+export function useItemForm(itemId: string, options: UseItemFormOptions = {}) {
+  const { enablePrivateToggle = false } = options;
   const queryClient = useQueryClient();
   const invalidateAfterSave = useInvalidateAfterItemMutation();
   const { isOnline } = useAppContext();
@@ -78,11 +87,25 @@ export function useItemForm(itemId: string) {
       try {
         const updated = await updateItem(item.id, { [field]: value });
         const serverModified = updated.modified;
-        setItem((prev) => (prev ? { ...prev, modified: serverModified } : prev));
+        setItem((prev) => {
+          if (!prev) return prev;
+          const next = { ...prev, modified: serverModified };
+          // Keep local is_private in sync after toggle
+          if (field === "is_private" && typeof value === "boolean") {
+            next.is_private = value;
+          }
+          return next;
+        });
         if (!saveTimeoutRef.current) {
           setIsDirty(false);
         }
         invalidateAfterSave(field);
+        // When toggling is_private, also invalidate private-related queries
+        if (field === "is_private" && enablePrivateToggle) {
+          queryClient.invalidateQueries({ queryKey: queryKeys.items.all });
+          queryClient.invalidateQueries({ queryKey: queryKeys.tags });
+          queryClient.invalidateQueries({ queryKey: queryKeys.stats });
+        }
         setSaveStatus("saved");
         savedTimerRef.current = setTimeout(() => setSaveStatus("idle"), 2000);
       } catch (err) {
@@ -90,7 +113,7 @@ export function useItemForm(itemId: string) {
         toast.error(err instanceof Error ? err.message : "儲存失敗");
       }
     },
-    [item, isOnline, invalidateAfterSave],
+    [item, isOnline, invalidateAfterSave, enablePrivateToggle, queryClient],
   );
 
   const debouncedSave = useCallback(

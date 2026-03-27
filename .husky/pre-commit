@@ -51,3 +51,13 @@ fi
 
 # === lint-staged ===
 npx lint-staged
+
+# === Format check (catches anything lint-staged missed) ===
+echo "Running format:check..."
+npm run format:check || {
+  echo ""
+  echo "  ERROR: Prettier formatting issues found."
+  echo "  Run: npm run format"
+  echo ""
+  exit 1
+}

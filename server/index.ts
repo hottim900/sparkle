@@ -7,6 +7,7 @@ import { logger } from "./lib/logger.js";
 import { requestLogger } from "./middleware/logger.js";
 import { bodyLimit } from "hono/body-limit";
 import { compress } from "hono/compress";
+import { randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 import type { Server } from "node:http";
 import { createServer } from "node:https";
@@ -27,10 +28,10 @@ import { categoriesRouter } from "./routes/categories.js";
 import { dashboardRouter } from "./routes/dashboard.js";
 import { publicRouter } from "./routes/public.js";
 import { db, sqlite, DB_PATH } from "./db/index.js";
-import { items } from "./db/schema.js";
+import { items, categories } from "./db/schema.js";
 import { checkHealth } from "./lib/health.js";
 import { dirname } from "node:path";
-import { eq, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { getAllTags } from "./lib/items.js";
 import { getObsidianSettings } from "./lib/settings.js";
 import { ZodError } from "zod";
@@ -39,6 +40,10 @@ import { clearExpiredSessions } from "./lib/line-session.js";
 import { privateRouter } from "./routes/private.js";
 import { privateTokenMiddleware } from "./middleware/private-token.js";
 import { clearExpiredPrivateSessions } from "./lib/private-session.js";
+import { dailyNoteRouter } from "./routes/daily-note.js";
+import { lineBriefRouter } from "./routes/line-brief.js";
+import { checkAndGenerateDailyNote } from "./lib/daily-note-scheduler.js";
+import { checkAndSendLineBrief } from "./lib/line-brief-scheduler.js";
 
 // --- Startup validation ---
 function shannonEntropy(s: string): number {
@@ -103,7 +108,9 @@ if (lineSecret || lineToken) {
   }
 }
 
-const app = new Hono();
+import type { AppEnv } from "./types.js";
+
+const app = new Hono<AppEnv>();
 
 app.use("*", requestLogger);
 // Marker header for SW to distinguish Sparkle responses from CF Access pages
@@ -117,6 +124,10 @@ app.use("*", async (c, next) => {
   c.res.headers.set("X-Content-Type-Options", "nosniff");
   c.res.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
   c.res.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  // HSTS only in production — avoid locking dev/test environments to HTTPS
+  if (process.env.NODE_ENV === "production") {
+    c.res.headers.set("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload");
+  }
 });
 app.use("*", compress());
 app.use("*", async (c, next) => {
@@ -127,12 +138,21 @@ app.use("*", async (c, next) => {
 });
 
 // Content-Security-Policy
-// Public share pages (/s/*) use inline scripts for TOC & back-to-top (server-generated, no user input)
+// Public share pages (/s/*) use nonce-based script-src instead of unsafe-inline
 app.use("*", async (c, next) => {
+  // Generate nonce before route handler so it's available via c.get("cspNonce")
+  let scriptSrc = "script-src 'self'";
+  if (c.req.path.startsWith("/s/")) {
+    try {
+      const nonce = randomBytes(16).toString("base64");
+      c.set("cspNonce", nonce);
+      scriptSrc = `script-src 'self' 'nonce-${nonce}'`;
+    } catch {
+      // Fallback: if nonce generation fails, allow inline scripts rather than breaking the page
+      scriptSrc = "script-src 'self' 'unsafe-inline'";
+    }
+  }
   await next();
-  const scriptSrc = c.req.path.startsWith("/s/")
-    ? "script-src 'self' 'unsafe-inline'"
-    : "script-src 'self'";
   c.res.headers.set(
     "Content-Security-Policy",
     `default-src 'self'; ${scriptSrc}; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; connect-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'`,
@@ -192,6 +212,8 @@ app.route("/api/webhook", webhookRouter);
 app.route("/api/settings", settingsRouter);
 app.route("/api/categories", categoriesRouter);
 app.route("/api/dashboard", dashboardRouter);
+app.route("/api/daily-note", dailyNoteRouter);
+app.route("/api/line-brief", lineBriefRouter);
 app.route("/api", sharesRouter);
 
 // Health check endpoint (unauthenticated — skipped in auth middleware)
@@ -266,52 +288,120 @@ app.post("/api/import", async (c) => {
 
     let imported = 0;
     let updated = 0;
-
     let skipped = 0;
+    const warnings: string[] = [];
 
-    for (const item of importItems) {
-      const existing = db.select().from(items).where(eq(items.id, item.id)).get();
+    // Bulk pre-fetch valid FK references to avoid N+1 queries
+    const referencedCategoryIds = [
+      ...new Set(importItems.map((i) => i.category_id).filter(Boolean)),
+    ] as string[];
+    const validCategoryIds = new Set(
+      referencedCategoryIds.length > 0
+        ? db
+            .select({ id: categories.id })
+            .from(categories)
+            .where(inArray(categories.id, referencedCategoryIds))
+            .all()
+            .map((r) => r.id)
+        : [],
+    );
 
-      if (existing) {
-        // Skip private items — don't overwrite private content via import
-        if (existing.is_private) {
-          skipped++;
-          continue;
+    const referencedLinkedIds = [
+      ...new Set(importItems.map((i) => i.linked_note_id).filter(Boolean)),
+    ] as string[];
+    const existingLinkedIds = new Set(
+      referencedLinkedIds.length > 0
+        ? db
+            .select({ id: items.id })
+            .from(items)
+            .where(inArray(items.id, referencedLinkedIds))
+            .all()
+            .map((r) => r.id)
+        : [],
+    );
+
+    // Track IDs that are successfully processed (not skipped) for self-references
+    const processedIds = new Set<string>();
+
+    // Wrap entire import in a transaction for atomicity
+    const txResult = sqlite.transaction(() => {
+      for (const item of importItems) {
+        // Validate linked_note_id FK reference
+        if (item.linked_note_id) {
+          const linkedExists =
+            processedIds.has(item.linked_note_id) || existingLinkedIds.has(item.linked_note_id);
+          if (!linkedExists) {
+            logger.warn(
+              { itemId: item.id, linked_note_id: item.linked_note_id },
+              "Import: linked_note_id references non-existent item, skipping",
+            );
+            warnings.push(
+              `Item ${item.id}: linked_note_id "${item.linked_note_id}" not found, skipped`,
+            );
+            skipped++;
+            continue;
+          }
         }
-        db.update(items)
-          .set({
-            type: item.type,
-            title: item.title,
-            content: item.content,
-            status: item.status,
-            priority: item.priority,
-            due: item.due,
-            tags: JSON.stringify(item.tags),
-            origin: item.origin,
-            source: item.source,
-            aliases: JSON.stringify(item.aliases),
-            linked_note_id: item.linked_note_id,
-            created: item.created,
-            modified: item.modified,
-          })
-          .where(eq(items.id, item.id))
-          .run();
-        updated++;
-      } else {
-        // Strip is_private from imported data — imports always create public items
-        db.insert(items)
-          .values({
-            ...item,
-            tags: JSON.stringify(item.tags),
-            aliases: JSON.stringify(item.aliases),
-            is_private: 0,
-          })
-          .run();
-        imported++;
-      }
-    }
 
-    return c.json({ imported, updated, skipped });
+        // Validate category_id FK reference
+        if (item.category_id) {
+          if (!validCategoryIds.has(item.category_id)) {
+            logger.warn(
+              { itemId: item.id, category_id: item.category_id },
+              "Import: category_id references non-existent category, skipping",
+            );
+            warnings.push(`Item ${item.id}: category_id "${item.category_id}" not found, skipped`);
+            skipped++;
+            continue;
+          }
+        }
+
+        const existing = db.select().from(items).where(eq(items.id, item.id)).get();
+
+        if (existing) {
+          // Skip private items — don't overwrite private content via import
+          if (existing.is_private) {
+            skipped++;
+            continue;
+          }
+          db.update(items)
+            .set({
+              type: item.type,
+              title: item.title,
+              content: item.content,
+              status: item.status,
+              priority: item.priority,
+              due: item.due,
+              tags: JSON.stringify(item.tags),
+              origin: item.origin,
+              source: item.source,
+              aliases: JSON.stringify(item.aliases),
+              linked_note_id: item.linked_note_id,
+              category_id: item.category_id,
+              created: item.created,
+              modified: item.modified,
+            })
+            .where(eq(items.id, item.id))
+            .run();
+          updated++;
+        } else {
+          // Strip is_private from imported data — imports always create public items
+          db.insert(items)
+            .values({
+              ...item,
+              tags: JSON.stringify(item.tags),
+              aliases: JSON.stringify(item.aliases),
+              is_private: 0,
+            })
+            .run();
+          imported++;
+        }
+        processedIds.add(item.id);
+      }
+      return { imported, updated, skipped };
+    })();
+
+    return c.json({ ...txResult, warnings: warnings.length > 0 ? warnings : undefined });
   } catch (e) {
     if (e instanceof ZodError) {
       return c.json({ error: e.issues[0]?.message ?? "Validation error" }, 400);
@@ -381,5 +471,13 @@ sessionCleanupTimer.unref();
 // Periodically clean up expired private sessions (in-memory, 30-min TTL)
 const privateSessionCleanupTimer = setInterval(clearExpiredPrivateSessions, 60_000);
 privateSessionCleanupTimer.unref();
+
+// Daily note scheduler — checks every 60s if it's time to generate
+const dailyNoteTimer = setInterval(() => checkAndGenerateDailyNote(sqlite), 60_000);
+dailyNoteTimer.unref();
+
+// LINE daily brief scheduler — checks every 60s if it's time to push
+const lineBriefTimer = setInterval(() => checkAndSendLineBrief(sqlite), 60_000);
+lineBriefTimer.unref();
 
 export default app;

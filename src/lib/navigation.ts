@@ -14,6 +14,7 @@ const VIEW_TO_PATH: Record<string, string> = {
   archived: "/archived",
   settings: "/settings",
   shares: "/shares",
+  private: "/private",
   search: "/", // search is a non-routed overlay, fallback to root
 };
 
@@ -30,6 +31,7 @@ const PATH_TO_VIEW: Record<string, string> = {
   "/archived": "archived",
   "/settings": "settings",
   "/shares": "shares",
+  "/private": "private",
 };
 
 export function viewToPath(view: string): string {
@@ -38,21 +40,4 @@ export function viewToPath(view: string): string {
 
 export function pathToView(path: string): string | undefined {
   return PATH_TO_VIEW[path];
-}
-
-/** Routes that use the list+detail split panel layout */
-export const LIST_ROUTE_PREFIXES = [
-  "/notes",
-  "/todos",
-  "/scratch",
-  "/all",
-  "/archived",
-  "/unreviewed",
-  "/recent",
-  "/attention",
-  "/stale",
-] as const;
-
-export function isListRoute(path: string): boolean {
-  return LIST_ROUTE_PREFIXES.some((prefix) => path === prefix || path.startsWith(prefix + "/"));
 }

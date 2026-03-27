@@ -30,6 +30,7 @@ export const queryKeys = {
   recent: ["recent"] as const,
   attention: ["attention"] as const,
   dashboardStale: ["dashboardStale"] as const,
+  dashboardWeek: (start: string) => ["dashboardWeek", start] as const,
   private: {
     status: ["private", "status"] as const,
     list: (filters?: Record<string, string>) => ["private", "items", filters ?? {}] as const,

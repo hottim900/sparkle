@@ -26,7 +26,7 @@ Notes: `fleeting` → `developing` → `permanent` → `exported` → `archived`
 
 Type conversion auto-maps status server-side. `category_id` preserved; `due`/`linked_note_id` cleared on todo→note; tags/priority/aliases cleared on →scratch.
 
-DB migration version 0→14, idempotent. Migration safety enforced by PostToolUse hook.
+DB migration version 0→17, idempotent. Migration safety enforced by PostToolUse hook.
 
 ## Conventions
 
@@ -41,7 +41,20 @@ DB migration version 0→14, idempotent. Migration safety enforced by PostToolUs
 - Session 管理：不相關任務之間用 `/clear` 重置 context。長 session 品質下降時 `/compact` 或 `/clear`。
 - Agent/Teammate：**(0) 驗證不在 main 上** (1) commit 前 `npm run lint:fix && npm run format && npx tsc --noEmit` (2) 在 worktree 或 feature branch 工作 (3) 完成後開 PR。
 
+- 新 dashboard query：**必須比對既有 query 的 WHERE 條件**（`is_private = 0`、status 過濾、type 過濾），確保一致。
+- 新 route：必須有獨立的 route validation 測試（不依賴純 function unit test 覆蓋）。
+
 Detailed module conventions (API retry, PWA, Logging, Sentry, CSP, Offline UI, State management, CI/CD, Sharing, Export, Data Model fields) — see `conventions-detail` skill.
+
+## Feature Workflow
+
+新功能開發流程（**先建 branch，再 review**）：
+
+1. `git checkout -b feat/xxx`（或 worktree）
+2. 設計：`/office-hours` → design doc
+3. Review：`/autoplan` 或個別 review skills（在 feature branch 上跑，review log 才會對齊）
+4. 實作 + 測試
+5. `/ship` 出 PR → `gh pr merge --squash --auto`
 
 ## Quality Management
 
@@ -58,6 +71,11 @@ Detailed module conventions (API retry, PWA, Logging, Sentry, CSP, Offline UI, S
 | mcp-server         | `/mcp-server`         | MCP server (stdio + HTTP/OAuth)    |
 | conventions-detail | `/conventions-detail` | Detailed module conventions        |
 | quality            | `/quality`            | Quality tracking system operations |
+
+## gstack
+
+Use /browse from gstack for all web browsing. Never use mcp**claude-in-chrome**\* tools.
+Available skills: /office-hours, /plan-ceo-review, /plan-eng-review, /plan-design-review, /design-consultation, /review, /ship, /land-and-deploy, /canary, /benchmark, /browse, /qa, /qa-only, /design-review, /setup-browser-cookies, /setup-deploy, /retro, /investigate, /document-release, /codex, /cso, /autoplan, /careful, /freeze, /guard, /unfreeze, /gstack-upgrade.
 
 ## Maintenance
 

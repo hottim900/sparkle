@@ -26,7 +26,7 @@ function ListLayout() {
 
       {/* Detail panel */}
       {selectedId && (
-        <div className="fixed inset-0 z-50 bg-background md:static md:z-auto md:flex-1 md:min-w-0 md:border-l">
+        <div className="absolute inset-0 z-10 bg-background md:static md:z-auto md:flex-1 md:min-w-0 md:border-l">
           <ErrorBoundary>
             <Suspense fallback={<LoadingFallback />}>
               <ItemDetail

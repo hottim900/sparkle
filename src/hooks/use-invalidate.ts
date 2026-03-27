@@ -23,11 +23,17 @@ function invalidateItemFields(queryClient: QueryClient, field?: string) {
     queryClient.invalidateQueries({ queryKey: queryKeys.recent });
     queryClient.invalidateQueries({ queryKey: queryKeys.attention });
     queryClient.invalidateQueries({ queryKey: queryKeys.dashboardStale });
+    queryClient.invalidateQueries({ queryKey: ["dashboardWeek"] });
     return;
   }
 
   // Any field change affects detail views
   queryClient.invalidateQueries({ queryKey: queryKeys.items.details });
+
+  // Week view depends on status, due, title, type changes
+  if (LIST_FIELDS.has(field)) {
+    queryClient.invalidateQueries({ queryKey: ["dashboardWeek"] });
+  }
 
   if (LIST_FIELDS.has(field)) {
     queryClient.invalidateQueries({ queryKey: queryKeys.items.lists });

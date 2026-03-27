@@ -127,3 +127,31 @@ export async function createCategoryViaApi(
   });
   return response.json();
 }
+
+/**
+ * Update settings via the REST API (bypasses UI for fast setup/teardown).
+ */
+export async function updateSettingsViaApi(
+  request: APIRequestContext,
+  data: Record<string, string>,
+) {
+  const response = await request.put(`${API_BASE}/settings`, {
+    headers: {
+      Authorization: `Bearer ${AUTH_TOKEN}`,
+      "Content-Type": "application/json",
+    },
+    data,
+  });
+  return response;
+}
+
+/**
+ * Navigate to the Settings page and wait for it to load.
+ */
+export async function navigateToSettings(page: Page) {
+  await page.goto("/");
+  await navigateTo(page, "設定");
+  await page
+    .getByRole("heading", { name: "設定", exact: true })
+    .waitFor({ state: "visible", timeout: 10_000 });
+}

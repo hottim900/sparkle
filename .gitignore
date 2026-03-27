@@ -21,3 +21,4 @@ docs/superpowers/
 test-results/
 playwright-report/
 e2e/.auth/
+.gstack/
