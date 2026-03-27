@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.2.3.0] - 2026-03-27
+
+### Added
+
+- Settings UI: Obsidian Daily Note section with enable toggle, folder/time/mode settings, and manual generate button
+- `daily_note_enabled` setting: independent on/off control for daily note scheduler (separate from `obsidian_enabled`)
+- Frontend API client `generateDailyNote()` with `DailyNoteGenerateResponse` type
+- Two-layer disable logic: Obsidian disabled → entire section disabled; daily note disabled → fields disabled but generate still works
+- 22 new tests: scheduler (1), settings unit (3), route validation (3), component tests (10), existing test updates (5)
+
+### Changed
+
+- Scheduler `checkAndGenerateDailyNote()` now checks `daily_note_enabled` before generating
+- `DailyNoteSettings` interface includes `daily_note_enabled: boolean` field
+- `SettingsResponse` type adds 4 optional fields for daily note settings
+- `daily_note_mode` type tightened from `string` to `"subfolder" | "append"` in frontend types
+
 ## [1.2.2.0] - 2026-03-26
 
 ### Added

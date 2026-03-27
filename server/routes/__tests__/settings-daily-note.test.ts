@@ -106,4 +106,33 @@ describe("PUT /api/settings — daily note validation", () => {
     });
     expect(res.status).toBe(400);
   });
+
+  it("accepts valid daily_note_enabled 'true'", async () => {
+    const res = await app.request("/api/settings", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ daily_note_enabled: "true" }),
+    });
+    expect(res.status).toBe(200);
+  });
+
+  it("accepts valid daily_note_enabled 'false'", async () => {
+    const res = await app.request("/api/settings", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ daily_note_enabled: "false" }),
+    });
+    expect(res.status).toBe(200);
+  });
+
+  it("rejects invalid daily_note_enabled", async () => {
+    const res = await app.request("/api/settings", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ daily_note_enabled: "yes" }),
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toContain("daily_note_enabled");
+  });
 });
