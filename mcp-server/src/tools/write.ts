@@ -30,7 +30,7 @@ Returns: The created item with all fields including generated ID and timestamps.
         .object({
           title: z.string().min(1).max(500).describe("Note title"),
           content: z.string().max(50000).optional().describe("Note content (markdown)"),
-          tags: z.array(z.string().max(50)).max(20).optional().describe("Tags"),
+          tags: z.array(z.string().min(1).max(50)).max(20).optional().describe("Tags"),
           status: z
             .enum(["fleeting", "developing", "permanent", "active", "draft"])
             .optional()
@@ -49,7 +49,7 @@ Returns: The created item with all fields including generated ID and timestamps.
             .optional()
             .describe("Due date YYYY-MM-DD (todo only)"),
           source: z.string().max(2000).optional().describe("Reference URL"),
-          aliases: z.array(z.string().max(200)).max(10).optional().describe("Alternative names"),
+          aliases: z.array(z.string().min(1).max(200)).max(10).optional().describe("Alternative names"),
           linked_note_id: z.string().uuid().optional().describe("UUID of linked note (todo only)"),
           category_id: z
             .string()
@@ -152,7 +152,7 @@ Side effects:
             .max(50000)
             .optional()
             .describe("Find-and-replace: text to find in existing content (use with content)"),
-          tags: z.array(z.string().max(50)).max(20).optional().describe("New tags (replaces all)"),
+          tags: z.array(z.string().min(1).max(50)).max(20).optional().describe("New tags (replaces all)"),
           status: z
             .enum([
               "fleeting",
@@ -182,7 +182,7 @@ Side effects:
             .optional()
             .describe("Due date YYYY-MM-DD (todo only, null to clear)"),
           aliases: z
-            .array(z.string().max(200))
+            .array(z.string().min(1).max(200))
             .max(10)
             .optional()
             .describe("New aliases (replaces all)"),
