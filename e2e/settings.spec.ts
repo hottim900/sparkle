@@ -1,23 +1,13 @@
 import { test, expect } from "@playwright/test";
 import { mkdirSync, rmSync } from "node:fs";
 
-import { AUTH_TOKEN } from "../playwright.config";
+import { navigateTo, navigateToSettings, selectRadixOption, updateSettingsViaApi } from "./helpers";
 
-const PORT = process.env.PORT || 3456;
-const API_BASE = `http://localhost:${PORT}/api`;
 const VAULT_PATH = "/tmp/e2e-settings-vault";
 
 test.describe("Settings", () => {
   test("loads settings page with all sections", async ({ page }) => {
-    await page.goto("/");
-
-    // Navigate to settings
-    await page.getByTestId("sidebar").getByRole("link", { name: "設定" }).click();
-
-    // Verify page heading (lazy-loaded)
-    await expect(page.getByRole("heading", { name: "設定", exact: true })).toBeVisible({
-      timeout: 10_000,
-    });
+    await navigateToSettings(page);
 
     // Verify section headings
     await expect(page.getByRole("heading", { name: "Obsidian 匯出" })).toBeVisible();
@@ -32,11 +22,7 @@ test.describe("Settings", () => {
   });
 
   test("toggles theme between light and dark", async ({ page }) => {
-    await page.goto("/");
-    await page.getByTestId("sidebar").getByRole("link", { name: "設定" }).click();
-    await expect(page.getByRole("heading", { name: "設定", exact: true })).toBeVisible({
-      timeout: 10_000,
-    });
+    await navigateToSettings(page);
 
     const html = page.locator("html");
     const initialClass = (await html.getAttribute("class")) ?? "";
@@ -70,11 +56,7 @@ test.describe("Settings", () => {
   });
 
   test("exports data as JSON download", async ({ page }) => {
-    await page.goto("/");
-    await page.getByTestId("sidebar").getByRole("link", { name: "設定" }).click();
-    await expect(page.getByRole("heading", { name: "設定", exact: true })).toBeVisible({
-      timeout: 10_000,
-    });
+    await navigateToSettings(page);
 
     // Set up download listener before clicking
     const downloadPromise = page.waitForEvent("download");
@@ -102,16 +84,9 @@ test.describe("Settings - Obsidian", () => {
 
   test("toggles Obsidian enable/disable and saves", async ({ page, request }) => {
     // Ensure Obsidian starts disabled
-    await request.put(`${API_BASE}/settings`, {
-      headers: { Authorization: `Bearer ${AUTH_TOKEN}`, "Content-Type": "application/json" },
-      data: { obsidian_enabled: "false" },
-    });
+    await updateSettingsViaApi(request, { obsidian_enabled: "false" });
 
-    await page.goto("/");
-    await page.getByTestId("sidebar").getByRole("link", { name: "設定" }).click();
-    await expect(page.getByRole("heading", { name: "設定", exact: true })).toBeVisible({
-      timeout: 10_000,
-    });
+    await navigateToSettings(page);
 
     // Enable Obsidian
     await page.getByRole("button", { name: "已停用" }).first().click();
@@ -131,7 +106,7 @@ test.describe("Settings - Obsidian", () => {
 
     // Reload and verify persisted
     await page.reload();
-    await page.getByTestId("sidebar").getByRole("link", { name: "設定" }).click();
+    await navigateTo(page, "設定");
     await expect(page.getByRole("heading", { name: "設定", exact: true })).toBeVisible({
       timeout: 10_000,
     });
@@ -153,11 +128,7 @@ test.describe("Settings - Obsidian", () => {
 
 test.describe("Settings - Dashboard", () => {
   test("changes recent_days and stale_days and saves", async ({ page }) => {
-    await page.goto("/");
-    await page.getByTestId("sidebar").getByRole("link", { name: "設定" }).click();
-    await expect(page.getByRole("heading", { name: "設定", exact: true })).toBeVisible({
-      timeout: 10_000,
-    });
+    await navigateToSettings(page);
 
     // Scroll to Dashboard section
     await page.getByRole("heading", { name: "Dashboard 設定" }).scrollIntoViewIfNeeded();
@@ -182,7 +153,6 @@ test.describe("Settings - Dashboard", () => {
     const saveResponsePromise = page.waitForResponse(
       (r) => r.url().includes("/api/settings") && r.request().method() === "PUT",
     );
-    // Dashboard save button is in the section with "Dashboard 設定"
     const dashboardSection = page.locator("section").filter({ hasText: "Dashboard 設定" });
     await dashboardSection.getByRole("button", { name: "儲存設定", exact: true }).click();
     const saveResponse = await saveResponsePromise;
@@ -192,7 +162,7 @@ test.describe("Settings - Dashboard", () => {
 
     // Reload and verify persisted
     await page.reload();
-    await page.getByTestId("sidebar").getByRole("link", { name: "設定" }).click();
+    await navigateTo(page, "設定");
     await expect(page.getByRole("heading", { name: "設定", exact: true })).toBeVisible({
       timeout: 10_000,
     });
@@ -213,16 +183,9 @@ test.describe("Settings - Dashboard", () => {
 test.describe("Settings - LINE Brief", () => {
   test("toggles LINE brief enable/disable, changes time, and saves", async ({ page, request }) => {
     // Ensure LINE brief starts enabled with known time via API
-    await request.put(`${API_BASE}/settings`, {
-      headers: { Authorization: `Bearer ${AUTH_TOKEN}`, "Content-Type": "application/json" },
-      data: { line_brief_enabled: "true", line_brief_time: "21:00" },
-    });
+    await updateSettingsViaApi(request, { line_brief_enabled: "true", line_brief_time: "21:00" });
 
-    await page.goto("/");
-    await page.getByTestId("sidebar").getByRole("link", { name: "設定" }).click();
-    await expect(page.getByRole("heading", { name: "設定", exact: true })).toBeVisible({
-      timeout: 10_000,
-    });
+    await navigateToSettings(page);
 
     // Scroll to LINE Brief section
     const lineBriefSection = page.locator("section").filter({ hasText: "LINE 每日簡報" });
@@ -252,7 +215,7 @@ test.describe("Settings - LINE Brief", () => {
 
     // Reload and verify persisted
     await page.reload();
-    await page.getByTestId("sidebar").getByRole("link", { name: "設定" }).click();
+    await navigateTo(page, "設定");
     await expect(page.getByRole("heading", { name: "設定", exact: true })).toBeVisible({
       timeout: 10_000,
     });
@@ -260,18 +223,11 @@ test.describe("Settings - LINE Brief", () => {
     await expect(timeInput).toHaveValue("08:30");
 
     // Restore defaults via API
-    await request.put(`${API_BASE}/settings`, {
-      headers: { Authorization: `Bearer ${AUTH_TOKEN}`, "Content-Type": "application/json" },
-      data: { line_brief_enabled: "true", line_brief_time: "21:00" },
-    });
+    await updateSettingsViaApi(request, { line_brief_enabled: "true", line_brief_time: "21:00" });
   });
 
   test("manual send button triggers LINE brief", async ({ page }) => {
-    await page.goto("/");
-    await page.getByTestId("sidebar").getByRole("link", { name: "設定" }).click();
-    await expect(page.getByRole("heading", { name: "設定", exact: true })).toBeVisible({
-      timeout: 10_000,
-    });
+    await navigateToSettings(page);
 
     const lineBriefSection = page.locator("section").filter({ hasText: "LINE 每日簡報" });
     await lineBriefSection.scrollIntoViewIfNeeded();
@@ -302,16 +258,9 @@ test.describe("Settings - Daily Note", () => {
 
   test("shows warning when Obsidian is not enabled", async ({ page, request }) => {
     // Ensure Obsidian is disabled
-    await request.put(`${API_BASE}/settings`, {
-      headers: { Authorization: `Bearer ${AUTH_TOKEN}`, "Content-Type": "application/json" },
-      data: { obsidian_enabled: "false" },
-    });
+    await updateSettingsViaApi(request, { obsidian_enabled: "false" });
 
-    await page.goto("/");
-    await page.getByTestId("sidebar").getByRole("link", { name: "設定" }).click();
-    await expect(page.getByRole("heading", { name: "設定", exact: true })).toBeVisible({
-      timeout: 10_000,
-    });
+    await navigateToSettings(page);
 
     // Verify warning text is shown
     await expect(page.getByText("請先在上方啟用 Obsidian 匯出")).toBeVisible();
@@ -324,28 +273,21 @@ test.describe("Settings - Daily Note", () => {
 
   test("changes mode, time, folder and saves", async ({ page, request }) => {
     // Enable Obsidian first via API
-    await request.put(`${API_BASE}/settings`, {
-      headers: { Authorization: `Bearer ${AUTH_TOKEN}`, "Content-Type": "application/json" },
-      data: {
-        obsidian_enabled: "true",
-        obsidian_vault_path: VAULT_PATH,
-        daily_note_enabled: "false",
-        daily_note_mode: "subfolder",
-        daily_note_time: "23:00",
-        obsidian_daily_folder: "Daily",
-      },
+    await updateSettingsViaApi(request, {
+      obsidian_enabled: "true",
+      obsidian_vault_path: VAULT_PATH,
+      daily_note_enabled: "false",
+      daily_note_mode: "subfolder",
+      daily_note_time: "23:00",
+      obsidian_daily_folder: "Daily",
     });
 
-    await page.goto("/");
-    await page.getByTestId("sidebar").getByRole("link", { name: "設定" }).click();
-    await expect(page.getByRole("heading", { name: "設定", exact: true })).toBeVisible({
-      timeout: 10_000,
-    });
+    await navigateToSettings(page);
 
     const dailyNoteSection = page.locator("section").filter({ hasText: "Obsidian Daily Note" });
     await dailyNoteSection.scrollIntoViewIfNeeded();
 
-    // Enable daily note (use regex to find toggle regardless of current state)
+    // Enable daily note
     const dailyNoteToggle = dailyNoteSection.getByRole("button", { name: /已啟用|已停用/ });
     await expect(dailyNoteToggle).toHaveText("已停用");
     await dailyNoteToggle.click();
@@ -360,9 +302,7 @@ test.describe("Settings - Daily Note", () => {
     await timeInput.fill("07:00");
 
     // Change mode to append via Radix Select
-    const modeSelectTrigger = dailyNoteSection.locator('[role="combobox"]');
-    await modeSelectTrigger.click();
-    await page.getByRole("option", { name: "追加模式" }).click();
+    await selectRadixOption(page, dailyNoteSection.locator('[role="combobox"]'), "追加模式");
 
     // Save Daily Note settings
     const saveResponsePromise = page.waitForResponse(
@@ -376,7 +316,7 @@ test.describe("Settings - Daily Note", () => {
 
     // Reload and verify persisted
     await page.reload();
-    await page.getByTestId("sidebar").getByRole("link", { name: "設定" }).click();
+    await navigateTo(page, "設定");
     await expect(page.getByRole("heading", { name: "設定", exact: true })).toBeVisible({
       timeout: 10_000,
     });
@@ -387,33 +327,23 @@ test.describe("Settings - Daily Note", () => {
     await expect(dailyNoteSection.locator('[role="combobox"]')).toHaveText("追加模式");
 
     // Restore defaults
-    await request.put(`${API_BASE}/settings`, {
-      headers: { Authorization: `Bearer ${AUTH_TOKEN}`, "Content-Type": "application/json" },
-      data: {
-        obsidian_enabled: "false",
-        daily_note_enabled: "false",
-        daily_note_mode: "subfolder",
-        daily_note_time: "23:00",
-        obsidian_daily_folder: "Daily",
-      },
+    await updateSettingsViaApi(request, {
+      obsidian_enabled: "false",
+      daily_note_enabled: "false",
+      daily_note_mode: "subfolder",
+      daily_note_time: "23:00",
+      obsidian_daily_folder: "Daily",
     });
   });
 
   test("generate button triggers daily note generation", async ({ page, request }) => {
     // Enable Obsidian via API
-    await request.put(`${API_BASE}/settings`, {
-      headers: { Authorization: `Bearer ${AUTH_TOKEN}`, "Content-Type": "application/json" },
-      data: {
-        obsidian_enabled: "true",
-        obsidian_vault_path: VAULT_PATH,
-      },
+    await updateSettingsViaApi(request, {
+      obsidian_enabled: "true",
+      obsidian_vault_path: VAULT_PATH,
     });
 
-    await page.goto("/");
-    await page.getByTestId("sidebar").getByRole("link", { name: "設定" }).click();
-    await expect(page.getByRole("heading", { name: "設定", exact: true })).toBeVisible({
-      timeout: 10_000,
-    });
+    await navigateToSettings(page);
 
     const dailyNoteSection = page.locator("section").filter({ hasText: "Obsidian Daily Note" });
     await dailyNoteSection.scrollIntoViewIfNeeded();
@@ -432,9 +362,6 @@ test.describe("Settings - Daily Note", () => {
     expect(generateResponse.status()).toBeLessThan(500);
 
     // Restore defaults
-    await request.put(`${API_BASE}/settings`, {
-      headers: { Authorization: `Bearer ${AUTH_TOKEN}`, "Content-Type": "application/json" },
-      data: { obsidian_enabled: "false" },
-    });
+    await updateSettingsViaApi(request, { obsidian_enabled: "false" });
   });
 });
