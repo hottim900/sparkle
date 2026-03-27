@@ -10,6 +10,13 @@ export interface ObsidianSettings {
 
 /**
  * Get a single setting value by key.
+ *
+ * Note: Some keys are internal-only and not exposed through the settings API:
+ * - `last_daily_note_date` — tracks the last date a daily note was generated (used by the scheduler)
+ * - `last_brief_sent_date` — tracks the last date a LINE daily brief was sent (used by the scheduler)
+ *
+ * These are written by server-side schedulers and intentionally excluded from
+ * the ALLOWED_KEYS whitelist in the settings route.
  */
 export function getSetting(sqlite: Database.Database, key: string): string | null {
   const row = sqlite.prepare("SELECT value FROM settings WHERE key = ?").get(key) as
