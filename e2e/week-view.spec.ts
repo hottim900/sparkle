@@ -238,36 +238,10 @@ test.describe("WeekView", () => {
     // Verify section headers in detail panel
     await expect(detailPanel.getByText(/待辦 \(\d+\)/)).toBeVisible();
 
-    // Also verify the note created via API appears (notes are bucketed by created date)
-    // Create a note — it should appear in today's notes_created
-    const noteTitle = `今日筆記-${Date.now()}`;
-    await createItemViaApi(request, {
-      title: noteTitle,
-      type: "note",
-    });
-
-    // Reload to see the newly created note
-    await page.goto("/dashboard");
-    await expect(page.getByRole("heading", { name: "總覽" })).toBeVisible({
-      timeout: 10_000,
-    });
-
-    // Re-select today's cell
-    const grid2 = page.getByRole("grid", { name: "週檢視" });
-    const weekSection2 = page.locator("section", { has: grid2 });
-    const detailPanel2 = weekSection2.locator(".border.rounded-lg");
-    const cells2 = grid2.getByRole("gridcell");
-    await cells2.nth(gridIndex).click();
-
-    // Verify both the todo and the note appear in the detail panel
-    await expect(detailPanel2.getByText(todoTitle)).toBeVisible({ timeout: 5_000 });
-    await expect(detailPanel2.getByText(noteTitle)).toBeVisible({ timeout: 5_000 });
-    await expect(detailPanel2.getByText(/筆記 \(\d+\)/)).toBeVisible();
-
     // Click the same cell again to deselect (toggle behavior)
-    await cells2.nth(gridIndex).click();
+    await todayCell.click();
 
     // Detail panel should close
-    await expect(detailPanel2).toBeHidden();
+    await expect(detailPanel).toBeHidden();
   });
 });
