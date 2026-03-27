@@ -8,6 +8,12 @@ const MarkdownPreview = lazy(() =>
   import("@/components/markdown-preview").then((m) => ({ default: m.MarkdownPreview })),
 );
 
+/** Default number of rows for content textarea. */
+export const CONTENT_TEXTAREA_ROWS = 10;
+
+/** Minimum height (Tailwind class) for the markdown preview container. */
+export const CONTENT_PREVIEW_MIN_HEIGHT = "min-h-[240px]";
+
 interface ItemContentEditorProps {
   content: string;
   onChange: (content: string) => void;
@@ -54,7 +60,7 @@ export function ItemContentEditor({
         </p>
       )}
       {previewMode ? (
-        <div className="min-h-[240px] rounded-md border p-3 text-sm break-words">
+        <div className={`${CONTENT_PREVIEW_MIN_HEIGHT} rounded-md border p-3 text-sm break-words`}>
           {content ? (
             <ErrorBoundary>
               <Suspense
@@ -77,7 +83,7 @@ export function ItemContentEditor({
           onChange={(e) => onChange(e.target.value)}
           onBlur={onBlur}
           placeholder="Markdown 內容..."
-          rows={10}
+          rows={CONTENT_TEXTAREA_ROWS}
           className="font-mono text-sm"
         />
       )}
