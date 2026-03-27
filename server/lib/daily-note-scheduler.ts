@@ -24,6 +24,10 @@ export function checkAndGenerateDailyNote(sqlite: Database.Database): void {
   }
 
   const settings = getDailyNoteSettings(sqlite);
+  if (!settings.daily_note_enabled) {
+    return;
+  }
+
   const now = new Date();
   const currentHHMM = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
 

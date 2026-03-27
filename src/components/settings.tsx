@@ -1,7 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { useTheme } from "next-themes";
 import { toast } from "sonner";
-import { getSettings, updateSettings, exportData, importData, sendLineBrief } from "@/lib/api";
+import {
+  getSettings,
+  updateSettings,
+  exportData,
+  importData,
+  sendLineBrief,
+  generateDailyNote,
+} from "@/lib/api";
 import type { SettingsResponse } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,6 +32,8 @@ import {
   ExternalLink,
   MessageSquare,
   Send,
+  Calendar,
+  Play,
 } from "lucide-react";
 
 interface SettingsProps {
@@ -48,6 +57,12 @@ export function Settings({ onSettingsChanged }: SettingsProps) {
   const [lineBriefTime, setLineBriefTime] = useState("21:00");
   const [savingLineBrief, setSavingLineBrief] = useState(false);
   const [sendingBrief, setSendingBrief] = useState(false);
+  const [dailyNoteEnabled, setDailyNoteEnabled] = useState(false);
+  const [dailyFolder, setDailyFolder] = useState("Daily");
+  const [dailyNoteTime, setDailyNoteTime] = useState("23:00");
+  const [dailyNoteMode, setDailyNoteMode] = useState<"subfolder" | "append">("subfolder");
+  const [savingDailyNote, setSavingDailyNote] = useState(false);
+  const [generating, setGenerating] = useState(false);
 
   const { resolvedTheme, setTheme } = useTheme();
   const isOnline = useOnlineStatus();
@@ -69,6 +84,10 @@ export function Settings({ onSettingsChanged }: SettingsProps) {
         setStaleDays(settingsData.stale_days ?? "14");
         setLineBriefEnabled(settingsData.line_brief_enabled === "true");
         setLineBriefTime(settingsData.line_brief_time ?? "21:00");
+        setDailyNoteEnabled(settingsData.daily_note_enabled === "true");
+        setDailyFolder(settingsData.obsidian_daily_folder ?? "Daily");
+        setDailyNoteTime(settingsData.daily_note_time ?? "23:00");
+        setDailyNoteMode(settingsData.daily_note_mode ?? "subfolder");
       } catch {
         if (!cancelled) {
           toast.error("無法載入設定");
@@ -174,6 +193,35 @@ export function Settings({ onSettingsChanged }: SettingsProps) {
     );
   }
 
+  async function handleSaveDailyNote() {
+    await saveSection(
+      setSavingDailyNote,
+      {
+        daily_note_enabled: dailyNoteEnabled ? "true" : "false",
+        obsidian_daily_folder: dailyFolder,
+        daily_note_time: dailyNoteTime,
+        daily_note_mode: dailyNoteMode,
+      },
+      "Daily Note 設定已儲存",
+    );
+  }
+
+  async function handleGenerateDailyNote() {
+    setGenerating(true);
+    try {
+      const result = await generateDailyNote();
+      if (result.skipped) {
+        toast(`Daily note 已跳過：${result.reason}`);
+      } else {
+        toast.success(`Daily note 已生成：${result.path}`);
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "生成失敗");
+    } finally {
+      setGenerating(false);
+    }
+  }
+
   async function handleSendBrief() {
     setSendingBrief(true);
     try {
@@ -202,6 +250,13 @@ export function Settings({ onSettingsChanged }: SettingsProps) {
   const hasDashboardChanges =
     settings !== null &&
     (recentDays !== (settings.recent_days ?? "7") || staleDays !== (settings.stale_days ?? "14"));
+
+  const hasDailyNoteChanges =
+    settings !== null &&
+    (dailyNoteEnabled !== (settings.daily_note_enabled === "true") ||
+      dailyFolder !== (settings.obsidian_daily_folder ?? "Daily") ||
+      dailyNoteTime !== (settings.daily_note_time ?? "23:00") ||
+      dailyNoteMode !== (settings.daily_note_mode ?? "subfolder"));
 
   const hasLineBriefChanges =
     settings !== null &&
@@ -307,7 +362,110 @@ export function Settings({ onSettingsChanged }: SettingsProps) {
           </div>
         </section>
 
-        {/* Section 2: Dashboard Settings */}
+        {/* Section 2: Obsidian Daily Note */}
+        <section className="space-y-4">
+          <div className="flex items-center gap-2">
+            <Calendar className="h-4 w-4 text-muted-foreground" />
+            <h2 className="text-sm font-semibold text-muted-foreground">Obsidian Daily Note</h2>
+          </div>
+
+          <div className="border rounded-lg p-4 space-y-4">
+            {!enabled && (
+              <p className="text-sm text-muted-foreground">請先在上方啟用 Obsidian 匯出</p>
+            )}
+
+            {/* Enable toggle */}
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium">啟用每日筆記</p>
+                <p className="text-xs text-muted-foreground">
+                  每日自動生成 Obsidian daily note 並寫入 vault
+                </p>
+              </div>
+              <Button
+                variant={dailyNoteEnabled ? "default" : "outline"}
+                size="sm"
+                onClick={() => setDailyNoteEnabled(!dailyNoteEnabled)}
+                disabled={!enabled}
+              >
+                {dailyNoteEnabled ? "已啟用" : "已停用"}
+              </Button>
+            </div>
+
+            {/* Daily folder */}
+            <div>
+              <label className="text-sm text-muted-foreground block mb-1">Daily Note 資料夾</label>
+              <Input
+                value={dailyFolder}
+                onChange={(e) => setDailyFolder(e.target.value)}
+                placeholder="Daily"
+                disabled={!enabled || !dailyNoteEnabled}
+              />
+              <p className="text-xs text-muted-foreground mt-1">相對於 vault 根目錄的資料夾名稱</p>
+            </div>
+
+            {/* Daily note time */}
+            <div>
+              <label className="text-sm text-muted-foreground block mb-1">生成時間</label>
+              <Input
+                type="time"
+                value={dailyNoteTime}
+                onChange={(e) => setDailyNoteTime(e.target.value)}
+                disabled={!enabled || !dailyNoteEnabled}
+              />
+              <p className="text-xs text-muted-foreground mt-1">每日自動生成時間（伺服器時區）</p>
+            </div>
+
+            {/* Daily note mode */}
+            <div>
+              <label className="text-sm text-muted-foreground block mb-1">寫入模式</label>
+              <Select
+                value={dailyNoteMode}
+                onValueChange={(v) => setDailyNoteMode(v as "subfolder" | "append")}
+                disabled={!enabled || !dailyNoteEnabled}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="subfolder">獨立檔案</SelectItem>
+                  <SelectItem value="append">追加模式</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Generate + Save buttons */}
+            <div className="flex justify-between">
+              <Button
+                variant="outline"
+                onClick={handleGenerateDailyNote}
+                disabled={generating || !isOnline || settings?.obsidian_enabled !== "true"}
+                className="gap-1.5"
+              >
+                {generating ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Play className="h-4 w-4" />
+                )}
+                立即生成
+              </Button>
+              <Button
+                onClick={handleSaveDailyNote}
+                disabled={savingDailyNote || !hasDailyNoteChanges || !isOnline}
+                className="gap-1.5"
+              >
+                {savingDailyNote ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Save className="h-4 w-4" />
+                )}
+                儲存設定
+              </Button>
+            </div>
+          </div>
+        </section>
+
+        {/* Section 3: Dashboard Settings */}
         <section className="space-y-4">
           <div className="flex items-center gap-2">
             <SettingsIcon className="h-4 w-4 text-muted-foreground" />
@@ -358,7 +516,7 @@ export function Settings({ onSettingsChanged }: SettingsProps) {
           </div>
         </section>
 
-        {/* Section 3: LINE Brief */}
+        {/* Section 4: LINE Brief */}
         <section className="space-y-4">
           <div className="flex items-center gap-2">
             <MessageSquare className="h-4 w-4 text-muted-foreground" />
@@ -424,10 +582,10 @@ export function Settings({ onSettingsChanged }: SettingsProps) {
           </div>
         </section>
 
-        {/* Section 4: Category Management */}
+        {/* Section 5: Category Management */}
         <CategoryManagement />
 
-        {/* Section 5: General */}
+        {/* Section 6: General */}
         <section className="space-y-4">
           <div className="flex items-center gap-2">
             <SettingsIcon className="h-4 w-4 text-muted-foreground" />
