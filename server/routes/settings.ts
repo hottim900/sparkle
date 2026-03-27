@@ -13,6 +13,7 @@ const ALLOWED_KEYS = [
   "obsidian_export_mode",
   "obsidian_daily_folder",
   "daily_note_time",
+  "daily_note_enabled",
   "daily_note_mode",
   "recent_days",
   "stale_days",
@@ -50,6 +51,19 @@ const updateSettingsSchema = z
       return true;
     },
     { message: 'obsidian_export_mode must be "overwrite" or "new"' },
+  )
+  .refine(
+    (obj) => {
+      if (
+        "daily_note_enabled" in obj &&
+        obj.daily_note_enabled !== "true" &&
+        obj.daily_note_enabled !== "false"
+      ) {
+        return false;
+      }
+      return true;
+    },
+    { message: 'daily_note_enabled must be "true" or "false"' },
   )
   .refine(
     (obj) => {
