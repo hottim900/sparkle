@@ -7,6 +7,7 @@ import { logger } from "./lib/logger.js";
 import { requestLogger } from "./middleware/logger.js";
 import { bodyLimit } from "hono/body-limit";
 import { compress } from "hono/compress";
+import { randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 import type { Server } from "node:http";
 import { createServer } from "node:https";
@@ -107,7 +108,9 @@ if (lineSecret || lineToken) {
   }
 }
 
-const app = new Hono();
+import type { AppEnv } from "./types.js";
+
+const app = new Hono<AppEnv>();
 
 app.use("*", requestLogger);
 // Marker header for SW to distinguish Sparkle responses from CF Access pages
@@ -135,12 +138,21 @@ app.use("*", async (c, next) => {
 });
 
 // Content-Security-Policy
-// Public share pages (/s/*) use inline scripts for TOC & back-to-top (server-generated, no user input)
+// Public share pages (/s/*) use nonce-based script-src instead of unsafe-inline
 app.use("*", async (c, next) => {
+  // Generate nonce before route handler so it's available via c.get("cspNonce")
+  let scriptSrc = "script-src 'self'";
+  if (c.req.path.startsWith("/s/")) {
+    try {
+      const nonce = randomBytes(16).toString("base64");
+      c.set("cspNonce", nonce);
+      scriptSrc = `script-src 'self' 'nonce-${nonce}'`;
+    } catch {
+      // Fallback: if nonce generation fails, allow inline scripts rather than breaking the page
+      scriptSrc = "script-src 'self' 'unsafe-inline'";
+    }
+  }
   await next();
-  const scriptSrc = c.req.path.startsWith("/s/")
-    ? "script-src 'self' 'unsafe-inline'"
-    : "script-src 'self'";
   c.res.headers.set(
     "Content-Security-Policy",
     `default-src 'self'; ${scriptSrc}; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; connect-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'`,
