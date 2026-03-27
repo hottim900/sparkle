@@ -6,6 +6,16 @@ import { getSettings, updateSettings } from "../lib/settings.js";
 
 const settingsRouter = new Hono();
 
+/**
+ * Whitelist of settings keys that can be updated through the public API.
+ *
+ * Internal-only keys are intentionally excluded (not a bug):
+ * - `last_daily_note_date` — written by the daily note scheduler to track dedup state
+ * - `last_brief_sent_date` — written by the LINE brief scheduler to track dedup state
+ *
+ * These scheduler dedup keys must not be user-editable to prevent skipping or
+ * double-triggering scheduled jobs.
+ */
 const ALLOWED_KEYS = [
   "obsidian_enabled",
   "obsidian_vault_path",
