@@ -63,13 +63,19 @@ publicRouter.get("/s/:token", (c) => {
 
   const tags = parseShareTags(share);
 
-  const html = renderPublicPage({
-    title: share.item_title,
-    content: share.item_content,
-    tags,
-    created: share.item_created,
-    modified: share.item_modified,
-  });
+  // Nonce is set by CSP middleware in server/index.ts (AppEnv typed on parent Hono)
+  const nonce = (c.get as (key: string) => string | undefined)("cspNonce");
+
+  const html = renderPublicPage(
+    {
+      title: share.item_title,
+      content: share.item_content,
+      tags,
+      created: share.item_created,
+      modified: share.item_modified,
+    },
+    { nonce },
+  );
 
   return c.html(html);
 });
