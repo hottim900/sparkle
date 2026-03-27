@@ -124,8 +124,9 @@ test.describe("WeekView", () => {
     const tuesday = toDateStr(new Date(y!, m! - 1, d! + 1));
     const thursday = toDateStr(new Date(y!, m! - 1, d! + 3));
 
-    const tuesdayTitle = `週二待辦-${Date.now()}`;
-    const thursdayTitle = `週四待辦-${Date.now()}`;
+    const ts = Date.now();
+    const tuesdayTitle = `週二待辦-${ts}-tue`;
+    const thursdayTitle = `週四待辦-${ts}-thu`;
 
     // Create todos with specific due dates
     await createItemViaApi(request, {
@@ -181,17 +182,18 @@ test.describe("WeekView", () => {
     });
 
     // Navigate far into the future where there's certainly no data
-    // Click next week button 10 times to go ~10 weeks ahead
+    const nextBtn = page.getByRole("button", { name: "下一週" });
     for (let i = 0; i < 10; i++) {
-      await page.getByRole("button", { name: "下一週" }).click();
+      await nextBtn.click();
     }
 
-    // Wait for data to load
+    // Wait for the grid to stabilize after repeated navigation
     const grid = page.getByRole("grid", { name: "週檢視" });
     await expect(grid).toBeVisible();
-
-    // Click a day cell — should show "這天沒有活動"
+    // Ensure the last API call has settled by waiting for cells to render
     const cells = grid.getByRole("gridcell");
+    await expect(cells).toHaveCount(7);
+
     await cells.first().click();
 
     await expect(page.getByText("這天沒有活動")).toBeVisible({ timeout: 5_000 });
