@@ -38,8 +38,8 @@ import { settingsRouter } from "../settings.js";
 import { getAllTags } from "../../lib/items.js";
 import { logger } from "../../lib/logger.js";
 import { getObsidianSettings } from "../../lib/settings.js";
-import { items } from "../../db/schema.js";
-import { eq } from "drizzle-orm";
+import { items, categories } from "../../db/schema.js";
+import { eq, inArray } from "drizzle-orm";
 import { ZodError } from "zod";
 import { importSchema } from "../../schemas/items.js";
 
@@ -129,8 +129,36 @@ function createApp() {
       let skipped = 0;
       const warnings: string[] = [];
 
-      // Build a set of all item IDs being imported (for linked_note_id self-references)
-      const importingIds = new Set(importItems.map((item) => item.id));
+      // Bulk pre-fetch valid FK references to avoid N+1 queries
+      const referencedCategoryIds = [
+        ...new Set(importItems.map((i) => i.category_id).filter(Boolean)),
+      ] as string[];
+      const validCategoryIds = new Set(
+        referencedCategoryIds.length > 0
+          ? testDb
+              .select({ id: categories.id })
+              .from(categories)
+              .where(inArray(categories.id, referencedCategoryIds))
+              .all()
+              .map((r) => r.id)
+          : [],
+      );
+
+      const referencedLinkedIds = [
+        ...new Set(importItems.map((i) => i.linked_note_id).filter(Boolean)),
+      ] as string[];
+      const existingLinkedIds = new Set(
+        referencedLinkedIds.length > 0
+          ? testDb
+              .select({ id: items.id })
+              .from(items)
+              .where(inArray(items.id, referencedLinkedIds))
+              .all()
+              .map((r) => r.id)
+          : [],
+      );
+
+      const processedIds = new Set<string>();
 
       // Wrap entire import in a transaction for atomicity
       const txResult = testSqlite.transaction(() => {
@@ -138,8 +166,7 @@ function createApp() {
           // Validate linked_note_id FK reference
           if (item.linked_note_id) {
             const linkedExists =
-              importingIds.has(item.linked_note_id) ||
-              testDb.select().from(items).where(eq(items.id, item.linked_note_id)).get();
+              processedIds.has(item.linked_note_id) || existingLinkedIds.has(item.linked_note_id);
             if (!linkedExists) {
               logger.warn(
                 { itemId: item.id, linked_note_id: item.linked_note_id },
@@ -155,10 +182,7 @@ function createApp() {
 
           // Validate category_id FK reference
           if (item.category_id) {
-            const categoryExists = testSqlite
-              .prepare("SELECT id FROM categories WHERE id = ?")
-              .get(item.category_id);
-            if (!categoryExists) {
+            if (!validCategoryIds.has(item.category_id)) {
               logger.warn(
                 { itemId: item.id, category_id: item.category_id },
                 "Import: category_id references non-existent category, skipping",
@@ -213,6 +237,7 @@ function createApp() {
               .run();
             imported++;
           }
+          processedIds.add(item.id);
         }
         return { imported, updated, skipped };
       })();

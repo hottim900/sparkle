@@ -27,10 +27,10 @@ import { categoriesRouter } from "./routes/categories.js";
 import { dashboardRouter } from "./routes/dashboard.js";
 import { publicRouter } from "./routes/public.js";
 import { db, sqlite, DB_PATH } from "./db/index.js";
-import { items } from "./db/schema.js";
+import { items, categories } from "./db/schema.js";
 import { checkHealth } from "./lib/health.js";
 import { dirname } from "node:path";
-import { eq, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { getAllTags } from "./lib/items.js";
 import { getObsidianSettings } from "./lib/settings.js";
 import { ZodError } from "zod";
@@ -279,8 +279,37 @@ app.post("/api/import", async (c) => {
     let skipped = 0;
     const warnings: string[] = [];
 
-    // Build a set of all item IDs being imported (for linked_note_id self-references)
-    const importingIds = new Set(importItems.map((item) => item.id));
+    // Bulk pre-fetch valid FK references to avoid N+1 queries
+    const referencedCategoryIds = [
+      ...new Set(importItems.map((i) => i.category_id).filter(Boolean)),
+    ] as string[];
+    const validCategoryIds = new Set(
+      referencedCategoryIds.length > 0
+        ? db
+            .select({ id: categories.id })
+            .from(categories)
+            .where(inArray(categories.id, referencedCategoryIds))
+            .all()
+            .map((r) => r.id)
+        : [],
+    );
+
+    const referencedLinkedIds = [
+      ...new Set(importItems.map((i) => i.linked_note_id).filter(Boolean)),
+    ] as string[];
+    const existingLinkedIds = new Set(
+      referencedLinkedIds.length > 0
+        ? db
+            .select({ id: items.id })
+            .from(items)
+            .where(inArray(items.id, referencedLinkedIds))
+            .all()
+            .map((r) => r.id)
+        : [],
+    );
+
+    // Track IDs that are successfully processed (not skipped) for self-references
+    const processedIds = new Set<string>();
 
     // Wrap entire import in a transaction for atomicity
     const txResult = sqlite.transaction(() => {
@@ -288,8 +317,7 @@ app.post("/api/import", async (c) => {
         // Validate linked_note_id FK reference
         if (item.linked_note_id) {
           const linkedExists =
-            importingIds.has(item.linked_note_id) ||
-            db.select().from(items).where(eq(items.id, item.linked_note_id)).get();
+            processedIds.has(item.linked_note_id) || existingLinkedIds.has(item.linked_note_id);
           if (!linkedExists) {
             logger.warn(
               { itemId: item.id, linked_note_id: item.linked_note_id },
@@ -305,10 +333,7 @@ app.post("/api/import", async (c) => {
 
         // Validate category_id FK reference
         if (item.category_id) {
-          const categoryExists = sqlite
-            .prepare("SELECT id FROM categories WHERE id = ?")
-            .get(item.category_id);
-          if (!categoryExists) {
+          if (!validCategoryIds.has(item.category_id)) {
             logger.warn(
               { itemId: item.id, category_id: item.category_id },
               "Import: category_id references non-existent category, skipping",
@@ -359,6 +384,7 @@ app.post("/api/import", async (c) => {
             .run();
           imported++;
         }
+        processedIds.add(item.id);
       }
       return { imported, updated, skipped };
     })();
