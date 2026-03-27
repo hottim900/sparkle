@@ -312,23 +312,34 @@ Replace `/path/to/node` with the absolute path to your Node.js binary (`which no
 
 ### Available Tools
 
-| Tool                         | Description                 |
-| ---------------------------- | --------------------------- |
-| `sparkle_search`             | Full-text search            |
-| `sparkle_get_note`           | Read a single note          |
-| `sparkle_list_notes`         | List notes with filters     |
-| `sparkle_create_note`        | Create a new note or todo   |
-| `sparkle_update_note`        | Update an existing item     |
-| `sparkle_advance_note`       | Advance note maturity stage |
-| `sparkle_export_to_obsidian` | Export a note to Obsidian   |
-| `sparkle_get_stats`          | Get statistics              |
-| `sparkle_list_tags`          | List all tags               |
-| `sparkle_list_categories`    | List categories             |
-| `sparkle_create_category`    | Create a category           |
-| `sparkle_update_category`    | Update a category           |
-| `sparkle_delete_category`    | Delete a category           |
-| `sparkle_reorder_categories` | Reorder categories          |
-| `sparkle_guide`              | Query Sparkle documentation |
+| Tool                             | Description                               |
+| -------------------------------- | ----------------------------------------- |
+| `sparkle_search`                 | Full-text search in Sparkle DB            |
+| `sparkle_search_all`             | Search both Sparkle DB and Obsidian vault |
+| `sparkle_get_note`               | Read a single note                        |
+| `sparkle_list_notes`             | List notes with filters                   |
+| `sparkle_create_note`            | Create a new note or todo                 |
+| `sparkle_update_note`            | Update an existing item                   |
+| `sparkle_advance_note`           | Advance note maturity stage               |
+| `sparkle_export_to_obsidian`     | Export a note to Obsidian                 |
+| `sparkle_get_stats`              | Get statistics                            |
+| `sparkle_list_tags`              | List all tags                             |
+| `sparkle_list_categories`        | List categories                           |
+| `sparkle_create_category`        | Create a category                         |
+| `sparkle_update_category`        | Update a category                         |
+| `sparkle_delete_category`        | Delete a category                         |
+| `sparkle_reorder_categories`     | Reorder categories                        |
+| `sparkle_list_unreviewed`        | Dashboard: unreviewed items               |
+| `sparkle_list_recent`            | Dashboard: recently active items          |
+| `sparkle_list_attention`         | Dashboard: items needing attention        |
+| `sparkle_list_stale`             | Dashboard: stale items                    |
+| `sparkle_read_obsidian`          | Read vault file by Sparkle ID             |
+| `sparkle_write_obsidian`         | Write vault file by Sparkle ID            |
+| `sparkle_read_obsidian_by_path`  | Read vault file by path                   |
+| `sparkle_write_obsidian_by_path` | Write vault file by path                  |
+| `sparkle_search_obsidian`        | Search Obsidian vault                     |
+| `sparkle_list_obsidian`          | List files in Obsidian vault              |
+| `sparkle_guide`                  | Query Sparkle documentation               |
 
 ### Test
 
