@@ -27,10 +27,10 @@ import { categoriesRouter } from "./routes/categories.js";
 import { dashboardRouter } from "./routes/dashboard.js";
 import { publicRouter } from "./routes/public.js";
 import { db, sqlite, DB_PATH } from "./db/index.js";
-import { items } from "./db/schema.js";
+import { items, categories } from "./db/schema.js";
 import { checkHealth } from "./lib/health.js";
 import { dirname } from "node:path";
-import { eq, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { getAllTags } from "./lib/items.js";
 import { getObsidianSettings } from "./lib/settings.js";
 import { ZodError } from "zod";
@@ -121,6 +121,10 @@ app.use("*", async (c, next) => {
   c.res.headers.set("X-Content-Type-Options", "nosniff");
   c.res.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
   c.res.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  // HSTS only in production — avoid locking dev/test environments to HTTPS
+  if (process.env.NODE_ENV === "production") {
+    c.res.headers.set("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload");
+  }
 });
 app.use("*", compress());
 app.use("*", async (c, next) => {
@@ -272,52 +276,120 @@ app.post("/api/import", async (c) => {
 
     let imported = 0;
     let updated = 0;
-
     let skipped = 0;
+    const warnings: string[] = [];
 
-    for (const item of importItems) {
-      const existing = db.select().from(items).where(eq(items.id, item.id)).get();
+    // Bulk pre-fetch valid FK references to avoid N+1 queries
+    const referencedCategoryIds = [
+      ...new Set(importItems.map((i) => i.category_id).filter(Boolean)),
+    ] as string[];
+    const validCategoryIds = new Set(
+      referencedCategoryIds.length > 0
+        ? db
+            .select({ id: categories.id })
+            .from(categories)
+            .where(inArray(categories.id, referencedCategoryIds))
+            .all()
+            .map((r) => r.id)
+        : [],
+    );
 
-      if (existing) {
-        // Skip private items — don't overwrite private content via import
-        if (existing.is_private) {
-          skipped++;
-          continue;
+    const referencedLinkedIds = [
+      ...new Set(importItems.map((i) => i.linked_note_id).filter(Boolean)),
+    ] as string[];
+    const existingLinkedIds = new Set(
+      referencedLinkedIds.length > 0
+        ? db
+            .select({ id: items.id })
+            .from(items)
+            .where(inArray(items.id, referencedLinkedIds))
+            .all()
+            .map((r) => r.id)
+        : [],
+    );
+
+    // Track IDs that are successfully processed (not skipped) for self-references
+    const processedIds = new Set<string>();
+
+    // Wrap entire import in a transaction for atomicity
+    const txResult = sqlite.transaction(() => {
+      for (const item of importItems) {
+        // Validate linked_note_id FK reference
+        if (item.linked_note_id) {
+          const linkedExists =
+            processedIds.has(item.linked_note_id) || existingLinkedIds.has(item.linked_note_id);
+          if (!linkedExists) {
+            logger.warn(
+              { itemId: item.id, linked_note_id: item.linked_note_id },
+              "Import: linked_note_id references non-existent item, skipping",
+            );
+            warnings.push(
+              `Item ${item.id}: linked_note_id "${item.linked_note_id}" not found, skipped`,
+            );
+            skipped++;
+            continue;
+          }
         }
-        db.update(items)
-          .set({
-            type: item.type,
-            title: item.title,
-            content: item.content,
-            status: item.status,
-            priority: item.priority,
-            due: item.due,
-            tags: JSON.stringify(item.tags),
-            origin: item.origin,
-            source: item.source,
-            aliases: JSON.stringify(item.aliases),
-            linked_note_id: item.linked_note_id,
-            created: item.created,
-            modified: item.modified,
-          })
-          .where(eq(items.id, item.id))
-          .run();
-        updated++;
-      } else {
-        // Strip is_private from imported data — imports always create public items
-        db.insert(items)
-          .values({
-            ...item,
-            tags: JSON.stringify(item.tags),
-            aliases: JSON.stringify(item.aliases),
-            is_private: 0,
-          })
-          .run();
-        imported++;
-      }
-    }
 
-    return c.json({ imported, updated, skipped });
+        // Validate category_id FK reference
+        if (item.category_id) {
+          if (!validCategoryIds.has(item.category_id)) {
+            logger.warn(
+              { itemId: item.id, category_id: item.category_id },
+              "Import: category_id references non-existent category, skipping",
+            );
+            warnings.push(`Item ${item.id}: category_id "${item.category_id}" not found, skipped`);
+            skipped++;
+            continue;
+          }
+        }
+
+        const existing = db.select().from(items).where(eq(items.id, item.id)).get();
+
+        if (existing) {
+          // Skip private items — don't overwrite private content via import
+          if (existing.is_private) {
+            skipped++;
+            continue;
+          }
+          db.update(items)
+            .set({
+              type: item.type,
+              title: item.title,
+              content: item.content,
+              status: item.status,
+              priority: item.priority,
+              due: item.due,
+              tags: JSON.stringify(item.tags),
+              origin: item.origin,
+              source: item.source,
+              aliases: JSON.stringify(item.aliases),
+              linked_note_id: item.linked_note_id,
+              category_id: item.category_id,
+              created: item.created,
+              modified: item.modified,
+            })
+            .where(eq(items.id, item.id))
+            .run();
+          updated++;
+        } else {
+          // Strip is_private from imported data — imports always create public items
+          db.insert(items)
+            .values({
+              ...item,
+              tags: JSON.stringify(item.tags),
+              aliases: JSON.stringify(item.aliases),
+              is_private: 0,
+            })
+            .run();
+          imported++;
+        }
+        processedIds.add(item.id);
+      }
+      return { imported, updated, skipped };
+    })();
+
+    return c.json({ ...txResult, warnings: warnings.length > 0 ? warnings : undefined });
   } catch (e) {
     if (e instanceof ZodError) {
       return c.json({ error: e.issues[0]?.message ?? "Validation error" }, 400);

@@ -4,6 +4,7 @@ import { generateAndPushBrief } from "../lib/line-brief.js";
 import { updateSettings } from "../lib/settings.js";
 import { toLocalDateStr } from "../lib/stats.js";
 import { logger } from "../lib/logger.js";
+import { validateDateParam } from "../lib/date-utils.js";
 
 const lineBriefRouter = new Hono();
 
@@ -11,15 +12,11 @@ const lineBriefRouter = new Hono();
 lineBriefRouter.post("/send", async (c) => {
   const dateParam = c.req.query("date");
 
-  // Validate date format and components if provided
+  // Validate date format and semantic correctness if provided
   if (dateParam) {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateParam)) {
-      return c.json({ error: "Invalid date format. Expected YYYY-MM-DD." }, 400);
-    }
-    const [y, m, d] = dateParam.split("-").map(Number);
-    const parsed = new Date(y!, m! - 1, d!);
-    if (isNaN(parsed.getTime()) || parsed.getMonth() !== m! - 1 || parsed.getDate() !== d!) {
-      return c.json({ error: "Invalid date. Month must be 1-12, day must be valid." }, 400);
+    const dateError = validateDateParam(dateParam);
+    if (dateError) {
+      return c.json({ error: dateError }, 400);
     }
   }
 

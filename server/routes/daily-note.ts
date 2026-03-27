@@ -4,6 +4,7 @@ import { generateDailyNote } from "../lib/daily-note.js";
 import { updateSettings } from "../lib/settings.js";
 import { toLocalDateStr } from "../lib/stats.js";
 import { logger } from "../lib/logger.js";
+import { validateDateParam } from "../lib/date-utils.js";
 
 const dailyNoteRouter = new Hono();
 
@@ -11,9 +12,12 @@ const dailyNoteRouter = new Hono();
 dailyNoteRouter.post("/generate", async (c) => {
   const dateParam = c.req.query("date");
 
-  // Validate date format if provided
-  if (dateParam && !/^\d{4}-\d{2}-\d{2}$/.test(dateParam)) {
-    return c.json({ error: "Invalid date format. Expected YYYY-MM-DD." }, 400);
+  // Validate date format and semantic correctness if provided
+  if (dateParam) {
+    const dateError = validateDateParam(dateParam);
+    if (dateError) {
+      return c.json({ error: dateError }, 400);
+    }
   }
 
   try {
