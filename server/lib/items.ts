@@ -189,8 +189,10 @@ export function updateItem(
   id: string,
   input: UpdateItemInput & { is_private?: boolean },
   includePrivate = false,
+  prefetchedExisting?: ItemWithLinkedInfo | null,
 ) {
-  const existing = getItem(db, id, false, includePrivate);
+  const existing =
+    prefetchedExisting !== undefined ? prefetchedExisting : getItem(db, id, false, includePrivate);
   if (!existing) return null;
 
   const now = new Date().toISOString();
