@@ -447,6 +447,11 @@ describe("resolveSparkleReferences", () => {
     expect(resolveSparkleReferences("筆記（abcd1234）", lookup)).toBe("筆記（abcd1234）");
   });
 
+  it("sanitizes ]] and | in titles for wikilink safety", () => {
+    const lookup = () => ({ title: "Note with ]] and | chars" });
+    expect(resolveSparkleReferences("筆記（abcd1234）", lookup)).toBe("[[Note with  and - chars]]");
+  });
+
   it("resolves adjacent references independently", () => {
     const lookup = (id: string) => {
       if (id === "aaaa") return { title: "First" };

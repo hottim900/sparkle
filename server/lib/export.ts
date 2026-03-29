@@ -85,7 +85,10 @@ export function resolveSparkleReferences(content: string, lookupItem: ItemLookup
   return content.replace(/筆記（([a-f0-9]{4,8})）/g, (match, shortId) => {
     try {
       const item = lookupItem(shortId);
-      return item ? `[[${item.title}]]` : match;
+      if (!item) return match;
+      // Sanitize title for Obsidian wikilink: ]] breaks link, | is alias separator
+      const safeTitle = item.title.replace(/\]\]/g, "").replace(/\|/g, "-");
+      return `[[${safeTitle}]]`;
     } catch {
       return match;
     }
