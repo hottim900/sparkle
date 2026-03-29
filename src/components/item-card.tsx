@@ -2,7 +2,16 @@ import { Badge } from "@/components/ui/badge";
 import { updateItem, deleteItem } from "@/lib/api";
 import type { ParsedItem } from "@/lib/types";
 import { toast } from "sonner";
-import { Square, CheckSquare, FileText, ListTodo, Trash2, Link, Globe } from "lucide-react";
+import {
+  Square,
+  CheckSquare,
+  FileText,
+  ListTodo,
+  Trash2,
+  Link,
+  Globe,
+  PauseCircle,
+} from "lucide-react";
 
 const priorityColors: Record<string, string> = {
   high: "border-l-red-500",
@@ -57,6 +66,7 @@ export function ItemCard({
   onToggle,
 }: ItemCardProps) {
   const borderColor = item.priority ? (priorityColors[item.priority] ?? "") : "";
+  const isPaused = item.paused === 1;
 
   const dueDateInfo = item.type === "todo" && item.due ? getDueDateInfo(item.due) : null;
   const isOverdue = dueDateInfo?.className === "text-red-500" && item.status !== "done";
@@ -100,7 +110,7 @@ export function ItemCard({
     <div
       className={`p-3 border-l-4 cursor-pointer transition-colors hover:bg-accent ${borderColor} ${
         selected && !selectionMode ? "bg-accent" : ""
-      } ${checked ? "bg-accent/50" : ""} ${item.status === "done" ? "opacity-60" : ""} ${isOverdue ? "ring-1 ring-red-200 dark:ring-red-900" : ""}`}
+      } ${checked ? "bg-accent/50" : ""} ${item.status === "done" || isPaused ? "opacity-60" : ""} ${isOverdue ? "ring-1 ring-red-200 dark:ring-red-900" : ""}`}
       onClick={handleClick}
     >
       <div className="flex items-start gap-2">
@@ -148,6 +158,7 @@ export function ItemCard({
             {item.title}
           </p>
           <div className="flex items-center gap-1 mt-1 flex-wrap">
+            {isPaused && <PauseCircle className="h-3 w-3 text-amber-500 dark:text-amber-400" />}
             {item.tags.map((tag) => (
               <Badge key={tag} variant="secondary" className="text-xs">
                 {tag}

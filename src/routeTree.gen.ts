@@ -19,6 +19,7 @@ import { Route as ListUnreviewedRouteImport } from './routes/_list/unreviewed'
 import { Route as ListTodosRouteImport } from './routes/_list/todos'
 import { Route as ListStaleRouteImport } from './routes/_list/stale'
 import { Route as ListRecentRouteImport } from './routes/_list/recent'
+import { Route as ListPausedRouteImport } from './routes/_list/paused'
 import { Route as ListNotesRouteImport } from './routes/_list/notes'
 import { Route as ListAttentionRouteImport } from './routes/_list/attention'
 import { Route as ListArchivedRouteImport } from './routes/_list/archived'
@@ -79,6 +80,11 @@ const ListStaleRoute = ListStaleRouteImport.update({
 const ListRecentRoute = ListRecentRouteImport.update({
   id: '/recent',
   path: '/recent',
+  getParentRoute: () => ListRoute,
+} as any)
+const ListPausedRoute = ListPausedRouteImport.update({
+  id: '/paused',
+  path: '/paused',
   getParentRoute: () => ListRoute,
 } as any)
 const ListNotesRoute = ListNotesRouteImport.update({
@@ -152,6 +158,7 @@ export interface FileRoutesByFullPath {
   '/archived': typeof ListArchivedRoute
   '/attention': typeof ListAttentionRoute
   '/notes': typeof ListNotesRouteWithChildren
+  '/paused': typeof ListPausedRoute
   '/recent': typeof ListRecentRoute
   '/stale': typeof ListStaleRoute
   '/todos': typeof ListTodosRouteWithChildren
@@ -174,6 +181,7 @@ export interface FileRoutesByTo {
   '/all': typeof ListAllRoute
   '/archived': typeof ListArchivedRoute
   '/attention': typeof ListAttentionRoute
+  '/paused': typeof ListPausedRoute
   '/recent': typeof ListRecentRoute
   '/stale': typeof ListStaleRoute
   '/unreviewed': typeof ListUnreviewedRoute
@@ -198,6 +206,7 @@ export interface FileRoutesById {
   '/_list/archived': typeof ListArchivedRoute
   '/_list/attention': typeof ListAttentionRoute
   '/_list/notes': typeof ListNotesRouteWithChildren
+  '/_list/paused': typeof ListPausedRoute
   '/_list/recent': typeof ListRecentRoute
   '/_list/stale': typeof ListStaleRoute
   '/_list/todos': typeof ListTodosRouteWithChildren
@@ -223,6 +232,7 @@ export interface FileRouteTypes {
     | '/archived'
     | '/attention'
     | '/notes'
+    | '/paused'
     | '/recent'
     | '/stale'
     | '/todos'
@@ -245,6 +255,7 @@ export interface FileRouteTypes {
     | '/all'
     | '/archived'
     | '/attention'
+    | '/paused'
     | '/recent'
     | '/stale'
     | '/unreviewed'
@@ -268,6 +279,7 @@ export interface FileRouteTypes {
     | '/_list/archived'
     | '/_list/attention'
     | '/_list/notes'
+    | '/_list/paused'
     | '/_list/recent'
     | '/_list/stale'
     | '/_list/todos'
@@ -361,6 +373,13 @@ declare module '@tanstack/react-router' {
       path: '/recent'
       fullPath: '/recent'
       preLoaderRoute: typeof ListRecentRouteImport
+      parentRoute: typeof ListRoute
+    }
+    '/_list/paused': {
+      id: '/_list/paused'
+      path: '/paused'
+      fullPath: '/paused'
+      preLoaderRoute: typeof ListPausedRouteImport
       parentRoute: typeof ListRoute
     }
     '/_list/notes': {
@@ -489,6 +508,7 @@ interface ListRouteChildren {
   ListArchivedRoute: typeof ListArchivedRoute
   ListAttentionRoute: typeof ListAttentionRoute
   ListNotesRoute: typeof ListNotesRouteWithChildren
+  ListPausedRoute: typeof ListPausedRoute
   ListRecentRoute: typeof ListRecentRoute
   ListStaleRoute: typeof ListStaleRoute
   ListTodosRoute: typeof ListTodosRouteWithChildren
@@ -501,6 +521,7 @@ const ListRouteChildren: ListRouteChildren = {
   ListArchivedRoute: ListArchivedRoute,
   ListAttentionRoute: ListAttentionRoute,
   ListNotesRoute: ListNotesRouteWithChildren,
+  ListPausedRoute: ListPausedRoute,
   ListRecentRoute: ListRecentRoute,
   ListStaleRoute: ListStaleRoute,
   ListTodosRoute: ListTodosRouteWithChildren,

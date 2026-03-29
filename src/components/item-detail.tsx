@@ -22,7 +22,10 @@ import { ItemDetailHeader } from "@/components/item-detail-header";
 import { LinkedItemsSection } from "@/components/linked-items-section";
 import { ItemContentEditor } from "@/components/item-content-editor";
 import { CategorySelect } from "@/components/category-select";
+import { PauseToggle } from "@/components/pause-toggle";
+import { PausedBanner } from "@/components/paused-banner";
 import { useItemForm } from "@/hooks/use-item-form";
+import { usePauseResume } from "@/hooks/use-pause-resume";
 import { updateItem } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
 
@@ -86,6 +89,7 @@ export function ItemDetail({ itemId, onDeleted }: ItemDetailProps) {
   const [aliasInput, setAliasInput] = useState("");
   const [createTodoRequested, setCreateTodoRequested] = useState(false);
   const [markingAsPrivate, setMarkingAsPrivate] = useState(false);
+  const { handleResume, resuming } = usePauseResume(item, setItem);
 
   const handleMarkAsPrivate = useCallback(async () => {
     if (!item) return;
@@ -160,6 +164,9 @@ export function ItemDetail({ itemId, onDeleted }: ItemDetailProps) {
         onMarkAsPrivate={handleMarkAsPrivate}
         markingAsPrivate={markingAsPrivate}
       />
+
+      {/* Paused banner */}
+      <PausedBanner item={item} isOnline={isOnline} onResume={handleResume} resuming={resuming} />
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4 animate-fade-in break-words">
@@ -254,6 +261,10 @@ export function ItemDetail({ itemId, onDeleted }: ItemDetailProps) {
                 <SelectItem value="high">高</SelectItem>
               </SelectContent>
             </Select>
+          )}
+
+          {item.type !== "scratch" && (
+            <PauseToggle item={item} isOnline={isOnline} onItemUpdate={setItem} />
           )}
         </div>
 

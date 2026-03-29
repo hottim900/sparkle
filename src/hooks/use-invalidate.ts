@@ -3,9 +3,18 @@ import { useCallback } from "react";
 import { queryKeys } from "@/lib/query-keys";
 
 // Fields that affect list query results (filtering, sorting, display)
-const LIST_FIELDS = new Set(["title", "status", "type", "priority", "due", "tags", "category_id"]);
+const LIST_FIELDS = new Set([
+  "title",
+  "status",
+  "type",
+  "priority",
+  "due",
+  "tags",
+  "category_id",
+  "paused",
+]);
 const TAG_FIELDS = new Set(["tags"]);
-const STATS_FIELDS = new Set(["status", "type"]);
+const STATS_FIELDS = new Set(["status", "type", "paused"]);
 // Fields that affect linked todo counts (status changes can archive/unarchive todos)
 const LINKED_TODO_FIELDS = new Set(["status", "type", "linked_note_id"]);
 
@@ -23,6 +32,7 @@ function invalidateItemFields(queryClient: QueryClient, field?: string) {
     queryClient.invalidateQueries({ queryKey: queryKeys.recent });
     queryClient.invalidateQueries({ queryKey: queryKeys.attention });
     queryClient.invalidateQueries({ queryKey: queryKeys.dashboardStale });
+    queryClient.invalidateQueries({ queryKey: queryKeys.pausedCount });
     queryClient.invalidateQueries({ queryKey: ["dashboardWeek"] });
     return;
   }
@@ -43,6 +53,13 @@ function invalidateItemFields(queryClient: QueryClient, field?: string) {
   }
   if (STATS_FIELDS.has(field)) {
     queryClient.invalidateQueries({ queryKey: queryKeys.stats });
+  }
+  if (field === "paused") {
+    queryClient.invalidateQueries({ queryKey: queryKeys.pausedCount });
+    queryClient.invalidateQueries({ queryKey: queryKeys.focus });
+    queryClient.invalidateQueries({ queryKey: queryKeys.unreviewed });
+    queryClient.invalidateQueries({ queryKey: queryKeys.attention });
+    queryClient.invalidateQueries({ queryKey: queryKeys.dashboardStale });
   }
   if (LINKED_TODO_FIELDS.has(field)) {
     queryClient.invalidateQueries({ queryKey: queryKeys.items.all });

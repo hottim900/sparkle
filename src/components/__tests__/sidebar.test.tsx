@@ -5,10 +5,12 @@ import { Sidebar } from "../sidebar";
 
 const mockGetTags = vi.fn();
 const mockClearToken = vi.fn();
+const mockListItems = vi.fn();
 
 vi.mock("@/lib/api", () => ({
   getTags: (...args: unknown[]) => mockGetTags(...args),
   clearToken: (...args: unknown[]) => mockClearToken(...args),
+  listItems: (...args: unknown[]) => mockListItems(...args),
 }));
 
 vi.mock("../search-bar", () => ({
@@ -43,6 +45,7 @@ vi.mock("@tanstack/react-router", () => ({
 beforeEach(() => {
   vi.clearAllMocks();
   mockGetTags.mockResolvedValue({ tags: [] });
+  mockListItems.mockResolvedValue({ items: [], total: 0 });
   mockPathname = "/notes/fleeting";
   mockSearchParams = {};
 });
@@ -69,6 +72,7 @@ describe("Sidebar", () => {
     expect(screen.getByText("已完成")).toBeInTheDocument();
     expect(screen.getByText("暫存區")).toBeInTheDocument();
     expect(screen.getByText("全部")).toBeInTheDocument();
+    expect(screen.getByText("已暫停")).toBeInTheDocument();
     expect(screen.getByText("已封存")).toBeInTheDocument();
     expect(screen.getByText("分享管理")).toBeInTheDocument();
     expect(screen.getByText("設定")).toBeInTheDocument();

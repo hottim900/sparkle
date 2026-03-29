@@ -3,7 +3,7 @@ import { Link, useNavigate, useRouterState, type NavigateOptions } from "@tansta
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { SearchBar } from "./search-bar";
-import { getTags } from "@/lib/api";
+import { getTags, listItems } from "@/lib/api";
 import { clearToken } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
 import { pathToView } from "@/lib/navigation";
@@ -18,6 +18,11 @@ export function Sidebar() {
   const { data: tags = [] } = useQuery({
     queryKey: queryKeys.tags,
     queryFn: () => getTags().then((r) => r.tags),
+  });
+
+  const { data: pausedCount = 0 } = useQuery({
+    queryKey: queryKeys.pausedCount,
+    queryFn: () => listItems({ paused: "true", limit: 1 }).then((r) => r.total),
   });
 
   const selectedTag = useRouterState({
@@ -51,6 +56,7 @@ export function Sidebar() {
             )}
             {group.items.map((v) => {
               const Icon = v.icon;
+              const badgeCount = v.id === "paused" ? pausedCount : 0;
               return (
                 <Button
                   key={v.id}
@@ -61,6 +67,14 @@ export function Sidebar() {
                   <Link to={v.path} search={{}}>
                     <Icon className="h-4 w-4" />
                     {v.label}
+                    {badgeCount > 0 && (
+                      <Badge
+                        variant="secondary"
+                        className="ml-auto h-5 min-w-5 px-1 text-xs font-normal"
+                      >
+                        {badgeCount}
+                      </Badge>
+                    )}
                   </Link>
                 </Button>
               );
