@@ -18,14 +18,16 @@ test.describe("Paused Items", () => {
     await navigateTo(page, "閃念");
     await page.getByText(item.title).click();
 
-    // Wait for detail panel
+    // Wait for detail panel and pause button to appear
     await expect(page.getByPlaceholder("標題")).toBeVisible({ timeout: 10_000 });
+    const pauseBtn = page.getByRole("button", { name: "暫停", exact: true });
+    await expect(pauseBtn).toBeVisible({ timeout: 5_000 });
 
     // Click pause button in the metadata area
-    await page.getByRole("button", { name: "暫停", exact: true }).click();
+    await pauseBtn.click();
 
     // Popover opens — click "不附備忘直接暫停"
-    await page.getByText("不附備忘直接暫停").click();
+    await page.getByRole("button", { name: "不附備忘直接暫停" }).click();
 
     // Wait for PATCH to complete
     await expect(page.getByText("已暫停")).toBeVisible({ timeout: 5_000 });
@@ -84,8 +86,8 @@ test.describe("Paused Items", () => {
     await expect(page.getByText(item.title)).toBeVisible({ timeout: 10_000 });
 
     // Click resume button next to the item
-    const itemRow = page.getByText(item.title).locator("../..");
-    await itemRow.getByRole("button", { name: /恢復/ }).click();
+    const itemCard = page.locator("[class*='cursor-pointer']", { hasText: item.title });
+    await itemCard.getByRole("button", { name: "恢復", exact: true }).click();
 
     // Wait for success toast
     await expect(page.getByText("已恢復")).toBeVisible({ timeout: 5_000 });
@@ -110,18 +112,19 @@ test.describe("Paused Items", () => {
 
     await expect(page.getByPlaceholder("標題")).toBeVisible({ timeout: 10_000 });
 
-    // Click pause
-    await page.getByRole("button", { name: "暫停", exact: true }).click();
+    // Click pause — wait for button to be visible first
+    const pauseBtn = page.getByRole("button", { name: "暫停", exact: true });
+    await expect(pauseBtn).toBeVisible({ timeout: 5_000 });
+    await pauseBtn.click();
 
     // Fill in context
     await page.getByPlaceholder("下次回來時，你想記住什麼？").fill("需要等設計稿");
 
-    // Click the primary pause button in the popover
-    // There are two buttons with "暫停" text — the popover's submit button
-    const popoverPauseBtn = page.locator("[data-radix-popper-content-wrapper] button", {
-      hasText: "暫停",
-    });
-    await popoverPauseBtn.click();
+    // Click the primary pause button in the popover (exact match excludes "不附備忘直接暫停")
+    await page
+      .locator("[data-radix-popper-content-wrapper]")
+      .getByRole("button", { name: "暫停", exact: true })
+      .click();
 
     await expect(page.getByText("已暫停")).toBeVisible({ timeout: 5_000 });
 
