@@ -80,7 +80,7 @@ export function getStats(sqlite: Database.Database): Stats {
         COALESCE(SUM(CASE WHEN status = 'draft' AND type = 'scratch' THEN 1 ELSE 0 END), 0) AS scratch_count,
         COALESCE(SUM(CASE WHEN created >= ? THEN 1 ELSE 0 END), 0) AS created_this_week,
         COALESCE(SUM(CASE WHEN created >= ? THEN 1 ELSE 0 END), 0) AS created_this_month,
-        COALESCE(SUM(CASE WHEN due < ? AND type = 'todo' AND status NOT IN ('done', 'exported', 'archived') THEN 1 ELSE 0 END), 0) AS overdue_count
+        COALESCE(SUM(CASE WHEN due < ? AND type = 'todo' AND status NOT IN ('done', 'exported', 'archived') AND paused = 0 THEN 1 ELSE 0 END), 0) AS overdue_count
       FROM items
       WHERE is_private = 0`,
     )
@@ -137,6 +137,7 @@ export function getStaleNotes(
        WHERE i.status = 'developing'
          AND i.modified < datetime('now', '-' || ? || ' days')
          AND i.is_private = 0
+         AND i.paused = 0
        ORDER BY i.modified ASC
        LIMIT ?`,
     )
@@ -148,7 +149,8 @@ export function getStaleNotes(
        FROM items i
        WHERE i.status = 'developing'
          AND i.modified < datetime('now', '-' || ? || ' days')
-         AND i.is_private = 0`,
+         AND i.is_private = 0
+         AND i.paused = 0`,
     )
     .get(days) as { count: number };
 
@@ -168,6 +170,7 @@ export function getUnreviewedItems(
        WHERE i.viewed_at IS NULL
          AND i.status NOT IN ('archived', 'done')
          AND i.is_private = 0
+         AND i.paused = 0
        ORDER BY i.created DESC
        LIMIT ? OFFSET ?`,
     )
@@ -179,7 +182,8 @@ export function getUnreviewedItems(
        FROM items i
        WHERE i.viewed_at IS NULL
          AND i.status NOT IN ('archived', 'done')
-         AND i.is_private = 0`,
+         AND i.is_private = 0
+         AND i.paused = 0`,
     )
     .get() as { count: number };
 
@@ -237,6 +241,7 @@ export function getAttentionItems(
        WHERE i.status NOT IN ('done', 'archived') AND i.type != 'scratch'
          AND ((i.type = 'todo' AND i.due < :today) OR i.priority = 'high')
          AND i.is_private = 0
+         AND i.paused = 0
        ORDER BY attention_reason ASC, i.due ASC, i.created DESC
        LIMIT :limit`,
     )
@@ -248,7 +253,8 @@ export function getAttentionItems(
        FROM items i
        WHERE i.status NOT IN ('done', 'archived') AND i.type != 'scratch'
          AND ((i.type = 'todo' AND i.due < :today) OR i.priority = 'high')
-         AND i.is_private = 0`,
+         AND i.is_private = 0
+         AND i.paused = 0`,
     )
     .get({ today }) as { count: number };
 
@@ -274,6 +280,7 @@ export function getCategoryDistribution(sqlite: Database.Database): CategoryDist
        LEFT JOIN categories c ON i.category_id = c.id
        WHERE i.status NOT IN ('archived', 'done')
          AND i.is_private = 0
+         AND i.paused = 0
        GROUP BY i.category_id
        ORDER BY count DESC`,
     )
@@ -327,6 +334,7 @@ export function getFocusItems(sqlite: Database.Database): FocusItem[] {
         WHERE status NOT IN ('done', 'exported', 'archived')
           AND type != 'scratch'
           AND is_private = 0
+          AND paused = 0
       ) ranked
       WHERE focus_rank < 6
       ORDER BY focus_rank ASC, focus_sort ASC

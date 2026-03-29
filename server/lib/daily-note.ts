@@ -93,7 +93,8 @@ function queryDayData(sqlite: Database.Database, dateStr: string): DayData {
        WHERE type = 'todo'
          AND status NOT IN ('done', 'exported', 'archived')
          AND due = ?
-         AND is_private = 0`,
+         AND is_private = 0
+         AND paused = 0`,
     )
     .all(dateStr) as DayTodo[];
 
@@ -132,7 +133,8 @@ function queryDayData(sqlite: Database.Database, dateStr: string): DayData {
          AND status NOT IN ('done', 'exported', 'archived')
          AND due IS NOT NULL
          AND due < ?
-         AND is_private = 0`,
+         AND is_private = 0
+         AND paused = 0`,
     )
     .all(dateStr) as DayTodo[];
 

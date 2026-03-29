@@ -32,6 +32,7 @@ itemsRouter.get("/", (c) => {
       order: c.req.query("order"),
       limit: c.req.query("limit"),
       offset: c.req.query("offset"),
+      paused: c.req.query("paused"),
     });
     const result = listItems(db, query);
     return c.json(result);
@@ -168,10 +169,16 @@ itemsRouter.post("/batch", async (c) => {
           errors.push({ id: item.id, error: (e as Error).message });
         }
       }
-      // 3. Bulk update exported items (1 query)
+      // 3. Bulk update exported items (1 query); auto-clear paused
       if (exportedIds.length > 0) {
         db.update(items)
-          .set({ status: "exported", modified: now })
+          .set({
+            status: "exported",
+            modified: now,
+            paused: 0,
+            paused_at: null,
+            paused_context: null,
+          })
           .where(inArray(items.id, exportedIds))
           .run();
       }
@@ -179,10 +186,10 @@ itemsRouter.post("/batch", async (c) => {
       skipped = skippedIds.length + (ids.length - eligible.length);
       return c.json({ affected, skipped, errors });
     } else if (action === "done") {
-      // → done (todo only, any status)
+      // → done (todo only, any status); auto-clear paused
       const result = db
         .update(items)
-        .set({ status: "done", modified: now })
+        .set({ status: "done", modified: now, paused: 0, paused_at: null, paused_context: null })
         .where(and(inArray(items.id, ids), eq(items.type, "todo"), eq(items.is_private, 0)))
         .run();
       affected = result.changes;
@@ -197,10 +204,16 @@ itemsRouter.post("/batch", async (c) => {
       affected = result.changes;
       skipped = ids.length - affected;
     } else {
-      // archive — any type
+      // archive — any type; auto-clear paused
       const result = db
         .update(items)
-        .set({ status: "archived", modified: now })
+        .set({
+          status: "archived",
+          modified: now,
+          paused: 0,
+          paused_at: null,
+          paused_context: null,
+        })
         .where(and(inArray(items.id, ids), eq(items.is_private, 0)))
         .run();
       affected = result.changes;
@@ -222,7 +235,7 @@ itemsRouter.get("/:id/linked-todos", (c) => {
   // Verify the note exists and is not private (prevents confirming private note IDs exist)
   const note = getItem(db, id, false);
   if (!note) return c.json({ error: "Item not found" }, 404);
-  const result = listItems(db, { linked_note_id: id });
+  const result = listItems(db, { linked_note_id: id, paused: "all" });
   return c.json({ items: result.items });
 });
 
