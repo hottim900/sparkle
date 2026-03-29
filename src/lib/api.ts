@@ -191,6 +191,7 @@ export async function listItems(params?: {
   limit?: number;
   offset?: number;
   excludeStatus?: string[];
+  paused?: string;
 }): Promise<ListItemsResponse> {
   // Source of truth: server/schemas/items.ts statusEnum
   const validStatuses = new Set([
@@ -217,6 +218,7 @@ export async function listItems(params?: {
       search.append("excludeStatus", s);
     }
   }
+  if (params?.paused) search.set("paused", params.paused);
 
   const qs = search.toString();
   return request<ListItemsResponse>(`/items${qs ? `?${qs}` : ""}`);
@@ -261,6 +263,8 @@ export async function updateItem(
     category_id?: string | null;
     viewed_at?: string | null;
     is_private?: boolean;
+    paused?: boolean;
+    pausedContext?: string;
   },
 ): Promise<Item> {
   return request<Item>(`/items/${id}`, {

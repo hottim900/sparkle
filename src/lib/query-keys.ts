@@ -8,6 +8,7 @@ export interface ItemFilters {
   limit?: number;
   offset?: number;
   excludeStatus?: string[];
+  paused?: string;
 }
 
 export const queryKeys = {
@@ -30,6 +31,7 @@ export const queryKeys = {
   recent: ["recent"] as const,
   attention: ["attention"] as const,
   dashboardStale: ["dashboardStale"] as const,
+  pausedCount: ["pausedCount"] as const,
   dashboardWeek: (start: string) => ["dashboardWeek", start] as const,
   private: {
     status: ["private", "status"] as const,

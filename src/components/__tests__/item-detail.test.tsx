@@ -36,6 +36,11 @@ const mockItem: Item = {
   share_visibility: null,
   category_id: null,
   category_name: null,
+  viewed_at: "2026-01-01T00:00:00.000Z",
+  is_private: false,
+  paused: 0,
+  pausedAt: null,
+  pausedContext: null,
   created: "2026-01-01T00:00:00.000Z",
   modified: "2026-01-01T00:00:00.000Z",
 };
