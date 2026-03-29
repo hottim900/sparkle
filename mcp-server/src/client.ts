@@ -138,7 +138,7 @@ export async function updateItem(
     category_id?: string | null;
     is_private?: boolean;
     paused?: boolean;
-    pausedContext?: string;
+    paused_context?: string;
   },
 ): Promise<SparkleItem> {
   return sparkleApi<SparkleItem>(`/items/${id}`, "PATCH", input);

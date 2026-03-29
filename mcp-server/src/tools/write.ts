@@ -301,7 +301,7 @@ Side effects:
         if (category_id !== undefined) update.category_id = category_id;
         if (is_private !== undefined) update.is_private = is_private;
         if (paused !== undefined) update.paused = paused;
-        if (paused_context !== undefined) update.pausedContext = paused_context;
+        if (paused_context !== undefined) update.paused_context = paused_context;
 
         const item = await updateItem(id, update);
         const text = `Note updated successfully.\n\n${formatItem(item)}`;

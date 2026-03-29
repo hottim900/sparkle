@@ -97,8 +97,8 @@ Returns: The updated item.`,
     },
     async ({ id, context }) => {
       try {
-        const update: { paused: boolean; pausedContext?: string } = { paused: true };
-        if (context !== undefined) update.pausedContext = context;
+        const update: { paused: boolean; paused_context?: string } = { paused: true };
+        if (context !== undefined) update.paused_context = context;
         const item = await updateItem(id, update);
         const text = `項目已暫停。\n\n${formatItem(item)}`;
         return {
