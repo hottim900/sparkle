@@ -27,8 +27,8 @@ export interface Item {
   viewed_at: string | null;
   is_private: boolean;
   paused: number;
-  pausedAt: string | null;
-  pausedContext: string | null;
+  paused_at: string | null;
+  paused_context: string | null;
   created: string;
   modified: string;
 }

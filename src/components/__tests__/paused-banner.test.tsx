@@ -26,8 +26,8 @@ function makeItem(overrides: Partial<ParsedItem> = {}): ParsedItem {
     viewed_at: "2026-01-01T00:00:00.000Z",
     is_private: false,
     paused: 0,
-    pausedAt: null,
-    pausedContext: null,
+    paused_at: null,
+    paused_context: null,
     created: "2026-01-01T00:00:00.000Z",
     modified: "2026-01-01T00:00:00.000Z",
     ...overrides,
@@ -45,7 +45,7 @@ describe("PausedBanner", () => {
   it("renders banner with context for paused item", () => {
     render(
       <PausedBanner
-        item={makeItem({ paused: 1, pausedAt: "2026-01-01T00:00:00Z", pausedContext: "等回覆" })}
+        item={makeItem({ paused: 1, paused_at: "2026-01-01T00:00:00Z", paused_context: "等回覆" })}
         isOnline={true}
         onResume={vi.fn()}
       />,
@@ -57,7 +57,7 @@ describe("PausedBanner", () => {
   it("shows default text when no context", () => {
     render(
       <PausedBanner
-        item={makeItem({ paused: 1, pausedAt: "2026-01-01T00:00:00Z" })}
+        item={makeItem({ paused: 1, paused_at: "2026-01-01T00:00:00Z" })}
         isOnline={true}
         onResume={vi.fn()}
       />,
@@ -71,7 +71,7 @@ describe("PausedBanner", () => {
 
     render(
       <PausedBanner
-        item={makeItem({ paused: 1, pausedAt: "2026-01-01T00:00:00Z" })}
+        item={makeItem({ paused: 1, paused_at: "2026-01-01T00:00:00Z" })}
         isOnline={true}
         onResume={onResume}
       />,
@@ -84,7 +84,7 @@ describe("PausedBanner", () => {
   it("disables resume button when offline", () => {
     render(
       <PausedBanner
-        item={makeItem({ paused: 1, pausedAt: "2026-01-01T00:00:00Z" })}
+        item={makeItem({ paused: 1, paused_at: "2026-01-01T00:00:00Z" })}
         isOnline={false}
         onResume={vi.fn()}
       />,

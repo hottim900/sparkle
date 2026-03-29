@@ -35,8 +35,8 @@ function makeItem(overrides: Partial<ParsedItem> = {}): ParsedItem {
     viewed_at: "2026-01-01T00:00:00.000Z",
     is_private: false,
     paused: 0,
-    pausedAt: null,
-    pausedContext: null,
+    paused_at: null,
+    paused_context: null,
     created: "2026-01-01T00:00:00.000Z",
     modified: "2026-01-01T00:00:00.000Z",
     ...overrides,
@@ -83,7 +83,7 @@ describe("PauseToggle", () => {
 
   it("shows resume button for paused item", () => {
     renderPauseToggle(
-      makeItem({ paused: 1, pausedAt: "2026-01-01T00:00:00Z", pausedContext: "waiting" }),
+      makeItem({ paused: 1, paused_at: "2026-01-01T00:00:00Z", paused_context: "waiting" }),
     );
     expect(screen.getByRole("button", { name: /恢復/ })).toBeInTheDocument();
   });
@@ -94,7 +94,7 @@ describe("PauseToggle", () => {
   });
 
   it("disables resume button when offline", () => {
-    renderPauseToggle(makeItem({ paused: 1, pausedAt: "2026-01-01T00:00:00Z" }), {
+    renderPauseToggle(makeItem({ paused: 1, paused_at: "2026-01-01T00:00:00Z" }), {
       isOnline: false,
     });
     expect(screen.getByRole("button", { name: /恢復/ })).toBeDisabled();
@@ -140,7 +140,7 @@ describe("PauseToggle", () => {
     vi.mocked(api.updateItem).mockResolvedValue(makeItem({ paused: 0 }) as never);
 
     const { onItemUpdate } = renderPauseToggle(
-      makeItem({ paused: 1, pausedAt: "2026-01-01T00:00:00Z" }),
+      makeItem({ paused: 1, paused_at: "2026-01-01T00:00:00Z" }),
     );
 
     await user.click(screen.getByRole("button", { name: /恢復/ }));
@@ -178,7 +178,7 @@ describe("PauseToggle", () => {
     vi.mocked(api.updateItem).mockRejectedValue(new Error("Network error"));
 
     const { onItemUpdate } = renderPauseToggle(
-      makeItem({ paused: 1, pausedAt: "2026-01-01T00:00:00Z" }),
+      makeItem({ paused: 1, paused_at: "2026-01-01T00:00:00Z" }),
     );
 
     await user.click(screen.getByRole("button", { name: /恢復/ }));

@@ -22,7 +22,7 @@ export function Sidebar() {
 
   const { data: pausedCount = 0 } = useQuery({
     queryKey: queryKeys.pausedCount,
-    queryFn: () => listItems({ paused: "true", limit: 0 }).then((r) => r.total),
+    queryFn: () => listItems({ paused: "true", limit: 1 }).then((r) => r.total),
   });
 
   const selectedTag = useRouterState({

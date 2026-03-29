@@ -1,10 +1,11 @@
 import { useCallback, useMemo } from "react";
 import { useNavigate, useRouterState, type NavigateOptions } from "@tanstack/react-router";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { listItems, updateItem } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
 import { parseItems, type ParsedItem } from "@/lib/types";
 import { useAppContext } from "@/lib/app-context";
+import { useInvalidateAfterItemMutation } from "@/hooks/use-invalidate";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,10 +19,10 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-function getDaysPaused(pausedAt: string | null): number {
-  if (!pausedAt) return 0;
+function getDaysPaused(paused_at: string | null): number {
+  if (!paused_at) return 0;
   const now = new Date();
-  const paused = new Date(pausedAt);
+  const paused = new Date(paused_at);
   return Math.floor((now.getTime() - paused.getTime()) / 86400000);
 }
 
@@ -70,7 +71,7 @@ function getStatusLabel(status: string): string {
 export function PausedItemList() {
   const { isOnline } = useAppContext();
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
+  const invalidateAfterSave = useInvalidateAfterItemMutation();
 
   const selectedId = useRouterState({
     select: (s) => {
@@ -85,8 +86,8 @@ export function PausedItemList() {
     error: itemsError,
     refetch,
   } = useQuery({
-    queryKey: queryKeys.items.list({ paused: "true", sort: "created", order: "asc" }),
-    queryFn: () => listItems({ paused: "true", sort: "created", order: "asc", limit: 200 }),
+    queryKey: queryKeys.items.list({ paused: "true", sort: "created", order: "asc", limit: 100 }),
+    queryFn: () => listItems({ paused: "true", sort: "created", order: "asc", limit: 100 }),
   });
 
   const items = useMemo(() => parseItems(itemsData?.items ?? []), [itemsData?.items]);
@@ -99,20 +100,13 @@ export function PausedItemList() {
     async (item: ParsedItem) => {
       try {
         await updateItem(item.id, { paused: false });
-        queryClient.invalidateQueries({ queryKey: queryKeys.items.all });
-        queryClient.invalidateQueries({ queryKey: queryKeys.stats });
-        queryClient.invalidateQueries({ queryKey: queryKeys.pausedCount });
-        queryClient.invalidateQueries({ queryKey: queryKeys.unreviewed });
-        queryClient.invalidateQueries({ queryKey: queryKeys.attention });
-        queryClient.invalidateQueries({ queryKey: queryKeys.dashboardStale });
-        queryClient.invalidateQueries({ queryKey: queryKeys.focus });
-        queryClient.invalidateQueries({ queryKey: ["dashboardWeek"] });
+        invalidateAfterSave("paused");
         toast.success("已恢復");
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "恢復失敗");
       }
     },
-    [queryClient],
+    [invalidateAfterSave],
   );
 
   const navigateToItem = useCallback(
@@ -156,7 +150,7 @@ export function PausedItemList() {
   }
 
   const renderItem = (item: ParsedItem) => {
-    const daysPaused = getDaysPaused(item.pausedAt);
+    const daysPaused = getDaysPaused(item.paused_at);
 
     return (
       <div
@@ -176,7 +170,7 @@ export function PausedItemList() {
               </Badge>
             </div>
             <p className="text-xs text-muted-foreground italic mt-1 line-clamp-2">
-              {item.pausedContext || "未附備忘"}
+              {item.paused_context || "未附備忘"}
             </p>
           </div>
           <div className="flex items-center gap-2 shrink-0">

@@ -264,7 +264,7 @@ export async function updateItem(
     viewed_at?: string | null;
     is_private?: boolean;
     paused?: boolean;
-    pausedContext?: string;
+    paused_context?: string;
   },
 ): Promise<Item> {
   return request<Item>(`/items/${id}`, {

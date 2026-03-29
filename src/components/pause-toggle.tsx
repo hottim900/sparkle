@@ -1,11 +1,11 @@
 import { useState, useCallback } from "react";
-import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Pause, Play } from "lucide-react";
 import { updateItem } from "@/lib/api";
-import { queryKeys } from "@/lib/query-keys";
+import { useInvalidateAfterItemMutation } from "@/hooks/use-invalidate";
+import { usePauseResume } from "@/hooks/use-pause-resume";
 import type { ParsedItem } from "@/lib/types";
 import { toast } from "sonner";
 
@@ -16,26 +16,15 @@ interface PauseToggleProps {
 }
 
 export function PauseToggle({ item, isOnline, onItemUpdate }: PauseToggleProps) {
-  const queryClient = useQueryClient();
+  const invalidateAfterSave = useInvalidateAfterItemMutation();
   const [popoverOpen, setPopoverOpen] = useState(false);
   const [context, setContext] = useState("");
-  const [resuming, setResuming] = useState(false);
 
   const isPaused = item.paused === 1;
-
-  const invalidateAfterPause = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: queryKeys.items.all });
-    queryClient.invalidateQueries({ queryKey: queryKeys.stats });
-    queryClient.invalidateQueries({ queryKey: queryKeys.pausedCount });
-    queryClient.invalidateQueries({ queryKey: queryKeys.unreviewed });
-    queryClient.invalidateQueries({ queryKey: queryKeys.attention });
-    queryClient.invalidateQueries({ queryKey: queryKeys.dashboardStale });
-    queryClient.invalidateQueries({ queryKey: queryKeys.focus });
-    queryClient.invalidateQueries({ queryKey: ["dashboardWeek"] });
-  }, [queryClient]);
+  const { handleResume, resuming } = usePauseResume(item, onItemUpdate);
 
   const handlePause = useCallback(
-    async (pausedContext?: string) => {
+    async (paused_context?: string) => {
       setPopoverOpen(false);
 
       // Optimistic update
@@ -44,56 +33,29 @@ export function PauseToggle({ item, isOnline, onItemUpdate }: PauseToggleProps) 
         return {
           ...prev,
           paused: 1,
-          pausedAt: new Date().toISOString(),
-          pausedContext: pausedContext ?? null,
+          paused_at: new Date().toISOString(),
+          paused_context: paused_context ?? null,
         };
       });
 
       try {
-        const payload: { paused: boolean; pausedContext?: string } = { paused: true };
-        if (pausedContext) payload.pausedContext = pausedContext;
+        const payload: { paused: boolean; paused_context?: string } = { paused: true };
+        if (paused_context) payload.paused_context = paused_context;
         await updateItem(item.id, payload);
-        invalidateAfterPause();
+        invalidateAfterSave("paused");
         toast.success("已暫停");
       } catch (err) {
         // Rollback
         onItemUpdate((prev) => {
           if (!prev) return prev;
-          return { ...prev, paused: 0, pausedAt: null, pausedContext: null };
+          return { ...prev, paused: 0, paused_at: null, paused_context: null };
         });
         toast.error(err instanceof Error ? err.message : "暫停失敗");
       }
       setContext("");
     },
-    [item.id, onItemUpdate, invalidateAfterPause],
+    [item.id, onItemUpdate, invalidateAfterSave],
   );
-
-  const handleResume = useCallback(async () => {
-    setResuming(true);
-    // Optimistic update
-    const prevPausedAt = item.pausedAt;
-    const prevPausedContext = item.pausedContext;
-
-    onItemUpdate((prev) => {
-      if (!prev) return prev;
-      return { ...prev, paused: 0, pausedAt: null, pausedContext: null };
-    });
-
-    try {
-      await updateItem(item.id, { paused: false });
-      invalidateAfterPause();
-      toast.success("已恢復");
-    } catch (err) {
-      // Rollback
-      onItemUpdate((prev) => {
-        if (!prev) return prev;
-        return { ...prev, paused: 1, pausedAt: prevPausedAt, pausedContext: prevPausedContext };
-      });
-      toast.error(err instanceof Error ? err.message : "恢復失敗");
-    } finally {
-      setResuming(false);
-    }
-  }, [item.id, item.pausedAt, item.pausedContext, onItemUpdate, invalidateAfterPause]);
 
   if (isPaused) {
     return (

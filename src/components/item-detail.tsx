@@ -25,6 +25,7 @@ import { CategorySelect } from "@/components/category-select";
 import { PauseToggle } from "@/components/pause-toggle";
 import { PausedBanner } from "@/components/paused-banner";
 import { useItemForm } from "@/hooks/use-item-form";
+import { usePauseResume } from "@/hooks/use-pause-resume";
 import { updateItem } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
 
@@ -88,40 +89,7 @@ export function ItemDetail({ itemId, onDeleted }: ItemDetailProps) {
   const [aliasInput, setAliasInput] = useState("");
   const [createTodoRequested, setCreateTodoRequested] = useState(false);
   const [markingAsPrivate, setMarkingAsPrivate] = useState(false);
-  const [resuming, setResuming] = useState(false);
-
-  const handleResume = useCallback(async () => {
-    if (!item) return;
-    setResuming(true);
-    const prevPausedAt = item.pausedAt;
-    const prevPausedContext = item.pausedContext;
-
-    setItem((prev) => {
-      if (!prev) return prev;
-      return { ...prev, paused: 0, pausedAt: null, pausedContext: null };
-    });
-
-    try {
-      await updateItem(item.id, { paused: false });
-      queryClient.invalidateQueries({ queryKey: queryKeys.items.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.stats });
-      queryClient.invalidateQueries({ queryKey: queryKeys.pausedCount });
-      queryClient.invalidateQueries({ queryKey: queryKeys.unreviewed });
-      queryClient.invalidateQueries({ queryKey: queryKeys.attention });
-      queryClient.invalidateQueries({ queryKey: queryKeys.dashboardStale });
-      queryClient.invalidateQueries({ queryKey: queryKeys.focus });
-      queryClient.invalidateQueries({ queryKey: ["dashboardWeek"] });
-      toast.success("已恢復");
-    } catch (err) {
-      setItem((prev) => {
-        if (!prev) return prev;
-        return { ...prev, paused: 1, pausedAt: prevPausedAt, pausedContext: prevPausedContext };
-      });
-      toast.error(err instanceof Error ? err.message : "恢復失敗");
-    } finally {
-      setResuming(false);
-    }
-  }, [item, queryClient, setItem]);
+  const { handleResume, resuming } = usePauseResume(item, setItem);
 
   const handleMarkAsPrivate = useCallback(async () => {
     if (!item) return;

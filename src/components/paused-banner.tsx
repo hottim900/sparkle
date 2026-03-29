@@ -15,7 +15,7 @@ export function PausedBanner({ item, isOnline, onResume, resuming }: PausedBanne
   return (
     <div className="flex items-center gap-2 px-4 py-2 text-sm bg-amber-50 text-amber-800 dark:bg-amber-950 dark:text-amber-200 border-b border-amber-200 dark:border-amber-800">
       <PauseCircle className="h-4 w-4 shrink-0" />
-      <span className="flex-1 min-w-0 truncate">{item.pausedContext || "已暫停"}</span>
+      <span className="flex-1 min-w-0 truncate">{item.paused_context || "已暫停"}</span>
       <Button
         variant="outline"
         size="sm"

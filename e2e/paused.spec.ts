@@ -2,6 +2,12 @@ import { test, expect } from "@playwright/test";
 import { createItemViaApi, navigateTo } from "./helpers";
 
 test.describe("Paused Items", () => {
+  test("empty state message on paused page", async ({ page }) => {
+    // Must run first before other tests create paused items
+    await page.goto("/paused");
+    await expect(page.getByText("目前沒有暫停中的項目")).toBeVisible({ timeout: 10_000 });
+  });
+
   test("pause from detail view, item disappears from default list", async ({ page, request }) => {
     const item = await createItemViaApi(request, {
       title: `PauseTest ${Date.now()}`,
@@ -44,7 +50,7 @@ test.describe("Paused Items", () => {
         Authorization: `Bearer ${process.env.AUTH_TOKEN || "e2e-test-token-that-is-long-enough-for-validation"}`,
         "Content-Type": "application/json",
       },
-      data: { paused: true, pausedContext: "等待回覆" },
+      data: { paused: true, paused_context: "等待回覆" },
     });
 
     await page.goto("/");
@@ -125,13 +131,6 @@ test.describe("Paused Items", () => {
 
     await expect(page.getByText(item.title)).toBeVisible({ timeout: 10_000 });
     await expect(page.getByText("需要等設計稿")).toBeVisible();
-  });
-
-  test("empty state message on paused page", async ({ page }) => {
-    // Navigate to paused page — should show empty state
-    // (assuming no paused items from other tests remain — tests run serially with fresh DB)
-    await page.goto("/paused");
-    await expect(page.getByText("目前沒有暫停中的項目")).toBeVisible({ timeout: 10_000 });
   });
 
   test("sidebar badge count shows when items are paused", async ({ page, request }) => {
