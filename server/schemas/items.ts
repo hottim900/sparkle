@@ -56,6 +56,8 @@ export const updateItemSchema = z.object({
   category_id: z.string().uuid().nullable().optional(),
   viewed_at: z.string().nullable().optional(),
   is_private: z.boolean().optional(),
+  paused: z.boolean().optional(),
+  pausedContext: z.string().max(500).optional(),
 });
 
 export const listItemsSchema = z.object({
@@ -70,6 +72,7 @@ export const listItemsSchema = z.object({
     .union([z.string().transform((s) => s.split(",").filter(Boolean)), z.array(z.string())])
     .optional(),
   category_id: z.string().uuid().optional(),
+  paused: z.enum(["true", "false", "all"]).optional(),
 });
 
 export const batchSchema = z.object({

@@ -32,6 +32,7 @@ itemsRouter.get("/", (c) => {
       order: c.req.query("order"),
       limit: c.req.query("limit"),
       offset: c.req.query("offset"),
+      paused: c.req.query("paused"),
     });
     const result = listItems(db, query);
     return c.json(result);
@@ -168,10 +169,16 @@ itemsRouter.post("/batch", async (c) => {
           errors.push({ id: item.id, error: (e as Error).message });
         }
       }
-      // 3. Bulk update exported items (1 query)
+      // 3. Bulk update exported items (1 query); auto-clear paused
       if (exportedIds.length > 0) {
         db.update(items)
-          .set({ status: "exported", modified: now })
+          .set({
+            status: "exported",
+            modified: now,
+            paused: 0,
+            pausedAt: null,
+            pausedContext: null,
+          })
           .where(inArray(items.id, exportedIds))
           .run();
       }
@@ -197,10 +204,16 @@ itemsRouter.post("/batch", async (c) => {
       affected = result.changes;
       skipped = ids.length - affected;
     } else {
-      // archive — any type
+      // archive — any type; auto-clear paused
       const result = db
         .update(items)
-        .set({ status: "archived", modified: now })
+        .set({
+          status: "archived",
+          modified: now,
+          paused: 0,
+          pausedAt: null,
+          pausedContext: null,
+        })
         .where(and(inArray(items.id, ids), eq(items.is_private, 0)))
         .run();
       affected = result.changes;

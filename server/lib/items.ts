@@ -100,6 +100,7 @@ export function listItems(
     limit?: number;
     offset?: number;
     is_private?: 0 | 1;
+    paused?: "true" | "false" | "all";
   },
   enrich = true,
 ) {
@@ -107,6 +108,16 @@ export function listItems(
 
   // Default: show public items only. Pass is_private=1 to see private items.
   conditions.push(eq(items.is_private, filters?.is_private ?? 0));
+
+  // Paused filter: default (no param) → exclude paused; "true" → only paused; "false" → only non-paused; "all" → all
+  if (filters?.paused === "true") {
+    conditions.push(eq(items.paused, 1));
+  } else if (filters?.paused === "all") {
+    // No filter — show all
+  } else {
+    // Default or "false" — exclude paused
+    conditions.push(eq(items.paused, 0));
+  }
 
   if (filters?.status) {
     // SAFETY: Drizzle requires literal union type; value is validated by Zod in route layer
@@ -212,6 +223,23 @@ export function updateItem(
   if (input.viewed_at !== undefined) updates.viewed_at = input.viewed_at;
   if (input.is_private !== undefined) updates.is_private = input.is_private ? 1 : 0;
 
+  // Paused flag handling
+  if (input.paused === true) {
+    updates.paused = 1;
+    updates.pausedAt = new Date().toISOString();
+    if (input.pausedContext !== undefined) {
+      updates.pausedContext = input.pausedContext;
+    }
+  } else if (input.paused === false) {
+    updates.paused = 0;
+    updates.pausedAt = null;
+    updates.pausedContext = null;
+  } else if (input.pausedContext !== undefined && existing.paused) {
+    // Update context on an already-paused item without toggling paused
+    updates.pausedContext = input.pausedContext;
+  }
+  // If pausedContext sent without paused=true on a non-paused item → silently ignore (no else branch)
+
   // Type conversion auto-mapping (Section 9)
   if (input.type !== undefined && input.type !== existing.type) {
     const mappedStatus = getAutoMappedStatus(existing.type, input.type, existing.status);
@@ -270,6 +298,14 @@ export function updateItem(
       delete updates.aliases;
       delete updates.linked_note_id;
     }
+  }
+
+  // Auto-clear paused when transitioning to archived or exported
+  const finalStatus = (updates.status as string) ?? existing.status;
+  if (finalStatus === "archived" || finalStatus === "exported") {
+    updates.paused = 0;
+    updates.pausedAt = null;
+    updates.pausedContext = null;
   }
 
   db.update(items).set(updates).where(eq(items.id, id)).run();

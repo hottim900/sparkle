@@ -61,6 +61,7 @@ export function queryBriefData(sqlite: Database.Database, dateStr: string): Brie
          AND due IS NOT NULL
          AND due < ?
          AND is_private = 0
+         AND paused = 0
        ORDER BY due ASC
        LIMIT 10`,
     )
@@ -76,6 +77,7 @@ export function queryBriefData(sqlite: Database.Database, dateStr: string): Brie
          AND status = 'fleeting'
          AND modified < datetime(?, '-7 days')
          AND is_private = 0
+         AND paused = 0
        ORDER BY modified ASC
        LIMIT 5`,
     )
