@@ -47,6 +47,12 @@ export function formatItem(item: SparkleItem): string {
   if (item.share_visibility) {
     footer.push(`Shared: ${item.share_visibility}`);
   }
+  if (item.paused) {
+    footer.push(`Paused: ${item.paused_at ?? "yes"}`);
+    if (item.paused_context) {
+      footer.push(`Paused context: ${item.paused_context}`);
+    }
+  }
   lines.push(`*${footer.join(" | ")}*`);
 
   return lines.join("\n");
@@ -74,8 +80,9 @@ export function formatItemList<T extends SparkleItem>(
     } else {
       const dueStr = item.due ? ` (due: ${item.due})` : "";
       const priorityStr = item.priority ? ` ⚡${item.priority}` : "";
+      const pausedStr = item.paused ? " ⏸️paused" : "";
       lines.push(
-        `- **${item.title}** — ${item.status}${priorityStr}${dueStr}${catStr}${tagStr}`,
+        `- **${item.title}** — ${item.status}${priorityStr}${dueStr}${pausedStr}${catStr}${tagStr}`,
       );
     }
     lines.push(`  ID: ${item.id} | Type: ${item.type} | Modified: ${item.modified}`);

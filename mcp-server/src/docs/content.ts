@@ -271,7 +271,14 @@ sparkle_update_note(id: "...", type: "note")
 
 - \`sparkle_list_tags\` 查看現有標籤，保持一致性
 - 相關主題使用相同標籤，方便後續篩選
-- \`sparkle_list_notes\` 搭配 \`tag\` 參數按標籤瀏覽`,
+- \`sparkle_list_notes\` 搭配 \`tag\` 參數按標籤瀏覽
+
+## 暫停與恢復項目
+
+暫時不想處理的項目可以暫停，避免出現在 stale / attention 等提醒清單：
+- \`sparkle_pause_note\`：暫停項目，可選填恢復備忘
+- \`sparkle_resume_note\`：恢復暫停的項目（stale 天數從恢復時起算）
+- \`sparkle_list_notes\` 搭配 \`paused: "true"\` 查看所有暫停中的項目`,
   },
 
   "data-model": {
@@ -295,6 +302,9 @@ sparkle_update_note(id: "...", type: "note")
 | source | 參考 URL（可為 null） |
 | aliases | 別名陣列（用於 Obsidian 連結，最多 10 個） |
 | linked_note_id | 關聯筆記 ID（僅 todo 有效，可為 null） |
+| paused | 是否暫停（0 或 1） |
+| paused_at | 暫停時間（ISO 8601，可為 null） |
+| paused_context | 恢復備忘（最多 500 字，可為 null） |
 | created | 建立時間（ISO 8601） |
 | modified | 修改時間（ISO 8601） |
 

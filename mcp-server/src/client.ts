@@ -75,6 +75,7 @@ export async function listItems(params?: {
   type?: string;
   tag?: string;
   category_id?: string;
+  paused?: string;
   sort?: string;
   order?: string;
   limit?: number;
@@ -85,6 +86,7 @@ export async function listItems(params?: {
   if (params?.type) search.set("type", params.type);
   if (params?.tag) search.set("tag", params.tag);
   if (params?.category_id) search.set("category_id", params.category_id);
+  if (params?.paused) search.set("paused", params.paused);
   if (params?.sort) search.set("sort", params.sort);
   if (params?.order) search.set("order", params.order);
   if (params?.limit) search.set("limit", String(params.limit));
@@ -135,6 +137,8 @@ export async function updateItem(
     linked_note_id?: string | null;
     category_id?: string | null;
     is_private?: boolean;
+    paused?: boolean;
+    paused_context?: string;
   },
 ): Promise<SparkleItem> {
   return sparkleApi<SparkleItem>(`/items/${id}`, "PATCH", input);

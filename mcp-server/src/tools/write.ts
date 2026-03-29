@@ -130,6 +130,8 @@ Args:
   - linked_note_id (string, optional): UUID of linked note, or null to clear (todo only)
   - category_id (string, optional): Category UUID to assign, or null to clear
   - is_private (boolean, optional): Mark item as private (true only; already-private items return 404 from normal API)
+  - paused (boolean, optional): 暫停/恢復項目。暫停的項目不會出現在 stale、attention 等提醒列表中。
+  - paused_context (string, optional): 恢復備忘（最多 500 字）——下次回來時想記住什麼。僅在 paused=true 時有效。
 
 Returns: The updated item with all fields.
 
@@ -208,6 +210,15 @@ Side effects:
             .boolean()
             .optional()
             .describe("標記為私密筆記 (true to mark as private)"),
+          paused: z
+            .boolean()
+            .optional()
+            .describe("暫停/恢復項目"),
+          paused_context: z
+            .string()
+            .max(500)
+            .optional()
+            .describe("恢復備忘——下次回來時想記住什麼（僅 paused=true 時有效）"),
         })
         .strict(),
       annotations: {
@@ -232,6 +243,8 @@ Side effects:
       linked_note_id,
       category_id,
       is_private,
+      paused,
+      paused_context,
     }) => {
       try {
         // Find-and-replace mode: old_content + content
@@ -287,6 +300,8 @@ Side effects:
         if (linked_note_id !== undefined) update.linked_note_id = linked_note_id;
         if (category_id !== undefined) update.category_id = category_id;
         if (is_private !== undefined) update.is_private = is_private;
+        if (paused !== undefined) update.paused = paused;
+        if (paused_context !== undefined) update.paused_context = paused_context;
 
         const item = await updateItem(id, update);
         const text = `Note updated successfully.\n\n${formatItem(item)}`;
