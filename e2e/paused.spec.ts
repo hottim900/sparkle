@@ -30,7 +30,7 @@ test.describe("Paused Items", () => {
     await page.getByRole("button", { name: "不附備忘直接暫停" }).click();
 
     // Wait for PATCH to complete
-    await expect(page.getByText("已暫停")).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByRole("button", { name: "恢復", exact: true }).first()).toBeVisible({ timeout: 5_000 });
 
     // Close detail
     await page.keyboard.press("Escape");
@@ -126,7 +126,7 @@ test.describe("Paused Items", () => {
       .getByRole("button", { name: "暫停", exact: true })
       .click();
 
-    await expect(page.getByText("已暫停")).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByRole("button", { name: "恢復", exact: true }).first()).toBeVisible({ timeout: 5_000 });
 
     // Navigate to paused list
     await page.keyboard.press("Escape");
