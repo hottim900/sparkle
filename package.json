@@ -1,7 +1,7 @@
 {
   "name": "sparkle",
   "version": "1.2.0",
-  "description": "Self-hosted PWA for personal idea capture + task management with Zettelkasten note maturity flow",
+  "description": "Self-hosted PKM frontend for Obsidian: quick capture (PWA / LINE Bot / MCP) → Zettelkasten maturity → vault export",
   "license": "MIT",
   "repository": {
     "type": "git",
