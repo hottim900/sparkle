@@ -447,9 +447,11 @@ describe("resolveSparkleReferences", () => {
     expect(resolveSparkleReferences("筆記（abcd1234）", lookup)).toBe("筆記（abcd1234）");
   });
 
-  it("sanitizes ]] and | in titles for wikilink safety", () => {
-    const lookup = () => ({ title: "Note with ]] and | chars" });
-    expect(resolveSparkleReferences("筆記（abcd1234）", lookup)).toBe("[[Note with  and - chars]]");
+  it("sanitizes wikilink-breaking chars in titles", () => {
+    const lookup = () => ({ title: "Note with ]] and [[ and | and\nnewline" });
+    expect(resolveSparkleReferences("筆記（abcd1234）", lookup)).toBe(
+      "[[Note with ） and （ and - and newline]]",
+    );
   });
 
   it("resolves adjacent references independently", () => {

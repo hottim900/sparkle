@@ -12,10 +12,15 @@ import {
   listItemsSchema,
   batchSchema,
 } from "../schemas/items.js";
-import { exportToObsidian, resolveSparkleReferences } from "../lib/export.js";
+import { exportToObsidian, resolveSparkleReferences, type ItemLookup } from "../lib/export.js";
 import { getObsidianSettings } from "../lib/settings.js";
 import { ZodError } from "zod";
 import { revokeSharesByItemId } from "../lib/shares.js";
+
+const lookupItem: ItemLookup = (shortId) => {
+  const found = getItem(db, shortId, false);
+  return found ? { title: found.title } : null;
+};
 
 const itemsRouter = new Hono();
 
@@ -154,10 +159,6 @@ itemsRouter.post("/batch", async (c) => {
         )
         .all();
       // 2. Loop export (file I/O, unavoidable)
-      const lookupItem = (shortId: string) => {
-        const found = getItem(db, shortId, false);
-        return found ? { title: found.title } : null;
-      };
       const errors: { id: string; error: string }[] = [];
       const exportedIds: string[] = [];
       const skippedIds: string[] = [];
@@ -263,10 +264,6 @@ itemsRouter.post("/:id/export", async (c) => {
   }
 
   try {
-    const lookupItem = (shortId: string) => {
-      const found = getItem(db, shortId, false);
-      return found ? { title: found.title } : null;
-    };
     const resolvedContent = resolveSparkleReferences(item.content || "", lookupItem);
     const exportItem = { ...item, content: resolvedContent };
     const result = await exportToObsidian(exportItem, {
