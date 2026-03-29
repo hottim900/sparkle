@@ -56,6 +56,8 @@ export const updateItemSchema = z.object({
   category_id: z.string().uuid().nullable().optional(),
   viewed_at: z.string().nullable().optional(),
   is_private: z.boolean().optional(),
+  paused: z.boolean().optional(),
+  paused_context: z.string().max(500).optional(),
 });
 
 export const listItemsSchema = z.object({
@@ -70,6 +72,7 @@ export const listItemsSchema = z.object({
     .union([z.string().transform((s) => s.split(",").filter(Boolean)), z.array(z.string())])
     .optional(),
   category_id: z.string().uuid().optional(),
+  paused: z.enum(["true", "false", "all"]).optional(),
 });
 
 export const batchSchema = z.object({
@@ -129,6 +132,9 @@ export const importItemSchema = z
     aliases: importAliasesSchema.default([]),
     linked_note_id: z.string().uuid().nullable().default(null),
     category_id: z.string().uuid().nullable().default(null),
+    paused: z.coerce.number().int().min(0).max(1).default(0),
+    paused_at: z.string().nullable().default(null),
+    paused_context: z.string().max(500).nullable().default(null),
     created: z.string().min(1),
     modified: z.string().min(1),
   })
