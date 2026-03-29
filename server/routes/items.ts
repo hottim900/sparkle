@@ -12,10 +12,15 @@ import {
   listItemsSchema,
   batchSchema,
 } from "../schemas/items.js";
-import { exportToObsidian } from "../lib/export.js";
+import { exportToObsidian, resolveSparkleReferences, type ItemLookup } from "../lib/export.js";
 import { getObsidianSettings } from "../lib/settings.js";
 import { ZodError } from "zod";
 import { revokeSharesByItemId } from "../lib/shares.js";
+
+const lookupItem: ItemLookup = (shortId) => {
+  const found = getItem(db, shortId, false);
+  return found ? { title: found.title } : null;
+};
 
 const itemsRouter = new Hono();
 
@@ -159,7 +164,9 @@ itemsRouter.post("/batch", async (c) => {
       const skippedIds: string[] = [];
       for (const item of eligible) {
         try {
-          const result = await exportToObsidian(item as ExportableItem, exportConfig);
+          const resolvedContent = resolveSparkleReferences(item.content || "", lookupItem);
+          const exportItem = { ...item, content: resolvedContent } as ExportableItem;
+          const result = await exportToObsidian(exportItem, exportConfig);
           if (result.skipped) {
             skippedIds.push(item.id);
           } else {
@@ -257,7 +264,9 @@ itemsRouter.post("/:id/export", async (c) => {
   }
 
   try {
-    const result = await exportToObsidian(item, {
+    const resolvedContent = resolveSparkleReferences(item.content || "", lookupItem);
+    const exportItem = { ...item, content: resolvedContent };
+    const result = await exportToObsidian(exportItem, {
       vaultPath: obsidian.obsidian_vault_path,
       inboxFolder: obsidian.obsidian_inbox_folder,
       exportMode: obsidian.obsidian_export_mode,

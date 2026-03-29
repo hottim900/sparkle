@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.2.4.0] - 2026-03-30
+
+### Fixed
+
+* Remove category from Obsidian export frontmatter (no native Obsidian equivalent)
+* Skip auto-generated H1 title when note content already starts with one
+* Normalize tags on export: lowercase, spaces→hyphens, deduplicate
+* Resolve Sparkle ID references (`筆記（id）`) to Obsidian wikilinks (`[[title]]`)
+* Sanitize wikilink-breaking characters in titles (`]]`, `[[`, `|`, newlines)
+
+### Changed
+
+* Extract shared lookupItem function for export reference resolution
+* Align wikilink title sanitization with existing daily-note.ts safeTitle()
+
 ## [1.2.0](https://github.com/hottim900/sparkle/compare/v1.1.1...v1.2.0) (2026-03-29)
 
 
