@@ -57,7 +57,7 @@ export const updateItemSchema = z.object({
   viewed_at: z.string().nullable().optional(),
   is_private: z.boolean().optional(),
   paused: z.boolean().optional(),
-  pausedContext: z.string().max(500).optional(),
+  paused_context: z.string().max(500).optional(),
 });
 
 export const listItemsSchema = z.object({
