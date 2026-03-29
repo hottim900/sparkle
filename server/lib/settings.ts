@@ -26,6 +26,17 @@ export function getSetting(sqlite: Database.Database, key: string): string | nul
 }
 
 /**
+ * Read a boolean setting with an explicit default for missing keys.
+ * Every boolean setting MUST use this instead of raw `=== "true"` comparison
+ * to prevent silent feature breakage when a key is absent from the DB.
+ */
+function getBoolSetting(all: Record<string, string>, key: string, defaultValue: boolean): boolean {
+  const val = all[key];
+  if (val === undefined) return defaultValue;
+  return val === "true";
+}
+
+/**
  * Get all settings as a key-value object.
  */
 export function getSettings(sqlite: Database.Database): Record<string, string> {
@@ -46,7 +57,7 @@ export function getSettings(sqlite: Database.Database): Record<string, string> {
 export function getObsidianSettings(sqlite: Database.Database): ObsidianSettings {
   const all = getSettings(sqlite);
   return {
-    obsidian_enabled: all.obsidian_enabled === "true",
+    obsidian_enabled: getBoolSetting(all, "obsidian_enabled", false),
     obsidian_vault_path: all.obsidian_vault_path ?? "",
     obsidian_inbox_folder: all.obsidian_inbox_folder ?? "0_Inbox",
     obsidian_export_mode: (all.obsidian_export_mode ?? "overwrite") as ExportMode,
@@ -85,7 +96,7 @@ export function getDailyNoteSettings(sqlite: Database.Database): DailyNoteSettin
   const all = getSettings(sqlite);
   const mode = all.daily_note_mode;
   return {
-    daily_note_enabled: all.daily_note_enabled === "true",
+    daily_note_enabled: getBoolSetting(all, "daily_note_enabled", true),
     obsidian_daily_folder: all.obsidian_daily_folder ?? "Daily",
     daily_note_time: all.daily_note_time ?? "23:00",
     daily_note_mode: mode === "append" ? "append" : "subfolder",
@@ -103,7 +114,7 @@ export interface LineBriefSettings {
 export function getLineBriefSettings(sqlite: Database.Database): LineBriefSettings {
   const all = getSettings(sqlite);
   return {
-    line_brief_enabled: all.line_brief_enabled === "true", // default false — requires explicit opt-in
+    line_brief_enabled: getBoolSetting(all, "line_brief_enabled", false),
     line_brief_time: all.line_brief_time ?? "21:00",
   };
 }
