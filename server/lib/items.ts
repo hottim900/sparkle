@@ -226,19 +226,19 @@ export function updateItem(
   // Paused flag handling
   if (input.paused === true) {
     updates.paused = 1;
-    updates.pausedAt = new Date().toISOString();
-    if (input.pausedContext !== undefined) {
-      updates.pausedContext = input.pausedContext;
+    updates.paused_at = new Date().toISOString();
+    if (input.paused_context !== undefined) {
+      updates.paused_context = input.paused_context;
     }
   } else if (input.paused === false) {
     updates.paused = 0;
-    updates.pausedAt = null;
-    updates.pausedContext = null;
-  } else if (input.pausedContext !== undefined && existing.paused) {
+    updates.paused_at = null;
+    updates.paused_context = null;
+  } else if (input.paused_context !== undefined && existing.paused) {
     // Update context on an already-paused item without toggling paused
-    updates.pausedContext = input.pausedContext;
+    updates.paused_context = input.paused_context;
   }
-  // If pausedContext sent without paused=true on a non-paused item → silently ignore (no else branch)
+  // If paused_context sent without paused=true on a non-paused item → silently ignore (no else branch)
 
   // Type conversion auto-mapping (Section 9)
   if (input.type !== undefined && input.type !== existing.type) {
@@ -304,8 +304,8 @@ export function updateItem(
   const finalStatus = (updates.status as string) ?? existing.status;
   if (finalStatus === "archived" || finalStatus === "exported") {
     updates.paused = 0;
-    updates.pausedAt = null;
-    updates.pausedContext = null;
+    updates.paused_at = null;
+    updates.paused_context = null;
   }
 
   db.update(items).set(updates).where(eq(items.id, id)).run();

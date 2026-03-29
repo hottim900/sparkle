@@ -140,8 +140,8 @@ describe("PATCH /api/items/:id — paused flag", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.paused).toBe(1);
-    expect(body.pausedAt).toBeTruthy();
-    expect(body.pausedContext).toBeNull();
+    expect(body.paused_at).toBeTruthy();
+    expect(body.paused_context).toBeNull();
   });
 
   it("unpauses an item with paused: false", async () => {
@@ -151,7 +151,7 @@ describe("PATCH /api/items/:id — paused flag", () => {
     await app.request(`/api/items/${id}`, {
       method: "PATCH",
       headers: jsonHeaders(),
-      body: JSON.stringify({ paused: true, pausedContext: "waiting" }),
+      body: JSON.stringify({ paused: true, paused_context: "waiting" }),
     });
 
     // Unpause
@@ -163,31 +163,31 @@ describe("PATCH /api/items/:id — paused flag", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.paused).toBe(0);
-    expect(body.pausedAt).toBeNull();
-    expect(body.pausedContext).toBeNull();
+    expect(body.paused_at).toBeNull();
+    expect(body.paused_context).toBeNull();
   });
 
-  it("stores pausedContext when pausing", async () => {
+  it("stores paused_context when pausing", async () => {
     const id = await createItemApi({ title: "Test todo", type: "todo" });
 
     const res = await app.request(`/api/items/${id}`, {
       method: "PATCH",
       headers: jsonHeaders(),
-      body: JSON.stringify({ paused: true, pausedContext: "waiting for feedback" }),
+      body: JSON.stringify({ paused: true, paused_context: "waiting for feedback" }),
     });
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.paused).toBe(1);
-    expect(body.pausedContext).toBe("waiting for feedback");
+    expect(body.paused_context).toBe("waiting for feedback");
   });
 
-  it("rejects pausedContext > 500 chars", async () => {
+  it("rejects paused_context > 500 chars", async () => {
     const id = await createItemApi({ title: "Test note", type: "note" });
 
     const res = await app.request(`/api/items/${id}`, {
       method: "PATCH",
       headers: jsonHeaders(),
-      body: JSON.stringify({ paused: true, pausedContext: "x".repeat(501) }),
+      body: JSON.stringify({ paused: true, paused_context: "x".repeat(501) }),
     });
     expect(res.status).toBe(400);
   });
@@ -199,7 +199,7 @@ describe("PATCH /api/items/:id — paused flag", () => {
     await app.request(`/api/items/${id}`, {
       method: "PATCH",
       headers: jsonHeaders(),
-      body: JSON.stringify({ paused: true, pausedContext: "reason" }),
+      body: JSON.stringify({ paused: true, paused_context: "reason" }),
     });
 
     // Archive
@@ -211,8 +211,8 @@ describe("PATCH /api/items/:id — paused flag", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.paused).toBe(0);
-    expect(body.pausedAt).toBeNull();
-    expect(body.pausedContext).toBeNull();
+    expect(body.paused_at).toBeNull();
+    expect(body.paused_context).toBeNull();
   });
 
   it("preserves paused flag on type conversion", async () => {
@@ -222,7 +222,7 @@ describe("PATCH /api/items/:id — paused flag", () => {
     await app.request(`/api/items/${id}`, {
       method: "PATCH",
       headers: jsonHeaders(),
-      body: JSON.stringify({ paused: true, pausedContext: "thinking" }),
+      body: JSON.stringify({ paused: true, paused_context: "thinking" }),
     });
 
     // Convert note → todo
@@ -235,21 +235,21 @@ describe("PATCH /api/items/:id — paused flag", () => {
     const body = await res.json();
     expect(body.type).toBe("todo");
     expect(body.paused).toBe(1);
-    expect(body.pausedContext).toBe("thinking");
+    expect(body.paused_context).toBe("thinking");
   });
 
-  it("silently ignores pausedContext when not pausing a non-paused item", async () => {
+  it("silently ignores paused_context when not pausing a non-paused item", async () => {
     const id = await createItemApi({ title: "Test note", type: "note" });
 
     const res = await app.request(`/api/items/${id}`, {
       method: "PATCH",
       headers: jsonHeaders(),
-      body: JSON.stringify({ pausedContext: "should be ignored" }),
+      body: JSON.stringify({ paused_context: "should be ignored" }),
     });
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.paused).toBe(0);
-    expect(body.pausedContext).toBeNull();
+    expect(body.paused_context).toBeNull();
   });
 });
 
@@ -346,7 +346,7 @@ describe("POST /api/items/batch — paused auto-clear", () => {
     await app.request(`/api/items/${id}`, {
       method: "PATCH",
       headers: jsonHeaders(),
-      body: JSON.stringify({ paused: true, pausedContext: "reason" }),
+      body: JSON.stringify({ paused: true, paused_context: "reason" }),
     });
 
     // Batch archive
@@ -365,8 +365,8 @@ describe("POST /api/items/batch — paused auto-clear", () => {
     });
     const item = await getRes.json();
     expect(item.paused).toBe(0);
-    expect(item.pausedAt).toBeNull();
-    expect(item.pausedContext).toBeNull();
+    expect(item.paused_at).toBeNull();
+    expect(item.paused_context).toBeNull();
   });
 });
 
