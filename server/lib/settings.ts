@@ -85,7 +85,7 @@ export function getDailyNoteSettings(sqlite: Database.Database): DailyNoteSettin
   const all = getSettings(sqlite);
   const mode = all.daily_note_mode;
   return {
-    daily_note_enabled: all.daily_note_enabled === "true",
+    daily_note_enabled: all.daily_note_enabled !== "false",
     obsidian_daily_folder: all.obsidian_daily_folder ?? "Daily",
     daily_note_time: all.daily_note_time ?? "23:00",
     daily_note_mode: mode === "append" ? "append" : "subfolder",
