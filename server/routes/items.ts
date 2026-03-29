@@ -176,8 +176,8 @@ itemsRouter.post("/batch", async (c) => {
             status: "exported",
             modified: now,
             paused: 0,
-            pausedAt: null,
-            pausedContext: null,
+            paused_at: null,
+            paused_context: null,
           })
           .where(inArray(items.id, exportedIds))
           .run();
@@ -186,10 +186,10 @@ itemsRouter.post("/batch", async (c) => {
       skipped = skippedIds.length + (ids.length - eligible.length);
       return c.json({ affected, skipped, errors });
     } else if (action === "done") {
-      // → done (todo only, any status)
+      // → done (todo only, any status); auto-clear paused
       const result = db
         .update(items)
-        .set({ status: "done", modified: now })
+        .set({ status: "done", modified: now, paused: 0, paused_at: null, paused_context: null })
         .where(and(inArray(items.id, ids), eq(items.type, "todo"), eq(items.is_private, 0)))
         .run();
       affected = result.changes;
@@ -211,8 +211,8 @@ itemsRouter.post("/batch", async (c) => {
           status: "archived",
           modified: now,
           paused: 0,
-          pausedAt: null,
-          pausedContext: null,
+          paused_at: null,
+          paused_context: null,
         })
         .where(and(inArray(items.id, ids), eq(items.is_private, 0)))
         .run();
@@ -235,7 +235,7 @@ itemsRouter.get("/:id/linked-todos", (c) => {
   // Verify the note exists and is not private (prevents confirming private note IDs exist)
   const note = getItem(db, id, false);
   if (!note) return c.json({ error: "Item not found" }, 404);
-  const result = listItems(db, { linked_note_id: id });
+  const result = listItems(db, { linked_note_id: id, paused: "all" });
   return c.json({ items: result.items });
 });
 
