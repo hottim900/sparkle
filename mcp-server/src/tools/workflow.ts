@@ -68,6 +68,89 @@ Returns: The updated note.`,
   );
 
   server.registerTool(
+    "sparkle_pause_note",
+    {
+      title: "Pause Sparkle Note",
+      description: `暫停項目。暫停的項目不會出現在 stale、attention 等提醒列表中，但可透過搜尋或暫停清單找到。可選填恢復備忘（下次回來時想記住什麼）。
+
+Args:
+  - id (string, required): Item UUID
+  - context (string, optional): 恢復備忘（最多 500 字）
+
+Returns: The updated item.`,
+      inputSchema: z
+        .object({
+          id: z.string().uuid().describe("Item UUID"),
+          context: z
+            .string()
+            .max(500)
+            .optional()
+            .describe("恢復備忘——下次回來時想記住什麼"),
+        })
+        .strict(),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ id, context }) => {
+      try {
+        const update: { paused: boolean; pausedContext?: string } = { paused: true };
+        if (context !== undefined) update.pausedContext = context;
+        const item = await updateItem(id, update);
+        const text = `項目已暫停。\n\n${formatItem(item)}`;
+        return {
+          content: [{ type: "text", text }],
+        };
+      } catch (error) {
+        return formatToolError(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "sparkle_resume_note",
+    {
+      title: "Resume Sparkle Note",
+      description: `恢復暫停的項目。恢復後 stale 天數從現在起算。
+
+Args:
+  - id (string, required): Item UUID
+
+Returns: The updated item.`,
+      inputSchema: z
+        .object({
+          id: z.string().uuid().describe("Item UUID"),
+        })
+        .strict(),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ id }) => {
+      try {
+        // Fetch before resuming to capture paused_context (cleared on resume)
+        const before = await getItem(id);
+        const item = await updateItem(id, { paused: false });
+        let text = `項目已恢復。\n\n${formatItem(item)}`;
+        if (before.paused_context) {
+          text = `項目已恢復。\n\n**恢復備忘**: ${before.paused_context}\n\n${formatItem(item)}`;
+        }
+        return {
+          content: [{ type: "text", text }],
+        };
+      } catch (error) {
+        return formatToolError(error);
+      }
+    },
+  );
+
+  server.registerTool(
     "sparkle_export_to_obsidian",
     {
       title: "Export Note to Obsidian",

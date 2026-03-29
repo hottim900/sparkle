@@ -54,6 +54,7 @@ Args:
   - tag (string, optional): Filter by tag name
   - type (string, optional): "note", "todo", or "scratch", default "note"
   - category_id (string, optional): Filter by category UUID
+  - paused (string, optional): 篩選暫停狀態 — "true"（僅暫停）、"false"（僅未暫停）、"all"（全部，預設）
   - sort (string, optional): "created", "modified", "priority", or "due" (default: "created")
   - order (string, optional): "asc" or "desc" (default: "desc")
   - limit (number, optional): Max results 1-100, default 50
@@ -77,6 +78,10 @@ Returns: List of items with total count and pagination info.`,
         tag: z.string().optional().describe("Filter by tag name"),
         type: z.enum(["note", "todo", "scratch"]).default("note").describe("Item type"),
         category_id: z.string().uuid().optional().describe("Filter by category UUID"),
+        paused: z
+          .enum(["true", "false", "all"])
+          .optional()
+          .describe("篩選暫停狀態 (default: all)"),
         sort: z
           .enum(["created", "modified", "priority", "due"])
           .default("created")
@@ -92,9 +97,9 @@ Returns: List of items with total count and pagination info.`,
         openWorldHint: false,
       },
     },
-    async ({ status, tag, type, category_id, sort, order, limit, offset }) => {
+    async ({ status, tag, type, category_id, paused, sort, order, limit, offset }) => {
       try {
-        const data = await listItems({ status, tag, type, category_id, sort, order, limit, offset });
+        const data = await listItems({ status, tag, type, category_id, paused, sort, order, limit, offset });
         const text = formatItemList(data.items, data.total, { offset, limit });
         return {
           content: [{ type: "text", text }],

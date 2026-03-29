@@ -69,6 +69,7 @@ export const SPARKLE_INSTRUCTIONS = `
 | 查看既有標籤 | sparkle_list_tags（建立新筆記前先查看，保持標籤一致性）|
 | 管理分類 | sparkle_list_categories、sparkle_create_category、sparkle_update_category、sparkle_delete_category、sparkle_reorder_categories |
 | 為項目指定分類 | sparkle_create_note / sparkle_update_note 的 category_id 參數（先用 sparkle_list_categories 查詢 UUID）|
+| 暫停/恢復項目 | sparkle_pause_note（暫停，不出現在提醒列表）、sparkle_resume_note（恢復）、sparkle_list_notes 加 paused 篩選 |
 | 讀取 vault 檔案 | sparkle_read_obsidian（按 sparkle_id）、sparkle_read_obsidian_by_path（按路徑）|
 | 修改 vault 檔案 | sparkle_write_obsidian（按 sparkle_id）、sparkle_write_obsidian_by_path（按路徑）|
 | 搜尋 vault 內容 | sparkle_search_obsidian（全文搜尋 vault .md 檔案）|
