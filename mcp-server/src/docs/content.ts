@@ -8,10 +8,16 @@ export const DOCS: Record<
 > = {
   overview: {
     title: "Sparkle 概覽",
-    description: "Sparkle 的設計理念、核心功能與三種項目類型介紹",
+    description: "Sparkle 的產品定位、核心功能與三種項目類型介紹",
     content: `# Sparkle 概覽
 
-Sparkle 是一個自架的個人知識管理 PWA，結合 **Zettelkasten 筆記成熟度流程**與 **GTD 待辦管理**，幫助你從靈感捕捉到知識沉澱的完整旅程。
+Sparkle 是 Obsidian 的自架式 PKM 前端。Sparkle 提供快速捕捉介面（PWA、LINE Bot、Claude Code MCP），將想法導入 Zettelkasten 成熟度流程，以 Obsidian vault 作為長期知識歸宿。Sparkle 負責捕捉、分類與任務管理；Obsidian 負責深度閱讀與反思。
+
+## 產品定位
+
+- **加深與 Obsidian 的連結**，而非在 Sparkle 內重建 Obsidian 已有的功能。
+- 時間維度的整合透過週檢視 + 每日筆記生成實現，不建完整行事曆（月/日檢視屬 Obsidian Calendar plugin 範疇）。
+- 多管道捕捉（PWA、LINE Bot、Claude Code MCP）→ Zettelkasten 成熟 → vault export 是核心資料流。
 
 ## 三種項目類型
 
@@ -27,18 +33,11 @@ Sparkle 是一個自架的個人知識管理 PWA，結合 **Zettelkasten 筆記�
 臨時的草稿空間：draft → archived。
 用於暫時存放片段資訊、未分類的內容。可升級為閃念筆記或直接封存。
 
-## 設計理念
-
-- **手機快速捕捉**：PWA 支援離線，隨時記下靈感
-- **桌面深度編輯**：Markdown 編輯器，適合整理和發展筆記
-- **LINE Bot 隨時記錄**：透過聊天介面快速新增和查詢
-- **Obsidian 匯出**：永久筆記匯出為 .md 檔案，融入長期知識庫
-
 ## 核心流程
 
-捕捉想法 → 分類整理 → 深化發展 → 匯出沉澱
+捕捉想法 → 分類整理 → 深化發展 → 匯出至 Obsidian vault
 
-Sparkle 專注於知識的「孵化」階段——從模糊的靈感到成熟的知識卡片。當筆記發展完成，匯出到 Obsidian 成為永久知識庫的一部分。`,
+Sparkle 專注於知識的「孵化」階段——從模糊的靈感到成熟的知識卡片。當筆記發展完成，匯出到 Obsidian 成為永久知識庫的一部分。每日活動自動生成 Obsidian daily note，並透過 LINE 推播每日摘要。`,
   },
 
   zettelkasten: {

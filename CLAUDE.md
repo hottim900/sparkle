@@ -1,6 +1,14 @@
 # Sparkle — Project Guide
 
-Self-hosted PWA: idea capture + task management with Zettelkasten maturity flow, LINE Bot, Obsidian export.
+Self-hosted PKM frontend for Obsidian: quick capture (LINE Bot / PWA) → Zettelkasten maturity → vault export. Includes task management, daily note generation, and temporal bridge (week view + LINE daily brief).
+
+## Product Positioning
+
+Sparkle 是 Obsidian 的活躍前端，不是獨立 PKM。Sparkle 負責捕捉、分類、任務管理；Obsidian 負責深度閱讀與反思。功能決策原則：
+
+- **加深與 Obsidian 的連結**，而非在 Sparkle 內重建 Obsidian 已有的功能。
+- 時間維度的整合透過 weekly view + daily note 生成實現，不建完整行事曆（月/日檢視屬 Obsidian Calendar plugin 範疇）。
+- 多管道捕捉（PWA、LINE Bot、Claude Code MCP）→ Zettelkasten 成熟 → vault export 是核心資料流。
 
 ## Development
 

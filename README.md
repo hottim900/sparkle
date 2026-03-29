@@ -2,7 +2,7 @@
 
 # Sparkle
 
-Self-hosted PWA for personal idea capture and task management with Zettelkasten note maturity flow.
+A self-hosted PKM frontend for Obsidian. Sparkle provides fast capture interfaces (PWA, LINE Bot, Claude Code via MCP) that feed into a Zettelkasten maturity flow, with the Obsidian vault as the long-term knowledge destination. Sparkle handles capture, triage, and task management; Obsidian handles deep reading and reflection.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node.js 22+](https://img.shields.io/badge/Node.js-22%2B-green.svg)](https://nodejs.org/)

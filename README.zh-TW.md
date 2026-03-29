@@ -2,7 +2,7 @@
 
 # Sparkle
 
-自架式 PWA，結合個人靈感捕捉與任務管理，搭載 Zettelkasten 筆記成熟度流程。
+Obsidian 的自架式 PKM 前端。Sparkle 提供快速捕捉介面（PWA、LINE Bot、透過 MCP 的 Claude Code），將想法導入 Zettelkasten 成熟度流程，以 Obsidian vault 作為長期知識歸宿。Sparkle 負責捕捉、分類與任務管理；Obsidian 負責深度閱讀與反思。
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node.js 22+](https://img.shields.io/badge/Node.js-22%2B-green.svg)](https://nodejs.org/)
