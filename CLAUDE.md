@@ -36,7 +36,9 @@ Type conversion auto-maps status server-side. `category_id` preserved; `due`/`li
 
 `paused` flag: cross-type pause mechanism (boolean, orthogonal to status). Paused items excluded from stale/attention/overdue/focus/unreviewed queries; visible in search and dedicated `/paused` page. Auto-cleared on archive/export/done.
 
-DB migration version 0→18, idempotent. Migration safety enforced by PostToolUse hook.
+DB migration version 0→19, idempotent. Migration safety enforced by PostToolUse hook.
+
+- Boolean settings: use `getBoolSetting(all, key, defaultValue)` — never raw `=== "true"`. New boolean settings MUST have a migration INSERT OR IGNORE + fresh install seed.
 
 ## Conventions
 

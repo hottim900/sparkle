@@ -93,12 +93,18 @@ describe("Settings", () => {
   // getDailyNoteSettings
   // ============================================================
   describe("getDailyNoteSettings", () => {
-    it("returns daily_note_enabled false when key missing from DB", () => {
+    it("defaults daily_note_enabled to true when key missing from DB", () => {
+      const settings = getDailyNoteSettings(sqlite);
+      expect(settings.daily_note_enabled).toBe(true);
+    });
+
+    it("returns false when daily_note_enabled explicitly set to 'false'", () => {
+      updateSettings(sqlite, { daily_note_enabled: "false" });
       const settings = getDailyNoteSettings(sqlite);
       expect(settings.daily_note_enabled).toBe(false);
     });
 
-    it("returns daily_note_enabled true when set", () => {
+    it("returns true when daily_note_enabled set to 'true'", () => {
       updateSettings(sqlite, { daily_note_enabled: "true" });
       const settings = getDailyNoteSettings(sqlite);
       expect(settings.daily_note_enabled).toBe(true);
@@ -107,7 +113,7 @@ describe("Settings", () => {
     it("returns defaults for all fields", () => {
       const settings = getDailyNoteSettings(sqlite);
       expect(settings).toEqual({
-        daily_note_enabled: false,
+        daily_note_enabled: true,
         obsidian_daily_folder: "Daily",
         daily_note_time: "23:00",
         daily_note_mode: "subfolder",

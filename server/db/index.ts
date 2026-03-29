@@ -8,7 +8,7 @@ import { logger } from "../lib/logger.js";
 
 const DB_PATH = process.env.DATABASE_URL || "./data/todo.db";
 
-const TARGET_VERSION = 18;
+const TARGET_VERSION = 19;
 
 function getSchemaVersion(sqlite: Database.Database): number {
   // Check if schema_version table exists
@@ -355,6 +355,14 @@ function runMigrations(sqlite: Database.Database) {
     sqlite.exec("CREATE INDEX IF NOT EXISTS idx_items_paused ON items(paused) WHERE paused = 1");
     setSchemaVersion(sqlite, 18);
   }
+
+  // Step 18→19: Seed daily_note_enabled for existing installations
+  if (version < 19) {
+    sqlite.exec(
+      "INSERT OR IGNORE INTO settings (key, value) VALUES ('daily_note_enabled', 'true')",
+    );
+    setSchemaVersion(sqlite, 19);
+  }
 }
 
 export function initializeDatabase(sqlite: Database.Database) {
@@ -413,6 +421,7 @@ export function initializeDatabase(sqlite: Database.Database) {
         ('stale_days', '14'),
         ('obsidian_daily_folder', 'Daily'),
         ('daily_note_time', '23:00'),
+        ('daily_note_enabled', 'true'),
         ('daily_note_mode', 'subfolder'),
         ('line_brief_enabled', 'false'),
         ('line_brief_time', '21:00');

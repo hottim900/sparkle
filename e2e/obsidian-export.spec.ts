@@ -46,7 +46,7 @@ test.describe("Obsidian Export", () => {
     await expect(page.getByRole("heading", { name: "設定", exact: true })).toBeVisible({
       timeout: 10_000,
     });
-    await expect(page.getByRole("button", { name: "已啟用" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "已啟用" }).first()).toBeVisible();
     await expect(vaultPathInput).toHaveValue(VAULT_PATH);
   });
 
