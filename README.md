@@ -12,6 +12,7 @@ A self-hosted PKM frontend for Obsidian. Sparkle provides fast capture interface
 
 - **Zettelkasten Note Flow** -- Notes mature through stages: Fleeting -> Developing -> Permanent -> Exported to Obsidian
 - **GTD Task Management** -- Quick-capture todos with priority levels, due dates, and tag organization
+- **Pause & Resume** -- Shelve notes and todos without archiving; paused items stay out of stale/attention alerts but remain searchable, with optional context memos for when you return
 - **Categories** -- Organize notes and todos into color-coded categories with drag-and-drop reordering
 - **Dashboard & Week View** -- Activity overview with weekly breakdown of notes and todos
 - **Private Notes** -- PIN-protected notes hidden from default views and search
