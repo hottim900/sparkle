@@ -129,6 +129,9 @@ export const importItemSchema = z
     aliases: importAliasesSchema.default([]),
     linked_note_id: z.string().uuid().nullable().default(null),
     category_id: z.string().uuid().nullable().default(null),
+    paused: z.coerce.number().int().min(0).max(1).default(0),
+    paused_at: z.string().nullable().default(null),
+    paused_context: z.string().max(500).nullable().default(null),
     created: z.string().min(1),
     modified: z.string().min(1),
   })

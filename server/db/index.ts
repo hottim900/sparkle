@@ -8,7 +8,7 @@ import { logger } from "../lib/logger.js";
 
 const DB_PATH = process.env.DATABASE_URL || "./data/todo.db";
 
-const TARGET_VERSION = 17;
+const TARGET_VERSION = 18;
 
 function getSchemaVersion(sqlite: Database.Database): number {
   // Check if schema_version table exists
@@ -331,6 +331,30 @@ function runMigrations(sqlite: Database.Database) {
     `);
     setSchemaVersion(sqlite, 17);
   }
+
+  // Step 17→18: Add paused flag columns
+  if (version < 18) {
+    try {
+      sqlite.exec("ALTER TABLE items ADD COLUMN paused INTEGER NOT NULL DEFAULT 0");
+    } catch (e: unknown) {
+      const msg = (e as Error).message || "";
+      if (!msg.includes("duplicate column")) throw e;
+    }
+    try {
+      sqlite.exec("ALTER TABLE items ADD COLUMN paused_at TEXT DEFAULT NULL");
+    } catch (e: unknown) {
+      const msg = (e as Error).message || "";
+      if (!msg.includes("duplicate column")) throw e;
+    }
+    try {
+      sqlite.exec("ALTER TABLE items ADD COLUMN paused_context TEXT DEFAULT NULL");
+    } catch (e: unknown) {
+      const msg = (e as Error).message || "";
+      if (!msg.includes("duplicate column")) throw e;
+    }
+    sqlite.exec("CREATE INDEX IF NOT EXISTS idx_items_paused ON items(paused) WHERE paused = 1");
+    setSchemaVersion(sqlite, 18);
+  }
 }
 
 export function initializeDatabase(sqlite: Database.Database) {
@@ -358,6 +382,9 @@ export function initializeDatabase(sqlite: Database.Database) {
         category_id TEXT DEFAULT NULL,
         viewed_at TEXT DEFAULT NULL,
         is_private INTEGER DEFAULT 0,
+        paused INTEGER NOT NULL DEFAULT 0,
+        paused_at TEXT DEFAULT NULL,
+        paused_context TEXT DEFAULT NULL,
         created TEXT NOT NULL,
         modified TEXT NOT NULL,
         FOREIGN KEY (linked_note_id) REFERENCES items(id) ON DELETE SET NULL,
@@ -371,6 +398,7 @@ export function initializeDatabase(sqlite: Database.Database) {
       CREATE INDEX idx_items_status_modified ON items(status, modified);
       CREATE INDEX idx_items_private_status ON items(is_private, status);
       CREATE INDEX idx_items_private_status_modified ON items(is_private, status, modified);
+      CREATE INDEX idx_items_paused ON items(paused) WHERE paused = 1;
 
       CREATE TABLE settings (
         key TEXT PRIMARY KEY,
