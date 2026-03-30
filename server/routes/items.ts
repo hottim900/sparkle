@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { and, eq, inArray } from "drizzle-orm";
 import { db, sqlite } from "../db/index.js";
-import { items, categories } from "../db/schema.js";
+import { items } from "../db/schema.js";
 import { createItem, getItem, listItems, updateItem, deleteItem } from "../lib/items.js";
 import { resolveLinkedInfo } from "../lib/item-enrichment.js";
 import { isValidTypeStatus, getAutoMappedStatus } from "../lib/item-type-system.js";
@@ -145,10 +145,8 @@ itemsRouter.post("/batch", async (c) => {
           category_id: items.category_id,
           created: items.created,
           modified: items.modified,
-          category_name: categories.name,
         })
         .from(items)
-        .leftJoin(categories, eq(items.category_id, categories.id))
         .where(
           and(
             inArray(items.id, ids),

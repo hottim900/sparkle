@@ -157,7 +157,6 @@ function makeItem(overrides: Partial<ExportableItem> = {}): ExportableItem {
     origin: "web",
     priority: null,
     due: null,
-    category_name: null,
     ...overrides,
   };
 }
@@ -226,11 +225,6 @@ describe("generateFrontmatter", () => {
   it("includes non-null due", () => {
     const fm = generateFrontmatter(makeItem({ due: "2026-03-01" }));
     expect(fm).toContain("due: 2026-03-01");
-  });
-
-  it("does not include category in frontmatter even when category_name is set", () => {
-    const fm = generateFrontmatter(makeItem({ category_name: "Work" }));
-    expect(fm).not.toContain("category:");
   });
 
   it("uses local time with timezone offset (no Z suffix)", () => {
