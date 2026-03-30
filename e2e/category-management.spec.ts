@@ -69,7 +69,7 @@ test.describe("Category management", () => {
 
     // Move first visible category down — wait for response simultaneously
     const firstRow = page.getByTestId("category-row").filter({ hasText: catA.name });
-    const [response] = await Promise.all([
+    await Promise.all([
       page.waitForResponse((resp) => resp.url().includes("/api/categories/reorder") && resp.ok()),
       firstRow.getByTitle("下移").click(),
     ]);
