@@ -67,13 +67,11 @@ test.describe("Category management", () => {
 
     await expect(page.getByText(catA.name)).toBeVisible();
 
-    // Move first visible category down
+    // Move first visible category down — wait for response simultaneously
     const firstRow = page.getByTestId("category-row").filter({ hasText: catA.name });
-    await firstRow.getByTitle("下移").click();
-
-    // Wait for reorder API response
-    await page.waitForResponse(
-      (resp) => resp.url().includes("/api/categories/reorder") && resp.ok(),
-    );
+    await Promise.all([
+      page.waitForResponse((resp) => resp.url().includes("/api/categories/reorder") && resp.ok()),
+      firstRow.getByTitle("下移").click(),
+    ]);
   });
 });
