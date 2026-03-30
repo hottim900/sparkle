@@ -111,7 +111,6 @@ export interface ExportableItem {
   origin: string | null;
   priority: string | null;
   due: string | null;
-  category_name: string | null;
 }
 
 /**
