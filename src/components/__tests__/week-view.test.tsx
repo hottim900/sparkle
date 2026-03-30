@@ -48,6 +48,18 @@ function makeWeekData(days?: WeekDay[]): WeekDataResponse {
   };
 }
 
+// Pin the date to 2026-03-23 (Monday) to match the default mock week data.
+// shouldAdvanceTime: true ensures real timers (setTimeout, setInterval) still
+// work normally — only Date.now() / new Date() are faked.
+beforeAll(() => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  vi.setSystemTime(new Date("2026-03-23T12:00:00"));
+});
+
+afterAll(() => {
+  vi.useRealTimers();
+});
+
 beforeEach(() => {
   vi.clearAllMocks();
   mockGetDashboardWeek.mockResolvedValue(makeWeekData());
@@ -225,10 +237,18 @@ describe("WeekView cross-week keyboard navigation (#228)", () => {
     // Press ArrowRight on Sunday to go to next week's Monday
     await user.keyboard("{ArrowRight}");
 
-    // Wait for the next week to render and Monday to be focused
+    // Phase 1: wait for navigation to trigger new week fetch
+    await waitFor(() => {
+      expect(mockGetDashboardWeek).toHaveBeenCalledTimes(2);
+    });
+
+    // Verify the 2nd fetch was called with the next week's start date
+    expect(mockGetDashboardWeek).toHaveBeenNthCalledWith(2, "2026-03-30");
+
+    // Phase 2: wait for the new week's data to render
     await waitFor(() => {
       const newCells = screen.getAllByRole("gridcell");
-      expect(newCells[0]).toHaveFocus();
+      expect(newCells[0]).toHaveAttribute("aria-label", "3月30日，無活動");
     });
   });
 
@@ -260,10 +280,18 @@ describe("WeekView cross-week keyboard navigation (#228)", () => {
     // Press ArrowLeft on Monday to go to previous week's Sunday
     await user.keyboard("{ArrowLeft}");
 
-    // Wait for the previous week to render and Sunday to be focused
+    // Phase 1: wait for navigation to trigger previous week fetch
+    await waitFor(() => {
+      expect(mockGetDashboardWeek).toHaveBeenCalledTimes(2);
+    });
+
+    // Verify the 2nd fetch was called with the previous week's start date
+    expect(mockGetDashboardWeek).toHaveBeenNthCalledWith(2, "2026-03-16");
+
+    // Phase 2: wait for the previous week's data to render
     await waitFor(() => {
       const newCells = screen.getAllByRole("gridcell");
-      expect(newCells[6]).toHaveFocus();
+      expect(newCells[6]).toHaveAttribute("aria-label", "3月22日，無活動");
     });
   });
 });
