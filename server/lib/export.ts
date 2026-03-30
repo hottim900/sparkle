@@ -65,6 +65,40 @@ export function yamlEscape(value: string): string {
   return `"${escapeYamlChars(value)}"`;
 }
 
+/**
+ * Normalize tags for Obsidian export: lowercase, spaces→hyphens, deduplicate.
+ * Preserves first occurrence when normalization creates duplicates.
+ */
+export function normalizeTags(tags: string[]): string[] {
+  const normalized = tags.map((t) => t.toLowerCase().replace(/\s+/g, "-"));
+  return [...new Set(normalized)];
+}
+
+export type ItemLookup = (shortId: string) => { title: string } | null;
+
+/**
+ * Replace Sparkle ID references in content with Obsidian wikilinks.
+ * Pattern: 筆記（xxxxxxxx）where xxxxxxxx is 4-8 hex chars.
+ * Preserves original text when lookup fails or is ambiguous.
+ */
+export function resolveSparkleReferences(content: string, lookupItem: ItemLookup): string {
+  return content.replace(/筆記（([a-f0-9]{4,8})）/g, (match, shortId) => {
+    try {
+      const item = lookupItem(shortId);
+      if (!item) return match;
+      // Sanitize title for Obsidian wikilink: ]] breaks link, [[ nests, | is alias separator
+      const safeTitle = item.title
+        .replace(/\|/g, "-")
+        .replace(/\]\]/g, "）")
+        .replace(/\[\[/g, "（")
+        .replace(/\n/g, " ");
+      return `[[${safeTitle}]]`;
+    } catch {
+      return match;
+    }
+  });
+}
+
 export interface ExportableItem {
   id: string;
   title: string;
@@ -90,21 +124,17 @@ export function generateFrontmatter(item: ExportableItem): string {
   // Always present
   lines.push(`sparkle_id: "${item.id}"`);
 
-  // Category — include when non-null
-  if (item.category_name) {
-    lines.push(`category: "${escapeYamlChars(item.category_name)}"`);
-  }
-
-  // Tags — include when non-empty
+  // Tags — include when non-empty, normalized for Obsidian
   let tags: string[] = [];
   try {
     tags = JSON.parse(item.tags);
   } catch {
     throw new Error(`Failed to parse tags JSON for item ${item.id}: ${item.tags}`);
   }
-  if (tags.length > 0) {
+  const normalizedTags = normalizeTags(tags);
+  if (normalizedTags.length > 0) {
     lines.push("tags:");
-    for (const tag of tags) {
+    for (const tag of normalizedTags) {
       lines.push(`  - ${yamlEscape(tag)}`);
     }
   }
@@ -155,7 +185,9 @@ export function generateFrontmatter(item: ExportableItem): string {
 export function generateMarkdown(item: ExportableItem): string {
   const frontmatter = generateFrontmatter(item);
   const body = item.content || "";
-  return `${frontmatter}\n\n# ${item.title}\n\n${body}\n`;
+  const hasH1 = /^#\s/.test(body.trimStart());
+  const titleBlock = hasH1 ? "" : `# ${item.title}\n\n`;
+  return `${frontmatter}\n\n${titleBlock}${body}\n`;
 }
 
 export type ExportMode = "new" | "overwrite";

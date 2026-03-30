@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, rmSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -8,6 +8,8 @@ import {
   generateMarkdown,
   exportToObsidian,
   yamlEscape,
+  normalizeTags,
+  resolveSparkleReferences,
   ExportableItem,
   ExportConfig,
 } from "../export.js";
@@ -226,24 +228,9 @@ describe("generateFrontmatter", () => {
     expect(fm).toContain("due: 2026-03-01");
   });
 
-  it("includes category when category_name is set", () => {
+  it("does not include category in frontmatter even when category_name is set", () => {
     const fm = generateFrontmatter(makeItem({ category_name: "Work" }));
-    expect(fm).toContain('category: "Work"');
-  });
-
-  it("omits category when category_name is null", () => {
-    const fm = generateFrontmatter(makeItem({ category_name: null }));
     expect(fm).not.toContain("category:");
-  });
-
-  it("places category after sparkle_id and before tags", () => {
-    const fm = generateFrontmatter(makeItem({ category_name: "Research", tags: '["science"]' }));
-    const lines = fm.split("\n");
-    const catIndex = lines.findIndex((l) => l.startsWith("category:"));
-    const sparkleIndex = lines.findIndex((l) => l.startsWith("sparkle_id:"));
-    const tagsIndex = lines.findIndex((l) => l.startsWith("tags:"));
-    expect(catIndex).toBeGreaterThan(sparkleIndex);
-    expect(catIndex).toBeLessThan(tagsIndex);
   });
 
   it("uses local time with timezone offset (no Z suffix)", () => {
@@ -262,14 +249,14 @@ describe("generateFrontmatter", () => {
 
   // --- YAML escaping (DEF-021) ---
 
-  it("escapes tags containing colons", () => {
+  it("escapes tags containing colons (normalized)", () => {
     const fm = generateFrontmatter(makeItem({ tags: '["key: value"]' }));
-    expect(fm).toContain('  - "key: value"');
+    expect(fm).toContain('  - "key:-value"');
   });
 
-  it("escapes tags containing hash", () => {
+  it("escapes tags containing hash (normalized to lowercase)", () => {
     const fm = generateFrontmatter(makeItem({ tags: '["C#"]' }));
-    expect(fm).toContain('  - "C#"');
+    expect(fm).toContain('  - "c#"');
   });
 
   it("escapes aliases containing double quotes", () => {
@@ -295,11 +282,6 @@ describe("generateFrontmatter", () => {
   it("renders simple origin without quotes", () => {
     const fm = generateFrontmatter(makeItem({ origin: "web" }));
     expect(fm).toContain("origin: web");
-  });
-
-  it("escapes category containing double quotes", () => {
-    const fm = generateFrontmatter(makeItem({ category_name: 'My "Special" Category' }));
-    expect(fm).toContain('category: "My \\"Special\\" Category"');
   });
 
   // --- JSON parse errors (DEF-022) ---
@@ -331,23 +313,156 @@ describe("generateFrontmatter", () => {
 // generateMarkdown
 // ============================================================
 describe("generateMarkdown", () => {
-  it("has correct format: frontmatter + blank line + H1 + blank line + body", () => {
+  it("adds H1 title when content has no H1", () => {
     const item = makeItem({ title: "My Note", content: "Hello world" });
     const md = generateMarkdown(item);
-
-    // Should start with frontmatter
-    expect(md).toMatch(/^---\n/);
-    // After frontmatter closing ---, should have blank line, then # Title, blank line, body
     const parts = md.split("---");
-    // parts[0] is empty (before first ---), parts[1] is frontmatter content, parts[2] is rest
     const afterFrontmatter = parts[2];
     expect(afterFrontmatter).toBe("\n\n# My Note\n\nHello world\n");
   });
 
-  it("handles empty content", () => {
+  it("skips auto H1 when content starts with H1", () => {
+    const item = makeItem({ title: "My Note", content: "# Existing Title\n\nBody text" });
+    const md = generateMarkdown(item);
+    expect(md).not.toContain("# My Note");
+    expect(md).toContain("# Existing Title");
+  });
+
+  it("still adds H1 when content starts with H2", () => {
+    const item = makeItem({ title: "My Note", content: "## Subtitle\n\nBody" });
+    const md = generateMarkdown(item);
+    expect(md).toContain("# My Note");
+    expect(md).toContain("## Subtitle");
+  });
+
+  it("handles leading whitespace before H1", () => {
+    const item = makeItem({ title: "My Note", content: "\n\n# Existing Title\n\nBody" });
+    const md = generateMarkdown(item);
+    expect(md).not.toContain("# My Note");
+    expect(md).toContain("# Existing Title");
+  });
+
+  it("adds H1 when content is empty", () => {
     const item = makeItem({ title: "Empty", content: "" });
     const md = generateMarkdown(item);
     expect(md).toContain("# Empty\n\n\n");
+  });
+
+  it("adds H1 when content is null", () => {
+    const item = makeItem({ title: "Null", content: null });
+    const md = generateMarkdown(item);
+    expect(md).toContain("# Null");
+  });
+
+  it("skips auto H1 even when H1 differs from title", () => {
+    const item = makeItem({ title: "My Note", content: "# Different Title\n\nBody" });
+    const md = generateMarkdown(item);
+    expect(md).not.toContain("# My Note");
+    expect(md).toContain("# Different Title");
+  });
+});
+
+// ============================================================
+// normalizeTags
+// ============================================================
+describe("normalizeTags", () => {
+  it("deduplicates after normalization", () => {
+    expect(normalizeTags(["claude code", "claude-code"])).toEqual(["claude-code"]);
+  });
+
+  it("lowercases and deduplicates", () => {
+    expect(normalizeTags(["Ai Agent", "AI-agent"])).toEqual(["ai-agent"]);
+  });
+
+  it("preserves first occurrence on dedup", () => {
+    expect(normalizeTags(["tag1", "TAG1", "Tag1"])).toEqual(["tag1"]);
+  });
+
+  it("returns empty array for empty input", () => {
+    expect(normalizeTags([])).toEqual([]);
+  });
+
+  it("preserves Chinese tags unchanged", () => {
+    expect(normalizeTags(["中文標籤"])).toEqual(["中文標籤"]);
+  });
+
+  it("preserves special chars, only lowercases", () => {
+    expect(normalizeTags(["C++", "Node.js"])).toEqual(["c++", "node.js"]);
+  });
+
+  it("integrates with generateFrontmatter", () => {
+    const fm = generateFrontmatter(
+      makeItem({ tags: '["claude code", "claude-code", "Ai Agent"]' }),
+    );
+    expect(fm).toContain("  - claude-code");
+    expect(fm).toContain("  - ai-agent");
+    // Should not contain duplicate
+    const lines = fm.split("\n").filter((l) => l.includes("claude-code"));
+    expect(lines).toHaveLength(1);
+  });
+});
+
+// ============================================================
+// resolveSparkleReferences
+// ============================================================
+describe("resolveSparkleReferences", () => {
+  it("resolves matching ID to wikilink", () => {
+    const lookup = () => ({ title: "My Note Title" });
+    expect(resolveSparkleReferences("參見筆記（a9e1f98d）的內容", lookup)).toBe(
+      "參見[[My Note Title]]的內容",
+    );
+  });
+
+  it("preserves original when lookup returns null", () => {
+    const lookup = () => null;
+    expect(resolveSparkleReferences("參見筆記（deadbeef）", lookup)).toBe("參見筆記（deadbeef）");
+  });
+
+  it("returns content unchanged when no references", () => {
+    const lookup = vi.fn();
+    const content = "No references here";
+    expect(resolveSparkleReferences(content, lookup)).toBe(content);
+    expect(lookup).not.toHaveBeenCalled();
+  });
+
+  it("resolves multiple references", () => {
+    const lookup = (id: string) => {
+      if (id === "aaaa1111") return { title: "Note A" };
+      if (id === "bbbb2222") return { title: "Note B" };
+      return null;
+    };
+    const result = resolveSparkleReferences("見筆記（aaaa1111）和筆記（bbbb2222）", lookup);
+    expect(result).toBe("見[[Note A]]和[[Note B]]");
+  });
+
+  it("preserves original when lookup throws (ambiguous prefix)", () => {
+    const lookup = () => {
+      throw new Error("Ambiguous ID prefix");
+    };
+    expect(resolveSparkleReferences("筆記（abcd）", lookup)).toBe("筆記（abcd）");
+  });
+
+  it("preserves original for private items (lookup returns null)", () => {
+    const lookup = () => null;
+    expect(resolveSparkleReferences("筆記（abcd1234）", lookup)).toBe("筆記（abcd1234）");
+  });
+
+  it("sanitizes wikilink-breaking chars in titles", () => {
+    const lookup = () => ({ title: "Note with ]] and [[ and | and\nnewline" });
+    expect(resolveSparkleReferences("筆記（abcd1234）", lookup)).toBe(
+      "[[Note with ） and （ and - and newline]]",
+    );
+  });
+
+  it("resolves adjacent references independently", () => {
+    const lookup = (id: string) => {
+      if (id === "aaaa") return { title: "First" };
+      if (id === "bbbb") return { title: "Second" };
+      return null;
+    };
+    expect(resolveSparkleReferences("筆記（aaaa）和筆記（bbbb）", lookup)).toBe(
+      "[[First]]和[[Second]]",
+    );
   });
 });
 
