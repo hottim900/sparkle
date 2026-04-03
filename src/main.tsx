@@ -84,11 +84,35 @@ if ("serviceWorker" in navigator) {
     navigator.serviceWorker.controller?.postMessage({ type: "REPLAY_QUEUE" });
   });
 
+  // Proactive CF Access session check: detect expired sessions on app resume
+  // before API calls fail through the slow retry cycle.
+  async function checkCfAccessSession() {
+    if (!navigator.onLine) return;
+    try {
+      await fetch("/api/health", {
+        cache: "no-store",
+        signal: AbortSignal.timeout(5000),
+      });
+    } catch (error) {
+      if (error instanceof TypeError && /fetch|network/i.test(error.message)) {
+        const RELOAD_KEY = "cf_auth_reload";
+        const RELOAD_COOLDOWN_MS = 30_000;
+        const lastReload = sessionStorage.getItem(RELOAD_KEY);
+        const now = Date.now();
+        if (!lastReload || now - Number(lastReload) > RELOAD_COOLDOWN_MS) {
+          sessionStorage.setItem(RELOAD_KEY, String(now));
+          window.location.reload();
+        }
+      }
+    }
+  }
+
   // Re-check connectivity when page becomes visible (mobile background → foreground)
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible" && navigator.onLine) {
       toast.dismiss("offline-fallback");
       navigator.serviceWorker.controller?.postMessage({ type: "REPLAY_QUEUE" });
+      checkCfAccessSession();
     }
   });
 }
