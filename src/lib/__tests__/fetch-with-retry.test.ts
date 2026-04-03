@@ -59,7 +59,8 @@ describe("fetchWithRetry", () => {
 
   // --- Retry on network errors ---
 
-  it("retries GET on network error then succeeds", async () => {
+  it("retries GET on network error then succeeds (offline)", async () => {
+    vi.stubGlobal("navigator", { onLine: false });
     fetchSpy
       .mockRejectedValueOnce(new TypeError("Failed to fetch"))
       .mockResolvedValueOnce(mockResponse(200));
@@ -72,7 +73,8 @@ describe("fetchWithRetry", () => {
     expect(fetchSpy).toHaveBeenCalledTimes(2);
   });
 
-  it("retries POST on network error (request never reached server)", async () => {
+  it("retries POST on network error then succeeds (offline)", async () => {
+    vi.stubGlobal("navigator", { onLine: false });
     fetchSpy
       .mockRejectedValueOnce(new TypeError("Failed to fetch"))
       .mockResolvedValueOnce(mockResponse(200));
@@ -197,21 +199,19 @@ describe("fetchWithRetry", () => {
 
   // --- CF Access JWT expiry detection ---
 
-  it("auto-reloads on first CF Access expiry (network error while online)", async () => {
+  it("auto-reloads immediately on CF Access expiry (network error while online, no retries)", async () => {
     vi.stubGlobal("navigator", { onLine: true });
     const reloadMock = vi.fn();
     vi.stubGlobal("location", { reload: reloadMock });
     sessionStorage.clear();
 
-    fetchSpy
-      .mockRejectedValueOnce(new TypeError("Failed to fetch"))
-      .mockRejectedValueOnce(new TypeError("Failed to fetch"))
-      .mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    fetchSpy.mockRejectedValueOnce(new TypeError("Failed to fetch"));
 
     const promise = fetchWithRetry("/api/test");
     await vi.runAllTimersAsync();
 
     const error = await promise.catch((e: unknown) => e);
+    expect(fetchSpy).toHaveBeenCalledTimes(1); // no retries — CF Access blocks at edge
     expect(reloadMock).toHaveBeenCalledOnce();
     expect(error).toBeInstanceOf(ApiClientError);
     expect(error).toMatchObject({ message: "重新驗證中…", status: 0 });
@@ -224,15 +224,13 @@ describe("fetchWithRetry", () => {
     // Simulate a recent reload
     sessionStorage.setItem("cf_auth_reload", String(Date.now()));
 
-    fetchSpy
-      .mockRejectedValueOnce(new TypeError("Failed to fetch"))
-      .mockRejectedValueOnce(new TypeError("Failed to fetch"))
-      .mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    fetchSpy.mockRejectedValueOnce(new TypeError("Failed to fetch"));
 
     const promise = fetchWithRetry("/api/test");
     await vi.runAllTimersAsync();
 
     const error = await promise.catch((e: unknown) => e);
+    expect(fetchSpy).toHaveBeenCalledTimes(1); // no retries
     expect(reloadMock).not.toHaveBeenCalled();
     expect(error).toBeInstanceOf(ApiClientError);
     expect(error).toMatchObject({
