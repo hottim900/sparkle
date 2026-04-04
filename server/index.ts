@@ -26,6 +26,7 @@ import { settingsRouter } from "./routes/settings.js";
 import { sharesRouter } from "./routes/shares.js";
 import { categoriesRouter } from "./routes/categories.js";
 import { dashboardRouter } from "./routes/dashboard.js";
+import { vaultRouter } from "./routes/vault.js";
 import { publicRouter } from "./routes/public.js";
 import { db, sqlite, DB_PATH } from "./db/index.js";
 import { items, categories } from "./db/schema.js";
@@ -217,6 +218,7 @@ app.route("/api/categories", categoriesRouter);
 app.route("/api/dashboard", dashboardRouter);
 app.route("/api/daily-note", dailyNoteRouter);
 app.route("/api/line-brief", lineBriefRouter);
+app.route("/api/vault", vaultRouter);
 app.route("/api", sharesRouter);
 
 // Health check endpoint (unauthenticated — skipped in auth middleware)
