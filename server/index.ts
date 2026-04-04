@@ -483,9 +483,8 @@ const lineBriefTimer = setInterval(() => checkAndSendLineBrief(sqlite), 60_000);
 lineBriefTimer.unref();
 
 // Vault sync — backfill export_path for pre-v20 exports, then start watcher
-backfillExportPaths(db, sqlite).catch((e) =>
-  logger.warn(`vault-backfill: failed: ${(e as Error).message}`),
-);
-startVaultWatcher(db, sqlite);
+backfillExportPaths(db, sqlite)
+  .catch((e) => logger.warn(`vault-backfill: failed: ${(e as Error).message}`))
+  .finally(() => startVaultWatcher(db, sqlite));
 
 export default app;

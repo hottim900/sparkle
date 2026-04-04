@@ -1,6 +1,6 @@
 import { readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
-import { eq, isNull } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import type Database from "better-sqlite3";
 import * as schema from "../db/schema.js";
@@ -43,11 +43,11 @@ export async function backfillExportPaths(
   const inboxFolder = obsidian.obsidian_inbox_folder;
   const targetDir = join(vaultPath, inboxFolder);
 
-  // Get exported items missing export_path
+  // Get exported items missing export_path (only exported status)
   const needsBackfill = db
     .select({ id: items.id })
     .from(items)
-    .where(isNull(items.export_path))
+    .where(and(eq(items.status, "exported"), isNull(items.export_path)))
     .all()
     .reduce((set, row) => {
       set.add(row.id);

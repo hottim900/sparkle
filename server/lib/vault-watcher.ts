@@ -1,7 +1,7 @@
 import { readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
-import { eq, isNotNull } from "drizzle-orm";
+import { and, eq, isNotNull } from "drizzle-orm";
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import type Database from "better-sqlite3";
 import * as schema from "../db/schema.js";
@@ -46,7 +46,7 @@ export async function scanExportedItems(
 
   const vaultPath = obsidian.obsidian_vault_path;
 
-  // Get all items with an export_path
+  // Get exported items with an export_path (only sync items still in exported status)
   const exported = db
     .select({
       id: items.id,
@@ -54,7 +54,7 @@ export async function scanExportedItems(
       content: items.content,
     })
     .from(items)
-    .where(isNotNull(items.export_path))
+    .where(and(eq(items.status, "exported"), isNotNull(items.export_path)))
     .all();
 
   let updated = 0;
