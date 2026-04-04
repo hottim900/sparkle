@@ -62,3 +62,47 @@ export function setupFTS(sqlite: Database.Database) {
   // Rebuild FTS index from existing data
   sqlite.exec("INSERT INTO items_fts(items_fts) VALUES ('rebuild')");
 }
+
+export function setupVaultFTS(sqlite: Database.Database) {
+  // Only set up if vault_files table exists (created by migration v21+)
+  const tableExists = sqlite
+    .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='vault_files'")
+    .get();
+  if (!tableExists) return;
+
+  // Create FTS5 external content table for vault files
+  sqlite.exec(`
+    CREATE VIRTUAL TABLE IF NOT EXISTS vault_files_fts USING fts5(
+      title,
+      content,
+      content=vault_files,
+      content_rowid=rowid,
+      tokenize='trigram'
+    );
+  `);
+
+  // Sync triggers
+  sqlite.exec(`
+    CREATE TRIGGER IF NOT EXISTS vault_files_ai AFTER INSERT ON vault_files BEGIN
+      INSERT INTO vault_files_fts(rowid, title, content)
+      VALUES (new.rowid, new.title, new.content);
+    END;
+  `);
+  sqlite.exec(`
+    CREATE TRIGGER IF NOT EXISTS vault_files_ad AFTER DELETE ON vault_files BEGIN
+      INSERT INTO vault_files_fts(vault_files_fts, rowid, title, content)
+      VALUES ('delete', old.rowid, old.title, old.content);
+    END;
+  `);
+  sqlite.exec(`
+    CREATE TRIGGER IF NOT EXISTS vault_files_au AFTER UPDATE ON vault_files BEGIN
+      INSERT INTO vault_files_fts(vault_files_fts, rowid, title, content)
+      VALUES ('delete', old.rowid, old.title, old.content);
+      INSERT INTO vault_files_fts(rowid, title, content)
+      VALUES (new.rowid, new.title, new.content);
+    END;
+  `);
+
+  // Rebuild FTS index from existing data
+  sqlite.exec("INSERT INTO vault_files_fts(vault_files_fts) VALUES ('rebuild')");
+}

@@ -93,3 +93,18 @@ export const categories = sqliteTable("categories", {
 
 export type Category = typeof categories.$inferSelect;
 export type NewCategory = typeof categories.$inferInsert;
+
+// Note: vault_files uses TEXT PRIMARY KEY (path). SQLite maintains an implicit
+// rowid which FTS5 external content table references via content_rowid=rowid.
+// Do NOT add WITHOUT ROWID to this table.
+export const vaultFiles = sqliteTable("vault_files", {
+  path: text("path").primaryKey(),
+  title: text("title").notNull(),
+  frontmatter: text("frontmatter"),
+  content: text("content").notNull(),
+  mtime: integer("mtime").notNull(),
+  content_hash: text("content_hash").notNull(),
+});
+
+export type VaultFile = typeof vaultFiles.$inferSelect;
+export type NewVaultFile = typeof vaultFiles.$inferInsert;

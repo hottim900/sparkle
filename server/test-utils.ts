@@ -1,7 +1,7 @@
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import * as schema from "./db/schema.js";
-import { setupFTS } from "./db/fts.js";
+import { setupFTS, setupVaultFTS } from "./db/fts.js";
 
 export function createTestDb() {
   const sqlite = new Database(":memory:");
@@ -71,9 +71,19 @@ export function createTestDb() {
     );
     CREATE INDEX idx_categories_sort_order ON categories(sort_order);
     CREATE INDEX idx_items_category_id ON items(category_id);
+
+    CREATE TABLE vault_files (
+      path TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      frontmatter TEXT,
+      content TEXT NOT NULL,
+      mtime INTEGER NOT NULL,
+      content_hash TEXT NOT NULL
+    );
   `);
 
   setupFTS(sqlite);
+  setupVaultFTS(sqlite);
 
   const db = drizzle(sqlite, { schema });
   return { db, sqlite };
