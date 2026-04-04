@@ -44,6 +44,7 @@ import { dailyNoteRouter } from "./routes/daily-note.js";
 import { lineBriefRouter } from "./routes/line-brief.js";
 import { checkAndGenerateDailyNote } from "./lib/daily-note-scheduler.js";
 import { checkAndSendLineBrief } from "./lib/line-brief-scheduler.js";
+import { startVaultWatcher } from "./lib/vault-watcher.js";
 
 // --- Startup validation ---
 function shannonEntropy(s: string): number {
@@ -479,5 +480,8 @@ dailyNoteTimer.unref();
 // LINE daily brief scheduler — checks every 60s if it's time to push
 const lineBriefTimer = setInterval(() => checkAndSendLineBrief(sqlite), 60_000);
 lineBriefTimer.unref();
+
+// Vault watcher — scans exported notes for vault-side edits every 60s
+startVaultWatcher(db, sqlite);
 
 export default app;
