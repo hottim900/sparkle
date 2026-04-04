@@ -513,7 +513,11 @@ export async function searchVault(q?: string, limit?: number): Promise<VaultSear
 }
 
 export async function getVaultFile(path: string): Promise<VaultFileResponse> {
-  return request<VaultFileResponse>(`/vault/file/${encodeURIComponent(path)}`);
+  const encodedPath = path
+    .split("/")
+    .map((s) => encodeURIComponent(s))
+    .join("/");
+  return request<VaultFileResponse>(`/vault/file/${encodedPath}`);
 }
 
 export { ApiClientError };

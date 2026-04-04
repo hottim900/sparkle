@@ -8,6 +8,32 @@ import { Input } from "@/components/ui/input";
 import { Search, ArrowLeft, FileText, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
+/**
+ * Safely render FTS5 snippet HTML. Only allows <mark> tags for highlighting,
+ * strips all other HTML to prevent XSS from vault file content.
+ */
+function HighlightedSnippet({ html }: { html: string }) {
+  // Strip all HTML except <mark> and </mark>
+  const safe = html.replace(/<(?!\/?mark>)[^>]*>/gi, "");
+  // Split on <mark>...</mark> and render as spans
+  const parts = safe.split(/(<mark>[\s\S]*?<\/mark>)/g);
+  return (
+    <>
+      {parts.map((part, i) => {
+        if (part.startsWith("<mark>")) {
+          const text = part.replace(/<\/?mark>/g, "");
+          return (
+            <mark key={i} className="bg-yellow-200 dark:bg-yellow-800 rounded px-0.5">
+              {text}
+            </mark>
+          );
+        }
+        return <span key={i}>{part}</span>;
+      })}
+    </>
+  );
+}
+
 function formatDate(mtime: number): string {
   return new Date(mtime).toLocaleDateString("zh-TW", {
     year: "numeric",
@@ -91,10 +117,9 @@ function VaultPage() {
                       <div className="font-medium text-sm truncate">{file.title}</div>
                       <div className="text-xs text-muted-foreground truncate">{file.path}</div>
                       {file.snippet && (
-                        <div
-                          className="text-xs text-muted-foreground mt-1 line-clamp-2"
-                          dangerouslySetInnerHTML={{ __html: file.snippet }}
-                        />
+                        <div className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                          <HighlightedSnippet html={file.snippet} />
+                        </div>
                       )}
                       <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
                         <Clock className="h-3 w-3" />

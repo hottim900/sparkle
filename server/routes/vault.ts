@@ -69,10 +69,11 @@ vaultRouter.get("/file/*", (c) => {
     return c.json({ error: "Path is required" }, 400);
   }
 
-  // Path traversal protection
+  // Path traversal protection (trailing / prevents sibling-directory bypass)
   const vaultRoot = resolve(obsidian.obsidian_vault_path);
+  const vaultPrefix = vaultRoot.endsWith("/") ? vaultRoot : vaultRoot + "/";
   const resolved = resolve(vaultRoot, normalize(requestedPath));
-  if (!resolved.startsWith(vaultRoot)) {
+  if (resolved !== vaultRoot && !resolved.startsWith(vaultPrefix)) {
     return c.json({ error: "Invalid path" }, 403);
   }
 
