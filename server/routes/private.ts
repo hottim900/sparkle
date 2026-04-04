@@ -19,6 +19,7 @@ import {
   listItemsSchema,
   searchSchema,
 } from "../schemas/items.js";
+import { EXPORTED_BLOCKED_FIELDS } from "../lib/exported-guard.js";
 
 const privateRouter = new Hono();
 
@@ -183,21 +184,9 @@ privateRouter.patch("/items/:id", async (c) => {
 
     // Exported items are read-only (content fields blocked)
     if (existing.status === "exported") {
-      const blockedFields = [
-        "title",
-        "content",
-        "type",
-        "priority",
-        "due",
-        "tags",
-        "source",
-        "aliases",
-        "linked_note_id",
-        "category_id",
-        "paused",
-        "paused_context",
-      ];
-      if (blockedFields.some((f) => (input as Record<string, unknown>)[f] !== undefined)) {
+      if (
+        EXPORTED_BLOCKED_FIELDS.some((f) => (input as Record<string, unknown>)[f] !== undefined)
+      ) {
         return c.json({ error: "已匯出項目為唯讀" }, 400);
       }
     }

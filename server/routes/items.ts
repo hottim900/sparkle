@@ -5,6 +5,7 @@ import { items } from "../db/schema.js";
 import { createItem, getItem, listItems, updateItem, deleteItem } from "../lib/items.js";
 import { resolveLinkedInfo } from "../lib/item-enrichment.js";
 import { isValidTypeStatus, getAutoMappedStatus } from "../lib/item-type-system.js";
+import { EXPORTED_BLOCKED_FIELDS } from "../lib/exported-guard.js";
 import type { ExportableItem } from "../lib/export.js";
 import {
   createItemSchema,
@@ -219,6 +220,7 @@ itemsRouter.post("/batch", async (c) => {
           paused: 0,
           paused_at: null,
           paused_context: null,
+          export_path: null,
         })
         .where(and(inArray(items.id, ids), eq(items.is_private, 0)))
         .run();
@@ -352,21 +354,9 @@ itemsRouter.patch("/:id", async (c) => {
 
     // Exported items are read-only (content fields blocked)
     if (existing.status === "exported") {
-      const blockedFields = [
-        "title",
-        "content",
-        "type",
-        "priority",
-        "due",
-        "tags",
-        "source",
-        "aliases",
-        "linked_note_id",
-        "category_id",
-        "paused",
-        "paused_context",
-      ];
-      if (blockedFields.some((f) => (input as Record<string, unknown>)[f] !== undefined)) {
+      if (
+        EXPORTED_BLOCKED_FIELDS.some((f) => (input as Record<string, unknown>)[f] !== undefined)
+      ) {
         return c.json({ error: "已匯出項目為唯讀" }, 400);
       }
     }

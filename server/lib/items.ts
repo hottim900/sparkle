@@ -8,6 +8,7 @@ import type * as schema from "../db/schema.js";
 import { getAutoMappedStatus, defaultStatusForType } from "./item-type-system.js";
 import { resolveLinkedInfo, type ItemWithLinkedInfo } from "./item-enrichment.js";
 import { logger } from "./logger.js";
+import { EXPORTED_BLOCKED_FIELDS } from "./exported-guard.js";
 
 type DB = BetterSQLite3Database<typeof schema>;
 
@@ -251,21 +252,7 @@ export function updateItem(
 
   // Exported items read-only guard (defensive layer — route handlers are primary)
   if (existing.status === "exported") {
-    const contentFields = [
-      "title",
-      "content",
-      "type",
-      "priority",
-      "due",
-      "tags",
-      "source",
-      "aliases",
-      "linked_note_id",
-      "category_id",
-      "paused",
-      "paused_context",
-    ];
-    if (contentFields.some((f) => (input as Record<string, unknown>)[f] !== undefined)) {
+    if (EXPORTED_BLOCKED_FIELDS.some((f) => (input as Record<string, unknown>)[f] !== undefined)) {
       logger.warn("Blocked content update on exported item", { id: existing.id });
       return existing;
     }
