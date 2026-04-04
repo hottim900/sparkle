@@ -8,7 +8,7 @@ import { logger } from "../lib/logger.js";
 
 const DB_PATH = process.env.DATABASE_URL || "./data/todo.db";
 
-const TARGET_VERSION = 19;
+const TARGET_VERSION = 20;
 
 function getSchemaVersion(sqlite: Database.Database): number {
   // Check if schema_version table exists
@@ -363,6 +363,17 @@ function runMigrations(sqlite: Database.Database) {
     );
     setSchemaVersion(sqlite, 19);
   }
+
+  // Step 19→20: Add export_path column for vault sync
+  if (version < 20) {
+    try {
+      sqlite.exec("ALTER TABLE items ADD COLUMN export_path TEXT DEFAULT NULL");
+    } catch (e: unknown) {
+      const msg = (e as Error).message || "";
+      if (!msg.includes("duplicate column")) throw e;
+    }
+    setSchemaVersion(sqlite, 20);
+  }
 }
 
 export function initializeDatabase(sqlite: Database.Database) {
@@ -393,6 +404,7 @@ export function initializeDatabase(sqlite: Database.Database) {
         paused INTEGER NOT NULL DEFAULT 0,
         paused_at TEXT DEFAULT NULL,
         paused_context TEXT DEFAULT NULL,
+        export_path TEXT DEFAULT NULL,
         created TEXT NOT NULL,
         modified TEXT NOT NULL,
         FOREIGN KEY (linked_note_id) REFERENCES items(id) ON DELETE SET NULL,
