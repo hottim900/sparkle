@@ -26,6 +26,7 @@ import { settingsRouter } from "./routes/settings.js";
 import { sharesRouter } from "./routes/shares.js";
 import { categoriesRouter } from "./routes/categories.js";
 import { dashboardRouter } from "./routes/dashboard.js";
+import { vaultRouter } from "./routes/vault.js";
 import { publicRouter } from "./routes/public.js";
 import { db, sqlite, DB_PATH } from "./db/index.js";
 import { items, categories } from "./db/schema.js";
@@ -46,6 +47,7 @@ import { checkAndGenerateDailyNote } from "./lib/daily-note-scheduler.js";
 import { checkAndSendLineBrief } from "./lib/line-brief-scheduler.js";
 import { startVaultWatcher } from "./lib/vault-watcher.js";
 import { backfillExportPaths } from "./lib/vault-backfill.js";
+import { startVaultScanner } from "./lib/vault-scanner.js";
 
 // --- Startup validation ---
 function shannonEntropy(s: string): number {
@@ -216,6 +218,7 @@ app.route("/api/categories", categoriesRouter);
 app.route("/api/dashboard", dashboardRouter);
 app.route("/api/daily-note", dailyNoteRouter);
 app.route("/api/line-brief", lineBriefRouter);
+app.route("/api/vault", vaultRouter);
 app.route("/api", sharesRouter);
 
 // Health check endpoint (unauthenticated — skipped in auth middleware)
@@ -486,5 +489,8 @@ lineBriefTimer.unref();
 backfillExportPaths(db, sqlite)
   .catch((e) => logger.warn(`vault-backfill: failed: ${(e as Error).message}`))
   .finally(() => startVaultWatcher(db, sqlite));
+
+// Vault scanner — indexes entire vault into vault_files table every 5 minutes
+startVaultScanner(db, sqlite);
 
 export default app;

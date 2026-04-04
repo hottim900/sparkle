@@ -482,4 +482,42 @@ export async function getDashboardWeek(start: string): Promise<WeekDataResponse>
   return request<WeekDataResponse>(`/dashboard/week?start=${encodeURIComponent(start)}`);
 }
 
+// Vault API
+export interface VaultSearchResult {
+  path: string;
+  title: string;
+  mtime: number;
+  snippet?: string;
+}
+
+export interface VaultSearchResponse {
+  results: VaultSearchResult[];
+  total: number;
+  error?: string;
+}
+
+export interface VaultFileResponse {
+  path: string;
+  title: string;
+  frontmatter: string | null;
+  content: string;
+  mtime: number;
+}
+
+export async function searchVault(q?: string, limit?: number): Promise<VaultSearchResponse> {
+  const params = new URLSearchParams();
+  if (q) params.set("q", q);
+  if (limit) params.set("limit", String(limit));
+  const qs = params.toString();
+  return request<VaultSearchResponse>(`/vault${qs ? `?${qs}` : ""}`);
+}
+
+export async function getVaultFile(path: string): Promise<VaultFileResponse> {
+  const encodedPath = path
+    .split("/")
+    .map((s) => encodeURIComponent(s))
+    .join("/");
+  return request<VaultFileResponse>(`/vault/file/${encodedPath}`);
+}
+
 export { ApiClientError };

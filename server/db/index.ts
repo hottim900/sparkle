@@ -3,12 +3,12 @@ import Database from "better-sqlite3";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import * as schema from "./schema.js";
-import { setupFTS } from "./fts.js";
+import { setupFTS, setupVaultFTS } from "./fts.js";
 import { logger } from "../lib/logger.js";
 
 const DB_PATH = process.env.DATABASE_URL || "./data/todo.db";
 
-const TARGET_VERSION = 20;
+const TARGET_VERSION = 21;
 
 function getSchemaVersion(sqlite: Database.Database): number {
   // Check if schema_version table exists
@@ -374,6 +374,21 @@ function runMigrations(sqlite: Database.Database) {
     }
     setSchemaVersion(sqlite, 20);
   }
+
+  // Step 20→21: Create vault_files table for vault browse
+  if (version < 21) {
+    sqlite.exec(`
+      CREATE TABLE IF NOT EXISTS vault_files (
+        path TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        frontmatter TEXT,
+        content TEXT NOT NULL,
+        mtime INTEGER NOT NULL,
+        content_hash TEXT NOT NULL
+      )
+    `);
+    setSchemaVersion(sqlite, 21);
+  }
 }
 
 export function initializeDatabase(sqlite: Database.Database) {
@@ -459,6 +474,15 @@ export function initializeDatabase(sqlite: Database.Database) {
       );
       CREATE INDEX idx_categories_sort_order ON categories(sort_order);
       CREATE INDEX idx_items_category_id ON items(category_id);
+
+      CREATE TABLE vault_files (
+        path TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        frontmatter TEXT,
+        content TEXT NOT NULL,
+        mtime INTEGER NOT NULL,
+        content_hash TEXT NOT NULL
+      );
     `);
 
     // Set version to target directly for fresh installs
@@ -478,6 +502,7 @@ export function initializeDatabase(sqlite: Database.Database) {
   }
 
   setupFTS(sqlite);
+  setupVaultFTS(sqlite);
 }
 
 function createDb() {
