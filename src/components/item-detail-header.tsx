@@ -24,6 +24,7 @@ import {
   Link,
   Globe,
   Lock,
+  Undo2,
 } from "lucide-react";
 
 interface ItemDetailHeaderProps {
@@ -41,6 +42,8 @@ interface ItemDetailHeaderProps {
   onOpenShare: () => void;
   onMarkAsPrivate: () => void;
   markingAsPrivate?: boolean;
+  onRevert?: () => void;
+  reverting?: boolean;
 }
 
 export function ItemDetailHeader({
@@ -58,9 +61,13 @@ export function ItemDetailHeader({
   onOpenShare,
   onMarkAsPrivate,
   markingAsPrivate = false,
+  onRevert,
+  reverting = false,
 }: ItemDetailHeaderProps) {
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [revertOpen, setRevertOpen] = useState(false);
   const showExportButton = obsidianEnabled && item.type === "note" && item.status === "permanent";
+  const isExported = item.status === "exported";
 
   return (
     <>
@@ -103,72 +110,125 @@ export function ItemDetailHeader({
           )}
         </div>
         <div className="flex items-center gap-1">
-          {item.type === "note" && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-1 text-xs"
-              onClick={onOpenCreateTodo}
-              disabled={!isOnline}
-            >
-              <ListTodo className="h-3 w-3" />
-              建立追蹤待辦
-            </Button>
-          )}
-          {showExportButton && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-1 text-xs"
-              onClick={onExport}
-              disabled={exporting || !isOnline}
-            >
-              {exporting ? (
-                <Loader2 className="h-3 w-3 animate-spin" />
-              ) : (
-                <ExternalLink className="h-3 w-3" />
+          {isExported ? (
+            <>
+              {/* Revert button with confirmation */}
+              <Dialog open={revertOpen} onOpenChange={setRevertOpen}>
+                <DialogTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1 text-xs"
+                    disabled={reverting || !isOnline}
+                  >
+                    {reverting ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <Undo2 className="h-3 w-3" />
+                    )}
+                    退回
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>退回為永久筆記</DialogTitle>
+                    <DialogDescription asChild>
+                      <div className="space-y-2">
+                        <p>退回後：</p>
+                        <ul className="list-disc pl-5 space-y-1">
+                          <li>此筆記將恢復為可編輯狀態，不再從 Vault 同步</li>
+                          <li>Vault 中的檔案不會被刪除或修改</li>
+                          <li>重新匯出可能會建立新檔案</li>
+                        </ul>
+                      </div>
+                    </DialogDescription>
+                  </DialogHeader>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setRevertOpen(false)}>
+                      取消
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        onRevert?.();
+                        setRevertOpen(false);
+                      }}
+                    >
+                      確認退回
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </>
+          ) : (
+            <>
+              {item.type === "note" && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1 text-xs"
+                  onClick={onOpenCreateTodo}
+                  disabled={!isOnline}
+                >
+                  <ListTodo className="h-3 w-3" />
+                  建立追蹤待辦
+                </Button>
               )}
-              匯出到 Obsidian
-            </Button>
-          )}
-          {item.type === "note" && (
-            <Button
-              variant="outline"
-              size="sm"
-              className={`gap-1 text-xs ${item.share_visibility === "public" ? "text-blue-600 dark:text-blue-400" : ""}`}
-              onClick={onOpenShare}
-              disabled={!isOnline}
-            >
-              {item.share_visibility === "public" ? (
-                <Globe className="h-3 w-3" />
-              ) : item.share_visibility === "unlisted" ? (
-                <Link className="h-3 w-3" />
-              ) : (
-                <Share2 className="h-3 w-3" />
+              {showExportButton && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1 text-xs"
+                  onClick={onExport}
+                  disabled={exporting || !isOnline}
+                >
+                  {exporting ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <ExternalLink className="h-3 w-3" />
+                  )}
+                  匯出到 Obsidian
+                </Button>
               )}
-              {item.share_visibility === "public"
-                ? "已公開分享"
-                : item.share_visibility === "unlisted"
-                  ? "已分享"
-                  : "分享"}
-            </Button>
-          )}
-          {item.type !== "scratch" && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-1 text-xs"
-              onClick={onMarkAsPrivate}
-              disabled={markingAsPrivate || !isOnline}
-              title="標記為私密"
-            >
-              {markingAsPrivate ? (
-                <Loader2 className="h-3 w-3 animate-spin" />
-              ) : (
-                <Lock className="h-3 w-3" />
+              {item.type === "note" && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className={`gap-1 text-xs ${item.share_visibility === "public" ? "text-blue-600 dark:text-blue-400" : ""}`}
+                  onClick={onOpenShare}
+                  disabled={!isOnline}
+                >
+                  {item.share_visibility === "public" ? (
+                    <Globe className="h-3 w-3" />
+                  ) : item.share_visibility === "unlisted" ? (
+                    <Link className="h-3 w-3" />
+                  ) : (
+                    <Share2 className="h-3 w-3" />
+                  )}
+                  {item.share_visibility === "public"
+                    ? "已公開分享"
+                    : item.share_visibility === "unlisted"
+                      ? "已分享"
+                      : "分享"}
+                </Button>
               )}
-              標記為私密
-            </Button>
+              {item.type !== "scratch" && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1 text-xs"
+                  onClick={onMarkAsPrivate}
+                  disabled={markingAsPrivate || !isOnline}
+                  title="標記為私密"
+                >
+                  {markingAsPrivate ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <Lock className="h-3 w-3" />
+                  )}
+                  標記為私密
+                </Button>
+              )}
+            </>
           )}
           <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
             <DialogTrigger asChild>

@@ -350,6 +350,27 @@ itemsRouter.patch("/:id", async (c) => {
       );
     }
 
+    // Exported items are read-only (content fields blocked)
+    if (existing.status === "exported") {
+      const blockedFields = [
+        "title",
+        "content",
+        "type",
+        "priority",
+        "due",
+        "tags",
+        "source",
+        "aliases",
+        "linked_note_id",
+        "category_id",
+        "paused",
+        "paused_context",
+      ];
+      if (blockedFields.some((f) => (input as Record<string, unknown>)[f] !== undefined)) {
+        return c.json({ error: "已匯出項目為唯讀" }, 400);
+      }
+    }
+
     // When marking as private, use includePrivate for the return value
     const markingPrivate = input.is_private === true && !existing.is_private;
     // Pass pre-fetched existing to avoid redundant getItem inside updateItem

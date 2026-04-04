@@ -281,15 +281,10 @@ describe("Data Access Layer", () => {
       expect(updated!.due).toBeNull(); // due cleared on todo→note conversion
     });
 
-    it("reverts exported note to permanent when title changes", () => {
+    it("blocks content field update on exported item (returns existing unchanged)", () => {
       const item = createItem(db, { title: "Note", type: "note", status: "exported" });
       const updated = updateItem(db, item.id, { title: "Changed title" });
-      expect(updated!.status).toBe("permanent");
-    });
-
-    it("does NOT revert exported note when non-content fields change", () => {
-      const item = createItem(db, { title: "Note", type: "note", status: "exported" });
-      const updated = updateItem(db, item.id, { tags: ["new-tag"] });
+      expect(updated!.title).toBe("Note");
       expect(updated!.status).toBe("exported");
     });
   });
@@ -399,11 +394,12 @@ describe("Data Access Layer", () => {
       expect(updated!.status).toBe("done");
     });
 
-    it("auto-maps note(exported) -> todo to done", () => {
+    it("blocks type conversion on exported note (read-only guard)", () => {
       const item = createItem(db, { title: "Exported note", type: "note", status: "exported" });
       const updated = updateItem(db, item.id, { type: "todo" });
-      expect(updated!.type).toBe("todo");
-      expect(updated!.status).toBe("done");
+      // Type change is a content field — blocked by exported guard
+      expect(updated!.type).toBe("note");
+      expect(updated!.status).toBe("exported");
     });
 
     it("preserves archived status across type conversion", () => {
@@ -687,8 +683,15 @@ describe("Data Access Layer", () => {
     });
   });
 
-  describe("updateItem — exported auto-reversion edge cases", () => {
-    it("reverts exported to permanent when content changes", () => {
+  describe("exported items read-only guard", () => {
+    it("blocks title update on exported item", () => {
+      const item = createItem(db, { title: "Exported Note", type: "note", status: "exported" });
+      const updated = updateItem(db, item.id, { title: "New Title" });
+      expect(updated!.title).toBe("Exported Note");
+      expect(updated!.status).toBe("exported");
+    });
+
+    it("blocks content update on exported item", () => {
       const item = createItem(db, {
         title: "Note",
         content: "original",
@@ -696,23 +699,92 @@ describe("Data Access Layer", () => {
         status: "exported",
       });
       const updated = updateItem(db, item.id, { content: "changed content" });
-      expect(updated!.status).toBe("permanent");
-    });
-
-    it("does NOT revert exported when same title is set", () => {
-      const item = createItem(db, { title: "Note", type: "note", status: "exported" });
-      const updated = updateItem(db, item.id, { title: "Note" });
+      expect(updated!.content).toBe("original");
       expect(updated!.status).toBe("exported");
     });
 
-    it("does NOT revert exported when same content is set", () => {
+    it("blocks tags update on exported item", () => {
       const item = createItem(db, {
         title: "Note",
-        content: "original",
         type: "note",
         status: "exported",
+        tags: ["existing"],
       });
-      const updated = updateItem(db, item.id, { content: "original" });
+      const updated = updateItem(db, item.id, { tags: ["new-tag"] });
+      expect(JSON.parse(updated!.tags)).toEqual(["existing"]);
+      expect(updated!.status).toBe("exported");
+    });
+
+    it("blocks type change on exported item", () => {
+      const item = createItem(db, { title: "Note", type: "note", status: "exported" });
+      const updated = updateItem(db, item.id, { type: "todo" });
+      expect(updated!.type).toBe("note");
+      expect(updated!.status).toBe("exported");
+    });
+
+    it("blocks priority update on exported item", () => {
+      const item = createItem(db, { title: "Note", type: "note", status: "exported" });
+      const updated = updateItem(db, item.id, { priority: "high" });
+      expect(updated!.priority).toBeNull();
+      expect(updated!.status).toBe("exported");
+    });
+
+    it("blocks category_id update on exported item", () => {
+      const catId = crypto.randomUUID();
+      const now = new Date().toISOString();
+      sqlite
+        .prepare(
+          "INSERT INTO categories (id, name, sort_order, created, modified) VALUES (?, ?, 0, ?, ?)",
+        )
+        .run(catId, "Work", now, now);
+      const item = createItem(db, { title: "Note", type: "note", status: "exported" });
+      const updated = updateItem(db, item.id, { category_id: catId });
+      expect(updated!.category_id).toBeNull();
+      expect(updated!.status).toBe("exported");
+    });
+
+    it("allows status change to permanent and clears export_path", () => {
+      const item = createItem(db, { title: "Note", type: "note", status: "exported" });
+      // Set export_path directly via raw SQL (not in UpdateItemInput schema)
+      sqlite
+        .prepare("UPDATE items SET export_path = ? WHERE id = ?")
+        .run("0_Inbox/Note.md", item.id);
+      const updated = updateItem(db, item.id, { status: "permanent" });
+      expect(updated!.status).toBe("permanent");
+      // Verify export_path is cleared in DB
+      const row = sqlite.prepare("SELECT export_path FROM items WHERE id = ?").get(item.id) as {
+        export_path: string | null;
+      };
+      expect(row.export_path).toBeNull();
+    });
+
+    it("allows status change to archived on exported item", () => {
+      const item = createItem(db, { title: "Note", type: "note", status: "exported" });
+      sqlite
+        .prepare("UPDATE items SET export_path = ? WHERE id = ?")
+        .run("0_Inbox/Note.md", item.id);
+      const updated = updateItem(db, item.id, { status: "archived" });
+      expect(updated!.status).toBe("archived");
+      // export_path cleared when leaving exported status
+      const row = sqlite.prepare("SELECT export_path FROM items WHERE id = ?").get(item.id) as {
+        export_path: string | null;
+      };
+      expect(row.export_path).toBeNull();
+    });
+
+    it("allows is_private update on exported item", () => {
+      const item = createItem(db, { title: "Note", type: "note", status: "exported" });
+      // Pass includePrivate=true so the return value is visible after marking private
+      const updated = updateItem(db, item.id, { is_private: true }, true);
+      expect(updated!.is_private).toBe(1);
+      expect(updated!.status).toBe("exported");
+    });
+
+    it("allows viewed_at update on exported item", () => {
+      const item = createItem(db, { title: "Note", type: "note", status: "exported" });
+      const viewedAt = new Date().toISOString();
+      const updated = updateItem(db, item.id, { viewed_at: viewedAt });
+      expect(updated!.viewed_at).toBe(viewedAt);
       expect(updated!.status).toBe("exported");
     });
   });

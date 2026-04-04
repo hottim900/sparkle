@@ -7,6 +7,7 @@ import type { CreateItemInput, UpdateItemInput } from "../schemas/items.js";
 import type * as schema from "../db/schema.js";
 import { getAutoMappedStatus, defaultStatusForType } from "./item-type-system.js";
 import { resolveLinkedInfo, type ItemWithLinkedInfo } from "./item-enrichment.js";
+import { logger } from "./logger.js";
 
 type DB = BetterSQLite3Database<typeof schema>;
 
@@ -248,16 +249,34 @@ export function updateItem(
     }
   }
 
-  // Exported note auto-reversion (Section 3)
-  const effectiveType = (updates.type as string) ?? existing.type;
-  const effectiveStatus = (updates.status as string) ?? existing.status;
-  if (effectiveType === "note" && effectiveStatus === "exported") {
-    const titleChanged = input.title !== undefined && input.title !== existing.title;
-    const contentChanged = input.content !== undefined && input.content !== existing.content;
-    if (titleChanged || contentChanged) {
-      updates.status = "permanent";
+  // Exported items read-only guard (defensive layer — route handlers are primary)
+  if (existing.status === "exported") {
+    const contentFields = [
+      "title",
+      "content",
+      "type",
+      "priority",
+      "due",
+      "tags",
+      "source",
+      "aliases",
+      "linked_note_id",
+      "category_id",
+      "paused",
+      "paused_context",
+    ];
+    if (contentFields.some((f) => (input as Record<string, unknown>)[f] !== undefined)) {
+      logger.warn("Blocked content update on exported item", { id: existing.id });
+      return existing;
     }
   }
+
+  // Clear export_path when leaving exported status
+  if (existing.status === "exported" && updates.status && updates.status !== "exported") {
+    updates.export_path = null;
+  }
+
+  const effectiveType = (updates.type as string) ?? existing.type;
 
   // Notes don't have linked_note_id; clear on todo→note conversion, ignore for notes
   if (effectiveType === "note") {

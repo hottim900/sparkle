@@ -1,5 +1,5 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useState, useCallback } from "react";
+import { createFileRoute, useSearch } from "@tanstack/react-router";
+import { useState, useCallback, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { searchVault, getVaultFile } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
@@ -43,10 +43,16 @@ function formatDate(mtime: number): string {
 }
 
 function VaultPage() {
+  const { file } = useSearch({ from: "/vault" });
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [debounceTimer, setDebounceTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
+
+  // Auto-select file from URL search param
+  useEffect(() => {
+    if (file) setSelectedPath(file);
+  }, [file]);
 
   const handleSearch = useCallback(
     (value: string) => {
@@ -65,10 +71,15 @@ function VaultPage() {
   });
 
   // Selected file detail
-  const { data: fileData, isPending: isLoadingFile } = useQuery({
+  const {
+    data: fileData,
+    isPending: isLoadingFile,
+    error: fileError,
+  } = useQuery({
     queryKey: queryKeys.vault.file(selectedPath || ""),
     queryFn: () => getVaultFile(selectedPath!),
     enabled: !!selectedPath,
+    retry: false,
   });
 
   const results = searchData?.results ?? [];
@@ -162,6 +173,14 @@ function VaultPage() {
           <div className="flex-1 flex items-center justify-center text-muted-foreground">
             載入中...
           </div>
+        ) : fileError && selectedPath ? (
+          <div className="flex-1 flex flex-col items-center justify-center gap-3 text-muted-foreground">
+            <p>此檔案已不存在於 Vault 中</p>
+            <Button variant="outline" size="sm" onClick={() => setSelectedPath(null)}>
+              <ArrowLeft className="h-4 w-4 mr-1" />
+              返回列表
+            </Button>
+          </div>
         ) : (
           <div className="flex-1 flex items-center justify-center text-muted-foreground">
             選擇一個檔案以查看內容
@@ -174,4 +193,7 @@ function VaultPage() {
 
 export const Route = createFileRoute("/vault")({
   component: VaultPage,
+  validateSearch: (search: Record<string, unknown>) => ({
+    file: typeof search.file === "string" ? search.file : undefined,
+  }),
 });

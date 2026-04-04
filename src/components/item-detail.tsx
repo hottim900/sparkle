@@ -16,7 +16,7 @@ import { useItemActions } from "@/hooks/use-item-actions";
 import { TagInput } from "@/components/tag-input";
 import { useAppContext } from "@/lib/app-context";
 import { toast } from "sonner";
-import { X } from "lucide-react";
+import { X, ExternalLink } from "lucide-react";
 import { ShareDialog } from "@/components/share-dialog";
 import { ItemDetailHeader } from "@/components/item-detail-header";
 import { LinkedItemsSection } from "@/components/linked-items-section";
@@ -24,6 +24,7 @@ import { ItemContentEditor } from "@/components/item-content-editor";
 import { CategorySelect } from "@/components/category-select";
 import { PauseToggle } from "@/components/pause-toggle";
 import { PausedBanner } from "@/components/paused-banner";
+import { VaultMarkdownPreview } from "@/components/vault-markdown-preview";
 import { useItemForm } from "@/hooks/use-item-form";
 import { usePauseResume } from "@/hooks/use-pause-resume";
 import { updateItem } from "@/lib/api";
@@ -89,7 +90,24 @@ export function ItemDetail({ itemId, onDeleted }: ItemDetailProps) {
   const [aliasInput, setAliasInput] = useState("");
   const [createTodoRequested, setCreateTodoRequested] = useState(false);
   const [markingAsPrivate, setMarkingAsPrivate] = useState(false);
+  const [reverting, setReverting] = useState(false);
   const { handleResume, resuming } = usePauseResume(item, setItem);
+
+  const handleRevert = useCallback(async () => {
+    if (!item) return;
+    setReverting(true);
+    try {
+      await updateItem(item.id, { status: "permanent" });
+      queryClient.invalidateQueries({ queryKey: queryKeys.items.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.items.detail(item.id) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.stats });
+      toast.success("已退回為永久筆記，可以開始編輯");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "退回失敗");
+    } finally {
+      setReverting(false);
+    }
+  }, [item, queryClient]);
 
   const handleMarkAsPrivate = useCallback(async () => {
     if (!item) return;
@@ -163,258 +181,366 @@ export function ItemDetail({ itemId, onDeleted }: ItemDetailProps) {
         onOpenShare={() => setShareOpen(true)}
         onMarkAsPrivate={handleMarkAsPrivate}
         markingAsPrivate={markingAsPrivate}
+        onRevert={handleRevert}
+        reverting={reverting}
       />
 
-      {/* Paused banner */}
-      <PausedBanner item={item} isOnline={isOnline} onResume={handleResume} resuming={resuming} />
+      {item.status === "exported" ? (
+        /* ── Exported: Read-only view ── */
+        <div className="flex-1 overflow-y-auto p-4 space-y-4 animate-fade-in break-words">
+          {/* Banner */}
+          <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-green-50 dark:bg-green-950 text-green-800 dark:text-green-200 text-sm">
+            <span>已匯出至 Obsidian</span>
+            {item.export_path && (
+              <>
+                <span className="text-green-600 dark:text-green-400 font-mono text-xs truncate">
+                  {item.export_path}
+                </span>
+                <a
+                  href={`/vault?file=${encodeURIComponent(item.export_path)}`}
+                  className={`inline-flex items-center gap-1 text-xs ${isOnline ? "text-green-700 dark:text-green-300 hover:underline" : "text-muted-foreground pointer-events-none"}`}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    if (isOnline) {
+                      navigate({ to: "/vault", search: { file: item.export_path! } });
+                    }
+                  }}
+                >
+                  <ExternalLink className="h-3 w-3" />在 Vault 中查看
+                </a>
+              </>
+            )}
+          </div>
 
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 animate-fade-in break-words">
-        {/* Title */}
-        <Input
-          value={item.title}
-          onChange={(e) => {
-            setIsDirty(true);
-            setItem({ ...item, title: e.target.value });
-            debouncedSave("title", e.target.value);
-          }}
-          onBlur={() => flushSave("title", item.title)}
-          className="text-lg font-semibold border-0 px-0 focus-visible:ring-0"
-          placeholder="標題"
-        />
+          {/* Title (read-only) */}
+          <h1 className="text-lg font-semibold px-0">{item.title}</h1>
 
-        {/* Metadata */}
-        <div className="text-xs text-muted-foreground font-mono">
-          <button
-            type="button"
-            className="hover:text-foreground transition-colors cursor-pointer"
-            title="點擊複製完整 ID"
-            onClick={() => {
-              navigator.clipboard.writeText(item.id);
-              toast.success("已複製 ID");
-            }}
-          >
-            {item.id.split("-")[0]}
-          </button>
-          {" · "}建立 {new Date(item.created).toLocaleString("zh-TW")} · 更新{" "}
-          {new Date(item.modified).toLocaleString("zh-TW")}
-        </div>
-
-        {/* Type + Status + Priority row */}
-        <div className="flex gap-2 flex-wrap">
-          <Select
-            value={item.type}
-            onValueChange={(v) => {
-              if (v !== "note") setShareOpen(false);
-              setItem({ ...item, type: v as ParsedItem["type"] });
-              saveField("type", v);
-            }}
-          >
-            <SelectTrigger className="w-24">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="note">筆記</SelectItem>
-              <SelectItem value="todo">待辦</SelectItem>
-              <SelectItem value="scratch">暫存</SelectItem>
-            </SelectContent>
-          </Select>
-
-          <Select
-            value={item.status}
-            onValueChange={(v) => {
-              setItem({ ...item, status: v as ParsedItem["status"] });
-              saveField("status", v);
-            }}
-          >
-            <SelectTrigger className="w-28">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {statusOptions.map((opt) => (
-                <SelectItem key={opt.value} value={opt.value}>
-                  {opt.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          {item.type !== "scratch" && (
-            <Select
-              value={item.priority ?? "none"}
-              onValueChange={(v) => {
-                const val = v === "none" ? null : v;
-                setItem({
-                  ...item,
-                  priority: val as ParsedItem["priority"],
-                });
-                saveField("priority", val);
+          {/* ID + timestamps */}
+          <div className="text-xs text-muted-foreground font-mono">
+            <button
+              type="button"
+              className="hover:text-foreground transition-colors cursor-pointer"
+              title="點擊複製完整 ID"
+              onClick={() => {
+                navigator.clipboard.writeText(item.id);
+                toast.success("已複製 ID");
               }}
             >
-              <SelectTrigger className="w-24">
-                <SelectValue placeholder="優先度" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">無</SelectItem>
-                <SelectItem value="low">低</SelectItem>
-                <SelectItem value="medium">中</SelectItem>
-                <SelectItem value="high">高</SelectItem>
-              </SelectContent>
-            </Select>
+              {item.id.split("-")[0]}
+            </button>
+            {" · "}建立 {new Date(item.created).toLocaleString("zh-TW")} · 更新{" "}
+            {new Date(item.modified).toLocaleString("zh-TW")}
+          </div>
+
+          {/* Metadata (read-only) */}
+          <div className="flex gap-2 flex-wrap text-sm text-muted-foreground">
+            <span>筆記</span>
+            {item.category_name && (
+              <>
+                <span>·</span>
+                <span>{item.category_name}</span>
+              </>
+            )}
+            {item.tags.length > 0 && (
+              <>
+                <span>·</span>
+                <div className="flex gap-1 flex-wrap">
+                  {item.tags.map((tag) => (
+                    <Badge key={tag} variant="secondary" className="text-xs">
+                      {tag}
+                    </Badge>
+                  ))}
+                </div>
+              </>
+            )}
+            {item.priority && (
+              <>
+                <span>·</span>
+                <span>
+                  {item.priority === "high" ? "高" : item.priority === "medium" ? "中" : "低"}優先
+                </span>
+              </>
+            )}
+          </div>
+
+          {/* Source URL (read-only) */}
+          {item.source && (
+            <div>
+              <label className="text-sm text-muted-foreground block mb-1">參考連結</label>
+              <a
+                href={item.source}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm text-blue-600 dark:text-blue-400 hover:underline break-all"
+              >
+                {item.source}
+              </a>
+            </div>
           )}
 
-          {item.type !== "scratch" && (
-            <PauseToggle item={item} isOnline={isOnline} onItemUpdate={setItem} />
-          )}
+          {/* Content (rendered markdown) */}
+          <VaultMarkdownPreview content={item.content} />
         </div>
-
-        {/* 分類 (not for scratch) */}
-        {item.type !== "scratch" && (
-          <div>
-            <label className="text-sm text-muted-foreground block mb-1">分類</label>
-            <CategorySelect
-              value={item.category_id ?? null}
-              onChange={(categoryId) => {
-                setItem((prev) => (prev ? { ...prev, category_id: categoryId } : prev));
-                saveField("category_id", categoryId);
-              }}
-              disabled={saveStatus === "saving"}
-            />
-          </div>
-        )}
-
-        {/* Due date (todo only) */}
-        {item.type === "todo" && (
-          <div>
-            <label className="text-sm text-muted-foreground block mb-1">到期日</label>
-            <Input
-              type="date"
-              value={item.due ?? ""}
-              onChange={(e) => {
-                const val = e.target.value || null;
-                setItem({ ...item, due: val });
-                saveField("due", val);
-              }}
-            />
-          </div>
-        )}
-
-        {/* Linked items (note: linked todos; todo: linked note) */}
-        <LinkedItemsSection
-          item={item}
-          createTodoRequested={createTodoRequested}
-          onCreateTodoDismiss={dismissCreateTodo}
-          isOnline={isOnline}
-          onNavigate={handleNavigate}
-        />
-
-        {/* Source URL */}
-        <div>
-          <label className="text-sm text-muted-foreground block mb-1">參考連結</label>
-          <Input
-            type="url"
-            value={item.source ?? ""}
-            onChange={(e) => {
-              const val = e.target.value || null;
-              setIsDirty(true);
-              setItem({ ...item, source: val });
-              debouncedSave("source", val);
-            }}
-            onBlur={() => flushSave("source", item.source)}
-            placeholder="https://..."
+      ) : (
+        /* ── Normal: Editable view ── */
+        <>
+          {/* Paused banner */}
+          <PausedBanner
+            item={item}
+            isOnline={isOnline}
+            onResume={handleResume}
+            resuming={resuming}
           />
-        </div>
 
-        {/* Origin (read-only) */}
-        {item.origin && (
-          <div>
-            <label className="text-sm text-muted-foreground block mb-1">捕捉來源</label>
-            <p className="text-sm px-3 py-2 bg-muted rounded-md">{item.origin}</p>
-          </div>
-        )}
+          {/* Content */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-4 animate-fade-in break-words">
+            {/* Title */}
+            <Input
+              value={item.title}
+              onChange={(e) => {
+                setIsDirty(true);
+                setItem({ ...item, title: e.target.value });
+                debouncedSave("title", e.target.value);
+              }}
+              onBlur={() => flushSave("title", item.title)}
+              className="text-lg font-semibold border-0 px-0 focus-visible:ring-0"
+              placeholder="標題"
+            />
 
-        {/* Tags */}
-        {item.type !== "scratch" && (
-          <div>
-            <label className="text-sm text-muted-foreground block mb-1">標籤</label>
-            {item.type === "todo" && (
-              <div className="flex gap-1 mb-2">
-                {gtdTags.map((gtd) => {
-                  const isActive = item.tags.includes(gtd.tag);
-                  return (
-                    <Button
-                      key={gtd.tag}
-                      size="sm"
-                      variant={isActive ? "default" : "outline"}
-                      className="h-7 text-xs"
-                      onClick={() => {
-                        if (isActive) {
-                          removeTag(gtd.tag);
-                        } else {
-                          addTag(gtd.tag);
-                        }
-                      }}
-                    >
-                      {gtd.label}
-                    </Button>
-                  );
-                })}
+            {/* Metadata */}
+            <div className="text-xs text-muted-foreground font-mono">
+              <button
+                type="button"
+                className="hover:text-foreground transition-colors cursor-pointer"
+                title="點擊複製完整 ID"
+                onClick={() => {
+                  navigator.clipboard.writeText(item.id);
+                  toast.success("已複製 ID");
+                }}
+              >
+                {item.id.split("-")[0]}
+              </button>
+              {" · "}建立 {new Date(item.created).toLocaleString("zh-TW")} · 更新{" "}
+              {new Date(item.modified).toLocaleString("zh-TW")}
+            </div>
+
+            {/* Type + Status + Priority row */}
+            <div className="flex gap-2 flex-wrap">
+              <Select
+                value={item.type}
+                onValueChange={(v) => {
+                  if (v !== "note") setShareOpen(false);
+                  setItem({ ...item, type: v as ParsedItem["type"] });
+                  saveField("type", v);
+                }}
+              >
+                <SelectTrigger className="w-24">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="note">筆記</SelectItem>
+                  <SelectItem value="todo">待辦</SelectItem>
+                  <SelectItem value="scratch">暫存</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Select
+                value={item.status}
+                onValueChange={(v) => {
+                  setItem({ ...item, status: v as ParsedItem["status"] });
+                  saveField("status", v);
+                }}
+              >
+                <SelectTrigger className="w-28">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {statusOptions.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              {item.type !== "scratch" && (
+                <Select
+                  value={item.priority ?? "none"}
+                  onValueChange={(v) => {
+                    const val = v === "none" ? null : v;
+                    setItem({
+                      ...item,
+                      priority: val as ParsedItem["priority"],
+                    });
+                    saveField("priority", val);
+                  }}
+                >
+                  <SelectTrigger className="w-24">
+                    <SelectValue placeholder="優先度" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">無</SelectItem>
+                    <SelectItem value="low">低</SelectItem>
+                    <SelectItem value="medium">中</SelectItem>
+                    <SelectItem value="high">高</SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
+
+              {item.type !== "scratch" && (
+                <PauseToggle item={item} isOnline={isOnline} onItemUpdate={setItem} />
+              )}
+            </div>
+
+            {/* 分類 (not for scratch) */}
+            {item.type !== "scratch" && (
+              <div>
+                <label className="text-sm text-muted-foreground block mb-1">分類</label>
+                <CategorySelect
+                  value={item.category_id ?? null}
+                  onChange={(categoryId) => {
+                    setItem((prev) => (prev ? { ...prev, category_id: categoryId } : prev));
+                    saveField("category_id", categoryId);
+                  }}
+                  disabled={saveStatus === "saving"}
+                />
               </div>
             )}
-            <TagInput tags={item.tags} allTags={allTags} onAdd={addTag} onRemove={removeTag} />
-          </div>
-        )}
 
-        {/* Aliases */}
-        {item.type !== "scratch" && (
-          <div>
-            <label className="text-sm text-muted-foreground block mb-1">別名</label>
-            <div className="flex flex-wrap gap-1 mb-2">
-              {item.aliases.map((alias) => (
-                <Badge key={alias} variant="secondary" className="gap-1">
-                  {alias}
-                  <button type="button" onClick={() => removeAlias(alias)}>
-                    <X className="h-3 w-3" />
-                  </button>
-                </Badge>
-              ))}
+            {/* Due date (todo only) */}
+            {item.type === "todo" && (
+              <div>
+                <label className="text-sm text-muted-foreground block mb-1">到期日</label>
+                <Input
+                  type="date"
+                  value={item.due ?? ""}
+                  onChange={(e) => {
+                    const val = e.target.value || null;
+                    setItem({ ...item, due: val });
+                    saveField("due", val);
+                  }}
+                />
+              </div>
+            )}
+
+            {/* Linked items (note: linked todos; todo: linked note) */}
+            <LinkedItemsSection
+              item={item}
+              createTodoRequested={createTodoRequested}
+              onCreateTodoDismiss={dismissCreateTodo}
+              isOnline={isOnline}
+              onNavigate={handleNavigate}
+            />
+
+            {/* Source URL */}
+            <div>
+              <label className="text-sm text-muted-foreground block mb-1">參考連結</label>
+              <Input
+                type="url"
+                value={item.source ?? ""}
+                onChange={(e) => {
+                  const val = e.target.value || null;
+                  setIsDirty(true);
+                  setItem({ ...item, source: val });
+                  debouncedSave("source", val);
+                }}
+                onBlur={() => flushSave("source", item.source)}
+                placeholder="https://..."
+              />
             </div>
-            <Input
-              value={aliasInput}
-              onChange={(e) => setAliasInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  if (addAlias(aliasInput)) setAliasInput("");
-                }
+
+            {/* Origin (read-only) */}
+            {item.origin && (
+              <div>
+                <label className="text-sm text-muted-foreground block mb-1">捕捉來源</label>
+                <p className="text-sm px-3 py-2 bg-muted rounded-md">{item.origin}</p>
+              </div>
+            )}
+
+            {/* Tags */}
+            {item.type !== "scratch" && (
+              <div>
+                <label className="text-sm text-muted-foreground block mb-1">標籤</label>
+                {item.type === "todo" && (
+                  <div className="flex gap-1 mb-2">
+                    {gtdTags.map((gtd) => {
+                      const isActive = item.tags.includes(gtd.tag);
+                      return (
+                        <Button
+                          key={gtd.tag}
+                          size="sm"
+                          variant={isActive ? "default" : "outline"}
+                          className="h-7 text-xs"
+                          onClick={() => {
+                            if (isActive) {
+                              removeTag(gtd.tag);
+                            } else {
+                              addTag(gtd.tag);
+                            }
+                          }}
+                        >
+                          {gtd.label}
+                        </Button>
+                      );
+                    })}
+                  </div>
+                )}
+                <TagInput tags={item.tags} allTags={allTags} onAdd={addTag} onRemove={removeTag} />
+              </div>
+            )}
+
+            {/* Aliases */}
+            {item.type !== "scratch" && (
+              <div>
+                <label className="text-sm text-muted-foreground block mb-1">別名</label>
+                <div className="flex flex-wrap gap-1 mb-2">
+                  {item.aliases.map((alias) => (
+                    <Badge key={alias} variant="secondary" className="gap-1">
+                      {alias}
+                      <button type="button" onClick={() => removeAlias(alias)}>
+                        <X className="h-3 w-3" />
+                      </button>
+                    </Badge>
+                  ))}
+                </div>
+                <Input
+                  value={aliasInput}
+                  onChange={(e) => setAliasInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      if (addAlias(aliasInput)) setAliasInput("");
+                    }
+                  }}
+                  placeholder="新增別名..."
+                />
+              </div>
+            )}
+
+            {/* Content / Markdown */}
+            <ItemContentEditor
+              content={item.content}
+              offlineWarning={!isOnline}
+              onChange={(content) => {
+                setIsDirty(true);
+                setItem({ ...item, content });
+                debouncedSave("content", content);
               }}
-              placeholder="新增別名..."
+              onBlur={() => flushSave("content", item.content)}
             />
           </div>
-        )}
 
-        {/* Content / Markdown */}
-        <ItemContentEditor
-          content={item.content}
-          offlineWarning={!isOnline}
-          onChange={(content) => {
-            setIsDirty(true);
-            setItem({ ...item, content });
-            debouncedSave("content", content);
-          }}
-          onBlur={() => flushSave("content", item.content)}
-        />
-      </div>
-
-      {/* Share Dialog */}
-      {item.type === "note" && (
-        <ShareDialog
-          itemId={item.id}
-          itemTitle={item.title}
-          open={shareOpen}
-          onOpenChange={setShareOpen}
-          isOnline={isOnline}
-        />
+          {/* Share Dialog */}
+          {item.type === "note" && (
+            <ShareDialog
+              itemId={item.id}
+              itemTitle={item.title}
+              open={shareOpen}
+              onOpenChange={setShareOpen}
+              isOnline={isOnline}
+            />
+          )}
+        </>
       )}
     </div>
   );

@@ -181,6 +181,27 @@ privateRouter.patch("/items/:id", async (c) => {
       return c.json({ error: "Item not found" }, 404);
     }
 
+    // Exported items are read-only (content fields blocked)
+    if (existing.status === "exported") {
+      const blockedFields = [
+        "title",
+        "content",
+        "type",
+        "priority",
+        "due",
+        "tags",
+        "source",
+        "aliases",
+        "linked_note_id",
+        "category_id",
+        "paused",
+        "paused_context",
+      ];
+      if (blockedFields.some((f) => (input as Record<string, unknown>)[f] !== undefined)) {
+        return c.json({ error: "已匯出項目為唯讀" }, 400);
+      }
+    }
+
     const updated = updateItem(db, id, input, true);
     if (!updated) {
       return c.json({ error: "Item not found" }, 404);

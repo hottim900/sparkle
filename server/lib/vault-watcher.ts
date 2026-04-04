@@ -85,7 +85,11 @@ export async function scanExportedItems(
       mtimeCache.set(item.export_path, mtime);
 
       if (fileHash !== dbHash) {
-        db.update(items).set({ content: body }).where(eq(items.id, item.id)).run();
+        // Only update if item is still exported (race condition: revert during scan)
+        db.update(items)
+          .set({ content: body })
+          .where(and(eq(items.id, item.id), eq(items.status, "exported")))
+          .run();
         updated++;
         logger.info(`vault-watcher: synced ${item.export_path} → item ${item.id}`);
       }
