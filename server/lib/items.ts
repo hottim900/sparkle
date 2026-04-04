@@ -253,7 +253,7 @@ export function updateItem(
   // Exported items read-only guard (defensive layer — route handlers are primary)
   if (existing.status === "exported") {
     if (EXPORTED_BLOCKED_FIELDS.some((f) => (input as Record<string, unknown>)[f] !== undefined)) {
-      logger.warn("Blocked content update on exported item", { id: existing.id });
+      logger.warn({ id: existing.id }, "Blocked content update on exported item");
       return existing;
     }
   }
