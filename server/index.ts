@@ -45,6 +45,7 @@ import { lineBriefRouter } from "./routes/line-brief.js";
 import { checkAndGenerateDailyNote } from "./lib/daily-note-scheduler.js";
 import { checkAndSendLineBrief } from "./lib/line-brief-scheduler.js";
 import { startVaultWatcher } from "./lib/vault-watcher.js";
+import { backfillExportPaths } from "./lib/vault-backfill.js";
 
 // --- Startup validation ---
 function shannonEntropy(s: string): number {
@@ -481,7 +482,10 @@ dailyNoteTimer.unref();
 const lineBriefTimer = setInterval(() => checkAndSendLineBrief(sqlite), 60_000);
 lineBriefTimer.unref();
 
-// Vault watcher — scans exported notes for vault-side edits every 60s
+// Vault sync — backfill export_path for pre-v20 exports, then start watcher
+backfillExportPaths(db, sqlite).catch((e) =>
+  logger.warn(`vault-backfill: failed: ${(e as Error).message}`),
+);
 startVaultWatcher(db, sqlite);
 
 export default app;
