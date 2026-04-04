@@ -46,6 +46,7 @@ import { checkAndGenerateDailyNote } from "./lib/daily-note-scheduler.js";
 import { checkAndSendLineBrief } from "./lib/line-brief-scheduler.js";
 import { startVaultWatcher } from "./lib/vault-watcher.js";
 import { backfillExportPaths } from "./lib/vault-backfill.js";
+import { startVaultScanner } from "./lib/vault-scanner.js";
 
 // --- Startup validation ---
 function shannonEntropy(s: string): number {
@@ -486,5 +487,8 @@ lineBriefTimer.unref();
 backfillExportPaths(db, sqlite)
   .catch((e) => logger.warn(`vault-backfill: failed: ${(e as Error).message}`))
   .finally(() => startVaultWatcher(db, sqlite));
+
+// Vault scanner — indexes entire vault into vault_files table every 5 minutes
+startVaultScanner(db, sqlite);
 
 export default app;
