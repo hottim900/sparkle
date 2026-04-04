@@ -36,6 +36,7 @@ export const items = sqliteTable(
     paused: integer("paused").notNull().default(0),
     paused_at: text("paused_at"),
     paused_context: text("paused_context"),
+    export_path: text("export_path"),
     created: text("created").notNull(),
     modified: text("modified").notNull(),
   },

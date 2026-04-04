@@ -158,7 +158,7 @@ itemsRouter.post("/batch", async (c) => {
         .all();
       // 2. Loop export (file I/O, unavoidable)
       const errors: { id: string; error: string }[] = [];
-      const exportedIds: string[] = [];
+      const exportedResults: { id: string; path: string }[] = [];
       const skippedIds: string[] = [];
       for (const item of eligible) {
         try {
@@ -168,26 +168,27 @@ itemsRouter.post("/batch", async (c) => {
           if (result.skipped) {
             skippedIds.push(item.id);
           } else {
-            exportedIds.push(item.id);
+            exportedResults.push({ id: item.id, path: result.path });
           }
         } catch (e) {
           errors.push({ id: item.id, error: (e as Error).message });
         }
       }
-      // 3. Bulk update exported items (1 query); auto-clear paused
-      if (exportedIds.length > 0) {
+      // 3. Per-item update with export_path; auto-clear paused
+      for (const { id, path } of exportedResults) {
         db.update(items)
           .set({
             status: "exported",
+            export_path: path,
             modified: now,
             paused: 0,
             paused_at: null,
             paused_context: null,
           })
-          .where(inArray(items.id, exportedIds))
+          .where(eq(items.id, id))
           .run();
       }
-      affected = exportedIds.length;
+      affected = exportedResults.length;
       skipped = skippedIds.length + (ids.length - eligible.length);
       return c.json({ affected, skipped, errors });
     } else if (action === "done") {
@@ -270,7 +271,18 @@ itemsRouter.post("/:id/export", async (c) => {
       exportMode: obsidian.obsidian_export_mode,
     });
     if (!result.skipped) {
-      updateItem(db, item.id, { status: "exported" });
+      const now = new Date().toISOString();
+      db.update(items)
+        .set({
+          status: "exported",
+          export_path: result.path,
+          modified: now,
+          paused: 0,
+          paused_at: null,
+          paused_context: null,
+        })
+        .where(eq(items.id, item.id))
+        .run();
     }
     return c.json({ path: result.path, skipped: result.skipped });
   } catch (e) {
