@@ -40,4 +40,9 @@ export const queryKeys = {
     tags: ["private", "tags"] as const,
     search: (q: string) => ["private", "search", q] as const,
   },
+  vault: {
+    all: ["vault"] as const,
+    search: (q: string) => ["vault", "search", q] as const,
+    file: (path: string) => ["vault", "file", path] as const,
+  },
 } as const;

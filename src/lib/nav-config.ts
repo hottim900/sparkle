@@ -16,6 +16,7 @@ import {
   ListTodo,
   Search,
   PauseCircle,
+  BookOpen,
 } from "lucide-react";
 
 export interface NavItemConfig {
@@ -78,6 +79,10 @@ export const sidebarNavGroups: NavGroupConfig[] = [
       { id: "shares", label: "分享管理", icon: Share2, path: "/shares" },
     ],
   },
+  {
+    label: "Vault",
+    items: [{ id: "vault", label: "Vault 瀏覽", icon: BookOpen, path: "/vault" }],
+  },
 ];
 
 /**
@@ -101,6 +106,7 @@ export const bottomNavMoreItems: NavItemConfig[] = [
   { id: "paused", label: "已暫停", icon: PauseCircle, path: "/paused" },
   { id: "archived", label: "已封存", icon: Archive, path: "/archived" },
   { id: "shares", label: "分享管理", icon: Share2, path: "/shares" },
+  { id: "vault", label: "Vault 瀏覽", icon: BookOpen, path: "/vault" },
   { id: "settings", label: "設定", icon: Settings, path: "/settings" },
 ];
 

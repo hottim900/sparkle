@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as VaultRouteImport } from './routes/vault'
 import { Route as SharesRouteImport } from './routes/shares'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as PrivateRouteImport } from './routes/private'
@@ -33,6 +34,11 @@ import { Route as ListNotesFleetingRouteImport } from './routes/_list/notes/flee
 import { Route as ListNotesExportedRouteImport } from './routes/_list/notes/exported'
 import { Route as ListNotesDevelopingRouteImport } from './routes/_list/notes/developing'
 
+const VaultRoute = VaultRouteImport.update({
+  id: '/vault',
+  path: '/vault',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SharesRoute = SharesRouteImport.update({
   id: '/shares',
   path: '/shares',
@@ -154,6 +160,7 @@ export interface FileRoutesByFullPath {
   '/private': typeof PrivateRoute
   '/settings': typeof SettingsRoute
   '/shares': typeof SharesRoute
+  '/vault': typeof VaultRoute
   '/all': typeof ListAllRoute
   '/archived': typeof ListArchivedRoute
   '/attention': typeof ListAttentionRoute
@@ -178,6 +185,7 @@ export interface FileRoutesByTo {
   '/private': typeof PrivateRoute
   '/settings': typeof SettingsRoute
   '/shares': typeof SharesRoute
+  '/vault': typeof VaultRoute
   '/all': typeof ListAllRoute
   '/archived': typeof ListArchivedRoute
   '/attention': typeof ListAttentionRoute
@@ -202,6 +210,7 @@ export interface FileRoutesById {
   '/private': typeof PrivateRoute
   '/settings': typeof SettingsRoute
   '/shares': typeof SharesRoute
+  '/vault': typeof VaultRoute
   '/_list/all': typeof ListAllRoute
   '/_list/archived': typeof ListArchivedRoute
   '/_list/attention': typeof ListAttentionRoute
@@ -228,6 +237,7 @@ export interface FileRouteTypes {
     | '/private'
     | '/settings'
     | '/shares'
+    | '/vault'
     | '/all'
     | '/archived'
     | '/attention'
@@ -252,6 +262,7 @@ export interface FileRouteTypes {
     | '/private'
     | '/settings'
     | '/shares'
+    | '/vault'
     | '/all'
     | '/archived'
     | '/attention'
@@ -275,6 +286,7 @@ export interface FileRouteTypes {
     | '/private'
     | '/settings'
     | '/shares'
+    | '/vault'
     | '/_list/all'
     | '/_list/archived'
     | '/_list/attention'
@@ -301,10 +313,18 @@ export interface RootRouteChildren {
   PrivateRoute: typeof PrivateRoute
   SettingsRoute: typeof SettingsRoute
   SharesRoute: typeof SharesRoute
+  VaultRoute: typeof VaultRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/vault': {
+      id: '/vault'
+      path: '/vault'
+      fullPath: '/vault'
+      preLoaderRoute: typeof VaultRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/shares': {
       id: '/shares'
       path: '/shares'
@@ -538,6 +558,7 @@ const rootRouteChildren: RootRouteChildren = {
   PrivateRoute: PrivateRoute,
   SettingsRoute: SettingsRoute,
   SharesRoute: SharesRoute,
+  VaultRoute: VaultRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
