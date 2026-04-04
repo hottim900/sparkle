@@ -142,7 +142,7 @@ Content editing modes:
 Side effects:
   - Type change to note: clears linked_note_id and due (not supported on notes).
   - Type change to scratch: clears tags, priority, due, aliases, linked_note_id (scratch only keeps title + content). category_id is preserved.
-  - Editing an exported note's title or content automatically reverts status to "permanent".`,
+  - Exported items are read-only. Content fields (title, content, type, tags, priority, etc.) cannot be modified. To edit, first revert to permanent status.`,
       inputSchema: z
         .object({
           id: z.string().uuid().describe("Item UUID"),

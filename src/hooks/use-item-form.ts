@@ -78,6 +78,7 @@ export function useItemForm(itemId: string, options: UseItemFormOptions = {}) {
   const saveField = useCallback(
     async (field: string, value: unknown) => {
       if (!item) return;
+      if (item.status === "exported") return;
       if (!isOnline) {
         toast.error("離線中，無法儲存變更");
         return;

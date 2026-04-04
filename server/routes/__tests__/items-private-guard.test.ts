@@ -590,3 +590,114 @@ describe("Share list endpoints — private item filtering", () => {
     expect(res.status).toBe(404);
   });
 });
+
+// ============================================================
+// PATCH /:id — Exported items read-only guard
+// ============================================================
+describe("PATCH /api/items/:id — exported read-only guard", () => {
+  it("returns 400 when updating content field on exported item", async () => {
+    const id = insertItem({ status: "exported" });
+    const res = await app.request(`/api/items/${id}`, {
+      method: "PATCH",
+      headers: jsonHeaders(),
+      body: JSON.stringify({ title: "New Title" }),
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toContain("唯讀");
+  });
+
+  it("returns 400 when updating tags on exported item", async () => {
+    const id = insertItem({ status: "exported" });
+    const res = await app.request(`/api/items/${id}`, {
+      method: "PATCH",
+      headers: jsonHeaders(),
+      body: JSON.stringify({ tags: ["new-tag"] }),
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toContain("唯讀");
+  });
+
+  it("allows status change on exported item", async () => {
+    const id = insertItem({ status: "exported" });
+    const res = await app.request(`/api/items/${id}`, {
+      method: "PATCH",
+      headers: jsonHeaders(),
+      body: JSON.stringify({ status: "permanent" }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.status).toBe("permanent");
+  });
+
+  it("allows is_private change on exported item", async () => {
+    const id = insertItem({ status: "exported" });
+    const res = await app.request(`/api/items/${id}`, {
+      method: "PATCH",
+      headers: jsonHeaders(),
+      body: JSON.stringify({ is_private: true }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.is_private).toBe(1);
+  });
+});
+
+// ============================================================
+// POST /batch — Exported items guard
+// ============================================================
+describe("POST /api/items/batch — exported items guard", () => {
+  it("batch develop skips exported items (remains exported)", async () => {
+    const id = insertItem({
+      id: "a1b2c3d4-e5f6-4a7b-8c9d-e0f1a2b3c4d5",
+      status: "exported",
+      is_private: 0,
+    });
+
+    const res = await app.request("/api/items/batch", {
+      method: "POST",
+      headers: jsonHeaders(),
+      body: JSON.stringify({
+        ids: [id],
+        action: "develop",
+      }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.affected).toBe(0);
+    expect(body.skipped).toBe(1);
+
+    // Verify item is still exported
+    const row = testSqlite.prepare("SELECT status FROM items WHERE id = ?").get(id) as {
+      status: string;
+    };
+    expect(row.status).toBe("exported");
+  });
+
+  it("batch archive works on exported items", async () => {
+    const id = insertItem({
+      id: "a1b2c3d4-e5f6-4a7b-8c9d-e0f1a2b3c4d5",
+      status: "exported",
+      is_private: 0,
+    });
+
+    const res = await app.request("/api/items/batch", {
+      method: "POST",
+      headers: jsonHeaders(),
+      body: JSON.stringify({
+        ids: [id],
+        action: "archive",
+      }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.affected).toBe(1);
+
+    // Verify item is archived
+    const row = testSqlite.prepare("SELECT status FROM items WHERE id = ?").get(id) as {
+      status: string;
+    };
+    expect(row.status).toBe("archived");
+  });
+});

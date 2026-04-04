@@ -26,6 +26,7 @@ export interface Item {
   category_name: string | null;
   viewed_at: string | null;
   is_private: boolean;
+  export_path: string | null;
   paused: number;
   paused_at: string | null;
   paused_context: string | null;

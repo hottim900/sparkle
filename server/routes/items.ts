@@ -5,6 +5,7 @@ import { items } from "../db/schema.js";
 import { createItem, getItem, listItems, updateItem, deleteItem } from "../lib/items.js";
 import { resolveLinkedInfo } from "../lib/item-enrichment.js";
 import { isValidTypeStatus, getAutoMappedStatus } from "../lib/item-type-system.js";
+import { EXPORTED_BLOCKED_FIELDS } from "../lib/exported-guard.js";
 import type { ExportableItem } from "../lib/export.js";
 import {
   createItemSchema,
@@ -219,6 +220,7 @@ itemsRouter.post("/batch", async (c) => {
           paused: 0,
           paused_at: null,
           paused_context: null,
+          export_path: null,
         })
         .where(and(inArray(items.id, ids), eq(items.is_private, 0)))
         .run();
@@ -348,6 +350,15 @@ itemsRouter.patch("/:id", async (c) => {
         { error: `Invalid status '${effectiveStatus}' for type '${effectiveType}'` },
         400,
       );
+    }
+
+    // Exported items are read-only (content fields blocked)
+    if (existing.status === "exported") {
+      if (
+        EXPORTED_BLOCKED_FIELDS.some((f) => (input as Record<string, unknown>)[f] !== undefined)
+      ) {
+        return c.json({ error: "已匯出項目為唯讀" }, 400);
+      }
     }
 
     // When marking as private, use includePrivate for the return value

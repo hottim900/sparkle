@@ -713,8 +713,8 @@ describe("tool description completeness", () => {
     expect(content).toMatch(/[Tt]ype change.*scratch.*clear/);
   });
 
-  it("sparkle_update_note description warns about exported note auto-reversion", () => {
+  it("sparkle_update_note description warns about exported items read-only", () => {
     const content = readToolSource("write.ts");
-    expect(content).toMatch(/exported.*permanent/i);
+    expect(content).toMatch(/exported.*read-only/i);
   });
 });

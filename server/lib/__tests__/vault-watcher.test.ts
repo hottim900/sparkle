@@ -172,4 +172,27 @@ describe("scanExportedItems", () => {
     const result = await scanExportedItems(db, sqlite);
     expect(result.errors).toBe(1);
   });
+
+  it("skips items reverted to permanent (no longer exported)", async () => {
+    enableObsidian(sqlite, tmpDir);
+    insertItem(sqlite, "item-1", "Original content", "0_Inbox/Reverted.md");
+
+    // Revert the item to permanent status (simulating user action)
+    sqlite.prepare("UPDATE items SET status = 'permanent' WHERE id = 'item-1'").run();
+
+    // Write a different file in the vault
+    const filePath = join(tmpDir, "0_Inbox/Reverted.md");
+    writeFileSync(filePath, `---\nsparkle_id: "item-1"\n---\nChanged in vault`);
+
+    const result = await scanExportedItems(db, sqlite);
+    // Item is no longer exported, so it should not be scanned
+    expect(result.scanned).toBe(0);
+    expect(result.updated).toBe(0);
+
+    // Verify DB content is unchanged
+    const row = sqlite.prepare("SELECT content FROM items WHERE id = 'item-1'").get() as {
+      content: string;
+    };
+    expect(row.content).toBe("Original content");
+  });
 });

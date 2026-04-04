@@ -6,6 +6,10 @@ import { exportToObsidian } from "../export.js";
 import { getObsidianSettings } from "../settings.js";
 import { parseDate } from "../line-date.js";
 import { formatDetail, STATUS_LABELS } from "../line-format.js";
+import { items } from "../../db/schema.js";
+import { eq } from "drizzle-orm";
+
+const EXPORTED_MSG = "❌ 此筆記已匯出至 Obsidian，如需修改請先退回永久筆記";
 
 // Each handler is registered by command.type in the dispatcher, so the Extract cast is always safe.
 
@@ -20,6 +24,7 @@ const handleDue: CommandHandler = async ({ userId, command, db }) => {
   const cmd = command as Extract<LineCommand, { type: "due" }>;
   const resolved = resolveSessionItem(db, userId, cmd.index);
   if (!resolved.ok) return resolved.error;
+  if (resolved.item.status === "exported") return EXPORTED_MSG;
   if (resolved.item.type !== "todo") return "❌ 到期日只適用於待辦";
   const dateParsed = parseDate(cmd.dateInput);
   if (!dateParsed.success) return "❌ 無法辨識日期，請用 YYYY-MM-DD 或中文如『明天』『3天後』";
@@ -34,6 +39,7 @@ const handleTag: CommandHandler = async ({ userId, command, db }) => {
   const cmd = command as Extract<LineCommand, { type: "tag" }>;
   const resolved = resolveSessionItem(db, userId, cmd.index);
   if (!resolved.ok) return resolved.error;
+  if (resolved.item.status === "exported") return EXPORTED_MSG;
   const existingTags: string[] = JSON.parse(resolved.item.tags || "[]");
   const newTags = [...new Set([...existingTags, ...cmd.tags])].slice(0, 20);
   updateItem(db, resolved.itemId, { tags: newTags });
@@ -97,7 +103,19 @@ const handleExport: CommandHandler = async ({ userId, command, db, sqlite }) => 
     if (result.skipped) {
       return `⏭️ 已存在相同筆記，跳過匯出: ${result.path}`;
     }
-    updateItem(db, resolved.itemId, { status: "exported" });
+    // Set status + export_path directly (export_path not in UpdateItemInput schema)
+    const now = new Date().toISOString();
+    db.update(items)
+      .set({
+        status: "exported",
+        export_path: result.path,
+        modified: now,
+        paused: 0,
+        paused_at: null,
+        paused_context: null,
+      })
+      .where(eq(items.id, resolved.itemId))
+      .run();
     return `✅ 已匯出到 Obsidian: ${result.path}`;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -117,6 +135,7 @@ const handlePriority: CommandHandler = async ({ userId, command, db }) => {
   const cmd = command as Extract<LineCommand, { type: "priority" }>;
   const resolved = resolveSessionItem(db, userId, cmd.index);
   if (!resolved.ok) return resolved.error;
+  if (resolved.item.status === "exported") return EXPORTED_MSG;
   updateItem(db, resolved.itemId, { priority: cmd.priority });
   return cmd.priority === null
     ? `✅ 已清除「${resolved.item.title}」的優先度`
@@ -127,6 +146,7 @@ const handleUntag: CommandHandler = async ({ userId, command, db }) => {
   const cmd = command as Extract<LineCommand, { type: "untag" }>;
   const resolved = resolveSessionItem(db, userId, cmd.index);
   if (!resolved.ok) return resolved.error;
+  if (resolved.item.status === "exported") return EXPORTED_MSG;
   const currentTags: string[] = JSON.parse(resolved.item.tags || "[]");
   const remaining = currentTags.filter((t) => !cmd.tags.includes(t));
   updateItem(db, resolved.itemId, { tags: remaining });

@@ -19,6 +19,7 @@ import {
   listItemsSchema,
   searchSchema,
 } from "../schemas/items.js";
+import { EXPORTED_BLOCKED_FIELDS } from "../lib/exported-guard.js";
 
 const privateRouter = new Hono();
 
@@ -179,6 +180,15 @@ privateRouter.patch("/items/:id", async (c) => {
     const existing = getItem(db, id, false, true);
     if (!existing || !existing.is_private) {
       return c.json({ error: "Item not found" }, 404);
+    }
+
+    // Exported items are read-only (content fields blocked)
+    if (existing.status === "exported") {
+      if (
+        EXPORTED_BLOCKED_FIELDS.some((f) => (input as Record<string, unknown>)[f] !== undefined)
+      ) {
+        return c.json({ error: "已匯出項目為唯讀" }, 400);
+      }
     }
 
     const updated = updateItem(db, id, input, true);

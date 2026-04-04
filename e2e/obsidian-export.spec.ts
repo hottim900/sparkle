@@ -82,4 +82,58 @@ test.describe("Obsidian Export", () => {
     await navigateTo(page, "永久筆記");
     await expect(page.getByText(title)).not.toBeVisible({ timeout: 5_000 });
   });
+
+  test("exported note shows read-only view and can be reverted", async ({ page, request }) => {
+    // Enable Obsidian via API
+    await request.put(`http://localhost:${PORT}/api/settings`, {
+      headers: { Authorization: `Bearer ${AUTH_TOKEN}`, "Content-Type": "application/json" },
+      data: {
+        obsidian_enabled: "true",
+        obsidian_vault_path: VAULT_PATH,
+        obsidian_inbox_folder: "0_Inbox",
+        obsidian_export_mode: "overwrite",
+      },
+    });
+
+    // Create and export a permanent note via API
+    const title = `readonly-test-${Date.now()}`;
+    const item = await createItemViaApi(request, {
+      title,
+      type: "note",
+      status: "permanent",
+      content: "# Test Content\n\nThis is exported.",
+    });
+
+    // Export via API
+    const exportRes = await request.post(`http://localhost:${PORT}/api/items/${item.id}/export`, {
+      headers: { Authorization: `Bearer ${AUTH_TOKEN}` },
+    });
+    expect(exportRes.ok()).toBeTruthy();
+
+    // Navigate to exported items and open the note
+    await page.goto("/");
+    await navigateTo(page, "已匯出");
+    await page.getByText(title).click();
+
+    // Verify read-only view: banner visible, no title input, content rendered
+    await expect(page.getByText("已匯出至 Obsidian")).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator("h1").filter({ hasText: title })).toBeVisible();
+    await expect(page.getByPlaceholder("標題")).not.toBeVisible();
+
+    // Verify revert button exists
+    const revertBtn = page.getByRole("button", { name: "退回" });
+    await expect(revertBtn).toBeVisible();
+
+    // Click revert → confirmation dialog
+    await revertBtn.click();
+    await expect(page.getByText("退回為永久筆記")).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByText("此筆記將恢復為可編輯狀態")).toBeVisible();
+
+    // Confirm revert
+    await page.getByRole("button", { name: "確認退回" }).click();
+
+    // Verify toast + editable form
+    await expect(page.getByText("已退回為永久筆記")).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByPlaceholder("標題")).toBeVisible({ timeout: 5_000 });
+  });
 });
