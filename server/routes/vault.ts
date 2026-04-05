@@ -1,10 +1,17 @@
 import { Hono } from "hono";
 import { resolve, normalize } from "node:path";
+import { z, ZodError } from "zod";
 import { db, sqlite } from "../db/index.js";
 import { vaultFiles } from "../db/schema.js";
 import { eq, sql } from "drizzle-orm";
 import { getObsidianSettings } from "../lib/settings.js";
+import { escapeFts5Query } from "../lib/fts-utils.js";
 import { logger } from "../lib/logger.js";
+
+const vaultSearchSchema = z.object({
+  q: z.string().min(1).max(1000).optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+});
 
 const vaultRouter = new Hono();
 
@@ -13,8 +20,20 @@ const vaultRouter = new Hono();
  * FTS5 search across vault files. Returns snippets.
  */
 vaultRouter.get("/", (c) => {
-  const q = c.req.query("q")?.trim();
-  const limit = Math.min(Math.max(parseInt(c.req.query("limit") || "20", 10) || 20, 1), 100);
+  let parsed;
+  try {
+    parsed = vaultSearchSchema.parse({
+      q: c.req.query("q")?.trim() || undefined,
+      limit: c.req.query("limit"),
+    });
+  } catch (e) {
+    if (e instanceof ZodError) {
+      return c.json({ error: e.issues[0]?.message ?? "Validation error" }, 400);
+    }
+    throw e;
+  }
+
+  const { q, limit } = parsed;
 
   if (!q) {
     // No query: return recent files by mtime
@@ -31,8 +50,9 @@ vaultRouter.get("/", (c) => {
     return c.json({ results: recent, total: recent.length });
   }
 
-  // FTS5 search
+  // FTS5 search — trigram tokenizer requires 3+ chars; shorter queries return empty (no LIKE fallback for vault performance)
   try {
+    const escaped = escapeFts5Query(q);
     const results = sqlite
       .prepare(
         `SELECT vf.path, vf.title, vf.mtime,
@@ -43,11 +63,10 @@ vaultRouter.get("/", (c) => {
          ORDER BY rank
          LIMIT ?`,
       )
-      .all(q, limit) as { path: string; title: string; mtime: number; snippet: string }[];
+      .all(escaped, limit) as { path: string; title: string; mtime: number; snippet: string }[];
 
     return c.json({ results, total: results.length });
   } catch (e) {
-    // FTS5 query syntax error (e.g., unmatched quotes)
     logger.warn(`vault search error: ${(e as Error).message}`);
     return c.json({ results: [], total: 0, error: "搜尋語法錯誤" }, 400);
   }
