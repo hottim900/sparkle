@@ -22,18 +22,18 @@
 
 | 代號      | 缺陷類別                | 層級              | 已知實例                                                                       | 搜查狀態      |
 | --------- | ----------------------- | ----------------- | ------------------------------------------------------------------------------ | ------------- |
-| D-SILENT  | 靜默失敗與可觀測性缺口  | 全層              | DEF-001, DEF-011, DEF-012, DEF-018, DEF-019, DEF-022, DEF-025, DEF-026, TD-026 | ✅ 2026-03-20 |
-| D-VALID   | 輸入驗證缺口            | API               | DEF-003, DEF-004, DEF-005, DEF-013, DEF-021, DEF-025                           | ✅ 2026-03-20 |
-| D-STATE   | 前端狀態管理不一致      | Frontend          | DEF-002, DEF-015, DEF-016                                                      | ✅ 2026-03-20 |
-| D-OFFLINE | 離線同步與 PWA 問題     | Frontend / SW     | (DEF-001)                                                                      | ✅ 2026-03-20 |
-| D-QUERY   | 查詢語意錯誤            | Server            | DEF-010                                                                        | ✅ 2026-03-20 |
-| D-MIGRATE | DB Migration 安全性     | Server            | —                                                                              | ✅ 2026-03-20 |
-| D-AUTH    | 認證、授權與安全防線    | API / 全層        | —                                                                              | ✅ 2026-03-20 |
-| D-EDGE    | 邊界條件與資源限制      | 全層              | DEF-006, DEF-007                                                               | ✅ 2026-03-20 |
-| D-TYPE    | TypeScript 型別安全漏洞 | Frontend / Server | DEF-008, TD-001, TD-004, TD-005, TD-006                                        | ✅ 2026-03-20 |
-| D-PERF    | 效能問題                | 全層              | DEF-009, DEF-014, TD-002, TD-003, FG-001                                       | ✅ 2026-03-20 |
-| D-DEPLOY  | Build/Deploy 一致性     | DevOps            | TD-027                                                                         | ✅ 2026-03-20 |
-| D-RACE    | 競態條件與並發問題      | Frontend / Server | DEF-024                                                                        | ✅ 2026-03-20 |
+| D-SILENT  | 靜默失敗與可觀測性缺口  | 全層              | DEF-001, DEF-011, DEF-012, DEF-018, DEF-019, DEF-022, DEF-025, DEF-026, TD-026 | ✅ 2026-04-05 |
+| D-VALID   | 輸入驗證缺口            | API               | DEF-003, DEF-004, DEF-005, DEF-013, DEF-021, DEF-025, #281                     | ✅ 2026-04-05 |
+| D-STATE   | 前端狀態管理不一致      | Frontend          | DEF-002, DEF-015, DEF-016                                                      | ✅ 2026-04-05 |
+| D-OFFLINE | 離線同步與 PWA 問題     | Frontend / SW     | (DEF-001)                                                                      | ✅ 2026-04-05 |
+| D-QUERY   | 查詢語意錯誤            | Server            | DEF-010                                                                        | ✅ 2026-04-05 |
+| D-MIGRATE | DB Migration 安全性     | Server            | —                                                                              | ✅ 2026-04-05 |
+| D-AUTH    | 認證、授權與安全防線    | API / 全層        | —                                                                              | ✅ 2026-04-05 |
+| D-EDGE    | 邊界條件與資源限制      | 全層              | DEF-006, DEF-007                                                               | ✅ 2026-04-05 |
+| D-TYPE    | TypeScript 型別安全漏洞 | Frontend / Server | DEF-008, TD-001, TD-004, TD-005, TD-006                                        | ✅ 2026-04-05 |
+| D-PERF    | 效能問題                | 全層              | DEF-009, DEF-014, TD-002, TD-003, FG-001                                       | ✅ 2026-04-05 |
+| D-DEPLOY  | Build/Deploy 一致性     | DevOps            | TD-027                                                                         | ✅ 2026-04-05 |
+| D-RACE    | 競態條件與並發問題      | Frontend / Server | DEF-024                                                                        | ✅ 2026-04-05 |
 
 ---
 
@@ -77,7 +77,7 @@ grep -rn "captureException\|captureMessage" server/ src/ --include="*.ts" --incl
 
 > **搜查策略：** 錯誤吞沒從精準到廣域。可觀測性先查 console.\* 和缺 logger 的破壞性路由。
 
-**搜查狀態：** ✅ 已搜查（2026-03-20）
+**搜查狀態：** ✅ 已搜查（2026-04-05）
 
 ### 搜查結果
 
@@ -92,12 +92,18 @@ grep -rn "captureException\|captureMessage" server/ src/ --include="*.ts" --incl
 - `server/db/index.ts:268,362` — 多餘的 bare catch 包裹 `IF NOT EXISTS` 語句，可能吞掉非預期 SQLite 錯誤（Low，未建 DEF）
 - TD-026 — `mcp-server/src/http.ts` 15 處 console.\* 代替結構化 logger，繞過 Sentry 和結構化日誌（Medium）（2026-03-20 增量發現）
 
+**增量搜查（2026-04-05 vault/private/daily-note 新增功能）：**
+
+無新缺陷。vault-scanner/vault-watcher/vault-backfill 均有 `logger.warn` 錯誤記錄。daily-note-scheduler/line-brief-scheduler 均有 `logger.error` 處理。private-session 路由均有 ZodError catch + throw re-raise。MCP console.\* 從 15 處降至 3 處（`mcp-server/src/index.ts` 的 stdio 啟動/致命錯誤用，合理）。
+
 **審查但判定合理（非缺陷）：**
 
 - Server 端 JSON.parse catch → 均有 `logger.warn` + HTTP 4xx 回應
 - Frontend catch → 均有 `toast.error` 通知使用者
 - Health check catch → 設定 degraded 狀態（設計如此）
 - SW offline queue catch → 正確的離線佇列排隊模式
+- vault-scanner bare catch（readdir/readFile）→ 跳過不可讀檔案，合理容錯
+- usePauseResume catch → toast.error + 樂觀更新 rollback
 
 ---
 
@@ -119,7 +125,7 @@ grep -rn "z\.object" server/ --include="*.ts"
 # 對比：每個寫入端點是否有對應的 Zod 驗證
 ```
 
-**搜查狀態：** ✅ 已搜查（2026-03-20）
+**搜查狀態：** ✅ 已搜查（2026-04-05）
 
 ### 搜查結果
 
@@ -138,7 +144,11 @@ grep -rn "z\.object" server/ --include="*.ts"
 - Issue #183（Defect, Low / S4-Trivial）— Tags/aliases 陣列元素允許空字串，缺 `.min(1)`
 - Issue #184（Tech Debt, Low）— Import 未驗證 FK 參照完整性（linked_note_id / category_id），可能觸發 FK constraint error 500
 
-**審查但判定合理：** 路徑參數 :id 未顯式驗證但由 DB lookup 保護、FTS5 轉義正確。UUID format 由 Zod `.uuid()` 嚴格檢查。Short ID prefix lookup 已有 `LIKE_SAFE_RE` 防止 LIKE wildcards 注入。MCP vault `readVaultFileByPath` 不限副檔名但有 `resolveVaultPath()` 路徑邊界檢查。Zod v3 預設 strip unknown keys（無 `.passthrough()`），prototype pollution 不適用。日期格式 regex 不做語意驗證（`"9999-99-99"` 可通過），SQLite TEXT 儲存不受影響。
+**增量搜查（2026-04-05 vault/private/daily-note 新增功能）：**
+
+- Issue #281（Defect, Low / S4-Trivial）— `server/routes/vault.ts:46` vault search FTS5 查詢未經 `escapeFts5Query()` 轉義，使用者可使用 FTS5 語法運算子，與 item search 行為不一致。附帶 `q` 參數缺 `.max()` 長度限制。
+
+**審查但判定合理：** 路徑參數 :id 未顯式驗證但由 DB lookup 保護、item FTS5 轉義正確。UUID format 由 Zod `.uuid()` 嚴格檢查。Short ID prefix lookup 已有 `LIKE_SAFE_RE` 防止 LIKE wildcards 注入。MCP vault `readVaultFileByPath` 不限副檔名但有 `resolveVaultPath()` 路徑邊界檢查。Zod v3 預設 strip unknown keys（無 `.passthrough()`），prototype pollution 不適用。日期格式 regex 不做語意驗證（`"9999-99-99"` 可通過），SQLite TEXT 儲存不受影響。Private endpoint（setup/unlock/lock/pin/CRUD/search/tags）Zod 驗證完整覆蓋。Vault file route 路徑遍歷防護正確（resolve + prefix check）。Vault route `limit` 手動 parseInt + clamp（非 Zod），功能正確但風格不一致（low-risk observation）。Daily-note/line-brief `date` 參數用 `validateDateParam()` 驗證，正確。
 
 ---
 
@@ -161,7 +171,7 @@ grep -rn "invalidateQueries\|invalidate" src/ --include="*.ts" --include="*.tsx"
 grep -rn "setState\|setItems\|setNotes" src/ --include="*.ts" --include="*.tsx"
 ```
 
-**搜查狀態：** ✅ 已搜查（2026-03-20）
+**搜查狀態：** ✅ 已搜查（2026-04-05）
 
 ### 搜查結果
 
@@ -198,7 +208,7 @@ grep -rn "NetworkFirst\|CacheFirst\|StaleWhileRevalidate" src/ --include="*.ts"
 grep -rn "navigator.onLine\|online\|offline" src/ --include="*.ts" --include="*.tsx"
 ```
 
-**搜查狀態：** ✅ 已搜查（2026-03-20）
+**搜查狀態：** ✅ 已搜查（2026-04-05）
 
 ### 搜查結果
 
@@ -232,7 +242,7 @@ grep -B 5 "\.limit(" server/ --include="*.ts"
 grep -rn "fts\|MATCH" server/ --include="*.ts"
 ```
 
-**搜查狀態：** ✅ 已搜查（2026-03-20）
+**搜查狀態：** ✅ 已搜查（2026-04-05）
 
 ### 搜查結果
 
@@ -262,7 +272,7 @@ grep -n "setSchemaVersion" server/db/index.ts
 
 > **注意：** 已有 `.claude/hooks/migration-safety.sh` PostToolUse hook 做自動檢查。此分類主要用於回顧性搜查。
 
-**搜查狀態：** ✅ 已搜查（2026-03-20）
+**搜查狀態：** ✅ 已搜查（2026-04-05）
 
 ### 搜查結果
 
@@ -314,7 +324,7 @@ grep -rn "dangerouslySetInnerHTML\|innerHTML" src/ --include="*.tsx"
 grep -rn "eval(\|new Function(" src/ server/ --include="*.ts" --include="*.tsx"
 ```
 
-**搜查狀態：** ✅ 已搜查（2026-03-20）
+**搜查狀態：** ✅ 已搜查（2026-04-05）
 
 ### 搜查結果
 
@@ -359,7 +369,7 @@ grep -rn "offset\|limit\|page" server/routes/ --include="*.ts"
 grep -rn "z\.array" server/ --include="*.ts"
 ```
 
-**搜查狀態：** ✅ 已搜查（2026-03-20）
+**搜查狀態：** ✅ 已搜查（2026-04-05）
 
 ### 搜查結果
 
@@ -394,7 +404,7 @@ grep -rn "as [A-Z]" src/ server/ --include="*.ts" --include="*.tsx" | grep -v "a
 grep -rn "interface.*Response\|type.*Response" src/ --include="*.ts"
 ```
 
-**搜查狀態：** ✅ 已搜查（2026-03-20）
+**搜查狀態：** ✅ 已搜查（2026-04-05）
 
 ### 搜查結果
 
@@ -433,7 +443,7 @@ grep -rn "useMemo\|useCallback" src/ --include="*.tsx"
 grep -rn "\.all(" server/ --include="*.ts" | grep -v "LIMIT\|limit"
 ```
 
-**搜查狀態：** ✅ 已搜查（2026-03-20）
+**搜查狀態：** ✅ 已搜查（2026-04-05）
 
 ### 搜查結果
 
@@ -497,7 +507,7 @@ git tag --sort=-v:refname | head -5
 
 > **搜查策略：** diff source vs artifact 是最高效的搜查。config drift 需要 cross-reference .env.example 和 process.env 使用處。
 
-**搜查狀態：** ✅ 已搜查（2026-03-20）
+**搜查狀態：** ✅ 已搜查（2026-04-05）
 
 ### 搜查結果
 
@@ -566,7 +576,7 @@ grep -rn "setTimeout" src/ --include="*.ts" --include="*.tsx" | grep -v "\.test\
 
 > **搜查策略：** Double-submit 最容易 grep，stale closure 需要人工審查 dependency array。abort race 檢查 AbortController 與 cleanup 配對。
 
-**搜查狀態：** ✅ 已搜查（2026-03-20）
+**搜查狀態：** ✅ 已搜查（2026-04-05）
 
 ### 搜查結果
 
@@ -593,31 +603,32 @@ grep -rn "setTimeout" src/ --include="*.ts" --include="*.tsx" | grep -v "\.test\
 
 ## 搜查執行紀錄
 
-| 日期       | 搜查範圍                                       | 結果                                                                                                           |
-| ---------- | ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| 2026-03-04 | D-SILENT（全層 catch 區塊）                    | 1 defect (DEF-001), 1 low-risk observation                                                                     |
-| 2026-03-06 | D-VALID（API 輸入驗證）                        | 3 defects (DEF-003, DEF-004, DEF-005)                                                                          |
-| 2026-03-06 | D-STATE（React Query invalidation）            | 1 defect (DEF-002)                                                                                             |
-| 2026-03-06 | D-OFFLINE（離線同步）                          | 0 new defects                                                                                                  |
-| 2026-03-06 | D-QUERY（查詢語意）                            | 0 defects                                                                                                      |
-| 2026-03-06 | D-MIGRATE（Migration 安全性）                  | 0 defects                                                                                                      |
-| 2026-03-06 | D-AUTH（認證授權）                             | 0 defects                                                                                                      |
-| 2026-03-06 | D-EDGE（邊界條件）                             | 2 defects (DEF-006, DEF-007)                                                                                   |
-| 2026-03-06 | D-TYPE（型別安全）                             | 1 defect (DEF-008), 1 tech debt (TD-001)                                                                       |
-| 2026-03-06 | D-PERF（效能）                                 | 1 defect (DEF-009), 1 tech debt (TD-002)                                                                       |
-| 2026-03-08 | 全 10 類別增量搜查                             | 5 new defects (DEF-010~014), 1 tech debt (TD-003)                                                              |
-| 2026-03-13 | Router 遷移後全面架構搜查                      | 2 defects (DEF-015, DEF-016), 3 tech debt (TD-004~006), 1 feature gap (FG-001)                                 |
-| 2026-03-13 | AI 開發效率與成功率專題搜查                    | 4 tech debt (TD-007~010), 2 feature gaps (FG-002, FG-003)                                                      |
-| 2026-03-17 | 重構後全 10 類別增量搜查                       | 0 new defects — 重構品質良好，error handling/validation/invalidation 均正確維持                                |
-| 2026-03-17 | 新增 D-DEPLOY + D-RACE，擴充 D-SILENT + D-AUTH | 分類 10→12，D-SILENT 加入可觀測性，D-AUTH 加入 secret/CSP                                                      |
-| 2026-03-20 | 全 12 類別完整搜查（含 D-DEPLOY/D-RACE 首次）  | 1 defect (DEF-024), 2 tech debt (TD-026, TD-027); MCP HTTP transport + vault tools 增量掃描通過; FG-004 已完成 |
+| 日期       | 搜查範圍                                              | 結果                                                                                                                     |
+| ---------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| 2026-03-04 | D-SILENT（全層 catch 區塊）                           | 1 defect (DEF-001), 1 low-risk observation                                                                               |
+| 2026-03-06 | D-VALID（API 輸入驗證）                               | 3 defects (DEF-003, DEF-004, DEF-005)                                                                                    |
+| 2026-03-06 | D-STATE（React Query invalidation）                   | 1 defect (DEF-002)                                                                                                       |
+| 2026-03-06 | D-OFFLINE（離線同步）                                 | 0 new defects                                                                                                            |
+| 2026-03-06 | D-QUERY（查詢語意）                                   | 0 defects                                                                                                                |
+| 2026-03-06 | D-MIGRATE（Migration 安全性）                         | 0 defects                                                                                                                |
+| 2026-03-06 | D-AUTH（認證授權）                                    | 0 defects                                                                                                                |
+| 2026-03-06 | D-EDGE（邊界條件）                                    | 2 defects (DEF-006, DEF-007)                                                                                             |
+| 2026-03-06 | D-TYPE（型別安全）                                    | 1 defect (DEF-008), 1 tech debt (TD-001)                                                                                 |
+| 2026-03-06 | D-PERF（效能）                                        | 1 defect (DEF-009), 1 tech debt (TD-002)                                                                                 |
+| 2026-03-08 | 全 10 類別增量搜查                                    | 5 new defects (DEF-010~014), 1 tech debt (TD-003)                                                                        |
+| 2026-03-13 | Router 遷移後全面架構搜查                             | 2 defects (DEF-015, DEF-016), 3 tech debt (TD-004~006), 1 feature gap (FG-001)                                           |
+| 2026-03-13 | AI 開發效率與成功率專題搜查                           | 4 tech debt (TD-007~010), 2 feature gaps (FG-002, FG-003)                                                                |
+| 2026-03-17 | 重構後全 10 類別增量搜查                              | 0 new defects — 重構品質良好，error handling/validation/invalidation 均正確維持                                          |
+| 2026-03-17 | 新增 D-DEPLOY + D-RACE，擴充 D-SILENT + D-AUTH        | 分類 10→12，D-SILENT 加入可觀測性，D-AUTH 加入 secret/CSP                                                                |
+| 2026-03-20 | 全 12 類別完整搜查（含 D-DEPLOY/D-RACE 首次）         | 1 defect (DEF-024), 2 tech debt (TD-026, TD-027); MCP HTTP transport + vault tools 增量掃描通過; FG-004 已完成           |
+| 2026-04-05 | 全 12 類別增量搜查（paused/vault/private/daily-note） | 1 defect (#281 vault FTS5 未轉義); 新增 ~20 個檔案（vault sync/browse、private session、daily note、line brief）全部通過 |
 
 ---
 
 ## 下次搜查建議
 
-全 12 類別搜查完成（2026-03-20）。
+全 12 類別搜查完成（2026-04-05）。
 
 1. **新 PR 合併後** — 針對變更檔案涉及的類別做增量搜查
 2. **季度全面搜查** — 重跑所有類別，比對上次結果（下次：2026-06）
-3. **MCP HTTP server 持續關注** — 新功能快速迭代中，D-SILENT（console.\*）、D-VALID（schema 邊界）、D-AUTH（token 管理）需隨新 PR 增量掃描
+3. **Private session 持續關注** — PIN brute-force 無嘗試上限（low-risk，behind main auth），未來若降低 main auth 要求需重新評估

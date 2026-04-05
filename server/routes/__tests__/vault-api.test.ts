@@ -107,10 +107,27 @@ describe("vault API", () => {
       expect(body.results).toHaveLength(1);
     });
 
-    it("returns 400 for invalid FTS5 syntax", async () => {
-      // Unmatched quotes cause FTS5 error
-      const res = await app.request('/api/vault?q="unclosed');
+    it("escapes FTS5 special syntax (NOT, OR, quotes)", async () => {
+      // These would fail with raw FTS5 syntax; with escaping they become literal searches
+      for (const q of ["NOT test", 'hello "world"', "OR", "NEAR(a b)"]) {
+        const res = await app.request(`/api/vault?q=${encodeURIComponent(q)}`);
+        expect(res.status).toBe(200);
+        const body = await res.json();
+        expect(body.results).toBeDefined();
+      }
+    });
+
+    it("returns 400 for query exceeding max length", async () => {
+      const longQuery = "a".repeat(1001);
+      const res = await app.request(`/api/vault?q=${longQuery}`);
       expect(res.status).toBe(400);
+    });
+
+    it("returns empty results for 1-2 char queries (trigram minimum)", async () => {
+      const res = await app.request("/api/vault?q=ab");
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.results).toHaveLength(0);
     });
   });
 
