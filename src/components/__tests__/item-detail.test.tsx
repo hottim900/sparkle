@@ -561,12 +561,19 @@ describe("ItemDetail offline behavior", () => {
     expect(exportBtn).toBeDisabled();
   });
 
-  it("shows offline warning in content editor", async () => {
+  it("shows offline warning in content editor after switching to edit mode", async () => {
     renderItemDetail({ isOnline: false });
     await act(async () => {
       await vi.advanceTimersByTimeAsync(0);
     });
 
+    // Default is preview mode — warning hidden
+    expect(screen.queryByText("離線中 — 編輯內容將不會自動儲存")).not.toBeInTheDocument();
+
+    // Switch to edit mode
+    await act(async () => {
+      fireEvent.click(screen.getByText("編輯"));
+    });
     expect(screen.getByText("離線中 — 編輯內容將不會自動儲存")).toBeInTheDocument();
   });
 });

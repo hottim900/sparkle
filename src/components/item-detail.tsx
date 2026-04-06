@@ -534,6 +534,7 @@ export function ItemDetail({ itemId, onDeleted }: ItemDetailProps) {
 
             {/* Content / Markdown */}
             <ItemContentEditor
+              key={itemId}
               content={item.content}
               offlineWarning={!isOnline}
               onChange={(content) => {
