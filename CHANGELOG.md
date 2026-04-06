@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.3.2.0] - 2026-04-06
+
+### Removed
+
+- "全部" nav entry from sidebar and bottom-nav (replaced by universal item resolver)
+
+### Added
+
+- `/item/:id` universal resolver route: fetches item type+status, redirects to correct list view with auto-selection
+- Standalone detail view for exported items at `/item/:id` (read-only with "回到 Vault" breadcrumb)
+- `/all` backward-compatible redirect route (forwards `?item=` to resolver, else dashboard)
+- `onBack`, `onDeleted`, `onNavigate` props on ItemDetail for standalone context support
+- Unit tests for type+status→path mapping (11 test cases)
+
+### Changed
+
+- Vault "在 Sparkle 中查看" and Share Management item clicks now use `/item/:id` resolver
+- Typed TanStack Router params for `/item/$id` navigation (vault.tsx, shares.tsx)
+
 ## [1.3.1.1] - 2026-04-06
 
 ### Changed
