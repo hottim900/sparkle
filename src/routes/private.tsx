@@ -515,9 +515,9 @@ function PrivateItemDetail({
     }
   };
 
-  const handleTitleConfirm = (confirmedTitle: string) => {
+  const handleTitleConfirm = async (confirmedTitle: string) => {
     if (pendingNextStatus) {
-      doAdvance(pendingNextStatus, confirmedTitle);
+      await doAdvance(pendingNextStatus, confirmedTitle);
       setPendingNextStatus(null);
     }
   };
