@@ -23,6 +23,14 @@ const lookupItem: ItemLookup = (shortId) => {
   return found ? { title: found.title } : null;
 };
 
+/** Extract title from content: first non-empty line, max 80 chars */
+export function deriveTitleFromContent(content: string): string {
+  const lines = content.split("\n");
+  const firstNonEmpty = lines.find((line) => line.trim() !== "") ?? "";
+  const trimmed = firstNonEmpty.trim();
+  return trimmed.length > 80 ? trimmed.slice(0, 80) + "..." : trimmed;
+}
+
 const itemsRouter = new Hono();
 
 // List items with filters
@@ -56,7 +64,8 @@ itemsRouter.post("/", async (c) => {
     const body = await c.req.json();
     const input = createItemSchema.parse(body);
 
-    const created = createItem(db, input);
+    const title = input.title ?? deriveTitleFromContent(input.content ?? "");
+    const created = createItem(db, { ...input, title });
     const [item] = resolveLinkedInfo(db, [created]);
     return c.json(item, 201);
   } catch (e) {

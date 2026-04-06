@@ -70,7 +70,7 @@ test.describe("Obsidian Export", () => {
     await page.goto("/");
     await navigateTo(page, "永久筆記");
     await page.getByText(title).click();
-    await expect(page.getByPlaceholder("標題")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByPlaceholder("標題", { exact: true })).toBeVisible({ timeout: 10_000 });
 
     // Click export button
     await page.getByRole("button", { name: "匯出到 Obsidian" }).click();
@@ -118,7 +118,7 @@ test.describe("Obsidian Export", () => {
     // Verify read-only view: banner visible, no title input, content rendered
     await expect(page.getByText("已匯出至 Obsidian")).toBeVisible({ timeout: 10_000 });
     await expect(page.locator("h1").filter({ hasText: title })).toBeVisible();
-    await expect(page.getByPlaceholder("標題")).not.toBeVisible();
+    await expect(page.getByPlaceholder("標題", { exact: true })).not.toBeVisible();
 
     // Verify revert button exists
     const revertBtn = page.getByRole("button", { name: "退回" });
@@ -134,6 +134,6 @@ test.describe("Obsidian Export", () => {
 
     // Verify toast + editable form
     await expect(page.getByText("已退回為永久筆記")).toBeVisible({ timeout: 5_000 });
-    await expect(page.getByPlaceholder("標題")).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByPlaceholder("標題", { exact: true })).toBeVisible({ timeout: 5_000 });
   });
 });

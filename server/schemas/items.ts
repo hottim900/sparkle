@@ -14,7 +14,7 @@ export const statusEnum = z.enum([
 
 export const createItemSchema = z
   .object({
-    title: z.string().min(1, "Title is required").max(500),
+    title: z.string().min(1).max(500).optional(),
     type: z.enum(["note", "todo", "scratch"]).default("note"),
     content: z.string().max(50000).default(""),
     status: statusEnum.optional(),
@@ -31,6 +31,14 @@ export const createItemSchema = z
     linked_note_id: z.string().uuid().nullable().default(null),
     category_id: z.string().uuid().nullable().default(null),
     is_private: z.boolean().optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.type === "todo" && !data.title) {
+      ctx.addIssue({ code: "custom", path: ["title"], message: "Title required for todo" });
+    }
+    if (!data.title && (!data.content || data.content.trim() === "")) {
+      ctx.addIssue({ code: "custom", path: ["content"], message: "Content or title required" });
+    }
   })
   .refine((data) => !data.status || isValidTypeStatus(data.type ?? "note", data.status), {
     message: "Invalid status for the given type",

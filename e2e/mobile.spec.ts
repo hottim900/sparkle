@@ -23,7 +23,7 @@ test.describe("Mobile viewport", () => {
 
     // Navigate back to notes
     await bottomNav.getByRole("link", { name: "筆記" }).click();
-    await expect(page.getByPlaceholder("快速記錄...")).toBeVisible();
+    await expect(page.getByPlaceholder("打下你的想法... 第一行會成為標題")).toBeVisible();
   });
 
   test("quick capture creates a note", async ({ page }) => {
@@ -37,7 +37,9 @@ test.describe("Mobile viewport", () => {
 
     // Expand the quick capture form — the expand button has no accessible name,
     // it's the 2nd icon button in the input row (after theme toggle)
-    const captureRow = page.getByPlaceholder("快速記錄...").locator("xpath=..");
+    const captureRow = page
+      .getByPlaceholder("打下你的想法... 第一行會成為標題")
+      .locator("xpath=..");
     await captureRow.getByRole("button").nth(1).click();
 
     // Type a tag name
@@ -59,7 +61,7 @@ test.describe("Mobile viewport", () => {
     await page.goto("/");
     await page.getByText("Mobile detail test").click();
 
-    await expect(page.getByPlaceholder("標題")).toHaveValue("Mobile detail test");
+    await expect(page.getByPlaceholder("標題", { exact: true })).toHaveValue("Mobile detail test");
     await expect(page.getByText("Content visible on mobile")).toBeVisible();
   });
 

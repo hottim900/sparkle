@@ -12,7 +12,9 @@ setup("authenticate", async ({ page }) => {
   await page.getByRole("button", { name: "登入" }).click();
 
   // Wait for main app to load — now redirects to /notes/fleeting
-  await expect(page.getByPlaceholder("快速記錄...")).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByPlaceholder("打下你的想法... 第一行會成為標題")).toBeVisible({
+    timeout: 10_000,
+  });
 
   // Save auth state
   await page.context().storageState({ path: "e2e/.auth/user.json" });

@@ -21,7 +21,9 @@ test.describe("Note Triage Workflow", () => {
 
     // Navigate to fleeting notes
     await navigateTo(page, "閃念");
-    await expect(page.getByPlaceholder("快速記錄...")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByPlaceholder("打下你的想法... 第一行會成為標題")).toBeVisible({
+      timeout: 10_000,
+    });
 
     // Click "整理" tab to enter triage mode
     await page.getByRole("button", { name: "整理", exact: true }).click();
@@ -41,7 +43,9 @@ test.describe("Note Triage Workflow", () => {
 
     // Navigate to fleeting notes → triage
     await navigateTo(page, "閃念");
-    await expect(page.getByPlaceholder("快速記錄...")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByPlaceholder("打下你的想法... 第一行會成為標題")).toBeVisible({
+      timeout: 10_000,
+    });
     await page.getByRole("button", { name: "整理", exact: true }).click();
     await expect(page.getByText(/剩餘 \d+ 項/)).toBeVisible({ timeout: 10_000 });
 
@@ -57,7 +61,9 @@ test.describe("Note Triage Workflow", () => {
 
     // Navigate to fleeting notes → triage
     await navigateTo(page, "閃念");
-    await expect(page.getByPlaceholder("快速記錄...")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByPlaceholder("打下你的想法... 第一行會成為標題")).toBeVisible({
+      timeout: 10_000,
+    });
     await page.getByRole("button", { name: "整理", exact: true }).click();
     await expect(page.getByText(/剩餘 \d+ 項/)).toBeVisible({ timeout: 10_000 });
 
@@ -82,7 +88,9 @@ test.describe("Note Maturity Progression", () => {
 
     // Navigate to fleeting notes
     await navigateTo(page, "閃念");
-    await expect(page.getByPlaceholder("快速記錄...")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByPlaceholder("打下你的想法... 第一行會成為標題")).toBeVisible({
+      timeout: 10_000,
+    });
 
     // Create a note
     const noteTitle = `Maturity ${Date.now()}`;

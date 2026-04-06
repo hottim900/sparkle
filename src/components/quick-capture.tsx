@@ -1,9 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useRouterState } from "@tanstack/react-router";
 import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -18,7 +19,20 @@ import { queryKeys } from "@/lib/query-keys";
 import { useInvalidateAfterItemMutation } from "@/hooks/use-invalidate";
 import { toast } from "sonner";
 import type { ItemType, ItemPriority } from "@/lib/types";
-import { ChevronDown, ChevronUp, Send, Sun, Moon, StickyNote, Pin, Paperclip } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronUp,
+  Send,
+  Sun,
+  Moon,
+  StickyNote,
+  Pin,
+  Paperclip,
+  Loader2,
+} from "lucide-react";
+
+const KEYBOARD_HINT_KEY = "sparkle:quickcapture:submissions";
+const KEYBOARD_HINT_DISMISS_AFTER = 5;
 
 const gtdTags = [
   { tag: "next-action", label: "下一步" },
@@ -38,18 +52,42 @@ function pathToDefaultType(pathname: string): ItemType {
   return "note";
 }
 
+function useShowKeyboardHint() {
+  const [show, setShow] = useState(() => {
+    const count = parseInt(localStorage.getItem(KEYBOARD_HINT_KEY) ?? "0", 10);
+    return count < KEYBOARD_HINT_DISMISS_AFTER;
+  });
+  const increment = () => {
+    const next = parseInt(localStorage.getItem(KEYBOARD_HINT_KEY) ?? "0", 10) + 1;
+    localStorage.setItem(KEYBOARD_HINT_KEY, String(next));
+    if (next >= KEYBOARD_HINT_DISMISS_AFTER) setShow(false);
+  };
+  return { show, increment };
+}
+
+function useIsDesktop() {
+  return typeof window !== "undefined" && typeof window.matchMedia === "function"
+    ? window.matchMedia("(hover: hover)").matches
+    : false;
+}
+
 export function QuickCapture() {
   const { isOnline } = useAppContext();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { resolvedTheme, setTheme } = useTheme();
   const invalidateAfterItemMutation = useInvalidateAfterItemMutation();
-  const [title, setTitle] = useState("");
+  const isDesktop = useIsDesktop();
+  const [text, setText] = useState("");
   const [expanded, setExpanded] = useState(false);
   const defaultType = pathToDefaultType(pathname);
   const [type, setType] = useState<ItemType>(defaultType);
   const [priority, setPriority] = useState<ItemPriority | "none">("none");
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [source, setSource] = useState("");
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const keyboardHint = useShowKeyboardHint();
+
+  const usesTextarea = type !== "todo";
 
   const { data: allTags = [] } = useQuery({
     queryKey: queryKeys.tags,
@@ -83,23 +121,33 @@ export function QuickCapture() {
 
   const handleSubmit = async (e?: React.FormEvent) => {
     e?.preventDefault();
-    const trimmed = title.trim();
+    const trimmed = text.trim();
     if (!trimmed || createMutation.isPending) return;
 
     try {
-      await createMutation.mutateAsync({
-        title: trimmed,
+      const payload: Parameters<typeof createItem>[0] = {
         type,
         priority: priority === "none" ? null : priority,
         tags: selectedTags,
         source: source.trim() || null,
         origin: "app",
-      });
-      setTitle("");
+      };
+
+      if (usesTextarea) {
+        // note/scratch: send content, server derives title
+        payload.content = trimmed;
+      } else {
+        // todo: send title directly
+        payload.title = trimmed;
+      }
+
+      await createMutation.mutateAsync(payload);
+      setText("");
       setSelectedTags([]);
       setSource("");
       setPriority("none");
       setExpanded(false);
+      keyboardHint.increment();
       toast.success("已新增");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "新增失敗");
@@ -107,9 +155,19 @@ export function QuickCapture() {
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      handleSubmit();
+    if (usesTextarea) {
+      // Textarea: Cmd/Ctrl+Enter to submit
+      if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        handleSubmit();
+      }
+      // Enter alone = newline (default textarea behavior, no preventDefault)
+    } else {
+      // Input (todo): Enter to submit
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        handleSubmit();
+      }
     }
   };
 
@@ -132,16 +190,27 @@ export function QuickCapture() {
         ))}
       </div>
       <form onSubmit={handleSubmit} className="flex gap-2">
-        <Input
-          placeholder={
-            type === "todo" ? "新增待辦..." : type === "scratch" ? "暫存筆記..." : "快速記錄..."
-          }
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          onKeyDown={handleKeyDown}
-          autoFocus
-          className="flex-1"
-        />
+        {usesTextarea ? (
+          <Textarea
+            ref={textareaRef}
+            placeholder={type === "scratch" ? "暫存筆記..." : "打下你的想法... 第一行會成為標題"}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={handleKeyDown}
+            autoFocus
+            rows={1}
+            className="flex-1 min-h-9 max-h-[min(40vh,200px)] overflow-y-auto resize-none"
+          />
+        ) : (
+          <Input
+            placeholder="新增待辦..."
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={handleKeyDown}
+            autoFocus
+            className="flex-1"
+          />
+        )}
         <Button
           type="button"
           variant="ghost"
@@ -167,14 +236,23 @@ export function QuickCapture() {
         <Button
           type="submit"
           size="icon"
-          disabled={!title.trim() || createMutation.isPending}
+          disabled={!text.trim() || createMutation.isPending}
           aria-label="送出"
           title="送出"
           className="shrink-0"
         >
-          <Send className="h-4 w-4" />
+          {createMutation.isPending ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Send className="h-4 w-4" />
+          )}
         </Button>
       </form>
+
+      {/* Keyboard hint — desktop only, dismiss after N submissions */}
+      {usesTextarea && isDesktop && keyboardHint.show && (
+        <p className="text-xs text-muted-foreground px-1">Enter 換行 | ⌘+Enter 送出</p>
+      )}
 
       {!isOnline && (
         <p className="text-xs text-yellow-600 dark:text-yellow-400 px-1">

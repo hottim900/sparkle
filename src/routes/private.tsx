@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/dialog";
 import { PinInput } from "@/components/pin-input";
 import { ErrorBoundary } from "@/components/error-boundary";
+import { TitleConfirmDialog, isAutoTitle } from "@/components/title-confirm-dialog";
 import { TagInput } from "@/components/tag-input";
 import { queryKeys } from "@/lib/query-keys";
 import { parseItem, parseItems, type ParsedItem, type ItemStatus } from "@/lib/types";
@@ -344,6 +345,8 @@ function PrivateItemDetail({
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const [previewMode, setPreviewMode] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [titleConfirmOpen, setTitleConfirmOpen] = useState(false);
+  const [pendingNextStatus, setPendingNextStatus] = useState<string | null>(null);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const savedTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
@@ -482,14 +485,40 @@ function PrivateItemDetail({
           ? "permanent"
           : null;
     if (!nextStatus) return;
+
+    // Check if title looks auto-derived; if so, show confirmation modal
+    if (isAutoTitle(localItem.title, localItem.content)) {
+      setPendingNextStatus(nextStatus);
+      setTitleConfirmOpen(true);
+      return;
+    }
+
+    await doAdvance(nextStatus);
+  };
+
+  const doAdvance = async (nextStatus: string, newTitle?: string) => {
+    if (!localItem) return;
     try {
-      await updatePrivateItem(token, localItem.id, { status: nextStatus });
-      setLocalItem((prev) => (prev ? { ...prev, status: nextStatus as ItemStatus } : prev));
+      const updates: Record<string, string> = { status: nextStatus };
+      if (newTitle && newTitle !== localItem.title) {
+        updates.title = newTitle;
+      }
+      await updatePrivateItem(token, localItem.id, updates);
+      setLocalItem((prev) =>
+        prev ? { ...prev, status: nextStatus as ItemStatus, title: newTitle ?? prev.title } : prev,
+      );
       queryClient.invalidateQueries({ queryKey: queryKeys.private.list() });
       queryClient.invalidateQueries({ queryKey: queryKeys.private.detail(localItem.id) });
       toast.success(`已推進至「${nextStatus === "developing" ? "發展中" : "永久筆記"}」`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "推進失敗");
+    }
+  };
+
+  const handleTitleConfirm = async (confirmedTitle: string) => {
+    if (pendingNextStatus) {
+      await doAdvance(pendingNextStatus, confirmedTitle);
+      setPendingNextStatus(null);
     }
   };
 
@@ -581,6 +610,14 @@ function PrivateItemDetail({
           </Dialog>
         </div>
       </div>
+
+      {/* Title confirmation modal for advancement */}
+      <TitleConfirmDialog
+        open={titleConfirmOpen}
+        onOpenChange={setTitleConfirmOpen}
+        currentTitle={localItem.title}
+        onConfirm={handleTitleConfirm}
+      />
 
       {/* Type indicator bar */}
       <div

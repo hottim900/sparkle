@@ -9,10 +9,10 @@ async function createNoteAndOpenDetail(page: import("@playwright/test").Page, pr
 
   // Navigate to fleeting notes view
   await page.getByTestId("sidebar").getByRole("link", { name: "閃念" }).click();
-  await expect(page.getByPlaceholder("快速記錄...")).toBeVisible();
+  await expect(page.getByPlaceholder("打下你的想法... 第一行會成為標題")).toBeVisible();
 
   // Create note
-  await page.getByPlaceholder("快速記錄...").fill(title);
+  await page.getByPlaceholder("打下你的想法... 第一行會成為標題").fill(title);
   await page.locator("button[type='submit']").click();
   await expect(page.getByText("已新增")).toBeVisible({ timeout: 5_000 });
 
@@ -20,7 +20,7 @@ async function createNoteAndOpenDetail(page: import("@playwright/test").Page, pr
   await page.getByText(title).click();
 
   // Wait for lazy-loaded detail panel (title input appears)
-  const titleInput = page.getByPlaceholder("標題");
+  const titleInput = page.getByPlaceholder("標題", { exact: true });
   await expect(titleInput).toBeVisible({ timeout: 10_000 });
   await expect(titleInput).toHaveValue(title);
 
@@ -33,7 +33,7 @@ test.describe("Item Lifecycle", () => {
     await createNoteAndOpenDetail(page, "TitleEdit");
 
     // Fill new title
-    const titleInput = page.getByPlaceholder("標題");
+    const titleInput = page.getByPlaceholder("標題", { exact: true });
     const newTitle = `Renamed ${Date.now()}`;
     await titleInput.fill(newTitle);
 
@@ -48,7 +48,7 @@ test.describe("Item Lifecycle", () => {
     // Reload and verify persistence via UI
     await page.reload();
     await page.getByTestId("sidebar").getByRole("link", { name: "閃念" }).click();
-    await expect(page.getByPlaceholder("快速記錄...")).toBeVisible();
+    await expect(page.getByPlaceholder("打下你的想法... 第一行會成為標題")).toBeVisible();
     await expect(page.getByText(newTitle)).toBeVisible({ timeout: 10_000 });
   });
 
@@ -71,7 +71,7 @@ test.describe("Item Lifecycle", () => {
       .getByText(/ContentEdit \d+/)
       .first()
       .click();
-    await expect(page.getByPlaceholder("標題")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByPlaceholder("標題", { exact: true })).toBeVisible({ timeout: 10_000 });
 
     // Verify content persists
     await expect(page.getByPlaceholder("Markdown 內容...")).toHaveValue(content);

@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.3.0.0] - 2026-04-06
+
+### Added
+
+- Quick Capture: multi-line textarea for notes and scratches (todo keeps single-line input)
+- Auto-title: server derives title from first non-empty line of content (max 80 chars)
+- Title confirmation modal: prompts to confirm/edit title when advancing auto-titled notes
+- Keyboard hint: "Enter 換行 | ⌘+Enter 送出" shown below textarea on desktop (auto-dismisses after 5 submissions)
+- Submit button spinner during pending state
+
+### Changed
+
+- Quick Capture keyboard behavior: Enter creates newline (was submit), Cmd/Ctrl+Enter submits (breaking change)
+- Notes and scratches send content to API instead of title; server handles title derivation
+- Title field now optional in create item API for note/scratch types (todo still requires title)
+
 ## [1.2.7.0] - 2026-04-06
 
 ### Added
