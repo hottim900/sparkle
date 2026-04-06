@@ -158,3 +158,44 @@ export async function navigateToSettings(page: Page) {
     .getByRole("heading", { name: "設定", exact: true })
     .waitFor({ state: "visible", timeout: 10_000 });
 }
+
+/**
+ * Setup PIN and unlock private space via API.
+ * Returns the session token for subsequent private API calls.
+ */
+export async function setupPrivatePin(request: APIRequestContext, pin = "123456"): Promise<string> {
+  const headers = {
+    Authorization: `Bearer ${AUTH_TOKEN}`,
+    "Content-Type": "application/json",
+  };
+  await request.post(`${API_BASE}/private/setup`, { headers, data: { pin } });
+  const unlockRes = await request.post(`${API_BASE}/private/unlock`, {
+    headers,
+    data: { pin },
+  });
+  const body = await unlockRes.json();
+  return body.token;
+}
+
+/**
+ * Create a private item via API (requires session token from setupPrivatePin).
+ */
+export async function createPrivateItemViaApi(
+  request: APIRequestContext,
+  privateToken: string,
+  data: {
+    title?: string;
+    type?: "note" | "todo" | "scratch";
+    content?: string;
+  },
+) {
+  const response = await request.post(`${API_BASE}/private/items`, {
+    headers: {
+      Authorization: `Bearer ${AUTH_TOKEN}`,
+      "Content-Type": "application/json",
+      "X-Private-Token": privateToken,
+    },
+    data,
+  });
+  return response.json();
+}
