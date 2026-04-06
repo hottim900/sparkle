@@ -23,7 +23,8 @@ vi.mock("../../lib/logger.js", () => ({
 
 import { Hono } from "hono";
 import { authMiddleware } from "../../middleware/auth.js";
-import { itemsRouter, deriveTitleFromContent } from "../items.js";
+import { itemsRouter } from "../items.js";
+import { deriveTitleFromContent } from "../../lib/title-derivation.js";
 
 const TEST_TOKEN = "test-secret-token-12345";
 

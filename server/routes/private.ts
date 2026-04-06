@@ -19,7 +19,7 @@ import {
   listItemsSchema,
   searchSchema,
 } from "../schemas/items.js";
-import { deriveTitleFromContent } from "./items.js";
+import { deriveTitleFromContent } from "../lib/title-derivation.js";
 import { EXPORTED_BLOCKED_FIELDS } from "../lib/exported-guard.js";
 
 const privateRouter = new Hono();
