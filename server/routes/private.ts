@@ -19,6 +19,7 @@ import {
   listItemsSchema,
   searchSchema,
 } from "../schemas/items.js";
+import { deriveTitleFromContent } from "./items.js";
 import { EXPORTED_BLOCKED_FIELDS } from "../lib/exported-guard.js";
 
 const privateRouter = new Hono();
@@ -149,7 +150,8 @@ privateRouter.post("/items", async (c) => {
     const body = await c.req.json();
     const input = createItemSchema.parse(body);
 
-    const created = createItem(db, { ...input, is_private: true });
+    const title = input.title ?? deriveTitleFromContent(input.content ?? "");
+    const created = createItem(db, { ...input, title, is_private: true });
     const item = getItem(db, created.id, true, true)!;
     return c.json(item, 201);
   } catch (e) {
