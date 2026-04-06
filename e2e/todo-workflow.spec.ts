@@ -80,7 +80,9 @@ test.describe("Linked Todos", () => {
 
     // Navigate to fleeting notes
     await navigateTo(page, "閃念");
-    await expect(page.getByPlaceholder("快速記錄...")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByPlaceholder("打下你的想法... 第一行會成為標題")).toBeVisible({
+      timeout: 10_000,
+    });
 
     // Create a note
     const noteTitle = `LinkedNote ${Date.now()}`;

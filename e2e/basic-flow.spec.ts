@@ -15,7 +15,9 @@ test.describe("Login", () => {
     await page.getByRole("button", { name: "登入" }).click();
 
     // Main app loads — redirects to /notes/fleeting
-    await expect(page.getByPlaceholder("快速記錄...")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByPlaceholder("打下你的想法... 第一行會成為標題")).toBeVisible({
+      timeout: 10_000,
+    });
   });
 
   test("shows error for invalid token", async ({ page }) => {
@@ -36,10 +38,10 @@ test.describe("Quick Capture", () => {
     await page.getByTestId("sidebar").getByRole("link", { name: "閃念" }).click();
 
     // Quick capture input should now be visible
-    await expect(page.getByPlaceholder("快速記錄...")).toBeVisible();
+    await expect(page.getByPlaceholder("打下你的想法... 第一行會成為標題")).toBeVisible();
 
     const noteTitle = `E2E test note ${Date.now()}`;
-    await page.getByPlaceholder("快速記錄...").fill(noteTitle);
+    await page.getByPlaceholder("打下你的想法... 第一行會成為標題").fill(noteTitle);
     await page.locator("button[type='submit']").click();
 
     // Verify toast
@@ -76,11 +78,11 @@ test.describe("Search", () => {
 
     // Navigate to fleeting notes
     await page.getByTestId("sidebar").getByRole("link", { name: "閃念" }).click();
-    await expect(page.getByPlaceholder("快速記錄...")).toBeVisible();
+    await expect(page.getByPlaceholder("打下你的想法... 第一行會成為標題")).toBeVisible();
 
     // Create a note with a unique title
     const uniqueTitle = `SearchTarget ${Date.now()}`;
-    await page.getByPlaceholder("快速記錄...").fill(uniqueTitle);
+    await page.getByPlaceholder("打下你的想法... 第一行會成為標題").fill(uniqueTitle);
     await page.locator("button[type='submit']").click();
     await expect(page.getByText("已新增")).toBeVisible({ timeout: 5_000 });
 
@@ -100,11 +102,11 @@ test.describe("Item Detail", () => {
 
     // Navigate to fleeting notes
     await page.getByTestId("sidebar").getByRole("link", { name: "閃念" }).click();
-    await expect(page.getByPlaceholder("快速記錄...")).toBeVisible();
+    await expect(page.getByPlaceholder("打下你的想法... 第一行會成為標題")).toBeVisible();
 
     // Create a note
     const noteTitle = `DetailTest ${Date.now()}`;
-    await page.getByPlaceholder("快速記錄...").fill(noteTitle);
+    await page.getByPlaceholder("打下你的想法... 第一行會成為標題").fill(noteTitle);
     await page.locator("button[type='submit']").click();
     await expect(page.getByText("已新增")).toBeVisible({ timeout: 5_000 });
 

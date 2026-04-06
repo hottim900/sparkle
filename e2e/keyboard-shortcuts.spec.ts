@@ -5,7 +5,9 @@ import { createItemViaApi, navigateTo } from "./helpers";
 test.describe("Keyboard Shortcuts", () => {
   test("/ focuses search input", async ({ page }) => {
     await page.goto("/");
-    await expect(page.getByPlaceholder("快速記錄...")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByPlaceholder("打下你的想法... 第一行會成為標題")).toBeVisible({
+      timeout: 10_000,
+    });
 
     // Ensure no input is focused (keyboard shortcuts are ignored when input focused)
     await page.locator("body").click();
@@ -22,7 +24,7 @@ test.describe("Keyboard Shortcuts", () => {
     await page.goto("/");
     await navigateTo(page, "閃念");
     await page.getByText(title).click();
-    const titleInput = page.getByPlaceholder("標題");
+    const titleInput = page.getByPlaceholder("標題", { exact: true });
     await expect(titleInput).toBeVisible({ timeout: 10_000 });
 
     // Blur any focused input first (Escape in input blurs instead of closing)

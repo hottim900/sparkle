@@ -75,11 +75,14 @@ export async function waitForSave(page: Page) {
   await page.getByText("已儲存").waitFor({ timeout: 5_000 });
 }
 
+/** Note quick-capture placeholder (textarea, multi-line) */
+export const NOTE_CAPTURE_PLACEHOLDER = "打下你的想法... 第一行會成為標題";
+
 /**
  * Create a note via quick capture UI.
  */
 export async function quickCaptureNote(page: Page, title: string) {
-  await page.getByPlaceholder("快速記錄...").fill(title);
+  await page.getByPlaceholder(NOTE_CAPTURE_PLACEHOLDER).fill(title);
   await page.locator("button[type='submit']").click();
   await page.getByText("已新增").waitFor({ timeout: 5_000 });
 }

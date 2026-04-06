@@ -19,7 +19,7 @@ test.describe("Paused Items", () => {
     await page.getByText(item.title).click();
 
     // Wait for detail panel and pause button to appear
-    await expect(page.getByPlaceholder("標題")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByPlaceholder("標題", { exact: true })).toBeVisible({ timeout: 10_000 });
     const pauseBtn = page.getByRole("button", { name: "暫停", exact: true });
     await expect(pauseBtn).toBeVisible({ timeout: 5_000 });
 
@@ -30,7 +30,9 @@ test.describe("Paused Items", () => {
     await page.getByRole("button", { name: "不附備忘直接暫停" }).click();
 
     // Wait for PATCH to complete
-    await expect(page.getByRole("button", { name: "恢復", exact: true }).first()).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByRole("button", { name: "恢復", exact: true }).first()).toBeVisible({
+      timeout: 5_000,
+    });
 
     // Close detail
     await page.keyboard.press("Escape");
@@ -110,7 +112,7 @@ test.describe("Paused Items", () => {
     await navigateTo(page, "閃念");
     await page.getByText(item.title).click();
 
-    await expect(page.getByPlaceholder("標題")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByPlaceholder("標題", { exact: true })).toBeVisible({ timeout: 10_000 });
 
     // Click pause — wait for button to be visible first
     const pauseBtn = page.getByRole("button", { name: "暫停", exact: true });
@@ -126,7 +128,9 @@ test.describe("Paused Items", () => {
       .getByRole("button", { name: "暫停", exact: true })
       .click();
 
-    await expect(page.getByRole("button", { name: "恢復", exact: true }).first()).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByRole("button", { name: "恢復", exact: true }).first()).toBeVisible({
+      timeout: 5_000,
+    });
 
     // Navigate to paused list
     await page.keyboard.press("Escape");

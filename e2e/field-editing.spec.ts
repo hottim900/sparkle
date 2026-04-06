@@ -10,7 +10,7 @@ test.describe("Field Editing", () => {
     await page.goto("/");
     await navigateTo(page, "閃念");
     await page.getByText(title).click();
-    await expect(page.getByPlaceholder("標題")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByPlaceholder("標題", { exact: true })).toBeVisible({ timeout: 10_000 });
 
     // Fill source URL
     const sourceInput = page.getByPlaceholder("https://...");
@@ -27,7 +27,7 @@ test.describe("Field Editing", () => {
     await page.reload();
     await navigateTo(page, "閃念");
     await page.getByText(title).click();
-    await expect(page.getByPlaceholder("標題")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByPlaceholder("標題", { exact: true })).toBeVisible({ timeout: 10_000 });
     await expect(sourceInput).toHaveValue("https://example.com/test");
   });
 
@@ -39,7 +39,7 @@ test.describe("Field Editing", () => {
     await page.goto("/");
     await navigateTo(page, "閃念");
     await page.getByText(title).click();
-    await expect(page.getByPlaceholder("標題")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByPlaceholder("標題", { exact: true })).toBeVisible({ timeout: 10_000 });
 
     // Add alias via keyboard (same pattern as tags)
     const aliasInput = page.getByPlaceholder("新增別名...");
@@ -75,7 +75,7 @@ test.describe("Field Editing", () => {
     await page.goto("/");
     await navigateTo(page, "閃念");
     await page.getByText(title).click();
-    await expect(page.getByPlaceholder("標題")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByPlaceholder("標題", { exact: true })).toBeVisible({ timeout: 10_000 });
 
     const sourceInput = page.getByPlaceholder("https://...");
 
@@ -99,7 +99,7 @@ test.describe("Field Editing", () => {
     await page.reload();
     await navigateTo(page, "閃念");
     await page.getByText(title).click();
-    await expect(page.getByPlaceholder("標題")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByPlaceholder("標題", { exact: true })).toBeVisible({ timeout: 10_000 });
     await expect(sourceInput).toHaveValue("");
   });
 });
