@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.3.1.1] - 2026-04-06
+
+### Changed
+
+- Move `deriveTitleFromContent` from route handler to `server/lib/title-derivation.ts`
+
+### Added
+
+- Integration tests for private route auto-title (8 tests)
+- E2E tests for private note advancement title confirmation modal (2 tests)
+- E2E helpers: `setupPrivatePin` and `createPrivateItemViaApi`
+
 ## [1.3.1.0] - 2026-04-06
 
 ### Changed
