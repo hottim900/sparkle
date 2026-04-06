@@ -46,7 +46,7 @@ export function createItem(
   return db.select().from(items).where(eq(items.id, id)).get()!;
 }
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+export const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const LIKE_SAFE_RE = /^[^%_]{4,36}$/;
 
 export function getItem(

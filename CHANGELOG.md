@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.2.6.0] - 2026-04-06
+
+### Added
+
+- Vault search API: `filter=sparkle` query param to show only Sparkle-sourced files
+- Vault search API: `sparkle_id` included in search results
+- New endpoint `GET /api/vault/by-sparkle-id/:id` resolves vault path from sparkle_id (UUID validated)
+- Vault watcher self-healing: auto-corrects broken export_path via sparkle_id lookup when file not found
+
 ## [1.2.5.0] - 2026-04-06
 
 ### Added

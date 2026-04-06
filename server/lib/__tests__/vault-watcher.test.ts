@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createTestDb } from "../../test-utils.js";
 import { scanExportedItems, stripFrontmatter, clearMtimeCache } from "../vault-watcher.js";
+import { vaultFiles } from "../../db/schema.js";
 
 function insertItem(
   sqlite: ReturnType<typeof createTestDb>["sqlite"],
@@ -171,6 +172,47 @@ describe("scanExportedItems", () => {
     insertItem(sqlite, "item-1", "Original", "0_Inbox");
     const result = await scanExportedItems(db, sqlite);
     expect(result.errors).toBe(1);
+  });
+
+  it("self-heals export_path via sparkle_id when file not found (ENOENT)", async () => {
+    enableObsidian(sqlite, tmpDir);
+    // Item has wrong export_path, but vault_files has correct mapping via sparkle_id
+    insertItem(sqlite, "item-heal", "Original", "0_Inbox/Wrong.md");
+
+    // Insert vault_files entry with correct path and matching sparkle_id
+    db.insert(vaultFiles)
+      .values({
+        path: "Correct.md",
+        title: "Correct File",
+        content: "Content",
+        mtime: 1700000000,
+        content_hash: "hash",
+        sparkle_id: "item-heal",
+      })
+      .run();
+
+    const result = await scanExportedItems(db, sqlite);
+    expect(result.errors).toBe(0);
+
+    // Verify export_path was self-healed
+    const row = sqlite.prepare("SELECT export_path FROM items WHERE id = 'item-heal'").get() as {
+      export_path: string;
+    };
+    expect(row.export_path).toBe("Correct.md");
+  });
+
+  it("does not self-heal when sparkle_id not in vault_files", async () => {
+    enableObsidian(sqlite, tmpDir);
+    insertItem(sqlite, "item-no-match", "Original", "0_Inbox/Missing.md");
+
+    const result = await scanExportedItems(db, sqlite);
+    expect(result.errors).toBe(0);
+
+    // export_path should remain unchanged
+    const row = sqlite
+      .prepare("SELECT export_path FROM items WHERE id = 'item-no-match'")
+      .get() as { export_path: string };
+    expect(row.export_path).toBe("0_Inbox/Missing.md");
   });
 
   it("skips items reverted to permanent (no longer exported)", async () => {
