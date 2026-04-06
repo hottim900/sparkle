@@ -1,6 +1,6 @@
 import { useState, useCallback } from "react";
 import { useNavigate, type NavigateOptions } from "@tanstack/react-router";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -27,7 +27,7 @@ import { PausedBanner } from "@/components/paused-banner";
 import { VaultMarkdownPreview } from "@/components/vault-markdown-preview";
 import { useItemForm } from "@/hooks/use-item-form";
 import { usePauseResume } from "@/hooks/use-pause-resume";
-import { updateItem } from "@/lib/api";
+import { updateItem, getVaultPathBySparkleId } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
 
 interface ItemDetailProps {
@@ -89,6 +89,14 @@ export function ItemDetail({ itemId, onDeleted }: ItemDetailProps) {
   const [shareOpen, setShareOpen] = useState(false);
   const [aliasInput, setAliasInput] = useState("");
   const [createTodoRequested, setCreateTodoRequested] = useState(false);
+
+  // Resolve vault path for exported items via sparkle_id
+  const { data: vaultPath } = useQuery({
+    queryKey: queryKeys.vault.bySparkleId(item?.id ?? ""),
+    queryFn: () => getVaultPathBySparkleId(item!.id),
+    enabled: !!item && item.status === "exported",
+    retry: false,
+  });
   const [markingAsPrivate, setMarkingAsPrivate] = useState(false);
   const [reverting, setReverting] = useState(false);
   const { handleResume, resuming } = usePauseResume(item, setItem);
@@ -191,24 +199,31 @@ export function ItemDetail({ itemId, onDeleted }: ItemDetailProps) {
           {/* Banner */}
           <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-green-50 dark:bg-green-950 text-green-800 dark:text-green-200 text-sm">
             <span>已匯出至 Obsidian</span>
-            {item.export_path && (
+            {vaultPath ? (
               <>
                 <span className="text-green-600 dark:text-green-400 font-mono text-xs truncate">
-                  {item.export_path}
+                  {vaultPath.path}
                 </span>
                 <a
-                  href={`/vault?file=${encodeURIComponent(item.export_path)}`}
+                  href={`/vault?file=${encodeURIComponent(vaultPath.path)}`}
                   className={`inline-flex items-center gap-1 text-xs ${isOnline ? "text-green-700 dark:text-green-300 hover:underline" : "text-muted-foreground pointer-events-none"}`}
                   onClick={(e) => {
                     e.preventDefault();
                     if (isOnline) {
-                      navigate({ to: "/vault", search: { file: item.export_path! } });
+                      navigate({
+                        to: "/vault",
+                        search: { file: vaultPath.path, filter: undefined },
+                      });
                     }
                   }}
                 >
                   <ExternalLink className="h-3 w-3" />在 Vault 中查看
                 </a>
               </>
+            ) : (
+              <span className="text-green-600 dark:text-green-400 text-xs">
+                Vault 中未找到對應檔案
+              </span>
             )}
           </div>
 

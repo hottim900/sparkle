@@ -488,6 +488,7 @@ export interface VaultSearchResult {
   title: string;
   mtime: number;
   snippet?: string;
+  sparkle_id?: string | null;
 }
 
 export interface VaultSearchResponse {
@@ -504,10 +505,15 @@ export interface VaultFileResponse {
   mtime: number;
 }
 
-export async function searchVault(q?: string, limit?: number): Promise<VaultSearchResponse> {
+export async function searchVault(
+  q?: string,
+  limit?: number,
+  filter?: string,
+): Promise<VaultSearchResponse> {
   const params = new URLSearchParams();
   if (q) params.set("q", q);
   if (limit) params.set("limit", String(limit));
+  if (filter) params.set("filter", filter);
   const qs = params.toString();
   return request<VaultSearchResponse>(`/vault${qs ? `?${qs}` : ""}`);
 }
@@ -518,6 +524,10 @@ export async function getVaultFile(path: string): Promise<VaultFileResponse> {
     .map((s) => encodeURIComponent(s))
     .join("/");
   return request<VaultFileResponse>(`/vault/file/${encodedPath}`);
+}
+
+export async function getVaultPathBySparkleId(id: string): Promise<{ path: string }> {
+  return request<{ path: string }>(`/vault/by-sparkle-id/${encodeURIComponent(id)}`);
 }
 
 export { ApiClientError };

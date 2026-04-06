@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.2.7.0] - 2026-04-06
+
+### Added
+
+- Vault page: "From Sparkle" filter toggle to show only Sparkle-sourced files
+- Vault page: sparkle badge (✦) on search results from Sparkle
+- Vault page: "來自 Sparkle" banner with "在 Sparkle 中查看" link in detail view
+- Item detail: "在 Vault 中查看" link now resolves via sparkle_id API (replaces static export_path)
+
+### Changed
+
+- "已匯出" page replaced with redirect to `/vault?filter=sparkle`
+- Sidebar: "已匯出" removed, "Vault 瀏覽" moved into notes section
+- Query keys include filter param to prevent stale cache after toggle
+
+### Removed
+
+- Standalone "已匯出" page (now served by vault browse with filter)
+
 ## [1.2.6.0] - 2026-04-06
 
 ### Added

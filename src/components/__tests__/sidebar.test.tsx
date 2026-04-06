@@ -67,7 +67,7 @@ describe("Sidebar", () => {
     expect(screen.getByText("閃念")).toBeInTheDocument();
     expect(screen.getByText("發展中")).toBeInTheDocument();
     expect(screen.getByText("永久筆記")).toBeInTheDocument();
-    expect(screen.getByText("已匯出")).toBeInTheDocument();
+    expect(screen.getByText("Vault 瀏覽")).toBeInTheDocument();
     expect(screen.getByText("進行中")).toBeInTheDocument();
     expect(screen.getByText("已完成")).toBeInTheDocument();
     expect(screen.getByText("暫存區")).toBeInTheDocument();

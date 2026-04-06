@@ -1,14 +1,10 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { ItemList } from "@/components/item-list";
-
-function ExportedPage() {
-  return (
-    <div className="flex-1 overflow-y-auto">
-      <ItemList type="note" status="exported" />
-    </div>
-  );
-}
+import { createFileRoute, redirect } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/_list/notes/exported")({
-  component: ExportedPage,
+  beforeLoad: () => {
+    throw redirect({
+      to: "/vault",
+      search: { filter: "sparkle", file: undefined },
+    });
+  },
 });
