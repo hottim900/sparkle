@@ -12,6 +12,7 @@ vi.mock("@tanstack/react-router", () => ({
     ...opts,
   }),
   useSearch: () => mockSearchParams,
+  useNavigate: () => vi.fn(),
 }));
 
 import { Route } from "@/routes/vault";

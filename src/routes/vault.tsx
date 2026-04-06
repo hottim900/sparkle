@@ -1,11 +1,11 @@
-import { createFileRoute, useSearch } from "@tanstack/react-router";
+import { createFileRoute, useSearch, useNavigate } from "@tanstack/react-router";
 import { useState, useCallback, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { searchVault, getVaultFile } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
 import { VaultMarkdownPreview } from "@/components/vault-markdown-preview";
 import { Input } from "@/components/ui/input";
-import { Search, ArrowLeft, FileText, Clock } from "lucide-react";
+import { Search, ArrowLeft, FileText, Clock, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 /**
@@ -43,11 +43,14 @@ function formatDate(mtime: number): string {
 }
 
 function VaultPage() {
-  const { file } = useSearch({ from: "/vault" });
+  const { file, filter } = useSearch({ from: "/vault" });
+  const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [debounceTimer, setDebounceTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
+
+  const sparkleFilter = filter === "sparkle" ? "sparkle" : undefined;
 
   // Auto-select file from URL search param
   useEffect(() => {
@@ -64,10 +67,15 @@ function VaultPage() {
     [debounceTimer],
   );
 
+  const toggleFilter = useCallback(() => {
+    const newFilter = sparkleFilter ? undefined : "sparkle";
+    navigate({ to: "/vault", search: { file, filter: newFilter } });
+  }, [sparkleFilter, file, navigate]);
+
   // Search / recent files
   const { data: searchData, isPending: isSearching } = useQuery({
-    queryKey: queryKeys.vault.search(debouncedQuery),
-    queryFn: () => searchVault(debouncedQuery || undefined, 30),
+    queryKey: queryKeys.vault.search(debouncedQuery, sparkleFilter),
+    queryFn: () => searchVault(debouncedQuery || undefined, 30, sparkleFilter),
   });
 
   // Selected file detail
@@ -83,6 +91,7 @@ function VaultPage() {
   });
 
   const results = searchData?.results ?? [];
+  const selectedSparkleId = results.find((r) => r.path === selectedPath)?.sparkle_id ?? null;
 
   // Mobile: show list or detail
   const showDetail = !!selectedPath;
@@ -93,8 +102,8 @@ function VaultPage() {
       <div
         className={`flex flex-col border-r border-border w-full md:w-96 md:flex-shrink-0 ${showDetail ? "hidden md:flex" : "flex"}`}
       >
-        {/* Search bar */}
-        <div className="p-3 border-b border-border">
+        {/* Search bar + filter */}
+        <div className="p-3 border-b border-border space-y-2">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
@@ -104,6 +113,15 @@ function VaultPage() {
               className="pl-9"
             />
           </div>
+          <Button
+            variant={sparkleFilter ? "default" : "outline"}
+            size="sm"
+            className="h-7 text-xs"
+            onClick={toggleFilter}
+          >
+            <Sparkles className="h-3 w-3 mr-1" />
+            From Sparkle
+          </Button>
         </div>
 
         {/* Results list */}
@@ -125,7 +143,12 @@ function VaultPage() {
                   <div className="flex items-start gap-2">
                     <FileText className="h-4 w-4 mt-0.5 text-muted-foreground flex-shrink-0" />
                     <div className="min-w-0 flex-1">
-                      <div className="font-medium text-sm truncate">{file.title}</div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-medium text-sm truncate">{file.title}</span>
+                        {file.sparkle_id && (
+                          <Sparkles className="h-3 w-3 text-amber-500 flex-shrink-0" />
+                        )}
+                      </div>
                       <div className="text-xs text-muted-foreground truncate">{file.path}</div>
                       {file.snippet && (
                         <div className="text-xs text-muted-foreground mt-1 line-clamp-2">
@@ -164,6 +187,23 @@ function VaultPage() {
                 <p className="text-xs text-muted-foreground truncate">{fileData.path}</p>
               </div>
             </div>
+            {/* Sparkle source badge */}
+            {selectedSparkleId && (
+              <div className="flex items-center gap-2 px-4 py-2 bg-amber-50 dark:bg-amber-950 text-amber-800 dark:text-amber-200 text-xs border-b border-border">
+                <Sparkles className="h-3 w-3" />
+                <span>來自 Sparkle</span>
+                <a
+                  href={`/all?item=${selectedSparkleId}`}
+                  className="ml-auto hover:underline"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    navigate({ to: "/all", search: { item: selectedSparkleId } });
+                  }}
+                >
+                  在 Sparkle 中查看
+                </a>
+              </div>
+            )}
             {/* Content */}
             <div className="flex-1 overflow-y-auto p-4">
               <VaultMarkdownPreview content={fileData.content} />
@@ -195,5 +235,6 @@ export const Route = createFileRoute("/vault")({
   component: VaultPage,
   validateSearch: (search: Record<string, unknown>) => ({
     file: typeof search.file === "string" ? search.file : undefined,
+    filter: typeof search.filter === "string" ? search.filter : undefined,
   }),
 });

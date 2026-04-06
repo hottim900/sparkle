@@ -65,6 +65,9 @@ function setupDefaultMocks(item: Item = mockExportedItem) {
   vi.mocked(api.getTags).mockResolvedValue({ tags: [] });
   vi.mocked(api.getLinkedTodos).mockResolvedValue({ items: [], total: 0 });
   vi.mocked(api.listCategories).mockResolvedValue({ categories: [] });
+  vi.mocked(api.getVaultPathBySparkleId).mockResolvedValue({
+    path: "inbox/test-exported-note.md",
+  });
 }
 
 function renderItemDetail(contextOverrides: Partial<AppContextValue> = {}) {
@@ -105,23 +108,26 @@ describe("ItemDetail - exported read-only mode", () => {
       expect(screen.getByText("已匯出至 Obsidian")).toBeInTheDocument();
     });
 
-    // Path should be shown in the banner
-    expect(screen.getByText("inbox/test-exported-note.md")).toBeInTheDocument();
-
-    // Vault link should be visible
-    expect(screen.getByText("在 Vault 中查看")).toBeInTheDocument();
+    // Path and vault link appear after sparkle_id API resolves
+    await waitFor(() => {
+      expect(screen.getByText("inbox/test-exported-note.md")).toBeInTheDocument();
+      expect(screen.getByText("在 Vault 中查看")).toBeInTheDocument();
+    });
   });
 
-  it("hides vault link when export_path is null", async () => {
+  it("shows fallback when vault path not found", async () => {
     setupDefaultMocks(mockExportedItemNoPath);
+    vi.mocked(api.getVaultPathBySparkleId).mockRejectedValue(new Error("Not found"));
     renderItemDetail();
 
     await waitFor(() => {
       expect(screen.getByText("已匯出至 Obsidian")).toBeInTheDocument();
     });
 
-    // No path or vault link
-    expect(screen.queryByText("inbox/test-exported-note.md")).not.toBeInTheDocument();
+    // Should show fallback message, not vault link
+    await waitFor(() => {
+      expect(screen.getByText("Vault 中未找到對應檔案")).toBeInTheDocument();
+    });
     expect(screen.queryByText("在 Vault 中查看")).not.toBeInTheDocument();
   });
 

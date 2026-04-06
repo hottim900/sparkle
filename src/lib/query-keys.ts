@@ -42,7 +42,8 @@ export const queryKeys = {
   },
   vault: {
     all: ["vault"] as const,
-    search: (q: string) => ["vault", "search", q] as const,
+    search: (q: string, filter?: string) => ["vault", "search", q, filter ?? "all"] as const,
     file: (path: string) => ["vault", "file", path] as const,
+    bySparkleId: (id: string) => ["vault", "by-sparkle-id", id] as const,
   },
 } as const;

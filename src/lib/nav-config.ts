@@ -3,7 +3,6 @@ import {
   Sparkles,
   Pencil,
   Gem,
-  ExternalLink,
   PlayCircle,
   CheckCircle,
   Archive,
@@ -52,7 +51,7 @@ export const sidebarNavGroups: NavGroupConfig[] = [
       { id: "fleeting", label: "閃念", icon: Sparkles, path: "/notes/fleeting" },
       { id: "developing", label: "發展中", icon: Pencil, path: "/notes/developing" },
       { id: "permanent", label: "永久筆記", icon: Gem, path: "/notes/permanent" },
-      { id: "exported", label: "已匯出", icon: ExternalLink, path: "/notes/exported" },
+      { id: "vault", label: "Vault 瀏覽", icon: BookOpen, path: "/vault" },
     ],
   },
   {
@@ -78,10 +77,6 @@ export const sidebarNavGroups: NavGroupConfig[] = [
       { id: "archived", label: "已封存", icon: Archive, path: "/archived" },
       { id: "shares", label: "分享管理", icon: Share2, path: "/shares" },
     ],
-  },
-  {
-    label: "Vault",
-    items: [{ id: "vault", label: "Vault 瀏覽", icon: BookOpen, path: "/vault" }],
   },
 ];
 
