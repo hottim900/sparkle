@@ -8,7 +8,7 @@ import { logger } from "../lib/logger.js";
 
 const DB_PATH = process.env.DATABASE_URL || "./data/todo.db";
 
-const TARGET_VERSION = 21;
+const TARGET_VERSION = 22;
 
 function getSchemaVersion(sqlite: Database.Database): number {
   // Check if schema_version table exists
@@ -389,6 +389,26 @@ function runMigrations(sqlite: Database.Database) {
     `);
     setSchemaVersion(sqlite, 21);
   }
+
+  // Step 21→22: Add sparkle_id to vault_files for Sparkle source tracking
+  if (version < 22) {
+    try {
+      sqlite.exec("ALTER TABLE vault_files ADD COLUMN sparkle_id TEXT DEFAULT NULL");
+    } catch (e: unknown) {
+      const msg = (e as Error).message || "";
+      if (!msg.includes("duplicate column")) throw e;
+    }
+    // Unique partial index: prevent duplicate sparkle_ids
+    sqlite.exec(
+      "CREATE UNIQUE INDEX IF NOT EXISTS idx_vault_files_sparkle_id ON vault_files(sparkle_id) WHERE sparkle_id IS NOT NULL",
+    );
+    // Force re-scan of files with sparkle_id in frontmatter so scanner fills the new column
+    // Must also reset mtime to 0 — scanner checks mtime before content_hash
+    sqlite.exec(
+      "UPDATE vault_files SET content_hash = '', mtime = 0 WHERE frontmatter LIKE '%sparkle_id%'",
+    );
+    setSchemaVersion(sqlite, 22);
+  }
 }
 
 export function initializeDatabase(sqlite: Database.Database) {
@@ -481,8 +501,10 @@ export function initializeDatabase(sqlite: Database.Database) {
         frontmatter TEXT,
         content TEXT NOT NULL,
         mtime INTEGER NOT NULL,
-        content_hash TEXT NOT NULL
+        content_hash TEXT NOT NULL,
+        sparkle_id TEXT DEFAULT NULL
       );
+      CREATE UNIQUE INDEX idx_vault_files_sparkle_id ON vault_files(sparkle_id) WHERE sparkle_id IS NOT NULL;
     `);
 
     // Set version to target directly for fresh installs

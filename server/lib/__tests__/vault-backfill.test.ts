@@ -47,6 +47,11 @@ describe("extractSparkleId", () => {
   it("returns null when frontmatter is unclosed", () => {
     expect(extractSparkleId("---\nsparkle_id: abc")).toBeNull();
   });
+
+  it("handles \\r\\n line endings (Windows/Obsidian)", () => {
+    const content = '---\r\nsparkle_id: "win-123"\r\ntags: []\r\n---\r\nBody';
+    expect(extractSparkleId(content)).toBe("win-123");
+  });
 });
 
 describe("backfillExportPaths", () => {

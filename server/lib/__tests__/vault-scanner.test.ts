@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync, utimesSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createTestDb } from "../../test-utils.js";
@@ -144,5 +144,68 @@ describe("scanVaultFiles", () => {
 
     const row = db.select().from(vaultFiles).where(eq(vaultFiles.path, "no-fm.md")).get();
     expect(row!.frontmatter).toBeNull();
+  });
+
+  it("extracts sparkle_id from frontmatter into vault_files", async () => {
+    enableObsidian(sqlite, tmpDir);
+    writeFileSync(
+      join(tmpDir, "exported.md"),
+      '---\nsparkle_id: "abc-123"\ntags: []\n---\n# Exported Note\nContent',
+    );
+
+    await scanVaultFiles(db, sqlite);
+
+    const row = db.select().from(vaultFiles).where(eq(vaultFiles.path, "exported.md")).get();
+    expect(row).toBeDefined();
+    expect(row!.sparkle_id).toBe("abc-123");
+  });
+
+  it("sets sparkle_id to null when not in frontmatter", async () => {
+    enableObsidian(sqlite, tmpDir);
+    writeFileSync(join(tmpDir, "plain.md"), "---\ntitle: Plain\n---\nNo sparkle_id");
+
+    await scanVaultFiles(db, sqlite);
+
+    const row = db.select().from(vaultFiles).where(eq(vaultFiles.path, "plain.md")).get();
+    expect(row!.sparkle_id).toBeNull();
+  });
+
+  it("handles duplicate sparkle_id gracefully (sets to null)", async () => {
+    enableObsidian(sqlite, tmpDir);
+    writeFileSync(join(tmpDir, "first.md"), '---\nsparkle_id: "dup-id"\n---\nFirst file');
+    writeFileSync(
+      join(tmpDir, "second.md"),
+      '---\nsparkle_id: "dup-id"\n---\nSecond file with same id',
+    );
+
+    // Should not throw
+    const result = await scanVaultFiles(db, sqlite);
+    expect(result.errors).toBe(0);
+
+    // One should have sparkle_id, the other null
+    const rows = db.select().from(vaultFiles).all();
+    const withId = rows.filter((r) => r.sparkle_id === "dup-id");
+    const withNull = rows.filter((r) => r.sparkle_id === null);
+    expect(withId).toHaveLength(1);
+    expect(withNull).toHaveLength(1);
+  });
+
+  it("updates sparkle_id when file content changes", async () => {
+    enableObsidian(sqlite, tmpDir);
+    const filePath = join(tmpDir, "evolving.md");
+    writeFileSync(filePath, "---\ntitle: No ID yet\n---\nContent");
+
+    await scanVaultFiles(db, sqlite);
+    let row = db.select().from(vaultFiles).where(eq(vaultFiles.path, "evolving.md")).get();
+    expect(row!.sparkle_id).toBeNull();
+
+    // Add sparkle_id — touch mtime to trigger re-scan
+    const future = new Date(Date.now() + 10_000);
+    writeFileSync(filePath, '---\nsparkle_id: "new-id"\ntitle: Now has ID\n---\nContent');
+    utimesSync(filePath, future, future);
+
+    await scanVaultFiles(db, sqlite);
+    row = db.select().from(vaultFiles).where(eq(vaultFiles.path, "evolving.md")).get();
+    expect(row!.sparkle_id).toBe("new-id");
   });
 });
