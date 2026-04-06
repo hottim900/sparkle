@@ -34,6 +34,7 @@ interface ItemDetailProps {
   itemId: string;
   onDeleted?: () => void;
   onBack?: () => void;
+  onNavigate?: (itemId: string) => void;
 }
 
 const noteStatuses: { value: ItemStatus; label: string }[] = [
@@ -60,7 +61,7 @@ const gtdTags = [
   { tag: "someday", label: "有一天" },
 ];
 
-export function ItemDetail({ itemId, onDeleted, onBack }: ItemDetailProps) {
+export function ItemDetail({ itemId, onDeleted, onBack, onNavigate }: ItemDetailProps) {
   const {
     item,
     setItem,
@@ -149,11 +150,15 @@ export function ItemDetail({ itemId, onDeleted, onBack }: ItemDetailProps) {
 
   const handleNavigate = useCallback(
     (linkedItemId: string) => {
-      navigate({
-        search: (prev) => ({ ...prev, item: linkedItemId }),
-      } as NavigateOptions);
+      if (onNavigate) {
+        onNavigate(linkedItemId);
+      } else {
+        navigate({
+          search: (prev) => ({ ...prev, item: linkedItemId }),
+        } as NavigateOptions);
+      }
     },
-    [navigate],
+    [navigate, onNavigate],
   );
 
   const dismissCreateTodo = useCallback(() => setCreateTodoRequested(false), []);

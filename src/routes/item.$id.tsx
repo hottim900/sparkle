@@ -1,3 +1,4 @@
+import { useCallback } from "react";
 import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { getItem } from "@/lib/api";
 import { toast } from "sonner";
@@ -50,11 +51,16 @@ export function getTargetPath(item: Item): string | null {
 function ExportedItemView({ itemId }: { itemId: string }) {
   const navigate = useNavigate();
 
+  const navigateToVault = useCallback(
+    () => navigate({ to: "/vault", search: { file: undefined, filter: undefined } }),
+    [navigate],
+  );
+
   return (
     <div className="flex-1 overflow-y-auto">
       <div className="max-w-4xl mx-auto px-4 py-6">
         <button
-          onClick={() => navigate({ to: "/vault", search: { file: undefined, filter: undefined } })}
+          onClick={navigateToVault}
           className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-4 transition-colors"
         >
           <ArrowLeft className="h-4 w-4" />
@@ -62,7 +68,9 @@ function ExportedItemView({ itemId }: { itemId: string }) {
         </button>
         <ItemDetail
           itemId={itemId}
-          onBack={() => navigate({ to: "/vault", search: { file: undefined, filter: undefined } })}
+          onBack={navigateToVault}
+          onDeleted={navigateToVault}
+          onNavigate={(linkedId) => navigate({ to: "/item/$id", params: { id: linkedId } })}
         />
       </div>
     </div>

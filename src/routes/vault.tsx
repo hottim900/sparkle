@@ -197,7 +197,7 @@ function VaultPage() {
                   className="ml-auto hover:underline"
                   onClick={(e) => {
                     e.preventDefault();
-                    navigate({ to: `/item/${selectedSparkleId}` });
+                    navigate({ to: "/item/$id", params: { id: selectedSparkleId } });
                   }}
                 >
                   在 Sparkle 中查看

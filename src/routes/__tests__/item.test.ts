@@ -72,4 +72,10 @@ describe("getTargetPath", () => {
   it("maps scratch+archived to /archived", () => {
     expect(getTargetPath(makeItem("scratch", "archived"))).toBe("/archived");
   });
+
+  it("falls back to /dashboard for unknown type", () => {
+    const item = makeItem("note", "fleeting");
+    (item as unknown as { type: string }).type = "unknown";
+    expect(getTargetPath(item as Item)).toBe("/dashboard");
+  });
 });
