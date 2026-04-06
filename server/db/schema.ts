@@ -104,6 +104,7 @@ export const vaultFiles = sqliteTable("vault_files", {
   content: text("content").notNull(),
   mtime: integer("mtime").notNull(),
   content_hash: text("content_hash").notNull(),
+  sparkle_id: text("sparkle_id"),
 });
 
 export type VaultFile = typeof vaultFiles.$inferSelect;

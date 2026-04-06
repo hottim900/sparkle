@@ -7,6 +7,7 @@ import type Database from "better-sqlite3";
 import * as schema from "../db/schema.js";
 import { vaultFiles } from "../db/schema.js";
 import { getObsidianSettings } from "./settings.js";
+import { extractSparkleId } from "./vault-backfill.js";
 import { logger } from "./logger.js";
 
 type DB = BetterSQLite3Database<typeof schema>;
@@ -27,14 +28,57 @@ function extractTitle(content: string, filename: string): string {
  * Returns null if no frontmatter found.
  */
 function extractFrontmatter(content: string): string | null {
-  if (!content.startsWith("---\n")) return null;
-  const endIdx = content.indexOf("\n---", 4);
-  if (endIdx === -1) return null;
-  return content.slice(4, endIdx);
+  const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+  return match?.[1]?.replace(/\r$/gm, "") ?? null;
 }
 
 function contentHash(content: string): string {
   return createHash("sha256").update(content, "utf-8").digest("hex");
+}
+
+type VaultFileData = {
+  title: string;
+  frontmatter: string | null;
+  content: string;
+  mtime: number;
+  content_hash: string;
+  sparkle_id: string | null;
+};
+
+/**
+ * Insert or update a vault file entry, handling duplicate sparkle_id gracefully.
+ * On UNIQUE constraint failure (two files share the same sparkle_id), retries with sparkle_id = null.
+ */
+function upsertWithDupGuard(
+  db: DB,
+  relPath: string,
+  data: VaultFileData,
+  mode: "insert" | "update",
+): void {
+  const run = (sparkleId: string | null) => {
+    const payload = { ...data, sparkle_id: sparkleId };
+    if (mode === "update") {
+      db.update(vaultFiles).set(payload).where(eq(vaultFiles.path, relPath)).run();
+    } else {
+      db.insert(vaultFiles)
+        .values({ path: relPath, ...payload })
+        .run();
+    }
+  };
+
+  try {
+    run(data.sparkle_id);
+  } catch (e) {
+    const msg = (e as Error).message || "";
+    if (msg.includes("UNIQUE constraint failed") && data.sparkle_id) {
+      logger.warn(
+        `vault-scanner: duplicate sparkle_id ${data.sparkle_id} in ${relPath}, setting to null`,
+      );
+      run(null);
+    } else {
+      throw e;
+    }
+  }
 }
 
 /**
@@ -139,19 +183,22 @@ export async function scanVaultFiles(
 
       const title = extractTitle(raw, relPath);
       const frontmatter = extractFrontmatter(raw);
+      const sparkleId = extractSparkleId(raw);
+
+      const data = {
+        title,
+        frontmatter,
+        content: raw,
+        mtime,
+        content_hash: hash,
+        sparkle_id: sparkleId,
+      };
 
       if (dbEntry) {
-        // Update existing entry
-        db.update(vaultFiles)
-          .set({ title, frontmatter, content: raw, mtime, content_hash: hash })
-          .where(eq(vaultFiles.path, relPath))
-          .run();
+        upsertWithDupGuard(db, relPath, data, "update");
         updated++;
       } else {
-        // Insert new entry
-        db.insert(vaultFiles)
-          .values({ path: relPath, title, frontmatter, content: raw, mtime, content_hash: hash })
-          .run();
+        upsertWithDupGuard(db, relPath, data, "insert");
         inserted++;
       }
     } catch (e) {

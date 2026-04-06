@@ -78,8 +78,10 @@ export function createTestDb() {
       frontmatter TEXT,
       content TEXT NOT NULL,
       mtime INTEGER NOT NULL,
-      content_hash TEXT NOT NULL
+      content_hash TEXT NOT NULL,
+      sparkle_id TEXT DEFAULT NULL
     );
+    CREATE UNIQUE INDEX idx_vault_files_sparkle_id ON vault_files(sparkle_id) WHERE sparkle_id IS NOT NULL;
   `);
 
   setupFTS(sqlite);

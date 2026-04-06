@@ -96,7 +96,7 @@ describe("Migration v15: is_private column", () => {
     expect(row.is_private).toBe(0);
 
     const ver = sqlite.prepare("SELECT version FROM schema_version").get() as { version: number };
-    expect(ver.version).toBe(21);
+    expect(ver.version).toBe(22);
   });
 
   it("upgrade from v14: is idempotent", () => {
