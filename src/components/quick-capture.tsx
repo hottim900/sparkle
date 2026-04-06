@@ -52,14 +52,26 @@ function pathToDefaultType(pathname: string): ItemType {
   return "note";
 }
 
+function safeStorage(key: string, fallback = "0"): string {
+  try {
+    return localStorage.getItem(key) ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 function useShowKeyboardHint() {
   const [show, setShow] = useState(() => {
-    const count = parseInt(localStorage.getItem(KEYBOARD_HINT_KEY) ?? "0", 10);
+    const count = parseInt(safeStorage(KEYBOARD_HINT_KEY), 10);
     return count < KEYBOARD_HINT_DISMISS_AFTER;
   });
   const increment = () => {
-    const next = parseInt(localStorage.getItem(KEYBOARD_HINT_KEY) ?? "0", 10) + 1;
-    localStorage.setItem(KEYBOARD_HINT_KEY, String(next));
+    const next = parseInt(safeStorage(KEYBOARD_HINT_KEY), 10) + 1;
+    try {
+      localStorage.setItem(KEYBOARD_HINT_KEY, String(next));
+    } catch {
+      /* Safari private browsing or quota exceeded */
+    }
     if (next >= KEYBOARD_HINT_DISMISS_AFTER) setShow(false);
   };
   return { show, increment };

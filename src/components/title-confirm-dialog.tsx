@@ -16,7 +16,8 @@ export function isAutoTitle(title: string, content: string | null | undefined): 
   const lines = content.split("\n");
   const firstNonEmpty = lines.find((line) => line.trim() !== "") ?? "";
   const trimmed = firstNonEmpty.trim();
-  const firstLine = trimmed.length > 80 ? trimmed.slice(0, 80) + "..." : trimmed;
+  const chars = [...trimmed];
+  const firstLine = chars.length > 80 ? chars.slice(0, 80).join("") + "..." : trimmed;
   return title.trim() === firstLine;
 }
 
