@@ -225,7 +225,7 @@ export async function listItems(params?: {
 }
 
 export async function createItem(input: {
-  title: string;
+  title?: string;
   type?: string;
   content?: string;
   status?: string;
