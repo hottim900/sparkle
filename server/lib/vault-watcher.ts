@@ -5,7 +5,7 @@ import { and, eq, isNotNull } from "drizzle-orm";
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import type Database from "better-sqlite3";
 import * as schema from "../db/schema.js";
-import { items } from "../db/schema.js";
+import { items, vaultFiles } from "../db/schema.js";
 
 type DB = BetterSQLite3Database<typeof schema>;
 import { getObsidianSettings } from "./settings.js";
@@ -94,10 +94,22 @@ export async function scanExportedItems(
         logger.info(`vault-watcher: synced ${item.export_path} → item ${item.id}`);
       }
     } catch (e) {
-      const msg = (e as NodeJS.ErrnoException).code;
-      if (msg === "ENOENT") {
-        // File deleted from vault — clear mtime cache, don't touch DB
-        mtimeCache.delete(item.export_path);
+      const code = (e as NodeJS.ErrnoException).code;
+      if (code === "ENOENT") {
+        // export_path invalid — try self-healing via sparkle_id lookup
+        mtimeCache.delete(item.export_path!);
+        const row = db
+          .select({ path: vaultFiles.path })
+          .from(vaultFiles)
+          .where(eq(vaultFiles.sparkle_id, item.id))
+          .get();
+        if (row) {
+          // Self-heal: update export_path. Content sync happens on next scan pass (60s).
+          db.update(items).set({ export_path: row.path }).where(eq(items.id, item.id)).run();
+          logger.info(
+            `vault-watcher: self-healed ${item.export_path} → ${row.path} for item ${item.id}`,
+          );
+        }
       } else {
         errors++;
         logger.warn(`vault-watcher: error reading ${item.export_path}: ${(e as Error).message}`);

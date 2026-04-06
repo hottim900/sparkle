@@ -6,11 +6,13 @@ import { vaultFiles } from "../db/schema.js";
 import { eq, sql } from "drizzle-orm";
 import { getObsidianSettings } from "../lib/settings.js";
 import { escapeFts5Query } from "../lib/fts-utils.js";
+import { UUID_RE } from "../lib/items.js";
 import { logger } from "../lib/logger.js";
 
 const vaultSearchSchema = z.object({
   q: z.string().min(1).max(1000).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(20),
+  filter: z.enum(["all", "sparkle"]).optional(),
 });
 
 const vaultRouter = new Hono();
@@ -25,6 +27,7 @@ vaultRouter.get("/", (c) => {
     parsed = vaultSearchSchema.parse({
       q: c.req.query("q")?.trim() || undefined,
       limit: c.req.query("limit"),
+      filter: c.req.query("filter") || undefined,
     });
   } catch (e) {
     if (e instanceof ZodError) {
@@ -33,7 +36,8 @@ vaultRouter.get("/", (c) => {
     throw e;
   }
 
-  const { q, limit } = parsed;
+  const { q, limit, filter } = parsed;
+  const sparkleOnly = filter === "sparkle";
 
   if (!q) {
     // No query: return recent files by mtime
@@ -42,8 +46,10 @@ vaultRouter.get("/", (c) => {
         path: vaultFiles.path,
         title: vaultFiles.title,
         mtime: vaultFiles.mtime,
+        sparkle_id: vaultFiles.sparkle_id,
       })
       .from(vaultFiles)
+      .where(sparkleOnly ? sql`${vaultFiles.sparkle_id} IS NOT NULL` : undefined)
       .orderBy(sql`${vaultFiles.mtime} DESC`)
       .limit(limit)
       .all();
@@ -53,17 +59,25 @@ vaultRouter.get("/", (c) => {
   // FTS5 search — trigram tokenizer requires 3+ chars; shorter queries return empty (no LIKE fallback for vault performance)
   try {
     const escaped = escapeFts5Query(q);
+    const sparkleClause = sparkleOnly ? "AND vf.sparkle_id IS NOT NULL" : "";
     const results = sqlite
       .prepare(
-        `SELECT vf.path, vf.title, vf.mtime,
+        `SELECT vf.path, vf.title, vf.mtime, vf.sparkle_id,
                 snippet(vault_files_fts, 1, '<mark>', '</mark>', '...', 40) as snippet
          FROM vault_files_fts
          JOIN vault_files vf ON vf.rowid = vault_files_fts.rowid
          WHERE vault_files_fts MATCH ?
+         ${sparkleClause}
          ORDER BY rank
          LIMIT ?`,
       )
-      .all(escaped, limit) as { path: string; title: string; mtime: number; snippet: string }[];
+      .all(escaped, limit) as {
+      path: string;
+      title: string;
+      mtime: number;
+      sparkle_id: string | null;
+      snippet: string;
+    }[];
 
     return c.json({ results, total: results.length });
   } catch (e) {
@@ -110,6 +124,29 @@ vaultRouter.get("/file/*", (c) => {
     content: file.content,
     mtime: file.mtime,
   });
+});
+
+/**
+ * GET /api/vault/by-sparkle-id/:id
+ * Look up vault file path by sparkle_id. Used by item-detail to resolve "View in Vault" links.
+ */
+vaultRouter.get("/by-sparkle-id/:id", (c) => {
+  const id = c.req.param("id");
+  if (!UUID_RE.test(id)) {
+    return c.json({ error: "Invalid sparkle_id format" }, 400);
+  }
+
+  const row = db
+    .select({ path: vaultFiles.path })
+    .from(vaultFiles)
+    .where(eq(vaultFiles.sparkle_id, id))
+    .get();
+
+  if (!row) {
+    return c.json({ error: "Not found" }, 404);
+  }
+
+  return c.json({ path: row.path });
 });
 
 export { vaultRouter };
