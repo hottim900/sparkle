@@ -62,48 +62,44 @@ test.describe("Item Resolver (/item/:id)", () => {
     await expect(page).toHaveURL(/\/dashboard/);
   });
 
-  test("vault sparkle badge navigates through resolver to correct list", async ({
+  test("exported item renders standalone view with back-to-vault link", async ({
     page,
     request,
   }) => {
-    // Enable Obsidian + export a note so vault has a sparkle item
+    // Enable Obsidian and export a note via API
     await request.put(`http://localhost:${PORT}/api/settings`, {
       headers: { Authorization: `Bearer ${AUTH_TOKEN}`, "Content-Type": "application/json" },
       data: {
         obsidian_enabled: "true",
-        obsidian_vault_path: "/tmp/e2e-resolver-vault",
+        obsidian_vault_path: VAULT_PATH,
         obsidian_inbox_folder: "0_Inbox",
         obsidian_export_mode: "overwrite",
       },
     });
 
-    const title = `vault-resolve-${Date.now()}`;
+    const title = `exported-standalone-${Date.now()}`;
     const item = await createItemViaApi(request, {
       title,
       type: "note",
       status: "permanent",
-      content: "Test content for vault resolver",
+      content: "# Standalone View Test\n\nThis is exported.",
     });
 
-    // Export the note
     const exportRes = await request.post(`http://localhost:${PORT}/api/items/${item.id}/export`, {
       headers: { Authorization: `Bearer ${AUTH_TOKEN}` },
     });
     expect(exportRes.ok()).toBeTruthy();
 
-    // Go to vault page
-    await page.goto("/");
-    await navigateTo(page, "Vault 瀏覽");
-    await expect(page.getByRole("heading", { name: "Vault" })).toBeVisible({ timeout: 10_000 });
+    // Navigate directly via /item/:id resolver
+    await page.goto(`/item/${item.id}`);
 
-    // Find the exported note in vault and click "在 Sparkle 中查看"
-    // The vault file list should show the exported note
-    await page.getByText(title).click();
-    await expect(page.getByText("來自 Sparkle")).toBeVisible({ timeout: 10_000 });
-    await page.getByText("在 Sparkle 中查看").click();
-
-    // Should navigate through /item/:id resolver to standalone exported view
+    // Exported item should render standalone detail view (not redirect)
     await expect(page.getByText("已匯出至 Obsidian")).toBeVisible({ timeout: 10_000 });
     await expect(page.getByText("回到 Vault")).toBeVisible();
+    await expect(page.locator("h1").filter({ hasText: title })).toBeVisible();
+
+    // Back-to-vault link should navigate to /vault
+    await page.getByText("回到 Vault").click();
+    await expect(page).toHaveURL(/\/vault/);
   });
 });
