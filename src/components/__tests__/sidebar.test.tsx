@@ -71,7 +71,6 @@ describe("Sidebar", () => {
     expect(screen.getByText("進行中")).toBeInTheDocument();
     expect(screen.getByText("已完成")).toBeInTheDocument();
     expect(screen.getByText("暫存區")).toBeInTheDocument();
-    expect(screen.getByText("全部")).toBeInTheDocument();
     expect(screen.getByText("已暫停")).toBeInTheDocument();
     expect(screen.getByText("已封存")).toBeInTheDocument();
     expect(screen.getByText("分享管理")).toBeInTheDocument();

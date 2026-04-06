@@ -9,7 +9,7 @@ function SharesPage() {
     <ErrorBoundary>
       <ShareManagement
         onNavigateToItem={(itemId) => {
-          navigate({ to: "/all", search: { item: itemId } });
+          navigate({ to: `/item/${itemId}` });
         }}
       />
     </ErrorBoundary>

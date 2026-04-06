@@ -10,7 +10,7 @@ const VIEW_TO_PATH: Record<string, string> = {
   notes: "/notes/fleeting",
   todos: "/todos",
   scratch: "/scratch",
-  all: "/all",
+
   paused: "/paused",
   archived: "/archived",
   settings: "/settings",
@@ -28,7 +28,7 @@ const PATH_TO_VIEW: Record<string, string> = {
   "/todos": "active",
   "/todos/done": "done",
   "/scratch": "draft",
-  "/all": "all",
+
   "/paused": "paused",
   "/archived": "archived",
   "/settings": "settings",

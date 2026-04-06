@@ -110,10 +110,8 @@ test.describe("Obsidian Export", () => {
     });
     expect(exportRes.ok()).toBeTruthy();
 
-    // Navigate to all items and open the exported note
-    await page.goto("/");
-    await navigateTo(page, "全部");
-    await page.getByText(title).click();
+    // Navigate to exported note via item resolver
+    await page.goto(`/item/${item.id}`);
 
     // Verify read-only view: banner visible, no title input, content rendered
     await expect(page.getByText("已匯出至 Obsidian")).toBeVisible({ timeout: 10_000 });

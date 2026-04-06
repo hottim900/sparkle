@@ -64,12 +64,11 @@ describe("BottomNav", () => {
     const user = userEvent.setup();
     renderWithContext(<BottomNav />);
 
-    expect(screen.queryByText("全部")).not.toBeInTheDocument();
+    expect(screen.queryByText("已暫停")).not.toBeInTheDocument();
 
     await user.click(screen.getByText("更多"));
 
     expect(screen.getByText("私密筆記")).toBeInTheDocument();
-    expect(screen.getByText("全部")).toBeInTheDocument();
     expect(screen.getByText("已暫停")).toBeInTheDocument();
     expect(screen.getByText("已封存")).toBeInTheDocument();
     expect(screen.getByText("分享管理")).toBeInTheDocument();
@@ -83,7 +82,7 @@ describe("BottomNav", () => {
     await user.click(screen.getByText("更多"));
     await user.click(screen.getByText("設定"));
 
-    expect(screen.queryByText("全部")).not.toBeInTheDocument();
+    expect(screen.queryByText("已暫停")).not.toBeInTheDocument();
   });
 
   it("closes more menu when clicking overlay", async () => {
@@ -91,12 +90,12 @@ describe("BottomNav", () => {
     renderWithContext(<BottomNav />);
 
     await user.click(screen.getByText("更多"));
-    expect(screen.getByText("全部")).toBeInTheDocument();
+    expect(screen.getByText("已暫停")).toBeInTheDocument();
 
     // Click the overlay to close
     await user.click(screen.getByTestId("more-overlay"));
 
-    expect(screen.queryByText("全部")).not.toBeInTheDocument();
+    expect(screen.queryByText("已暫停")).not.toBeInTheDocument();
   });
 
   it("highlights 更多 button when a more-menu view is active", () => {
