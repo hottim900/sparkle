@@ -27,6 +27,8 @@ test.describe("Quick Capture Multi-line + Auto-title", () => {
     await expect(page.getByPlaceholder("標題", { exact: true })).toHaveValue(firstLine, {
       timeout: 10_000,
     });
+    // Switch to edit mode (default is preview)
+    await page.getByRole("button", { name: "編輯" }).click();
     const contentArea = page.getByPlaceholder("Markdown 內容...");
     await expect(contentArea).toContainText(secondLine);
   });

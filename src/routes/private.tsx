@@ -343,7 +343,7 @@ function PrivateItemDetail({
   const [localItem, setLocalItem] = useState<ParsedItem | null>(null);
   const [isDirty, setIsDirty] = useState(false);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
-  const [previewMode, setPreviewMode] = useState(false);
+  const [previewMode, setPreviewMode] = useState(true);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [titleConfirmOpen, setTitleConfirmOpen] = useState(false);
   const [pendingNextStatus, setPendingNextStatus] = useState<string | null>(null);
@@ -365,7 +365,7 @@ function PrivateItemDetail({
   useEffect(() => {
     setIsDirty(false);
     setLocalItem(null);
-    setPreviewMode(false);
+    setPreviewMode(true);
     setSaveStatus("idle");
   }, [itemId]);
 

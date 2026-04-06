@@ -27,7 +27,7 @@ export function ItemContentEditor({
   onBlur,
   offlineWarning,
 }: ItemContentEditorProps) {
-  const [previewMode, setPreviewMode] = useState(false);
+  const [previewMode, setPreviewMode] = useState(true);
 
   return (
     <div>

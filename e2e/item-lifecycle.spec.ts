@@ -56,6 +56,9 @@ test.describe("Item Lifecycle", () => {
     await page.goto("/");
     await createNoteAndOpenDetail(page, "ContentEdit");
 
+    // Switch to edit mode (default is preview)
+    await page.getByRole("button", { name: "編輯" }).click();
+
     // Type content in textarea
     const content = `Test content ${Date.now()}`;
     await page.getByPlaceholder("Markdown 內容...").fill(content);
@@ -73,7 +76,8 @@ test.describe("Item Lifecycle", () => {
       .click();
     await expect(page.getByPlaceholder("標題", { exact: true })).toBeVisible({ timeout: 10_000 });
 
-    // Verify content persists
+    // Switch to edit mode to verify content persists
+    await page.getByRole("button", { name: "編輯" }).click();
     await expect(page.getByPlaceholder("Markdown 內容...")).toHaveValue(content);
   });
 
