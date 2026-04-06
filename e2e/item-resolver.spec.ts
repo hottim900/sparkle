@@ -1,10 +1,20 @@
 import { test, expect } from "@playwright/test";
+import { mkdirSync, rmSync } from "node:fs";
 import { createItemViaApi, navigateTo } from "./helpers";
 import { AUTH_TOKEN } from "../playwright.config";
 
 const PORT = process.env.PORT || 3456;
+const VAULT_PATH = "/tmp/e2e-resolver-vault";
 
 test.describe("Item Resolver (/item/:id)", () => {
+  test.beforeAll(() => {
+    mkdirSync(VAULT_PATH, { recursive: true });
+  });
+
+  test.afterAll(() => {
+    rmSync(VAULT_PATH, { recursive: true, force: true });
+  });
+
   test("resolves fleeting note to /notes/fleeting with item selected", async ({
     page,
     request,
