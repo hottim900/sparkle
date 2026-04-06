@@ -195,4 +195,14 @@ describe("deriveTitleFromContent", () => {
   it("leading/trailing whitespace trimmed", () => {
     expect(deriveTitleFromContent("  padded line  \nMore")).toBe("padded line");
   });
+
+  it("truncation does not split surrogate pairs", () => {
+    const s = "A".repeat(79) + "🌍🌍";
+    const result = deriveTitleFromContent(s);
+    expect(result).toBe("A".repeat(79) + "🌍...");
+  });
+
+  it("CRLF content handled correctly", () => {
+    expect(deriveTitleFromContent("Line one\r\nLine two")).toBe("Line one");
+  });
 });
