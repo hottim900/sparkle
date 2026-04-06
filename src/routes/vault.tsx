@@ -193,11 +193,11 @@ function VaultPage() {
                 <Sparkles className="h-3 w-3" />
                 <span>來自 Sparkle</span>
                 <a
-                  href={`/all?item=${selectedSparkleId}`}
+                  href={`/item/${selectedSparkleId}`}
                   className="ml-auto hover:underline"
                   onClick={(e) => {
                     e.preventDefault();
-                    navigate({ to: "/all", search: { item: selectedSparkleId } });
+                    navigate({ to: "/item/$id", params: { id: selectedSparkleId } });
                   }}
                 >
                   在 Sparkle 中查看

@@ -76,10 +76,8 @@ export function ItemList({ status, type }: ItemListProps) {
 
   const batchActions = getBatchActions(status, obsidianEnabled);
 
-  // Determine if this is an "all" or "archived" view (no specific type)
-  const isAllView = !type && !status;
   const isArchivedView = !type && status === "archived";
-  const showTypeGroups = isAllView || isArchivedView;
+  const showTypeGroups = isArchivedView;
 
   if (state.isPending) {
     return (

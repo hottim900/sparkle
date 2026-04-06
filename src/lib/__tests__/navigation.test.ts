@@ -11,7 +11,6 @@ describe("viewToPath", () => {
     expect(viewToPath("active")).toBe("/todos");
     expect(viewToPath("done")).toBe("/todos/done");
     expect(viewToPath("draft")).toBe("/scratch");
-    expect(viewToPath("all")).toBe("/all");
     expect(viewToPath("archived")).toBe("/archived");
     expect(viewToPath("settings")).toBe("/settings");
     expect(viewToPath("shares")).toBe("/shares");
@@ -35,7 +34,6 @@ describe("pathToView", () => {
     expect(pathToView("/todos")).toBe("active");
     expect(pathToView("/todos/done")).toBe("done");
     expect(pathToView("/scratch")).toBe("draft");
-    expect(pathToView("/all")).toBe("all");
     expect(pathToView("/archived")).toBe("archived");
   });
 

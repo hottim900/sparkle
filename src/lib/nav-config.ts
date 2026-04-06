@@ -72,7 +72,6 @@ export const sidebarNavGroups: NavGroupConfig[] = [
   {
     label: "共用",
     items: [
-      { id: "all", label: "全部", icon: FileText, path: "/all" },
       { id: "paused", label: "已暫停", icon: PauseCircle, path: "/paused" },
       { id: "archived", label: "已封存", icon: Archive, path: "/archived" },
       { id: "shares", label: "分享管理", icon: Share2, path: "/shares" },
@@ -97,7 +96,6 @@ export const bottomNavMainItems: (NavItemConfig | NavActionConfig)[] = [
  */
 export const bottomNavMoreItems: NavItemConfig[] = [
   { id: "private", label: "私密筆記", icon: Lock, path: "/private" },
-  { id: "all", label: "全部", icon: FileText, path: "/all" },
   { id: "paused", label: "已暫停", icon: PauseCircle, path: "/paused" },
   { id: "archived", label: "已封存", icon: Archive, path: "/archived" },
   { id: "shares", label: "分享管理", icon: Share2, path: "/shares" },

@@ -14,8 +14,10 @@ import { Route as SharesRouteImport } from './routes/shares'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as PrivateRouteImport } from './routes/private'
 import { Route as DashboardRouteImport } from './routes/dashboard'
+import { Route as AllRouteImport } from './routes/all'
 import { Route as ListRouteImport } from './routes/_list'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ItemIdRouteImport } from './routes/item.$id'
 import { Route as ListUnreviewedRouteImport } from './routes/_list/unreviewed'
 import { Route as ListTodosRouteImport } from './routes/_list/todos'
 import { Route as ListStaleRouteImport } from './routes/_list/stale'
@@ -24,7 +26,6 @@ import { Route as ListPausedRouteImport } from './routes/_list/paused'
 import { Route as ListNotesRouteImport } from './routes/_list/notes'
 import { Route as ListAttentionRouteImport } from './routes/_list/attention'
 import { Route as ListArchivedRouteImport } from './routes/_list/archived'
-import { Route as ListAllRouteImport } from './routes/_list/all'
 import { Route as ListTodosIndexRouteImport } from './routes/_list/todos/index'
 import { Route as ListScratchIndexRouteImport } from './routes/_list/scratch/index'
 import { Route as ListNotesIndexRouteImport } from './routes/_list/notes/index'
@@ -59,6 +60,11 @@ const DashboardRoute = DashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AllRoute = AllRouteImport.update({
+  id: '/all',
+  path: '/all',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ListRoute = ListRouteImport.update({
   id: '/_list',
   getParentRoute: () => rootRouteImport,
@@ -66,6 +72,11 @@ const ListRoute = ListRouteImport.update({
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ItemIdRoute = ItemIdRouteImport.update({
+  id: '/item/$id',
+  path: '/item/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ListUnreviewedRoute = ListUnreviewedRouteImport.update({
@@ -106,11 +117,6 @@ const ListAttentionRoute = ListAttentionRouteImport.update({
 const ListArchivedRoute = ListArchivedRouteImport.update({
   id: '/archived',
   path: '/archived',
-  getParentRoute: () => ListRoute,
-} as any)
-const ListAllRoute = ListAllRouteImport.update({
-  id: '/all',
-  path: '/all',
   getParentRoute: () => ListRoute,
 } as any)
 const ListTodosIndexRoute = ListTodosIndexRouteImport.update({
@@ -156,12 +162,12 @@ const ListNotesDevelopingRoute = ListNotesDevelopingRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/all': typeof AllRoute
   '/dashboard': typeof DashboardRoute
   '/private': typeof PrivateRoute
   '/settings': typeof SettingsRoute
   '/shares': typeof SharesRoute
   '/vault': typeof VaultRoute
-  '/all': typeof ListAllRoute
   '/archived': typeof ListArchivedRoute
   '/attention': typeof ListAttentionRoute
   '/notes': typeof ListNotesRouteWithChildren
@@ -170,6 +176,7 @@ export interface FileRoutesByFullPath {
   '/stale': typeof ListStaleRoute
   '/todos': typeof ListTodosRouteWithChildren
   '/unreviewed': typeof ListUnreviewedRoute
+  '/item/$id': typeof ItemIdRoute
   '/notes/developing': typeof ListNotesDevelopingRoute
   '/notes/exported': typeof ListNotesExportedRoute
   '/notes/fleeting': typeof ListNotesFleetingRoute
@@ -181,18 +188,19 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/all': typeof AllRoute
   '/dashboard': typeof DashboardRoute
   '/private': typeof PrivateRoute
   '/settings': typeof SettingsRoute
   '/shares': typeof SharesRoute
   '/vault': typeof VaultRoute
-  '/all': typeof ListAllRoute
   '/archived': typeof ListArchivedRoute
   '/attention': typeof ListAttentionRoute
   '/paused': typeof ListPausedRoute
   '/recent': typeof ListRecentRoute
   '/stale': typeof ListStaleRoute
   '/unreviewed': typeof ListUnreviewedRoute
+  '/item/$id': typeof ItemIdRoute
   '/notes/developing': typeof ListNotesDevelopingRoute
   '/notes/exported': typeof ListNotesExportedRoute
   '/notes/fleeting': typeof ListNotesFleetingRoute
@@ -206,12 +214,12 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_list': typeof ListRouteWithChildren
+  '/all': typeof AllRoute
   '/dashboard': typeof DashboardRoute
   '/private': typeof PrivateRoute
   '/settings': typeof SettingsRoute
   '/shares': typeof SharesRoute
   '/vault': typeof VaultRoute
-  '/_list/all': typeof ListAllRoute
   '/_list/archived': typeof ListArchivedRoute
   '/_list/attention': typeof ListAttentionRoute
   '/_list/notes': typeof ListNotesRouteWithChildren
@@ -220,6 +228,7 @@ export interface FileRoutesById {
   '/_list/stale': typeof ListStaleRoute
   '/_list/todos': typeof ListTodosRouteWithChildren
   '/_list/unreviewed': typeof ListUnreviewedRoute
+  '/item/$id': typeof ItemIdRoute
   '/_list/notes/developing': typeof ListNotesDevelopingRoute
   '/_list/notes/exported': typeof ListNotesExportedRoute
   '/_list/notes/fleeting': typeof ListNotesFleetingRoute
@@ -233,12 +242,12 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/all'
     | '/dashboard'
     | '/private'
     | '/settings'
     | '/shares'
     | '/vault'
-    | '/all'
     | '/archived'
     | '/attention'
     | '/notes'
@@ -247,6 +256,7 @@ export interface FileRouteTypes {
     | '/stale'
     | '/todos'
     | '/unreviewed'
+    | '/item/$id'
     | '/notes/developing'
     | '/notes/exported'
     | '/notes/fleeting'
@@ -258,18 +268,19 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/all'
     | '/dashboard'
     | '/private'
     | '/settings'
     | '/shares'
     | '/vault'
-    | '/all'
     | '/archived'
     | '/attention'
     | '/paused'
     | '/recent'
     | '/stale'
     | '/unreviewed'
+    | '/item/$id'
     | '/notes/developing'
     | '/notes/exported'
     | '/notes/fleeting'
@@ -282,12 +293,12 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/_list'
+    | '/all'
     | '/dashboard'
     | '/private'
     | '/settings'
     | '/shares'
     | '/vault'
-    | '/_list/all'
     | '/_list/archived'
     | '/_list/attention'
     | '/_list/notes'
@@ -296,6 +307,7 @@ export interface FileRouteTypes {
     | '/_list/stale'
     | '/_list/todos'
     | '/_list/unreviewed'
+    | '/item/$id'
     | '/_list/notes/developing'
     | '/_list/notes/exported'
     | '/_list/notes/fleeting'
@@ -309,11 +321,13 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ListRoute: typeof ListRouteWithChildren
+  AllRoute: typeof AllRoute
   DashboardRoute: typeof DashboardRoute
   PrivateRoute: typeof PrivateRoute
   SettingsRoute: typeof SettingsRoute
   SharesRoute: typeof SharesRoute
   VaultRoute: typeof VaultRoute
+  ItemIdRoute: typeof ItemIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -353,6 +367,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/all': {
+      id: '/all'
+      path: '/all'
+      fullPath: '/all'
+      preLoaderRoute: typeof AllRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_list': {
       id: '/_list'
       path: ''
@@ -365,6 +386,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/item/$id': {
+      id: '/item/$id'
+      path: '/item/$id'
+      fullPath: '/item/$id'
+      preLoaderRoute: typeof ItemIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_list/unreviewed': {
@@ -421,13 +449,6 @@ declare module '@tanstack/react-router' {
       path: '/archived'
       fullPath: '/archived'
       preLoaderRoute: typeof ListArchivedRouteImport
-      parentRoute: typeof ListRoute
-    }
-    '/_list/all': {
-      id: '/_list/all'
-      path: '/all'
-      fullPath: '/all'
-      preLoaderRoute: typeof ListAllRouteImport
       parentRoute: typeof ListRoute
     }
     '/_list/todos/': {
@@ -524,7 +545,6 @@ const ListTodosRouteWithChildren = ListTodosRoute._addFileChildren(
 )
 
 interface ListRouteChildren {
-  ListAllRoute: typeof ListAllRoute
   ListArchivedRoute: typeof ListArchivedRoute
   ListAttentionRoute: typeof ListAttentionRoute
   ListNotesRoute: typeof ListNotesRouteWithChildren
@@ -537,7 +557,6 @@ interface ListRouteChildren {
 }
 
 const ListRouteChildren: ListRouteChildren = {
-  ListAllRoute: ListAllRoute,
   ListArchivedRoute: ListArchivedRoute,
   ListAttentionRoute: ListAttentionRoute,
   ListNotesRoute: ListNotesRouteWithChildren,
@@ -554,11 +573,13 @@ const ListRouteWithChildren = ListRoute._addFileChildren(ListRouteChildren)
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ListRoute: ListRouteWithChildren,
+  AllRoute: AllRoute,
   DashboardRoute: DashboardRoute,
   PrivateRoute: PrivateRoute,
   SettingsRoute: SettingsRoute,
   SharesRoute: SharesRoute,
   VaultRoute: VaultRoute,
+  ItemIdRoute: ItemIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
