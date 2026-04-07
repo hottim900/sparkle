@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.3.2.3] - 2026-04-07
+
+### Fixed
+
+- Vault detail panel 仍溢出：巢狀 flex child 也需要 `min-w-0`，content area 加上 `overflow-x-hidden` 防止 markdown 內容溢出
+
 ## [1.3.2.2] - 2026-04-07
 
 ### Fixed
