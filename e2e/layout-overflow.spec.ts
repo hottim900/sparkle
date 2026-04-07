@@ -27,8 +27,8 @@ for (const vp of viewports) {
     for (const route of routes) {
       test(`${route.name} has no horizontal overflow`, async ({ page }) => {
         await page.goto(route.path);
-        // Wait for route to render (heading, button, or main content)
-        await page.waitForLoadState("networkidle");
+        // goto() waits for 'load' by default; flex-1 is a CSS property
+        // independent of data, so no additional wait needed
 
         const overflow = await page.evaluate(() => {
           return document.body.scrollWidth - document.body.clientWidth;
