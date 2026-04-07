@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.3.2.4] - 2026-04-07
+
+### Fixed
+
+- Vault 檔案選取狀態 F5 刷新後遺失：URL search param 成為唯一 source of truth，移除冗餘的 React state
+
 ## [1.3.2.3] - 2026-04-07
 
 ### Fixed
