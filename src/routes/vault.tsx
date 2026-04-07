@@ -97,7 +97,7 @@ function VaultPage() {
   const showDetail = !!selectedPath;
 
   return (
-    <div className="flex h-full">
+    <div className="flex h-full flex-1 min-w-0">
       {/* List panel */}
       <div
         className={`flex flex-col border-r border-border w-full md:w-96 md:flex-shrink-0 ${showDetail ? "hidden md:flex" : "flex"}`}
