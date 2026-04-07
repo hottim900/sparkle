@@ -36,7 +36,7 @@ Type conversion auto-maps status server-side. `category_id` preserved; `due`/`li
 
 `paused` flag: cross-type pause mechanism (boolean, orthogonal to status). Paused items excluded from stale/attention/overdue/focus/unreviewed queries; visible in search and dedicated `/paused` page. Auto-cleared on archive/export/done.
 
-DB migration version 0→19, idempotent. Migration safety enforced by PostToolUse hook.
+DB migration version 0→22, idempotent. Migration safety enforced by PostToolUse hook.
 
 - Boolean settings: use `getBoolSetting(all, key, defaultValue)` — never raw `=== "true"`. New boolean settings MUST have a migration INSERT OR IGNORE + fresh install seed.
 
@@ -88,6 +88,27 @@ Detailed module conventions (API retry, PWA, Logging, Sentry, CSP, Offline UI, S
 
 Use /browse from gstack for all web browsing. Never use mcp**claude-in-chrome**\* tools.
 Available skills: /office-hours, /plan-ceo-review, /plan-eng-review, /plan-design-review, /design-consultation, /review, /ship, /land-and-deploy, /canary, /benchmark, /browse, /qa, /qa-only, /design-review, /setup-browser-cookies, /setup-deploy, /retro, /investigate, /document-release, /codex, /cso, /autoplan, /careful, /freeze, /guard, /unfreeze, /gstack-upgrade.
+
+## Skill routing
+
+When the user's request matches an available skill, ALWAYS invoke it using the Skill
+tool as your FIRST action. Do NOT answer directly, do NOT use other tools first.
+The skill has specialized workflows that produce better results than ad-hoc answers.
+
+Key routing rules:
+
+- Product ideas, "is this worth building", brainstorming → invoke office-hours
+- Bugs, errors, "why is this broken", 500 errors → invoke investigate
+- Ship, deploy, push, create PR → invoke ship
+- QA, test the site, find bugs → invoke qa
+- Code review, check my diff → invoke review
+- Update docs after shipping → invoke document-release
+- Weekly retro → invoke retro
+- Design system, brand → invoke design-consultation
+- Visual audit, design polish → invoke design-review
+- Architecture review → invoke plan-eng-review
+- Save progress, checkpoint, resume → invoke checkpoint
+- Code quality, health check → invoke health
 
 ## Maintenance
 

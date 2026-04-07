@@ -19,7 +19,11 @@ Obsidian 的自架式 PKM 前端。Sparkle 提供快速捕捉介面（PWA、LINE
 - **每日筆記生成** -- 自動從 Sparkle 活動產生 Obsidian 每日筆記；LINE 推播每日摘要
 - **PWA 離線支援** -- 可安裝至任何裝置；離線時自動排入佇列，連線後同步
 - **LINE Bot 整合** -- 直接在 LINE 聊天中捕捉靈感、管理任務
-- **Obsidian 匯出** -- 將永久筆記匯出為帶有 YAML frontmatter 的 Markdown 檔案，直接寫入 Obsidian vault
+- **Vault 瀏覽與搜尋** -- 直接在 Sparkle 中瀏覽整個 Obsidian vault；全文搜尋 vault 檔案；篩選 Sparkle 來源的檔案
+- **多行快速捕捉** -- 以多行文字框捕捉較長的想法；伺服器自動從內容衍生標題
+- **Obsidian 匯出與同步** -- 將永久筆記匯出為帶有 YAML frontmatter 的 Markdown 檔案至 vault；匯出內容持續同步
+- **分享** -- 為個別筆記產生公開或不公開連結，含目錄、返回頂部及最後修改日期
+- **暫存區** -- 用於快速片段的臨時草稿，不進入 Zettelkasten 流程
 - **全文搜尋** -- SQLite FTS5 搭配 trigram tokenizer，快速搜尋中英文內容
 - **深色 / 淺色模式** -- 自動切換主題，亦可手動覆寫
 - **行動裝置優先的響應式設計** -- 手機上快速捕捉，桌面上豐富編輯
@@ -65,7 +69,7 @@ npm run dev:server   # 後端：http://localhost:3000
 ## 選用整合
 
 - **LINE Bot** -- 在 LINE 聊天中捕捉靈感、管理任務。詳見[自架指南：LINE Bot 設定](docs/self-hosting.zh-TW.md#line-bot-設定選用)。
-- **Obsidian 匯出** -- 將永久筆記匯出至 Obsidian vault。可在網頁 UI 的設定頁面中進行設定。
+- **Obsidian 整合** -- 將永久筆記匯出至 vault、瀏覽 vault 檔案、跨知識庫搜尋。可在網頁 UI 的設定頁面中進行設定。
 - **Claude Code MCP 伺服器** -- 讓 Claude Code 透過 Model Context Protocol 讀寫 Sparkle 筆記。詳見[自架指南：MCP 伺服器](docs/self-hosting.zh-TW.md#claude-code-mcp-伺服器選用)。
 
 ## 貢獻

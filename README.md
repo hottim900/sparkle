@@ -19,7 +19,11 @@ A self-hosted PKM frontend for Obsidian. Sparkle provides fast capture interface
 - **Daily Note Generation** -- Auto-generate Obsidian daily notes from Sparkle activity; LINE push notifications for daily briefs
 - **PWA with Offline Support** -- Install on any device; captures queue offline and sync when reconnected
 - **LINE Bot Integration** -- Capture ideas and manage tasks directly from LINE chat
-- **Obsidian Export** -- Export permanent notes as Markdown files with YAML frontmatter into your Obsidian vault
+- **Vault Browse & Search** -- Browse your entire Obsidian vault from within Sparkle; full-text search across vault files; filter by Sparkle-sourced files
+- **Multi-line Quick Capture** -- Capture longer thoughts with a multi-line textarea; server auto-derives titles from content
+- **Obsidian Export & Sync** -- Export permanent notes as Markdown with YAML frontmatter into your vault; exported content stays in sync
+- **Sharing** -- Generate public or unlisted links for individual notes with TOC, back-to-top, and last-modified date
+- **Scratch Pad** -- Temporary drafts for quick fragments that don't need the Zettelkasten flow
 - **Full-Text Search** -- SQLite FTS5 with trigram tokenizer for fast Chinese/English search
 - **Dark / Light Mode** -- Automatic theme switching with manual override
 - **Mobile-First Responsive** -- Optimized for quick capture on mobile, rich editing on desktop
@@ -65,7 +69,7 @@ For production deployment with HTTPS, systemd services, and optional integration
 ## Optional Integrations
 
 - **LINE Bot** -- Capture ideas and manage tasks from LINE chat. See [Self-Hosting Guide: LINE Bot Setup](docs/self-hosting.md#line-bot-setup-optional).
-- **Obsidian Export** -- Export permanent notes to your Obsidian vault. Configure via the Settings page in the web UI.
+- **Obsidian Integration** -- Export permanent notes to your vault, browse vault files, and search across your knowledge base. Configure via the Settings page in the web UI.
 - **MCP Server for Claude Code** -- Enable Claude Code to read and write Sparkle notes via the Model Context Protocol. See [Self-Hosting Guide: MCP Server](docs/self-hosting.md#mcp-server-for-claude-code-optional).
 
 ## Contributing
