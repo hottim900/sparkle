@@ -4,7 +4,7 @@
 > 每個類別附帶搜查指令、已知實例、和判定標準。
 
 **建立日期：** 2026-03-04
-**最後更新：** 2026-03-22
+**最後更新：** 2026-04-06
 
 > 舊系統項目參考：https://github.com/hottim900/sparkle-quality
 
@@ -105,6 +105,14 @@ grep -rn "captureException\|captureMessage" server/ src/ --include="*.ts" --incl
 - vault-scanner bare catch（readdir/readFile）→ 跳過不可讀檔案，合理容錯
 - usePauseResume catch → toast.error + 樂觀更新 rollback
 
+### 探索測試種子
+
+> grep 搜查模式結構性找不到的缺陷方向。搭配 `quality/et-charter-template.md` 使用。
+
+- **錯誤處理語意錯誤** — catch 區塊存在且有 log/toast，但處理方式對使用者有害。例如：retry without backoff、log level 太低導致 alert 不觸發、向使用者顯示原始錯誤訊息而非友善文字。grep 只看「有沒有 handle」，看不出「handle 得對不對」。
+- **Sentry 整合缺口** — 錯誤被 catch + log 但未 forward 到 Sentry，導致生產環境的問題不在 error tracking 中出現。特別關注 server-side 非 HTTP 錯誤路徑（scheduler、watcher、background job）。
+- **部分失敗的靜默降級** — 批次操作中部分項目失敗但整體回傳 success。例如：batch export 中一個檔案寫入失敗，API 回 200 但該項目狀態未更新。使用者看到「成功」但資料不完整。
+
 ---
 
 ## D-VALID: 輸入驗證缺口
@@ -150,6 +158,14 @@ grep -rn "z\.object" server/ --include="*.ts"
 
 **審查但判定合理：** 路徑參數 :id 未顯式驗證但由 DB lookup 保護、item FTS5 轉義正確。UUID format 由 Zod `.uuid()` 嚴格檢查。Short ID prefix lookup 已有 `LIKE_SAFE_RE` 防止 LIKE wildcards 注入。MCP vault `readVaultFileByPath` 不限副檔名但有 `resolveVaultPath()` 路徑邊界檢查。Zod v3 預設 strip unknown keys（無 `.passthrough()`），prototype pollution 不適用。日期格式 regex 不做語意驗證（`"9999-99-99"` 可通過），SQLite TEXT 儲存不受影響。Private endpoint（setup/unlock/lock/pin/CRUD/search/tags）Zod 驗證完整覆蓋。Vault file route 路徑遍歷防護正確（resolve + prefix check）。Vault route `limit` 手動 parseInt + clamp（非 Zod），功能正確但風格不一致（low-risk observation）。Daily-note/line-brief `date` 參數用 `validateDateParam()` 驗證，正確。
 
+### 探索測試種子
+
+> grep 搜查模式結構性找不到的缺陷方向。搭配 `quality/et-charter-template.md` 使用。
+
+- **跨欄位業務規則** — Zod schema 通過但違反 domain invariant。例如：todo 設定 due date 在過去、note 的 linked_note_id 指向自己、scratch 帶有 tags（schema 允許但語意矛盾）。Zod 做結構驗證，不做業務規則驗證。
+- **時序與狀態機違反** — type conversion 後的欄位清理是否完整（todo→note 應清 due/linked_note_id），import 的 status 是否符合 type 的合法狀態流。grep 找得到「有沒有 refine」，找不到「refine 條件是否涵蓋所有 invariant」。
+- **Import 資料的隱含假設** — import endpoint 接受的 JSON 可能包含 Sparkle UI 不會產生的組合。例如：tags 陣列有重複值、aliases 包含 tag 已有的值、category_id 指向已刪除的 category。
+
 ---
 
 ## D-STATE: 前端狀態管理不一致
@@ -187,6 +203,15 @@ grep -rn "setState\|setItems\|setNotes" src/ --include="*.ts" --include="*.tsx"
 
 **審查但判定合理：** QuickCapture/ItemDetail/FleetingTriage invalidation 策略一致、CategoryManagement 樂觀更新有完整 rollback。
 
+### 探索測試種子
+
+> grep 搜查模式結構性找不到的缺陷方向。搭配 `quality/et-charter-template.md` 使用。
+
+- **React Query cache 跨 query 一致性** — item list 和 item detail 的 cache 是否在所有 mutation 後保持同步。例如：在 detail view 更新 title → 返回 list view → 標題是否即時反映？category count 是否正確？grep 找得到 `invalidateQueries` 呼叫，找不到「invalidate 的 key 是否涵蓋所有受影響的 query」。
+- **Optimistic update rollback 完整性** — server reject 後，UI 是否真的回到正確狀態。特別是 category reorder 的多步 optimistic update，rollback 順序是否正確。需要實際觸發 server error 來測試。
+- **`key={itemId}` remount vs stale useState** — 當使用者在 list 中快速切換不同 item 時，detail view 是否完全 remount？如果使用 useState 保存 local state（如 dirty flag），快速切換是否導致前一個 item 的 state 殘留？
+- **TanStack Router route transition state** — navigating away from dirty form，refetchOnWindowFocus 在 optimistic update in-flight 時觸發。Route transition 期間的 loading state 是否正確處理。
+
 ---
 
 ## D-OFFLINE: 離線同步與 PWA 問題
@@ -217,6 +242,14 @@ grep -rn "navigator.onLine\|online\|offline" src/ --include="*.ts" --include="*.
 **Low-risk observations：** IndexedDB 佇列無大小限制檢查（實務低風險，配額 50-100MB）。
 
 **審查但判定合理：** SW 快取策略（NetworkFirst + 10s timeout）、POST 離線佇列設計、online listener 設計均合理。
+
+### 探索測試種子
+
+> grep 搜查模式結構性找不到的缺陷方向。搭配 `quality/et-charter-template.md` 使用。
+
+- **SW cache poisoning from CF Access** — CF Access 登入頁被 SW cache 快取，導致使用者 idle 後重新開啟 PWA 時看到登入頁 HTML 而非 app。已知 issue（DEF-001 相關），但值得驗證修復後是否完全覆蓋所有 navigation 路徑。
+- **Offline queue replay 順序與依賴** — 離線時建立 note → 加 tag → 編輯 content，重新上線後 replay 順序是否 FIFO？如果第一個請求（create）失敗，後續的 update 是否正確處理？特別是 queue 中有依賴關係的操作（create → update 同一個 item）。
+- **網路狀態切換邊界** — 從 WiFi 切換到行動網路時，in-flight request 的行為。PWA 在 background tab 長時間閒置後 SW 是否正確 reactivate。`navigator.onLine` 的可靠性（某些網路環境下可能誤報）。
 
 ---
 
@@ -253,6 +286,14 @@ grep -rn "fts\|MATCH" server/ --include="*.ts"
 
 **審查但判定合理：** FTS5 外部內容表正確、GROUP BY + LEFT JOIN 安全、統計 CASE WHEN 邏輯正確、short ID prefix LIKE 查詢使用 Drizzle `like()` 安全函式。
 
+### 探索測試種子
+
+> grep 搜查模式結構性找不到的缺陷方向。搭配 `quality/et-charter-template.md` 使用。
+
+- **NULL 在 WHERE 條件中的語意** — SQL 的三值邏輯讓 `WHERE column != 'value'` 不包含 NULL row。dashboard query 中的 `paused = 0` 對 NULL paused 的行為是否符合預期？需要用包含 NULL 值的真實資料測試，不能靠讀 code 判斷。
+- **FTS5 ranking 不一致** — trigram tokenizer（中文）和 default tokenizer 的 ranking 算法不同。搜尋同一個 query 在不同 tokenizer 下的排序是否對使用者合理？特別是中英混合搜尋。
+- **paused flag 與 aggregate query 的交互** — dashboard stats（category distribution、stale count）是否正確排除 paused items？如果 paused 的 item 同時符合 stale 條件，解除 pause 後是否正確出現在 stale list？需要實際操作 pause/resume 測試。
+
 ---
 
 ## D-MIGRATE: DB Migration 安全性
@@ -277,6 +318,14 @@ grep -n "setSchemaVersion" server/db/index.ts
 ### 搜查結果
 
 **發現：** 無缺陷。Migration v0-13 均使用明確列列表（無 SELECT \*）、FK 管理正確、setSchemaVersion 在 transaction 外、idempotent 保護完整。
+
+### 探索測試種子
+
+> grep 搜查模式結構性找不到的缺陷方向。搭配 `quality/et-charter-template.md` 使用。
+
+- **Migration 順序依賴** — v19 新增的 boolean setting 必須在 v20 引用之前存在。如果 migration 在中途失敗（例如 v15 成功、v16 失敗），重跑時是否冪等？特別是涉及 `INSERT OR IGNORE` 的 seed data migration。
+- **WAL mode 與 schema 變更的互動** — `PRAGMA journal_mode=WAL` 在 schema migration 期間的行為。concurrent reader 在 migration transaction 執行中是否看到部分變更？需要在實際 migration 執行時用另一個 connection 讀取測試。
+- **PRAGMA foreign_keys timing** — migration 中需要 `PRAGMA foreign_keys = OFF` 的操作（如 table rebuild），enable/disable 的 timing 是否正確？如果 migration 在 FK OFF 狀態下失敗，下次重跑 FK 狀態是否正確恢復？
 
 ---
 
@@ -348,6 +397,14 @@ grep -rn "eval(\|new Function(" src/ server/ --include="*.ts" --include="*.tsx"
 
 **輸入驗證（D-VALID 交叉確認）：** Zod 全覆蓋所有 API 路由、FTS5 `escapeFts5Query()` 防搜尋注入、body size limit 1MB。Drizzle ORM + prepared statements 零原生 SQL 拼接。`sanitizeFilename()` 防路徑遍歷。零 `exec()`/`spawn()` 呼叫。
 
+### 探索測試種子
+
+> grep 搜查模式結構性找不到的缺陷方向。搭配 `quality/et-charter-template.md` 使用。
+
+- **Role 變更 mid-session** — CF Access token 過期時的行為。使用者正在編輯 note，CF Access session 過期 → API call 被 CF 攔截 → 前端收到 HTML 登入頁而非 JSON error。auto-save debounce 觸發時的 token refresh timing。
+- **Private note 在 export/share 流程中的存取** — private note 透過 export 匯出到 Obsidian vault 時，檔案是否明文寫入？share link 能否被建立在 private note 上？grep 找得到 `is_private` 過濾，找不到「所有 data flow 出口是否都有 private check」。
+- **Bearer token 與 CF Access 的互動邊界** — 兩層 auth 在 edge case 的行為：CF Access 通過但 Bearer token 錯誤（應 401）、Bearer token 正確但 CF Access 過期（應被 CF 攔截）。特別是 service worker 持有的 token 與 main thread 的 CF Access cookie 的 lifecycle 差異。
+
 ---
 
 ## D-EDGE: 邊界條件與資源限制
@@ -382,6 +439,15 @@ grep -rn "z\.array" server/ --include="*.ts"
 **Low-risk observations：** offset 允許任意大整數（SQLite 自動處理）、並發寫入（WAL 模式序列化）。
 
 **審查但判定合理：** origin/source max 已設、tags/aliases 上限已設、空 content 按設計允許。
+
+### 探索測試種子
+
+> grep 搜查模式結構性找不到的缺陷方向。搭配 `quality/et-charter-template.md` 使用。
+
+- **CJK surrogate pair 邊界** — 47 字元的中文標題含 emoji 時，title truncation 是否正確處理 surrogate pair？已修復的 PR #290 覆蓋了 `deriveTitleFromContent`，但其他 truncation 點（LINE brief、share page OG meta、export filename）是否也安全？需用實際包含 emoji 的中文字串測試每個輸出點。
+- **500+ items 在單一 category 的 UI 行為** — list view 的虛擬滾動是否足夠？group header 的 count 顯示、category distribution chart 的渲染、batch 操作（全選 → archive）在大量 item 下的效能和 UX。
+- **無 frontmatter 的 vault 檔案** — Obsidian vault 中可能存在純文字檔案（無 YAML frontmatter）。vault scanner/watcher 是否正確 graceful handle？vault browse UI 是否顯示合理內容？vault search 是否能找到這些檔案？
+- **concurrent vault sync + 手動編輯** — vault watcher 偵測到 file change event 的同時，使用者透過 Sparkle UI 編輯同一個 note。兩個寫入是否衝突？最終狀態是否一致？
 
 ---
 
@@ -422,6 +488,14 @@ grep -rn "interface.*Response\|type.*Response" src/ --include="*.ts"
 
 **審查但判定合理：** Item tags/aliases 為 string（配合 parseItem 轉換）、ShareTokenRow 分離設計清晰。Server 端 error handling、auth middleware、rate limiting、input validation 全部通過。
 
+### 探索測試種子
+
+> grep 搜查模式結構性找不到的缺陷方向。搭配 `quality/et-charter-template.md` 使用。
+
+- **API response shape drift** — server 回傳的 JSON 與前端 TypeScript type 定義不一致。例如：新增 column 後 server 回傳新欄位，但前端 type 未更新，`parseItem` 忽略了新欄位。或者 server 回傳 null 但前端 type 定義為 string。需要比對實際 API response 與 TypeScript type。
+- **SQLite column type coercion** — SQLite 的動態型別讓 `typeof(column)` 可能與預期不同。INTEGER column 存入 `"1"` 字串、BOOLEAN column 的 NULL vs 0 區分。`getBoolSetting()` 是否正確處理所有 edge case？
+- **JSON.parse 結果的型別假設** — `parseItem` 將 string column（tags, aliases）parse 為 array。如果 DB 中的值不是合法 JSON（例如 migration 前的舊資料），parse 失敗的 catch 是否存在且行為正確？
+
 ---
 
 ## D-PERF: 效能問題
@@ -460,6 +534,14 @@ grep -rn "\.all(" server/ --include="*.ts" | grep -v "LIMIT\|limit"
 **Low-risk observations：** export 無欄位篩選（帶寬可優化）、ItemList 分組 O(n) 已用 useMemo。inline query options 在 linked-items-section（React Query 內部處理 memoization，實際影響低）。
 
 **審查但判定合理：** DB 索引完整覆蓋、前端陣列大小合理。item-list.tsx useMemo 覆蓋良好。bundle size 合理（42 precache entries，code splitting via TanStack Router）。
+
+### 探索測試種子
+
+> grep 搜查模式結構性找不到的缺陷方向。搭配 `quality/et-charter-template.md` 使用。
+
+- **N+1 隱藏在小資料集** — dev 環境只有幾十筆資料，query 都很快。但如果有 500+ items + 20 categories + 100 tags，dashboard stats query、category distribution、stale/attention list 的回應時間如何？需要用 seed script 產生大量資料測試。
+- **FTS5 CJK trigram tokenizer 效能** — 大量中文 content（1000+ notes，每篇 500+ 字）的搜尋延遲。trigram tokenizer 的 index 大小與查詢時間在大量中文內容下的表現。
+- **React Query cache invalidation 風暴** — 在 item detail 連續快速操作（改 title → 加 tag → 改 category → advance），每次 mutation 都觸發 invalidate，是否產生不必要的 refetch 風暴？TD-005 描述了 invalidate `items.all` 的 cascade 問題。
 
 ---
 
@@ -527,6 +609,14 @@ git tag --sort=-v:refname | head -5
 - SystemD service paths 全部存在且正確（sparkle.service、sparkle-mcp-http.service）。
 - Frontend `dist/index.html` 存在且完整（PWA manifest、SW、icons）。
 - `dist/` 正確 gitignored，deploy workflow 在 restart 前 rebuild。
+
+### 探索測試種子
+
+> grep 搜查模式結構性找不到的缺陷方向。搭配 `quality/et-charter-template.md` 使用。
+
+- **Vite dev vs production 差異** — 環境變數在 dev（`import.meta.env`）和 production build 中的行為差異。特別是 `VITE_` prefix 的變數、base path 設定、asset hashing 導致的快取行為差異。dev 正常但 production build 壞掉的情境。
+- **Cloudflare Tunnel 重啟順序** — systemd dependency chain：sparkle.service → sparkle-mcp-http.service → cloudflared.service。如果 sparkle service 重啟但 cloudflared 未同步重啟，tunnel 是否正確 reconnect？restart 期間的 request 是否被 CF 正確 retry 或顯示 error page？
+- **mcp-server dist/ 過期** — 修改 mcp-server source 後忘記 rebuild dist/。stdio mode 直接用 source（tsx watch），但 HTTP mode 用 compiled dist。兩者行為可能不一致。需要比對 source 和 dist 的時間戳。
 
 ---
 
@@ -598,6 +688,15 @@ grep -rn "setTimeout" src/ --include="*.ts" --include="*.tsx" | grep -v "\.test\
 - **Stale closure 防護：** useItemForm（ref-based debounce + cleanup）、SearchBar（debounceRef + cleanup）、LinkedItemsSection（noteSearchTimeoutRef + cleanup）、Settings（`cancelled` flag pattern）。
 - **Abort race：** `api.ts` AbortController + clearTimeout 配對正確。
 - **Server-side 並發：** Category create/reorder 皆用 `db.transaction()` 保護。Optimistic update（category reorder）有完整 rollback。
+
+### 探索測試種子
+
+> grep 搜查模式結構性找不到的缺陷方向。搭配 `quality/et-charter-template.md` 使用。
+
+- **Auto-save debounce 碰撞** — 1500ms debounce 正在倒數時使用者按下手動 save 按鈕。兩個 save 是否都送出？如果 debounce save 的 content 比 manual save 舊（使用者在 debounce 期間繼續打字），最終狀態是否正確？
+- **Vault watcher file change 與 export write 並發** — `sparkle_export_to_obsidian` 寫入 vault 檔案的同時，vault watcher 偵測到 file change event。watcher 是否會把剛寫入的檔案當成「外部變更」再次處理？是否產生重複的 vault backfill？
+- **Concurrent LINE webhook + PWA capture** — 使用者同時從 LINE 和 PWA 送出幾乎相同的內容（例如快速連發）。兩個 request 都到達 server，是否產生 duplicate item？有無 dedup 機制？
+- **refetchOnWindowFocus 與 optimistic update in-flight** — 使用者在 A tab 做 optimistic update（例如 reorder category），切換到 B tab 再切回。refetchOnWindowFocus 觸發時，server 可能還沒處理完 request。refetch 回來的資料是否覆蓋 optimistic state？
 
 ---
 

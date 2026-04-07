@@ -69,12 +69,22 @@ body:
         - "Integration Test"
         - "E2E Test"
         - "Production"
+  - type: dropdown
+    id: discovery-method
+    attributes:
+      label: "發現方式"
+      description: "這個項目是怎麼被發現的？"
+      options:
+        - "Taxonomy Sweep — 系統性搜查手冊掃描"
+        - "ET Session — 探索性測試 session"
+        - "Code Review — 程式碼審查中發現"
+        - "Production — 生產環境中觀察到"
   - type: input
     id: defect-category
     attributes:
       label: "缺陷子類別"
       description: "對應 defect-taxonomy.md 的類別代碼"
-      placeholder: "D-SILENT / D-VALID / D-AUTH / D-TYPE / D-PERF / D-EDGE"
+      placeholder: "D-SILENT / D-VALID / D-STATE / D-OFFLINE / D-QUERY / D-MIGRATE / D-AUTH / D-EDGE / D-TYPE / D-PERF / D-DEPLOY / D-RACE"
   - type: textarea
     id: current-state
     attributes:

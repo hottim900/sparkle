@@ -131,15 +131,16 @@
 
 ## Label 參考
 
-| Prefix        | 用途               | 必填？                                             | 值                                                                            |
-| ------------- | ------------------ | -------------------------------------------------- | ----------------------------------------------------------------------------- |
-| `type:`       | 項目類型           | **必填**（GitHub 模板自動套用；GitLab 需手動加上） | `defect` / `tech-debt` / `feature-gap` / `test-infra`                         |
-| `priority:`   | 優先級             | **必填**                                           | `critical` / `high` / `medium` / `low`                                        |
-| `status:`     | 細分狀態           | 選填                                               | `in-progress` / `blocked-by-decision`                                         |
-| `severity:`   | 嚴重度（Defect）   | 選填，建議填                                       | `s1-critical` / `s2-major` / `s3-minor` / `s4-trivial`                        |
-| `cost:`       | 成本               | 選填                                               | `s` / `m` / `l` / `xl`                                                        |
-| `escape:`     | 逃逸階段（Defect） | 選填，建議填                                       | `code-review` / `unit-test` / `integration-test` / `e2e-test` / `production`  |
-| `root-cause:` | 根因（Defect）     | 選填                                               | `design` / `implementation` / `configuration` / `framework` / `test-coverage` |
+| Prefix              | 用途               | 必填？                                             | 值                                                                            |
+| ------------------- | ------------------ | -------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `type:`             | 項目類型           | **必填**（GitHub 模板自動套用；GitLab 需手動加上） | `defect` / `tech-debt` / `feature-gap` / `test-infra`                         |
+| `priority:`         | 優先級             | **必填**                                           | `critical` / `high` / `medium` / `low`                                        |
+| `status:`           | 細分狀態           | 選填                                               | `in-progress` / `blocked-by-decision`                                         |
+| `severity:`         | 嚴重度（Defect）   | 選填，建議填                                       | `s1-critical` / `s2-major` / `s3-minor` / `s4-trivial`                        |
+| `cost:`             | 成本               | 選填                                               | `s` / `m` / `l` / `xl`                                                        |
+| `escape:`           | 逃逸階段（Defect） | 選填，建議填                                       | `code-review` / `unit-test` / `integration-test` / `e2e-test` / `production`  |
+| `root-cause:`       | 根因（Defect）     | 選填                                               | `design` / `implementation` / `configuration` / `framework` / `test-coverage` |
+| `discovery-method:` | 發現方式           | 選填，建議填                                       | `taxonomy-sweep` / `et-session` / `code-review` / `production`                |
 
 > 各專案可擴充 `defect-category:d-xxx` label 對應自己的 taxonomy。
 
@@ -148,6 +149,8 @@
 ## 搜查手冊
 
 定義所有已知缺陷類別和可重複執行的搜查模式：**[defect-taxonomy.md](./defect-taxonomy.md)**
+
+搜查手冊是 Layer 1（Grep Taxonomy）。Layer 2（探索性測試）的 charter seeds 也內嵌在每個類別的「探索測試種子」section 中。雙層發現策略見 **[discovery-strategy.md](./discovery-strategy.md)**，ET session 模板見 **[et-charter-template.md](./et-charter-template.md)**。
 
 ---
 
@@ -170,9 +173,10 @@
    - GitHub：`gh issue create --template defect.yml`（或 `tech-debt.yml` / `feature-gap.yml` / `test-infra.yml`）
    - GitLab：`glab issue create --template Defect`（或 `Tech-Debt` / `Feature-Gap` / `Test-Infrastructure`）
 3. 填寫模板中的所有欄位，加上 `priority:` label
-   > **注意：** 模板的下拉選單僅記錄在 Issue body 中，不會自動建立對應的 label。`type:` label 由 GitHub 模板自動套用，其他 label（`priority:`、`severity:` 等）需手動加上。
-4. 若 Defect，填寫「缺陷子類別」（對應 [defect-taxonomy.md](./defect-taxonomy.md) 的 D-XXX 代碼）
-5. 開始處理時，加上 `status:in-progress` label
+   > **注意：** 模板的下拉選單僅記錄在 Issue body 中，不會自動建立對應的 label。`type:` label 由 GitHub 模板自動套用，其他 label（`priority:`、`severity:`、`discovery-method:` 等）需手動加上。
+4. 加上 `discovery-method:` label（`taxonomy-sweep` / `et-session` / `code-review` / `production`）
+5. 若 Defect，填寫「缺陷子類別」（對應 [defect-taxonomy.md](./defect-taxonomy.md) 的 D-XXX 代碼）
+6. 開始處理時，加上 `status:in-progress` label
 
 ---
 
