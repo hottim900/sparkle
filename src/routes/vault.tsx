@@ -169,7 +169,7 @@ function VaultPage() {
       </div>
 
       {/* Detail panel */}
-      <div className={`flex-1 flex flex-col ${showDetail ? "flex" : "hidden md:flex"}`}>
+      <div className={`flex-1 flex flex-col min-w-0 ${showDetail ? "flex" : "hidden md:flex"}`}>
         {selectedPath && fileData ? (
           <>
             {/* Header with back button (mobile) */}
@@ -205,7 +205,7 @@ function VaultPage() {
               </div>
             )}
             {/* Content */}
-            <div className="flex-1 overflow-y-auto p-4">
+            <div className="flex-1 overflow-y-auto overflow-x-hidden min-w-0 p-4">
               <VaultMarkdownPreview content={fileData.content} />
             </div>
           </>
