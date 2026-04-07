@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.3.2.1] - 2026-04-07
+
+### Added
+
+- Dual-layer discovery strategy: grep taxonomy (Layer 1) + exploratory testing (Layer 2) targeting the "negative space" of grep patterns
+- Charter seeds (探索測試種子) for all 12 defect taxonomy categories in `quality/defect-taxonomy.md`
+- `quality/discovery-strategy.md`: dual-layer model, category mapping, trigger conditions, pattern promotion criteria, success metrics
+- `quality/et-charter-template.md`: SBTM 4T session template for structured exploratory testing
+- `quality/et-sessions/` directory for ET session records
+- Discovery-method dropdown in all 4 issue templates (defect, tech-debt, feature-gap, test-infra)
+- 4 GitHub labels: `discovery-method:{taxonomy-sweep,et-session,code-review,production}`
+- `discovery-method:` row in quality README label taxonomy table
+
+### Changed
+
+- Updated defect-category placeholder in `defect.yml` to list all 12 D-XXX codes
+- Quality skill reorganized with ET operations, staleness trigger (>60 days), and manual label application notes
+
 ## [1.3.2.0] - 2026-04-06
 
 ### Removed
