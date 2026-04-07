@@ -4,6 +4,11 @@ import { test, expect } from "@playwright/test";
  * Layout contract: every route's first DOM-producing element must have
  * flex-1 min-w-0 (or use Fragment so children participate directly in
  * parent flex). This test catches horizontal overflow regressions.
+ *
+ * We check the route content container (not document.body) because
+ * overflow-hidden on the parent hides body-level overflow while content
+ * is still clipped. Scanning nested elements with overflowX=visible
+ * catches the real problem.
  */
 
 const routes = [
@@ -27,15 +32,44 @@ for (const vp of viewports) {
     for (const route of routes) {
       test(`${route.name} has no horizontal overflow`, async ({ page }) => {
         await page.goto(route.path);
-        // goto() waits for 'load' by default; flex-1 is a CSS property
-        // independent of data, so no additional wait needed
 
-        const overflow = await page.evaluate(() => {
-          return document.body.scrollWidth - document.body.clientWidth;
+        const result = await page.evaluate(() => {
+          // Find the route content container (__root.tsx flex-row parent)
+          const container = document.querySelector(
+            ".relative.flex-1.flex.flex-col.md\\:flex-row.min-w-0.overflow-hidden",
+          );
+          if (!container)
+            return {
+              bodyOverflow: document.body.scrollWidth - document.body.clientWidth,
+              nested: [],
+            };
+
+          // Scan all descendants for visible overflow (not clipped by overflow-hidden/auto)
+          const nested: { tag: string; diff: number }[] = [];
+          container.querySelectorAll("*").forEach((el) => {
+            const diff = el.scrollWidth - el.clientWidth;
+            if (diff > 2) {
+              const style = getComputedStyle(el);
+              if (style.overflowX === "visible") {
+                nested.push({ tag: el.tagName, diff });
+              }
+            }
+          });
+
+          return {
+            bodyOverflow: document.body.scrollWidth - document.body.clientWidth,
+            nested,
+          };
         });
 
-        // Allow 2px tolerance for subpixel rendering
-        expect(overflow).toBeLessThanOrEqual(2);
+        // Body-level overflow (scrollbar visible to user)
+        expect(result.bodyOverflow).toBeLessThanOrEqual(2);
+
+        // Nested visible overflow (content clipped by parent overflow-hidden)
+        expect(
+          result.nested,
+          `Found ${result.nested.length} element(s) with visible overflow: ${JSON.stringify(result.nested.slice(0, 3))}`,
+        ).toHaveLength(0);
       });
     }
   });
