@@ -33,16 +33,19 @@ cp .env.example .env
 
 ### Environment Variables
 
-| Variable                    | Required | Description                                                            |
-| --------------------------- | -------- | ---------------------------------------------------------------------- |
-| `NODE_ENV`                  | Yes      | Set to `production`                                                    |
-| `PORT`                      | Yes      | Server port (default: `3000`)                                          |
-| `DATABASE_URL`              | Yes      | Path to SQLite database file (e.g., `./data/todo.db`)                  |
-| `AUTH_TOKEN`                | Yes      | Bearer token for web UI authentication. Choose a strong random string. |
-| `TLS_CERT`                  | No       | Path to TLS certificate file. Omit to run plain HTTP.                  |
-| `TLS_KEY`                   | No       | Path to TLS private key file. Omit to run plain HTTP.                  |
-| `LINE_CHANNEL_SECRET`       | No       | LINE Messaging API channel secret. Required for LINE Bot.              |
-| `LINE_CHANNEL_ACCESS_TOKEN` | No       | LINE Messaging API access token. Required for LINE Bot.                |
+| Variable                    | Required | Description                                                                |
+| --------------------------- | -------- | -------------------------------------------------------------------------- |
+| `NODE_ENV`                  | Yes      | Set to `production`                                                        |
+| `PORT`                      | Yes      | Server port (default: `3000`)                                              |
+| `DATABASE_URL`              | Yes      | Path to SQLite database file (e.g., `./data/todo.db`)                      |
+| `AUTH_TOKEN`                | Yes      | Bearer token for web UI authentication. Choose a strong random string.     |
+| `TLS_CERT`                  | No       | Path to TLS certificate file. Omit to run plain HTTP.                      |
+| `TLS_KEY`                   | No       | Path to TLS private key file. Omit to run plain HTTP.                      |
+| `LINE_CHANNEL_SECRET`       | No       | LINE Messaging API channel secret. Required for LINE Bot.                  |
+| `LINE_CHANNEL_ACCESS_TOKEN` | No       | LINE Messaging API access token. Required for LINE Bot.                    |
+| `LINE_ALLOWED_USER_IDS`     | No       | Comma-separated LINE user IDs. Only these users can interact with the bot. |
+| `LINE_ADMIN_USER_ID`        | No       | LINE user ID for admin notifications (monitoring scripts).                 |
+| `SENTRY_DSN`                | No       | Sentry DSN for error tracking. Omit to disable.                            |
 
 The database file and its parent directory are created automatically on first run.
 
@@ -178,6 +181,7 @@ In the LINE Developers Console:
 | `!fleeting`       | List fleeting notes         |
 | `!developing`     | List developing notes       |
 | `!permanent`      | List permanent notes        |
+| `!scratch`        | List scratch items          |
 | `!active`         | List active todos           |
 | `!today`          | Today's focus               |
 | `!find <keyword>` | Search                      |
@@ -312,34 +316,36 @@ Replace `/path/to/node` with the absolute path to your Node.js binary (`which no
 
 ### Available Tools
 
-| Tool                             | Description                               |
-| -------------------------------- | ----------------------------------------- |
-| `sparkle_search`                 | Full-text search in Sparkle DB            |
-| `sparkle_search_all`             | Search both Sparkle DB and Obsidian vault |
-| `sparkle_get_note`               | Read a single note                        |
-| `sparkle_list_notes`             | List notes with filters                   |
-| `sparkle_create_note`            | Create a new note or todo                 |
-| `sparkle_update_note`            | Update an existing item                   |
-| `sparkle_advance_note`           | Advance note maturity stage               |
-| `sparkle_export_to_obsidian`     | Export a note to Obsidian                 |
-| `sparkle_get_stats`              | Get statistics                            |
-| `sparkle_list_tags`              | List all tags                             |
-| `sparkle_list_categories`        | List categories                           |
-| `sparkle_create_category`        | Create a category                         |
-| `sparkle_update_category`        | Update a category                         |
-| `sparkle_delete_category`        | Delete a category                         |
-| `sparkle_reorder_categories`     | Reorder categories                        |
-| `sparkle_list_unreviewed`        | Dashboard: unreviewed items               |
-| `sparkle_list_recent`            | Dashboard: recently active items          |
-| `sparkle_list_attention`         | Dashboard: items needing attention        |
-| `sparkle_list_stale`             | Dashboard: stale items                    |
-| `sparkle_read_obsidian`          | Read vault file by Sparkle ID             |
-| `sparkle_write_obsidian`         | Write vault file by Sparkle ID            |
-| `sparkle_read_obsidian_by_path`  | Read vault file by path                   |
-| `sparkle_write_obsidian_by_path` | Write vault file by path                  |
-| `sparkle_search_obsidian`        | Search Obsidian vault                     |
-| `sparkle_list_obsidian`          | List files in Obsidian vault              |
-| `sparkle_guide`                  | Query Sparkle documentation               |
+| Tool                             | Description                                 |
+| -------------------------------- | ------------------------------------------- |
+| `sparkle_search`                 | Full-text search in Sparkle DB              |
+| `sparkle_search_all`             | Search both Sparkle DB and Obsidian vault   |
+| `sparkle_get_note`               | Read a single note                          |
+| `sparkle_list_notes`             | List notes with filters                     |
+| `sparkle_create_note`            | Create a new note or todo                   |
+| `sparkle_update_note`            | Update an existing item                     |
+| `sparkle_advance_note`           | Advance note maturity stage                 |
+| `sparkle_pause_note`             | Pause a note (exclude from stale/attention) |
+| `sparkle_resume_note`            | Resume a paused note                        |
+| `sparkle_export_to_obsidian`     | Export a note to Obsidian                   |
+| `sparkle_get_stats`              | Get statistics                              |
+| `sparkle_list_tags`              | List all tags                               |
+| `sparkle_list_categories`        | List categories                             |
+| `sparkle_create_category`        | Create a category                           |
+| `sparkle_update_category`        | Update a category                           |
+| `sparkle_delete_category`        | Delete a category                           |
+| `sparkle_reorder_categories`     | Reorder categories                          |
+| `sparkle_list_unreviewed`        | Dashboard: unreviewed items                 |
+| `sparkle_list_recent`            | Dashboard: recently active items            |
+| `sparkle_list_attention`         | Dashboard: items needing attention          |
+| `sparkle_list_stale`             | Dashboard: stale items                      |
+| `sparkle_read_obsidian`          | Read vault file by Sparkle ID               |
+| `sparkle_write_obsidian`         | Write vault file by Sparkle ID              |
+| `sparkle_read_obsidian_by_path`  | Read vault file by path                     |
+| `sparkle_write_obsidian_by_path` | Write vault file by path                    |
+| `sparkle_search_obsidian`        | Search Obsidian vault                       |
+| `sparkle_list_obsidian`          | List files in Obsidian vault                |
+| `sparkle_guide`                  | Query Sparkle documentation                 |
 
 ### Test
 

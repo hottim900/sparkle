@@ -43,6 +43,9 @@ cp .env.example .env
 | `TLS_KEY`                   | 否   | TLS 私鑰檔案路徑。省略則以純 HTTP 執行。                    |
 | `LINE_CHANNEL_SECRET`       | 否   | LINE Messaging API channel secret。啟用 LINE Bot 時必填。   |
 | `LINE_CHANNEL_ACCESS_TOKEN` | 否   | LINE Messaging API access token。啟用 LINE Bot 時必填。     |
+| `LINE_ALLOWED_USER_IDS`     | 否   | 以逗號分隔的 LINE 使用者 ID。只有這些使用者可與 Bot 互動。  |
+| `LINE_ADMIN_USER_ID`        | 否   | LINE 使用者 ID，供監控腳本發送管理通知。                    |
+| `SENTRY_DSN`                | 否   | Sentry DSN，用於錯誤追蹤。省略則停用。                      |
 
 資料庫檔案及其父目錄會在首次執行時自動建立。
 
@@ -178,6 +181,7 @@ LINE webhook 端點為 `https://YOUR_DOMAIN/api/webhook/line`。
 | `!fleeting`      | 列出閃念筆記         |
 | `!developing`    | 列出發展中筆記       |
 | `!permanent`     | 列出永久筆記         |
+| `!scratch`       | 列出暫存項目         |
 | `!active`        | 列出進行中的待辦事項 |
 | `!today`         | 今日焦點             |
 | `!find <關鍵字>` | 搜尋                 |
@@ -321,6 +325,8 @@ claude mcp add sparkle --transport stdio --scope user \
 | `sparkle_create_note`            | 建立新筆記或待辦事項               |
 | `sparkle_update_note`            | 更新現有項目                       |
 | `sparkle_advance_note`           | 推進筆記成熟度階段                 |
+| `sparkle_pause_note`             | 暫停筆記（排除於過期/關注提醒）    |
+| `sparkle_resume_note`            | 恢復已暫停的筆記                   |
 | `sparkle_export_to_obsidian`     | 將筆記匯出至 Obsidian              |
 | `sparkle_get_stats`              | 取得統計資料                       |
 | `sparkle_list_tags`              | 列出所有標籤                       |
