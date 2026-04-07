@@ -1,5 +1,5 @@
 import { createFileRoute, useSearch, useNavigate } from "@tanstack/react-router";
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { searchVault, getVaultFile } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
@@ -47,15 +47,9 @@ function VaultPage() {
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
-  const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [debounceTimer, setDebounceTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
 
   const sparkleFilter = filter === "sparkle" ? "sparkle" : undefined;
-
-  // Auto-select file from URL search param
-  useEffect(() => {
-    if (file) setSelectedPath(file);
-  }, [file]);
 
   const handleSearch = useCallback(
     (value: string) => {
@@ -84,17 +78,17 @@ function VaultPage() {
     isPending: isLoadingFile,
     error: fileError,
   } = useQuery({
-    queryKey: queryKeys.vault.file(selectedPath || ""),
-    queryFn: () => getVaultFile(selectedPath!),
-    enabled: !!selectedPath,
+    queryKey: queryKeys.vault.file(file || ""),
+    queryFn: () => getVaultFile(file!),
+    enabled: !!file,
     retry: false,
   });
 
   const results = searchData?.results ?? [];
-  const selectedSparkleId = results.find((r) => r.path === selectedPath)?.sparkle_id ?? null;
+  const selectedSparkleId = results.find((r) => r.path === file)?.sparkle_id ?? null;
 
   // Mobile: show list or detail
-  const showDetail = !!selectedPath;
+  const showDetail = !!file;
 
   return (
     <div className="flex h-full flex-1 min-w-0">
@@ -134,30 +128,30 @@ function VaultPage() {
             </div>
           ) : (
             <div className="divide-y divide-border">
-              {results.map((file) => (
+              {results.map((result) => (
                 <button
-                  key={file.path}
-                  onClick={() => setSelectedPath(file.path)}
-                  className={`w-full text-left px-3 py-2.5 hover:bg-accent transition-colors ${selectedPath === file.path ? "bg-accent" : ""}`}
+                  key={result.path}
+                  onClick={() => navigate({ to: "/vault", search: { file: result.path, filter } })}
+                  className={`w-full text-left px-3 py-2.5 hover:bg-accent transition-colors ${file === result.path ? "bg-accent" : ""}`}
                 >
                   <div className="flex items-start gap-2">
                     <FileText className="h-4 w-4 mt-0.5 text-muted-foreground flex-shrink-0" />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5">
-                        <span className="font-medium text-sm truncate">{file.title}</span>
-                        {file.sparkle_id && (
+                        <span className="font-medium text-sm truncate">{result.title}</span>
+                        {result.sparkle_id && (
                           <Sparkles className="h-3 w-3 text-amber-500 flex-shrink-0" />
                         )}
                       </div>
-                      <div className="text-xs text-muted-foreground truncate">{file.path}</div>
-                      {file.snippet && (
+                      <div className="text-xs text-muted-foreground truncate">{result.path}</div>
+                      {result.snippet && (
                         <div className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                          <HighlightedSnippet html={file.snippet} />
+                          <HighlightedSnippet html={result.snippet} />
                         </div>
                       )}
                       <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
                         <Clock className="h-3 w-3" />
-                        {formatDate(file.mtime)}
+                        {formatDate(result.mtime)}
                       </div>
                     </div>
                   </div>
@@ -170,7 +164,7 @@ function VaultPage() {
 
       {/* Detail panel */}
       <div className={`flex-1 flex flex-col min-w-0 ${showDetail ? "flex" : "hidden md:flex"}`}>
-        {selectedPath && fileData ? (
+        {file && fileData ? (
           <>
             {/* Header with back button (mobile) */}
             <div className="flex items-center gap-2 p-3 border-b border-border">
@@ -178,7 +172,7 @@ function VaultPage() {
                 variant="ghost"
                 size="icon"
                 className="md:hidden"
-                onClick={() => setSelectedPath(null)}
+                onClick={() => navigate({ to: "/vault", search: { file: undefined, filter } })}
               >
                 <ArrowLeft className="h-4 w-4" />
               </Button>
@@ -209,14 +203,18 @@ function VaultPage() {
               <VaultMarkdownPreview content={fileData.content} />
             </div>
           </>
-        ) : isLoadingFile && selectedPath ? (
+        ) : isLoadingFile && file ? (
           <div className="flex-1 flex items-center justify-center text-muted-foreground">
             載入中...
           </div>
-        ) : fileError && selectedPath ? (
+        ) : fileError && file ? (
           <div className="flex-1 flex flex-col items-center justify-center gap-3 text-muted-foreground">
             <p>此檔案已不存在於 Vault 中</p>
-            <Button variant="outline" size="sm" onClick={() => setSelectedPath(null)}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navigate({ to: "/vault", search: { file: undefined, filter } })}
+            >
               <ArrowLeft className="h-4 w-4 mr-1" />
               返回列表
             </Button>
