@@ -39,6 +39,7 @@ cp .env.example .env
 | `PORT`                      | Yes      | Server port (default: `3000`)                                              |
 | `DATABASE_URL`              | Yes      | Path to SQLite database file (e.g., `./data/todo.db`)                      |
 | `AUTH_TOKEN`                | Yes      | Bearer token for web UI authentication. Choose a strong random string.     |
+| `HOST`                      | No       | Listen address (default: `127.0.0.1`). Set to `0.0.0.0` for external.      |
 | `TLS_CERT`                  | No       | Path to TLS certificate file. Omit to run plain HTTP.                      |
 | `TLS_KEY`                   | No       | Path to TLS private key file. Omit to run plain HTTP.                      |
 | `LINE_CHANNEL_SECRET`       | No       | LINE Messaging API channel secret. Required for LINE Bot.                  |
@@ -173,22 +174,52 @@ In the LINE Developers Console:
 
 ### 4. Available Commands
 
+**Create:**
+
+| Command              | Description                            |
+| -------------------- | -------------------------------------- |
+| (plain text)         | Create a fleeting note                 |
+| `!todo <text>`       | Create a todo                          |
+| `!high <text>`       | Create a high-priority todo            |
+| `!todo !high <text>` | Create a high-priority todo (combined) |
+| `!tmp <text>`        | Create a scratch item                  |
+
+Multi-line messages: first line becomes the title, remaining lines become content.
+
+**Query:**
+
 | Command           | Description                 |
 | ----------------- | --------------------------- |
-| `!todo <text>`    | Create a todo               |
-| `!high <text>`    | Create a high-priority todo |
-| (plain text)      | Create a fleeting note      |
 | `!fleeting`       | List fleeting notes         |
 | `!developing`     | List developing notes       |
 | `!permanent`      | List permanent notes        |
-| `!scratch`        | List scratch items          |
+| `!scratch` / `!s` | List scratch items          |
+| `!notes`          | List all non-archived notes |
 | `!active`         | List active todos           |
+| `!todos`          | List all non-archived todos |
 | `!today`          | Today's focus               |
 | `!find <keyword>` | Search                      |
+| `!list <tag>`     | Filter by tag               |
 | `!stats`          | Statistics                  |
 | `?` / `help`      | Show help                   |
 
-After a query, results are numbered. Use the number to operate on items (e.g., `!detail 1`, `!done 2`, `!develop 3`).
+**Operate on results:** After a query, results are numbered. Use the number to operate on items:
+
+| Command               | Description                         |
+| --------------------- | ----------------------------------- |
+| `!detail N`           | View item detail                    |
+| `!develop N`          | Advance: fleeting → developing      |
+| `!mature N`           | Advance: developing → permanent     |
+| `!export N`           | Export permanent note to Obsidian   |
+| `!done N`             | Mark todo as completed              |
+| `!due N <date>`       | Set due date (e.g., `明天`, `3/15`) |
+| `!tag N <tags>`       | Add tags                            |
+| `!untag N <tags>`     | Remove tags                         |
+| `!priority N <level>` | Set priority (high/medium/low/none) |
+| `!track N [date]`     | Create tracking todo from note      |
+| `!upgrade N`          | Convert scratch to fleeting note    |
+| `!archive N`          | Archive item                        |
+| `!delete N`           | Delete item                         |
 
 ## Cloudflare Tunnel (Optional)
 

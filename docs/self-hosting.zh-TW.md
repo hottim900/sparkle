@@ -33,19 +33,20 @@ cp .env.example .env
 
 ### 環境變數
 
-| 變數                        | 必要 | 說明                                                        |
-| --------------------------- | ---- | ----------------------------------------------------------- |
-| `NODE_ENV`                  | 是   | 設為 `production`                                           |
-| `PORT`                      | 是   | 伺服器連接埠（預設：`3000`）                                |
-| `DATABASE_URL`              | 是   | SQLite 資料庫檔案路徑（例如 `./data/todo.db`）              |
-| `AUTH_TOKEN`                | 是   | 網頁 UI 認證用的 Bearer token。請選用一組高強度的隨機字串。 |
-| `TLS_CERT`                  | 否   | TLS 憑證檔案路徑。省略則以純 HTTP 執行。                    |
-| `TLS_KEY`                   | 否   | TLS 私鑰檔案路徑。省略則以純 HTTP 執行。                    |
-| `LINE_CHANNEL_SECRET`       | 否   | LINE Messaging API channel secret。啟用 LINE Bot 時必填。   |
-| `LINE_CHANNEL_ACCESS_TOKEN` | 否   | LINE Messaging API access token。啟用 LINE Bot 時必填。     |
-| `LINE_ALLOWED_USER_IDS`     | 否   | 以逗號分隔的 LINE 使用者 ID。只有這些使用者可與 Bot 互動。  |
-| `LINE_ADMIN_USER_ID`        | 否   | LINE 使用者 ID，供監控腳本發送管理通知。                    |
-| `SENTRY_DSN`                | 否   | Sentry DSN，用於錯誤追蹤。省略則停用。                      |
+| 變數                        | 必要 | 說明                                                         |
+| --------------------------- | ---- | ------------------------------------------------------------ |
+| `NODE_ENV`                  | 是   | 設為 `production`                                            |
+| `PORT`                      | 是   | 伺服器連接埠（預設：`3000`）                                 |
+| `DATABASE_URL`              | 是   | SQLite 資料庫檔案路徑（例如 `./data/todo.db`）               |
+| `AUTH_TOKEN`                | 是   | 網頁 UI 認證用的 Bearer token。請選用一組高強度的隨機字串。  |
+| `HOST`                      | 否   | 監聽位址（預設：`127.0.0.1`）。設為 `0.0.0.0` 接受外部連線。 |
+| `TLS_CERT`                  | 否   | TLS 憑證檔案路徑。省略則以純 HTTP 執行。                     |
+| `TLS_KEY`                   | 否   | TLS 私鑰檔案路徑。省略則以純 HTTP 執行。                     |
+| `LINE_CHANNEL_SECRET`       | 否   | LINE Messaging API channel secret。啟用 LINE Bot 時必填。    |
+| `LINE_CHANNEL_ACCESS_TOKEN` | 否   | LINE Messaging API access token。啟用 LINE Bot 時必填。      |
+| `LINE_ALLOWED_USER_IDS`     | 否   | 以逗號分隔的 LINE 使用者 ID。只有這些使用者可與 Bot 互動。   |
+| `LINE_ADMIN_USER_ID`        | 否   | LINE 使用者 ID，供監控腳本發送管理通知。                     |
+| `SENTRY_DSN`                | 否   | Sentry DSN，用於錯誤追蹤。省略則停用。                       |
 
 資料庫檔案及其父目錄會在首次執行時自動建立。
 
@@ -173,22 +174,52 @@ LINE webhook 端點為 `https://YOUR_DOMAIN/api/webhook/line`。
 
 ### 4. 可用指令
 
-| 指令             | 說明                 |
-| ---------------- | -------------------- |
-| `!todo <文字>`   | 建立待辦事項         |
-| `!high <文字>`   | 建立高優先度待辦事項 |
-| （直接輸入文字） | 建立閃念筆記         |
-| `!fleeting`      | 列出閃念筆記         |
-| `!developing`    | 列出發展中筆記       |
-| `!permanent`     | 列出永久筆記         |
-| `!scratch`       | 列出暫存項目         |
-| `!active`        | 列出進行中的待辦事項 |
-| `!today`         | 今日焦點             |
-| `!find <關鍵字>` | 搜尋                 |
-| `!stats`         | 統計資料             |
-| `?` / `help`     | 顯示說明             |
+**新增：**
 
-查詢後，結果會以編號顯示。使用編號即可對項目進行操作（例如 `!detail 1`、`!done 2`、`!develop 3`）。
+| 指令                 | 說明                             |
+| -------------------- | -------------------------------- |
+| （直接輸入文字）     | 建立閃念筆記                     |
+| `!todo <文字>`       | 建立待辦事項                     |
+| `!high <文字>`       | 建立高優先度待辦事項             |
+| `!todo !high <文字>` | 建立高優先度待辦事項（合併寫法） |
+| `!tmp <文字>`        | 建立暫存項目                     |
+
+多行訊息：第一行為標題，其餘行為內容。
+
+**查詢：**
+
+| 指令              | 說明                     |
+| ----------------- | ------------------------ |
+| `!fleeting`       | 列出閃念筆記             |
+| `!developing`     | 列出發展中筆記           |
+| `!permanent`      | 列出永久筆記             |
+| `!scratch` / `!s` | 列出暫存項目             |
+| `!notes`          | 列出所有未封存的筆記     |
+| `!active`         | 列出進行中的待辦事項     |
+| `!todos`          | 列出所有未封存的待辦事項 |
+| `!today`          | 今日焦點                 |
+| `!find <關鍵字>`  | 搜尋                     |
+| `!list <標籤>`    | 依標籤篩選               |
+| `!stats`          | 統計資料                 |
+| `?` / `help`      | 顯示說明                 |
+
+**對查詢結果操作：** 查詢後，結果會以編號顯示。使用編號即可對項目進行操作：
+
+| 指令                 | 說明                               |
+| -------------------- | ---------------------------------- |
+| `!detail N`          | 查看第 N 筆詳情                    |
+| `!develop N`         | 推進：閃念 → 發展中                |
+| `!mature N`          | 推進：發展中 → 永久筆記            |
+| `!export N`          | 匯出永久筆記至 Obsidian            |
+| `!done N`            | 標記待辦為已完成                   |
+| `!due N <日期>`      | 設定到期日（如 `明天`、`3/15`）    |
+| `!tag N <標籤>`      | 加標籤                             |
+| `!untag N <標籤>`    | 移除標籤                           |
+| `!priority N <等級>` | 設定優先度（high/medium/low/none） |
+| `!track N [日期]`    | 從筆記建立追蹤待辦                 |
+| `!upgrade N`         | 將暫存升級為閃念筆記               |
+| `!archive N`         | 封存項目                           |
+| `!delete N`          | 刪除項目                           |
 
 ## Cloudflare Tunnel（選用）
 
