@@ -55,6 +55,7 @@ DB migration version 0→22, idempotent. Migration safety enforced by PostToolUs
 
 - 新 dashboard query：**必須比對既有 query 的 WHERE 條件**（`is_private = 0`、`paused = 0`、status 過濾、type 過濾），確保一致。
 - 新 route：必須有獨立的 route validation 測試（不依賴純 function unit test 覆蓋）。
+- 新 route：第一個產生 DOM 的元素必須有 `flex-1 min-w-0`（或用 Fragment 讓子元素直接參與父層 flex）。E2E layout test 會驗證。
 
 Detailed module conventions (API retry, PWA, Logging, Sentry, CSP, Offline UI, State management, CI/CD, Sharing, Export, Data Model fields) — see `conventions-detail` skill.
 

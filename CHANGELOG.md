@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.3.2.2] - 2026-04-07
+
+### Fixed
+
+- Vault 頁面寬內容溢出 / 短內容縮排問題，根元素加上 `flex-1 min-w-0` 與其他 route 一致
+
+### Added
+
+- E2E layout overflow 測試：6 個 route x 2 個 viewport，防止 flex layout 回歸
+- CLAUDE.md 新增 route layout contract 慣例
+
 ## [1.3.2.1] - 2026-04-07
 
 ### Added
