@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.3.3.0] - 2026-04-09
+
+### Added
+
+- Obsidian 相容的 markdown 文字排版：單行換行顯示為換行（remark-breaks）、`==highlight==` 顯示為螢光標記、`> [!NOTE]` 等 callout 顯示為有樣式的方塊
+- 共用 markdown 配置模組（`markdown-config.tsx`），統一兩個預覽元件的 plugin 和 component 設定
+- 11 個新渲染測試涵蓋換行、code block、highlight、callout 功能
+
+### Fixed
+
+- 無語言 fenced code block 現在正確顯示為區塊樣式（pre/code 職責分離取代 className 偵測）
+
 ## [1.3.2.4] - 2026-04-07
 
 ### Fixed

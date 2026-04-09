@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { preprocessObsidian } from "../vault-markdown-preview";
+import { render } from "@testing-library/react";
+import { VaultMarkdownPreview, preprocessObsidian } from "../vault-markdown-preview";
 
 describe("preprocessObsidian", () => {
   it("strips YAML frontmatter", () => {
@@ -47,5 +48,51 @@ describe("preprocessObsidian", () => {
   it("handles unclosed frontmatter gracefully", () => {
     const input = "---\nunclosed frontmatter\nContent here";
     expect(preprocessObsidian(input)).toBe(input);
+  });
+});
+
+describe("VaultMarkdownPreview rendering", () => {
+  it("renders single line breaks as <br> (remark-breaks)", () => {
+    const { container } = render(<VaultMarkdownPreview content={"line1\nline2"} />);
+    const br = container.querySelector("br");
+    expect(br).toBeInTheDocument();
+  });
+
+  it("renders ==text== as <mark> highlight", () => {
+    const { container } = render(<VaultMarkdownPreview content="This is ==highlighted== text" />);
+    const mark = container.querySelector("mark");
+    expect(mark).toBeInTheDocument();
+    expect(mark).toHaveTextContent("highlighted");
+  });
+
+  it("renders > [!NOTE] as a callout (not plain blockquote)", () => {
+    const { container } = render(
+      <VaultMarkdownPreview content={"> [!NOTE]\n> This is a note callout"} />,
+    );
+    // rehype-callouts renders callouts as <div> with callout class, not <blockquote>
+    const callout = container.querySelector(".callout");
+    expect(callout).toBeInTheDocument();
+  });
+
+  it("renders no-lang fenced code block as block style", () => {
+    const { container } = render(<VaultMarkdownPreview content={"```\nsome code\n```"} />);
+    const pre = container.querySelector("pre");
+    expect(pre).toBeInTheDocument();
+    expect(pre).toHaveClass("bg-muted");
+  });
+
+  it("does not highlight ==text== inside fenced code blocks", () => {
+    const { container } = render(
+      <VaultMarkdownPreview content={"```\n==not highlighted==\n```"} />,
+    );
+    const mark = container.querySelector("mark");
+    expect(mark).not.toBeInTheDocument();
+  });
+
+  it("preprocessObsidian + remark-breaks: stripped comments don't create spurious <br>", () => {
+    const { container } = render(<VaultMarkdownPreview content={"Before\n%%comment%%\nAfter"} />);
+    // Comment stripped, but "Before" and "After" should both appear
+    expect(container.textContent).toContain("Before");
+    expect(container.textContent).toContain("After");
   });
 });
