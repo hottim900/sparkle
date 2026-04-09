@@ -48,4 +48,36 @@ describe("MarkdownPreview", () => {
     const { container } = render(<MarkdownPreview content="" />);
     expect(container).toBeInTheDocument();
   });
+
+  it("renders single line breaks as <br> (remark-breaks)", () => {
+    const { container } = render(<MarkdownPreview content={"line1\nline2"} />);
+    const br = container.querySelector("br");
+    expect(br).toBeInTheDocument();
+  });
+
+  it("renders no-lang fenced code block as block style", () => {
+    const { container } = render(<MarkdownPreview content={"```\nsome code\n```"} />);
+    const pre = container.querySelector("pre");
+    expect(pre).toBeInTheDocument();
+    expect(pre).toHaveClass("bg-muted");
+  });
+
+  it("renders ==text== as <mark> highlight", () => {
+    const { container } = render(<MarkdownPreview content="This is ==highlighted== text" />);
+    const mark = container.querySelector("mark");
+    expect(mark).toBeInTheDocument();
+    expect(mark).toHaveTextContent("highlighted");
+  });
+
+  it("does not highlight ==text== inside fenced code blocks", () => {
+    const { container } = render(<MarkdownPreview content={"```\n==not highlighted==\n```"} />);
+    const mark = container.querySelector("mark");
+    expect(mark).not.toBeInTheDocument();
+  });
+
+  it("does not highlight == inside inline code", () => {
+    const { container } = render(<MarkdownPreview content="Use `==` for highlights" />);
+    const mark = container.querySelector("mark");
+    expect(mark).not.toBeInTheDocument();
+  });
 });
