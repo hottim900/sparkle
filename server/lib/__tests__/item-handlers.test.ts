@@ -143,6 +143,17 @@ describe("LINE item-handlers — vault-origin guard", () => {
     },
   ];
 
+  // Explicitly enumerate non-mutating handlers here. Adding a 13th handler
+  // forces a conscious decision: does it mutate vault rows (→ add to CASES) or
+  // not (→ add to this list). Without this guard the it.each suite could pass
+  // while a new handler silently ships without a vault-origin guard.
+  const NON_MUTATING_HANDLERS = new Set(["detail", "done", "upgrade"]);
+  it("CASES plus NON_MUTATING_HANDLERS cover every itemHandler (drift guard)", () => {
+    const covered = new Set([...CASES.map((c) => c.handler), ...NON_MUTATING_HANDLERS]);
+    const registered = new Set(Object.keys(itemHandlers));
+    expect(covered).toEqual(registered);
+  });
+
   it.each(CASES)("$handler: vault item → EXPORTED_MSG", async ({ handler, build }) => {
     const id = insertVaultNote(sqlite);
     const idx = bindSession(`user-${handler}-vault`, id);

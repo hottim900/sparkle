@@ -149,6 +149,12 @@ export function insertActiveRow(
   const id = overrides.id ?? randomUUID();
   const now = new Date().toISOString();
   const type = overrides.type ?? "note";
+  const origin = overrides.origin ?? "";
+  // Mirror createItem (server/lib/items.ts): app-origin items are reviewed at
+  // creation (viewed_at=now), other origins start unreviewed (null). Without
+  // this alignment, any getUnreviewedItems-style test using the helper would
+  // silently diverge from production semantics.
+  const viewedAtDefault = origin === "" || origin === "app" ? now : null;
   sqlite
     .prepare(
       `INSERT INTO items_active (
@@ -168,11 +174,11 @@ export function insertActiveRow(
       overrides.due ?? null,
       JSON.stringify(overrides.tags ?? []),
       JSON.stringify(overrides.aliases ?? []),
-      overrides.origin ?? "",
+      origin,
       overrides.source ?? null,
       overrides.category_id ?? null,
       overrides.linked_note_id ?? null,
-      overrides.viewed_at ?? null,
+      "viewed_at" in overrides ? (overrides.viewed_at ?? null) : viewedAtDefault,
       overrides.is_private ?? 0,
       overrides.paused ?? 0,
       overrides.paused_at ?? null,

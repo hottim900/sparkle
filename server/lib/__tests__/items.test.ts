@@ -232,7 +232,10 @@ describe("Data Access Layer", () => {
     describe("v1.4.0 cross-table modes", () => {
       const { v4: uuidv4 } = require("uuid");
 
-      function insertVaultRow(
+      // Local shim (positional args for concise `it.each`-style tables below).
+      // Named distinctly from the shared insertVaultRow in test-utils to avoid
+      // shadowing confusion.
+      function insertVaultAtDate(
         title: string,
         exportedAt: string,
         opts: { tags?: string[]; category_id?: string | null; is_private?: 0 | 1 } = {},
@@ -257,7 +260,7 @@ describe("Data Access Layer", () => {
 
       it("status='exported' routes to items_vault only", () => {
         createItem(db, { title: "Active note" });
-        insertVaultRow("Vault note", "2026-04-01T00:00:00.000Z");
+        insertVaultAtDate("Vault note", "2026-04-01T00:00:00.000Z");
         const result = listItems(db, { status: "exported" });
         expect(result.items).toHaveLength(1);
         expect(result.items[0]!.title).toBe("Vault note");
@@ -267,7 +270,7 @@ describe("Data Access Layer", () => {
 
       it("include_vault='true' merges items_active + items_vault", () => {
         createItem(db, { title: "Active" });
-        insertVaultRow("Vault", "2026-04-01T00:00:00.000Z");
+        insertVaultAtDate("Vault", "2026-04-01T00:00:00.000Z");
         const result = listItems(db, { include_vault: "true" });
         const titles = result.items.map((i) => i.title).sort();
         expect(titles).toEqual(["Active", "Vault"]);
@@ -280,8 +283,8 @@ describe("Data Access Layer", () => {
             "INSERT INTO items_active (id, title, type, status, tags, origin, aliases, created, modified) VALUES (?, ?, 'note', 'fleeting', '[]', '', '[]', ?, ?)",
           )
           .run(uuidv4(), "Active-2026-02", "2026-02-01T00:00:00.000Z", "2026-02-01T00:00:00.000Z");
-        insertVaultRow("Vault-2026-04", "2026-04-01T00:00:00.000Z");
-        insertVaultRow("Vault-2026-01", "2026-01-15T00:00:00.000Z");
+        insertVaultAtDate("Vault-2026-04", "2026-04-01T00:00:00.000Z");
+        insertVaultAtDate("Vault-2026-01", "2026-01-15T00:00:00.000Z");
         const result = listItems(db, { include_vault: "true", sort: "created", order: "desc" });
         expect(result.items.map((i) => i.title)).toEqual([
           "Vault-2026-04",
@@ -299,8 +302,8 @@ describe("Data Access Layer", () => {
           .run(catId, "Work", new Date().toISOString(), new Date().toISOString());
         createItem(db, { title: "Active-cat", category_id: catId });
         createItem(db, { title: "Active-other" });
-        insertVaultRow("Vault-cat", "2026-04-01T00:00:00.000Z", { category_id: catId });
-        insertVaultRow("Vault-other", "2026-04-02T00:00:00.000Z");
+        insertVaultAtDate("Vault-cat", "2026-04-01T00:00:00.000Z", { category_id: catId });
+        insertVaultAtDate("Vault-other", "2026-04-02T00:00:00.000Z");
         const result = listItems(db, { include_vault: "true", category_id: catId });
         const titles = result.items.map((i) => i.title).sort();
         expect(titles).toEqual(["Active-cat", "Vault-cat"]);
@@ -309,8 +312,8 @@ describe("Data Access Layer", () => {
       it("include_vault='true' applies tag filter to vault rows", () => {
         createItem(db, { title: "Active-tagged", tags: ["work"] });
         createItem(db, { title: "Active-untagged" });
-        insertVaultRow("Vault-tagged", "2026-04-01T00:00:00.000Z", { tags: ["work"] });
-        insertVaultRow("Vault-untagged", "2026-04-02T00:00:00.000Z");
+        insertVaultAtDate("Vault-tagged", "2026-04-01T00:00:00.000Z", { tags: ["work"] });
+        insertVaultAtDate("Vault-untagged", "2026-04-02T00:00:00.000Z");
         const result = listItems(db, { include_vault: "true", tag: "work" });
         const titles = result.items.map((i) => i.title).sort();
         expect(titles).toEqual(["Active-tagged", "Vault-tagged"]);
@@ -318,7 +321,7 @@ describe("Data Access Layer", () => {
 
       it("include_vault='true' with type='todo' skips vault (vault has no todos)", () => {
         createItem(db, { title: "A todo", type: "todo" });
-        insertVaultRow("Vault-note", "2026-04-01T00:00:00.000Z");
+        insertVaultAtDate("Vault-note", "2026-04-01T00:00:00.000Z");
         const result = listItems(db, { include_vault: "true", type: "todo" });
         expect(result.items).toHaveLength(1);
         expect(result.items[0]!.title).toBe("A todo");
@@ -338,7 +341,7 @@ describe("Data Access Layer", () => {
             );
         }
         for (let i = 0; i < 2; i++) {
-          insertVaultRow(`V-${i}`, `2026-0${4 + i}-01T00:00:00.000Z`);
+          insertVaultAtDate(`V-${i}`, `2026-0${4 + i}-01T00:00:00.000Z`);
         }
         const page1 = listItems(db, { include_vault: "true", limit: 2, offset: 0 });
         const page2 = listItems(db, { include_vault: "true", limit: 2, offset: 2 });
