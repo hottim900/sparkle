@@ -131,12 +131,14 @@ describe("DELETE /api/items/:id/vault-stub", () => {
     expect(row).toBeTruthy();
   });
 
-  it("returns 404 when the id does not exist in either table", async () => {
+  it("returns 409 ALREADY_RELEASED when the id does not exist in either table", async () => {
     const res = await app.request(`/api/items/99999999-9999-4999-8999-999999999999/vault-stub`, {
       method: "DELETE",
       headers: authHeaders(),
     });
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body.code).toBe("ALREADY_RELEASED");
   });
 
   it("leaves vault .md untouched when vault_files row is absent", async () => {

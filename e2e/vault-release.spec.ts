@@ -155,12 +155,16 @@ test.describe("Vault stub release (PR 2)", () => {
     expect(after.status()).toBe(200);
   });
 
-  test("vault-stub endpoint ignores non-existent id", async ({ request }) => {
+  test("vault-stub endpoint returns 409 ALREADY_RELEASED on non-existent id", async ({
+    request,
+  }) => {
     const res = await request.delete(
       `http://localhost:${PORT}/api/items/99999999-9999-4999-8999-999999999999/vault-stub`,
       { headers: { Authorization: `Bearer ${AUTH_TOKEN}` } },
     );
-    expect(res.status()).toBe(404);
+    expect(res.status()).toBe(409);
+    const body = await res.json();
+    expect(body.code).toBe("ALREADY_RELEASED");
   });
 
   test("todo with linked exported note → shows '位於 vault 內' badge", async ({
@@ -191,5 +195,137 @@ test.describe("Vault stub release (PR 2)", () => {
     // verifies the cross-table enrichment path: API returns linked_note_origin
     // either 'active' (pre-export) or null (post-export cascade).
     await expect(page).toHaveURL(new RegExp(todo.id));
+  });
+
+  test("release dialog is fully keyboard navigable (Enter / Tab / Enter)", async ({
+    page,
+    request,
+  }) => {
+    await enableObsidian(request);
+    const title = `kbd-release-${Date.now()}`;
+    const item = await createItemViaApi(request, {
+      title,
+      type: "note",
+      status: "permanent",
+      content: "keyboard me",
+    });
+    await request.post(`http://localhost:${PORT}/api/items/${item.id}/export`, {
+      headers: { Authorization: `Bearer ${AUTH_TOKEN}` },
+    });
+    await page.goto(`/item/${item.id}`);
+
+    // Enter on the 釋出 button opens the dialog
+    const releaseBtn = page.getByRole("button", { name: "釋出" });
+    await expect(releaseBtn).toBeVisible({ timeout: 10_000 });
+    await releaseBtn.focus();
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("dialog")).toBeVisible();
+
+    // Dialog traps focus; the Radix Dialog autofocuses its first focusable
+    // (Close icon / cancel), so we tab our way to the 釋出 confirm and press
+    // Enter. We don't assume an exact tab count — instead Tab repeatedly up
+    // to a small bound until the 釋出 confirm is focused.
+    for (let i = 0; i < 6; i++) {
+      const activeLabel = await page.evaluate(
+        () =>
+          document.activeElement?.getAttribute("aria-label") ||
+          document.activeElement?.textContent?.trim() ||
+          "",
+      );
+      if (activeLabel === "釋出") break;
+      await page.keyboard.press("Tab");
+    }
+    await page.keyboard.press("Enter");
+
+    // Redirect to /notes (fleeting default) + toast fires
+    await expect(page.getByText(/已釋出/)).toBeVisible({ timeout: 5_000 });
+    await page.waitForURL(/\/notes\//, { timeout: 5_000 });
+  });
+
+  test("release dangling — todo shows missing UX + 解除關聯 clears it", async ({
+    page,
+    request,
+  }) => {
+    // PR 1's export flow FK-cascades `linked_note_id → null` when the active
+    // note is deleted at export time, so the "missing" state doesn't arise
+    // via the normal product flow (only via migration-era leftovers).
+    //
+    // To cover the UI branch end-to-end we mock the `/api/items/:id`
+    // response with Playwright's `page.route` so the server's enrichment
+    // layer doesn't have to produce the dangling shape. Then we let the
+    // PATCH → `linked_note_id: null` go through to the real server to
+    // verify the button actually submits.
+    await enableObsidian(request);
+    const title = `dangling-mock-${Date.now()}`;
+    const todo = await createItemViaApi(request, {
+      title: `tracking-${title}`,
+      type: "todo",
+    });
+    const phantomNoteId = "00000000-1111-4222-8333-444444444444";
+
+    let patchedToNull = false;
+    await page.route(`**/api/items/${todo.id}`, async (route) => {
+      const method = route.request().method();
+      if (method === "GET" && !patchedToNull) {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            id: todo.id,
+            type: "todo",
+            title: `tracking-${title}`,
+            content: "",
+            status: "active",
+            priority: null,
+            due: null,
+            tags: "[]",
+            source: null,
+            origin_source: "mcp",
+            aliases: "[]",
+            linked_note_id: phantomNoteId,
+            linked_note_title: null,
+            linked_note_origin: "missing",
+            linked_note_prefix: phantomNoteId.substring(0, 8),
+            linked_todo_count: 0,
+            share_visibility: null,
+            category_id: null,
+            category_name: null,
+            viewed_at: new Date().toISOString(),
+            is_private: 0,
+            export_path: null,
+            exported_at: null,
+            content_snippet: null,
+            origin: "active",
+            paused: 0,
+            paused_at: null,
+            paused_context: null,
+            created: new Date().toISOString(),
+            modified: new Date().toISOString(),
+          }),
+        });
+        return;
+      }
+      if (method === "PATCH") {
+        const payload = JSON.parse(route.request().postData() ?? "{}");
+        if (payload.linked_note_id === null) patchedToNull = true;
+      }
+      await route.continue();
+    });
+
+    await page.goto(`/item/${todo.id}`);
+
+    // Missing UX renders with the destructive dangling treatment
+    await expect(page.getByTestId("linked-note-missing")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(/此連結已失效（vault 中找不到檔案）/)).toBeVisible();
+    await expect(page.getByText(phantomNoteId.substring(0, 8))).toBeVisible();
+
+    // Click 解除關聯 → PATCH linked_note_id=null lands on the server.
+    await page.getByRole("button", { name: /解除關聯/ }).click();
+    await expect.poll(() => patchedToNull, { timeout: 5_000 }).toBe(true);
+
+    // With patchedToNull=true, subsequent GETs fall through to the real
+    // server — which returns the real todo (linked_note_id was always null).
+    // The missing state should disappear on refetch.
+    await expect(page.getByTestId("linked-note-missing")).not.toBeVisible({ timeout: 5_000 });
   });
 });

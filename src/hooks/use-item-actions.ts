@@ -63,12 +63,13 @@ export function useItemActions(
       invalidateAfterSave();
       onDeleted?.();
     } catch (err) {
-      // 404 is the only idempotent-failure path the endpoint returns: either
-      // the stub was already released (two tabs raced) or the id was never in
-      // items_vault (NOT_VAULT_ITEM). In both cases "already gone" is the
-      // accurate user-facing summary. Everything else is a real failure.
+      // 409 ALREADY_RELEASED: stub is gone (two tabs raced, or manually
+      // released already). 404 NOT_VAULT_ITEM: caller hit this endpoint on an
+      // active id — shouldn't happen from the UI since the button is gated on
+      // origin='vault', but treat the same way ("已釋出" surfaces "this is no
+      // longer releasable from this UI"). Anything else is a real failure.
       const status = (err as { status?: number } | null)?.status;
-      if (status === 404) {
+      if (status === 409 || status === 404) {
         toast.error("此筆記已釋出");
       } else {
         toast.error("釋出失敗，請重試");

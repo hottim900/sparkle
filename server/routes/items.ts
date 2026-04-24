@@ -439,7 +439,19 @@ itemsRouter.delete("/:id/vault-stub", (c) => {
   const id = c.req.param("id");
   const existing = getItem(db, id, false);
   if (!existing) {
-    return c.json({ error: "Item not found" }, 404);
+    // 409 vs 404: we can't distinguish "was released" from "never existed at
+    // this endpoint" once the row is gone, but both are surface-equivalent
+    // from the caller's POV ("this stub is not mine to release anymore"),
+    // and the design contract (dialog copy + toast) treats that as 已釋出.
+    // Reserve 404 strictly for the wrong-endpoint case below (NOT_VAULT_ITEM).
+    return c.json(
+      {
+        error: "此筆記已釋出或不存在",
+        error_en: "Vault stub not found — already released or never existed.",
+        code: "ALREADY_RELEASED",
+      },
+      409,
+    );
   }
   if (existing.origin !== "vault") {
     return c.json(
@@ -454,7 +466,16 @@ itemsRouter.delete("/:id/vault-stub", (c) => {
   }
   const released = deleteVaultItem(sqlite, existing.id);
   if (!released) {
-    return c.json({ error: "Item not found" }, 404);
+    // Row disappeared between getItem and deleteVaultItem (concurrent release) —
+    // same 409 semantics.
+    return c.json(
+      {
+        error: "此筆記已釋出或不存在",
+        error_en: "Vault stub not found — already released or never existed.",
+        code: "ALREADY_RELEASED",
+      },
+      409,
+    );
   }
   return c.json({ ok: true, id: released.id, export_path: released.export_path });
 });

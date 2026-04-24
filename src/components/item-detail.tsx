@@ -24,10 +24,9 @@ import { ItemContentEditor } from "@/components/item-content-editor";
 import { CategorySelect } from "@/components/category-select";
 import { PauseToggle } from "@/components/pause-toggle";
 import { PausedBanner } from "@/components/paused-banner";
-import { VaultMarkdownPreview } from "@/components/vault-markdown-preview";
 import { useItemForm } from "@/hooks/use-item-form";
 import { usePauseResume } from "@/hooks/use-pause-resume";
-import { updateItem, getVaultPathBySparkleId } from "@/lib/api";
+import { updateItem, getVaultPathBySparkleId, getSettings } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
 
 interface ItemDetailProps {
@@ -99,6 +98,23 @@ export function ItemDetail({ itemId, onDeleted, onBack, onNavigate }: ItemDetail
     enabled: !!item && item.origin === "vault",
     retry: false,
   });
+
+  // Vault name for the obsidian:// URI — derived from the configured vault path
+  // basename. Only fetched for vault-origin items to avoid an extra request
+  // on active-item views.
+  const { data: settings } = useQuery({
+    queryKey: queryKeys.settings,
+    queryFn: getSettings,
+    enabled: !!item && item.origin === "vault",
+    retry: false,
+  });
+  const vaultName = settings?.obsidian_vault_path
+    ? settings.obsidian_vault_path.replace(/\/+$/, "").split("/").pop() || ""
+    : "";
+  const obsidianUri =
+    vaultName && item?.export_path
+      ? `obsidian://open?vault=${encodeURIComponent(vaultName)}&file=${encodeURIComponent(item.export_path.replace(/\.md$/, ""))}`
+      : null;
   const [markingAsPrivate, setMarkingAsPrivate] = useState(false);
   const { handleResume, resuming } = usePauseResume(item, setItem);
 
@@ -279,8 +295,28 @@ export function ItemDetail({ itemId, onDeleted, onBack, onNavigate }: ItemDetail
             </div>
           )}
 
-          {/* Content (rendered markdown) */}
-          <VaultMarkdownPreview content={item.content} />
+          {/* Content snippet — immutable 500-char preview (vault .md is authoritative). */}
+          <div>
+            <label className="text-sm text-muted-foreground block mb-1">內容預覽</label>
+            <pre className="whitespace-pre-wrap break-words max-h-32 overflow-hidden text-xs text-muted-foreground relative bg-muted/30 rounded-md p-3">
+              {item.content_snippet ?? item.content ?? ""}
+              <span
+                aria-hidden="true"
+                className="pointer-events-none bg-gradient-to-b from-transparent to-slate-50 dark:to-slate-800 h-8 absolute bottom-0 inset-x-0"
+              />
+            </pre>
+            <div className="flex items-center gap-3 mt-1 text-[11px] text-muted-foreground">
+              <span>節錄前 500 字；完整內容請至 vault 查看</span>
+              {obsidianUri && (
+                <a
+                  href={obsidianUri}
+                  className="inline-flex items-center gap-1 text-foreground hover:underline"
+                >
+                  <ExternalLink className="h-3 w-3" />在 Obsidian 中開啟
+                </a>
+              )}
+            </div>
+          </div>
         </div>
       ) : (
         /* ── Normal: Editable view ── */

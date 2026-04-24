@@ -4,7 +4,10 @@
 
 ### Added
 
-- **Vault stub release** — `DELETE /api/items/:id/vault-stub` hard-deletes an `items_vault` row and nulls the matching `vault_files.sparkle_id` atomically. vault .md is preserved; Sparkle just stops tracking it. Linked todos become dangling (rendered as `linked_note_origin: 'missing'`).
+- **Vault stub release** — `DELETE /api/items/:id/vault-stub` hard-deletes an `items_vault` row and nulls the matching `vault_files.sparkle_id` atomically. vault .md is preserved; Sparkle just stops tracking it. Linked todos become dangling (rendered as `linked_note_origin: 'missing'`). Endpoint returns **409 `ALREADY_RELEASED`** on an unknown id (idempotent re-release path) and **404 `NOT_VAULT_ITEM`** on an active-item id.
+- **Content-snippet preview** — vault detail view renders `content_snippet` as a read-only `<pre>` (`whitespace-pre-wrap break-words max-h-32 overflow-hidden` + gradient fade) per plan item 16; prevents the horizontal-overflow regression from PRs #298-#301. Label: `內容預覽 · 節錄前 500 字；完整內容請至 vault 查看`.
+- **在 Obsidian 中開啟 link** — `obsidian://open?vault=<basename>&file=<relpath>` URI next to the snippet. Vault name derived from `obsidian_vault_path` basename via a cached `/api/settings` query (only fetched for vault-origin items).
+- **Release redirect + focus return** — post-release `ExportedItemView.onDeleted` navigates to `/notes/fleeting` (per design) and focuses the new page's `<h1>` (`tabindex=-1`) so keyboard users land where they can continue triaging.
 - **MCP `sparkle_release_note`** — wraps the vault-stub endpoint; requires `confirm: true` + vault-origin pre-check.
 - **Header vault-origin indicator bar** (slate-50 / dark:slate-800, `FolderOpen` icon, click-to-copy `export_path`) sits below the type indicator. Slate was chosen because amber is reserved for paused.
 - **Release button + dialog** replaces the trash icon when `origin === 'vault'`: destructive variant, reuses the existing `<Dialog>` primitive, copy per the plan (`釋出 Sparkle 記錄` / `Sparkle 將不再記錄這筆筆記。vault 檔案 {export_path} 保留不變動。`).
