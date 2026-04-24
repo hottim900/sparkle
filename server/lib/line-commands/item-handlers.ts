@@ -150,6 +150,7 @@ const handleArchive: CommandHandler = async ({ userId, command, db }) => {
   const cmd = command as Extract<LineCommand, { type: "archive" }>;
   const resolved = resolveSessionItem(db, userId, cmd.index);
   if (!resolved.ok) return resolved.error;
+  if (resolved.item.origin === "vault") return EXPORTED_MSG;
   updateItem(db, resolved.itemId, { status: "archived" });
   return `✅ 已封存「${resolved.item.title}」`;
 };
@@ -180,6 +181,7 @@ const handleDelete: CommandHandler = async ({ userId, command, db }) => {
   const cmd = command as Extract<LineCommand, { type: "delete" }>;
   const resolved = resolveSessionItem(db, userId, cmd.index);
   if (!resolved.ok) return resolved.error;
+  if (resolved.item.origin === "vault") return EXPORTED_MSG;
   deleteItem(db, resolved.itemId);
   return `🗑️ 已刪除「${resolved.item.title}」`;
 };
