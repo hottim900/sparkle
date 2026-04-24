@@ -208,9 +208,10 @@ export function resolveLinkedInfo(
     for (const li of vaultRows) linkedVault.set(li.id, li.title);
   }
 
-  // linked_todo_count — count active todos pointing at each note id (notes may
-  // live in items_active OR items_vault; count across both).
-  const noteIds = bases.map((r) => r.id);
+  // linked_todo_count — count active todos pointing at each note id. Only note
+  // rows can be linked-to (todos/scratch aren't valid link targets), so limit
+  // the IN-list to note-typed bases; vault rows are always notes.
+  const noteIds = bases.filter((r) => r.type === "note").map((r) => r.id);
   const countMap = new Map<string, number>();
   if (noteIds.length > 0) {
     const unique = [...new Set(noteIds)];
@@ -234,9 +235,9 @@ export function resolveLinkedInfo(
     }
   }
 
-  // Share visibility — shares only ever reference items_active (migration 23
-  // dropped tokens pointing at exported items; no FK to items_vault).
-  const allIds = bases.map((r) => r.id);
+  // Share visibility — share_tokens FK only points to items_active post-migration 23.
+  // Vault IDs will never match; filter them out rather than padding the IN-list.
+  const allIds = bases.filter((r) => r.origin === "active").map((r) => r.id);
   const shareMap = new Map<string, "public" | "unlisted">();
   if (allIds.length > 0) {
     const unique = [...new Set(allIds)];

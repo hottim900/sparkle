@@ -29,25 +29,12 @@ import { getObsidianSettings } from "../lib/settings.js";
 import { ZodError } from "zod";
 import { revokeSharesByItemId } from "../lib/shares.js";
 import { deriveTitleFromContent } from "../lib/title-derivation.js";
+import { vaultReadonlyPayload } from "../lib/vault-errors.js";
 
 const lookupItem: ItemLookup = (shortId) => {
   const found = getItemForLookup(db, shortId);
   return found ? { title: found.title } : null;
 };
-
-function vaultReadonlyPayload(vault_path: string | null) {
-  return {
-    error: "此項目為 vault-origin，Sparkle DB 僅持 metadata；內容以 vault 為準",
-    error_en:
-      "This item is vault-origin. Sparkle only stores metadata; vault file is the content source of truth.",
-    code: "VAULT_READONLY" as const,
-    vault_path,
-    hint_endpoint: "DELETE /api/items/:id/vault-stub",
-    hint_tool_by_id: "sparkle_write_obsidian",
-    hint_tool_by_path: "sparkle_write_obsidian_by_path",
-    doc_url: "sparkle://docs/data-model#vault-items",
-  };
-}
 
 const itemsRouter = new Hono();
 
@@ -208,6 +195,7 @@ itemsRouter.post("/batch", async (c) => {
         }
       }
       // 3. Atomic move per item: INSERT vault + DELETE active.
+      let committed = 0;
       for (const { path, item } of exportedResults) {
         try {
           commitExportToVault(
@@ -226,13 +214,12 @@ itemsRouter.post("/batch", async (c) => {
             },
             path,
           );
+          committed++;
         } catch (e) {
           errors.push({ id: item.id, error: (e as Error).message });
         }
       }
-      affected =
-        exportedResults.length -
-        errors.filter((e) => exportedResults.some((r) => r.id === e.id)).length;
+      affected = committed;
       skipped = skippedIds.length + (ids.length - eligible.length);
       return c.json({ affected, skipped, errors });
     } else if (action === "done") {

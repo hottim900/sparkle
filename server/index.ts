@@ -265,7 +265,7 @@ app.get("/api/export", (c) => {
     priority: null,
     due: null,
     tags: r.tags,
-    origin: r.origin ?? "",
+    origin: r.origin,
     source: r.source,
     aliases: r.aliases,
     linked_note_id: null,

@@ -20,6 +20,7 @@ import {
   searchSchema,
 } from "../schemas/items.js";
 import { deriveTitleFromContent } from "../lib/title-derivation.js";
+import { vaultReadonlyPayload } from "../lib/vault-errors.js";
 
 const privateRouter = new Hono();
 
@@ -184,14 +185,7 @@ privateRouter.patch("/items/:id", async (c) => {
     }
 
     if (existing.origin === "vault") {
-      return c.json(
-        {
-          error: "此項目為 vault-origin，Sparkle DB 僅持 metadata；內容以 vault 為準",
-          code: "VAULT_READONLY",
-          vault_path: existing.export_path,
-        },
-        409,
-      );
+      return c.json(vaultReadonlyPayload(existing.export_path), 409);
     }
 
     const updated = updateItem(db, id, input, true);
