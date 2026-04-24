@@ -30,13 +30,17 @@ See `/testing` for test architecture. See `/ops` for deployment.
 
 ## Data Model
 
-Notes: `fleeting` → `developing` → `permanent` → `exported` → `archived`. Todos: `active` → `done` → `archived`. Scratch: `draft` → `archived`. Full field reference in `conventions-detail` skill (invoke `/conventions-detail` for field reference).
+Notes (items_active): `fleeting` → `developing` → `permanent` → `archived`. Exported notes move to items_vault (metadata + 500-char snippet; vault .md is content authority). Todos: `active` → `done` → `archived`. Scratch: `draft` → `archived`.
+
+Full field reference in `conventions-detail` skill (invoke `/conventions-detail`). Two-table rationale + cross-table FK behaviour in `server/db/README.md`; v23 upgrade playbook in `docs/migration-v23.md`.
 
 Type conversion auto-maps status server-side. `category_id` preserved; `due`/`linked_note_id` cleared on todo→note; tags/priority/aliases cleared on →scratch.
 
-`paused` flag: cross-type pause mechanism (boolean, orthogonal to status). Paused items excluded from stale/attention/overdue/focus/unreviewed queries; visible in search and dedicated `/paused` page. Auto-cleared on archive/export/done.
+`paused` flag: cross-type pause mechanism (boolean, orthogonal to status) — lives on items_active only. Paused items excluded from stale/attention/overdue/focus/unreviewed queries; visible in search and dedicated `/paused` page. Auto-cleared on archive/export/done.
 
-DB migration version 0→22, idempotent. Migration safety enforced by PostToolUse hook.
+Mutations on items_vault from MCP (`sparkle_update_note`, `sparkle_advance_note`, `sparkle_pause_note`, `sparkle_resume_note`) and REST (`PATCH /api/items/:id` on vault rows) return `VAULT_READONLY` (409). Use `sparkle_write_obsidian` for content edits or `sparkle_release_note` / `DELETE /api/items/:id/vault-stub` to drop Sparkle's record while preserving the vault `.md`.
+
+DB migration version 0→23, idempotent. Migration safety enforced by PostToolUse hook.
 
 - Boolean settings: use `getBoolSetting(all, key, defaultValue)` — never raw `=== "true"`. New boolean settings MUST have a migration INSERT OR IGNORE + fresh install seed.
 

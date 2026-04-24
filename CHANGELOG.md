@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.4.2.0] - 2026-04-25
+
+### Added
+
+- **Dashboard "最近活動" now surfaces vault exports** with an `匯出` activity badge (slate). Vault rows are merged from `items_vault` into `getRecentItems` via a 2-SELECT + JS merge, keyed by `exported_at`. Clicking a vault row navigates to `/item/:id` (the universal resolver) instead of the removed `/notes/exported` route.
+- **Week view `notes_modified` includes vault exports** for the day they were exported, using `exported_at` as the event timestamp. Entries render with `status: 'exported'`.
+- **Category distribution includes items_vault** — per-category counts sum across active + vault, so categories remain visible after their only member is exported.
+- **Daily note `活躍筆記` section includes vault exports** for the generated day (labeled `(exported, 今日修改)`).
+- **`docs/migration-v23.md`** — 6-section self-hoster guide: schema summary, query translations, 13-tool MCP behavior diff, upgrade steps, rollback constraints, Claude.ai connector reconnect.
+- **`server/db/README.md`** — 6-section WHY doc for the two-table split: rationale, cross-table FK + app-layer constraints, FTS5 scope, dry-run protocol, DB-state check queries, rollback procedure.
+- **MCP instruction `## 資料模型` section** — explains the two-table model, item removal paths, and `VAULT_READONLY` error handling to MCP clients (rebuilt `mcp-server/dist`).
+
+### Changed
+
+- `CLAUDE.md` data-model line rewritten around the items_active / items_vault split; documents the `VAULT_READONLY` return from MCP + REST mutations on vault rows.
+- `ActivityType` extended with `"exported"` in both `server/lib/stats.ts` and `src/lib/types.ts`; `ActivityBadge` gains the slate "匯出" style.
+
+### Tests
+
+- New: `server/lib/__tests__/stats-vault-merge.test.ts` — 10 cases across `getRecentItems`, `getWeekData`, `getCategoryDistribution` covering vault inclusion, private filtering, sort order, and limit/offset pagination over the union.
+- New: `generateDailyNote — items_vault merge` describe block in `daily-note.test.ts` — 2 cases (happy path + private filter).
+
 ## [1.4.1.0] - 2026-04-24
 
 ### Added

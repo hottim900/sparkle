@@ -24,12 +24,26 @@ export const SPARKLE_INSTRUCTIONS = `
 - fleeting（閃念）：快速捕捉的原始想法，未經整理
 - developing（發展中）：正在擴充、加入脈絡與結構的筆記
 - permanent（永久）：論述完整、能獨立存在的知識單元
-- exported（已匯出）：已匯出至 Obsidian vault
+- exported（已匯出）：已匯出至 Obsidian vault（位於 items_vault，僅保留 metadata + 500 字 snippet）
 - archived（封存）：不再活躍但保留紀錄
 
 **待辦 (todo)** — GTD 任務管理：active → done → archived
 
 **暫存 (scratch)** — 臨時草稿：draft → archived。用於暫時存放片段資訊，不進入 Zettelkasten 流程。
+
+## 資料模型
+
+### 兩張表 (post-v1.4.0)
+- items_active: 成熟度 pipeline (fleeting/developing/permanent/archived)，content 欄位 authoritative
+- items_vault: exported 筆記的 metadata + 500 字 snippet，vault .md 是 content authoritative source
+
+### 移除項目路徑
+- Active 項目封存: sparkle_update_note(status='archived')
+- Active 項目真刪: DELETE /api/items/:id (MCP 無 tool)
+- Vault 項目釋出 Sparkle 記錄: sparkle_release_note (vault .md 不動)
+
+### VAULT_READONLY 錯誤處理
+- 遇到 code=VAULT_READONLY: 改用 sparkle_write_obsidian (vault 是 source of truth)
 
 ## 成熟度判斷標準
 

@@ -164,7 +164,7 @@ export interface LineBriefSendResponse {
 }
 
 // Dashboard types
-export type ActivityType = "created" | "updated";
+export type ActivityType = "created" | "updated" | "exported";
 
 export interface RecentActivityItem extends Item {
   activity: ActivityType;
