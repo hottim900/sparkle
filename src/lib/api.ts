@@ -277,6 +277,17 @@ export async function deleteItem(id: string): Promise<void> {
   await request(`/items/${id}`, { method: "DELETE" });
 }
 
+// Release a vault stub (hard-delete items_vault row; vault .md preserved).
+// Server nulls vault_files.sparkle_id atomically. Linked todos become dangling.
+export async function releaseVaultStub(
+  id: string,
+): Promise<{ ok: boolean; id: string; export_path: string | null }> {
+  return request<{ ok: boolean; id: string; export_path: string | null }>(
+    `/items/${id}/vault-stub`,
+    { method: "DELETE" },
+  );
+}
+
 // Batch API
 export async function batchAction(
   ids: string[],

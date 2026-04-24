@@ -9,6 +9,7 @@ import {
   listItems,
   updateItem,
   deleteItem,
+  deleteVaultItem,
 } from "../lib/items.js";
 import { resolveLinkedInfoActive } from "../lib/item-enrichment.js";
 import { isValidTypeStatus, getAutoMappedStatus } from "../lib/item-type-system.js";
@@ -429,6 +430,33 @@ itemsRouter.patch("/:id", async (c) => {
     }
     throw e;
   }
+});
+
+// Release a vault stub — hard-deletes items_vault row + nulls vault_files.sparkle_id.
+// vault .md file is preserved; Sparkle simply stops tracking it. Linked todos
+// become dangling (linked_note_origin: 'missing' in subsequent responses).
+itemsRouter.delete("/:id/vault-stub", (c) => {
+  const id = c.req.param("id");
+  const existing = getItem(db, id, false);
+  if (!existing) {
+    return c.json({ error: "Item not found" }, 404);
+  }
+  if (existing.origin !== "vault") {
+    return c.json(
+      {
+        error: "此端點只能釋出 vault 項目；active 項目請用 DELETE /api/items/:id",
+        error_en:
+          "This endpoint only releases vault items; use DELETE /api/items/:id for active items.",
+        code: "NOT_VAULT_ITEM",
+      },
+      404,
+    );
+  }
+  const released = deleteVaultItem(sqlite, existing.id);
+  if (!released) {
+    return c.json({ error: "Item not found" }, 404);
+  }
+  return c.json({ ok: true, id: released.id, export_path: released.export_path });
 });
 
 // Delete item — vault-origin returns 409 (use /vault-stub endpoint to release)

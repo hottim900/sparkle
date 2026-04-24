@@ -146,6 +146,15 @@ export async function updateItem(
   return sparkleApi<SparkleItem>(`/items/${id}`, "PATCH", input);
 }
 
+export async function releaseVaultNote(
+  id: string,
+): Promise<{ ok: boolean; id: string; export_path: string | null }> {
+  return sparkleApi<{ ok: boolean; id: string; export_path: string | null }>(
+    `/items/${id}/vault-stub`,
+    "DELETE",
+  );
+}
+
 // --- Category operations ---
 
 export async function listCategories(): Promise<{ categories: Category[] }> {

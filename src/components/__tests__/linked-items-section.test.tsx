@@ -11,7 +11,7 @@ import { createTestQueryClient } from "@/test-utils";
 vi.mock("@/lib/api");
 
 vi.mock("sonner", () => ({
-  toast: { success: vi.fn(), error: vi.fn() },
+  toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
 }));
 
 function makeNoteItem(overrides: Partial<ParsedItem> = {}): ParsedItem {
@@ -269,30 +269,29 @@ describe("LinkedItemsSection (todo mode)", () => {
   });
 
   it("displays linked note title", async () => {
-    vi.mocked(api.getItem).mockResolvedValue(
-      makeRawItem({ id: "linked-note", title: "Linked Note Title", type: "note" }),
+    renderLinked(
+      makeTodoItem({
+        linked_note_id: "linked-note",
+        linked_note_title: "Linked Note Title",
+        linked_note_origin: "active",
+      }),
     );
 
-    renderLinked(makeTodoItem({ linked_note_id: "linked-note" }));
-
-    await waitFor(() => {
-      expect(screen.getByText("Linked Note Title")).toBeInTheDocument();
-    });
+    expect(screen.getByText("Linked Note Title")).toBeInTheDocument();
   });
 
   it("click linked note calls onNavigate", async () => {
-    vi.mocked(api.getItem).mockResolvedValue(
-      makeRawItem({ id: "linked-note", title: "Click Me Note", type: "note" }),
-    );
-
     const user = userEvent.setup();
     const onNavigate = vi.fn();
 
-    renderLinked(makeTodoItem({ linked_note_id: "linked-note" }), { onNavigate });
-
-    await waitFor(() => {
-      expect(screen.getByText("Click Me Note")).toBeInTheDocument();
-    });
+    renderLinked(
+      makeTodoItem({
+        linked_note_id: "linked-note",
+        linked_note_title: "Click Me Note",
+        linked_note_origin: "active",
+      }),
+      { onNavigate },
+    );
 
     await user.click(screen.getByText("Click Me Note"));
     expect(onNavigate).toHaveBeenCalledWith("linked-note");
@@ -385,20 +384,21 @@ describe("LinkedItemsSection (todo mode)", () => {
   });
 
   it("unlink calls updateItem with null linked_note_id", async () => {
-    vi.mocked(api.getItem).mockResolvedValue(
-      makeRawItem({ id: "linked-note", title: "Linked Note", type: "note" }),
-    );
     vi.mocked(api.updateItem).mockResolvedValue(
       makeRawItem({ id: "todo-1", type: "todo", linked_note_id: null }),
     );
 
     const user = userEvent.setup();
 
-    renderLinked(makeTodoItem({ linked_note_id: "linked-note" }));
+    renderLinked(
+      makeTodoItem({
+        linked_note_id: "linked-note",
+        linked_note_title: "Linked Note",
+        linked_note_origin: "active",
+      }),
+    );
 
-    await waitFor(() => {
-      expect(screen.getByText("Linked Note")).toBeInTheDocument();
-    });
+    expect(screen.getByText("Linked Note")).toBeInTheDocument();
 
     await user.click(screen.getByText("解除關聯"));
 
@@ -478,10 +478,11 @@ describe("LinkedItemsSection offline behavior", () => {
   });
 
   it("disables unlink button when offline", async () => {
-    const todoItem = makeTodoItem({ linked_note_id: "note-1" });
-    vi.mocked(api.getItem).mockResolvedValue(
-      makeRawItem({ id: "note-1", type: "note", title: "Linked Note" }),
-    );
+    const todoItem = makeTodoItem({
+      linked_note_id: "note-1",
+      linked_note_title: "Linked Note",
+      linked_note_origin: "active",
+    });
     const queryClient = createTestQueryClient();
 
     render(
@@ -490,11 +491,98 @@ describe("LinkedItemsSection offline behavior", () => {
       </QueryClientProvider>,
     );
 
-    await waitFor(() => {
-      expect(screen.getByText("Linked Note")).toBeInTheDocument();
-    });
+    expect(screen.getByText("Linked Note")).toBeInTheDocument();
 
     const unlinkBtn = screen.getByRole("button", { name: /解除關聯/ });
     expect(unlinkBtn).toBeDisabled();
+  });
+});
+
+describe("LinkedItemsSection (todo mode — dangling linked note UX)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("renders 'active' branch with FileText + title + 解除關聯 for resolved active note", () => {
+    renderLinked(
+      makeTodoItem({
+        linked_note_id: "active-note",
+        linked_note_title: "Active Note",
+        linked_note_origin: "active",
+      }),
+    );
+    expect(screen.getByText("Active Note")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /解除關聯/ })).toBeInTheDocument();
+    expect(screen.queryByText("此連結已失效（vault 中找不到檔案）")).not.toBeInTheDocument();
+  });
+
+  it("renders 'vault' branch with '位於 vault 內' badge for exported note", () => {
+    renderLinked(
+      makeTodoItem({
+        linked_note_id: "vault-note",
+        linked_note_title: "Vault Note",
+        linked_note_origin: "vault",
+      }),
+    );
+    expect(screen.getByText("Vault Note")).toBeInTheDocument();
+    expect(screen.getByText("位於 vault 內")).toBeInTheDocument();
+  });
+
+  it("renders 'missing' branch with destructive AlertTriangle + dangling message + prefix", () => {
+    renderLinked(
+      makeTodoItem({
+        linked_note_id: "00000000-0000-0000-0000-000000000042",
+        linked_note_title: null,
+        linked_note_origin: "missing",
+        linked_note_prefix: "00000000",
+      }),
+    );
+    expect(screen.getByTestId("linked-note-missing")).toBeInTheDocument();
+    expect(screen.getByText(/此連結已失效（vault 中找不到檔案）/)).toBeInTheDocument();
+    expect(screen.getByText(/00000000/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /解除關聯/ })).toBeInTheDocument();
+  });
+
+  it("shows sonner toast.warning on first render of missing state", () => {
+    renderLinked(
+      makeTodoItem({
+        linked_note_id: "00000000-0000-0000-0000-000000000042",
+        linked_note_title: null,
+        linked_note_origin: "missing",
+        linked_note_prefix: "00000000",
+      }),
+    );
+    expect(toast.warning).toHaveBeenCalledWith("連結已失效：原筆記已從 Sparkle 記錄移除");
+  });
+
+  it("renders loading skeleton when linked_note_id set but linked_note_origin absent (stale)", () => {
+    const { container } = renderLinked(
+      makeTodoItem({
+        linked_note_id: "note-fetching",
+        linked_note_title: null,
+        linked_note_origin: undefined,
+      }),
+    );
+    expect(container.querySelector(".animate-pulse")).toBeTruthy();
+    expect(screen.queryByText("搜尋並關聯筆記")).not.toBeInTheDocument();
+  });
+
+  it("missing-state unlink button calls updateItem with null linked_note_id", async () => {
+    vi.mocked(api.updateItem).mockResolvedValue(
+      makeRawItem({ id: "todo-1", type: "todo", linked_note_id: null }),
+    );
+    const user = userEvent.setup();
+    renderLinked(
+      makeTodoItem({
+        linked_note_id: "00000000-0000-0000-0000-000000000042",
+        linked_note_title: null,
+        linked_note_origin: "missing",
+        linked_note_prefix: "00000000",
+      }),
+    );
+    await user.click(screen.getByRole("button", { name: /解除關聯/ }));
+    await waitFor(() => {
+      expect(api.updateItem).toHaveBeenCalledWith("todo-1", { linked_note_id: null });
+    });
   });
 });

@@ -9,7 +9,7 @@ import { renderWithContext } from "@/test-utils";
 vi.mock("@/lib/api");
 
 vi.mock("sonner", () => ({
-  toast: { success: vi.fn(), error: vi.fn() },
+  toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
 }));
 
 const mockNavigate = vi.fn();
@@ -100,18 +100,32 @@ describe("ItemDetail - exported read-only mode", () => {
     expect(textareas.length).toBe(0);
   });
 
-  it("shows exported banner with path", async () => {
+  it("shows exported marker + header vault-origin bar with path + vault link", async () => {
     renderItemDetail();
 
     await waitFor(() => {
       expect(screen.getByText("已匯出至 Obsidian")).toBeInTheDocument();
     });
 
-    // Path and vault link appear after sparkle_id API resolves
+    // Vault-origin header bar: "位於 vault · {export_path}"
     await waitFor(() => {
-      expect(screen.getByText("inbox/test-exported-note.md")).toBeInTheDocument();
+      expect(screen.getByText(/位於 vault/)).toBeInTheDocument();
+      expect(screen.getByText(/inbox\/test-exported-note\.md/)).toBeInTheDocument();
+    });
+
+    // Vault link appears after sparkle_id API resolves
+    await waitFor(() => {
       expect(screen.getByText("在 Vault 中查看")).toBeInTheDocument();
     });
+  });
+
+  it("header shows release button on vault-origin item (not delete button)", async () => {
+    renderItemDetail();
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "釋出" })).toBeInTheDocument();
+    });
+    // The normal delete icon button should not appear for a vault item
+    expect(screen.queryByRole("button", { name: "刪除" })).not.toBeInTheDocument();
   });
 
   it("shows fallback when vault path not found", async () => {

@@ -9,18 +9,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  updateItem,
-  getItem,
-  createItem,
-  getLinkedTodos,
-  searchItemsApi,
-  getTags,
-} from "@/lib/api";
-import { parseItem, parseItems, type ParsedItem, type ItemPriority, type Item } from "@/lib/types";
+import { updateItem, createItem, getLinkedTodos, searchItemsApi, getTags } from "@/lib/api";
+import { parseItems, type ParsedItem, type ItemPriority, type Item } from "@/lib/types";
 import { TagInput } from "@/components/tag-input";
 import { toast } from "sonner";
-import { Loader2, X, ListTodo, FileText, Plus, Search, Unlink } from "lucide-react";
+import {
+  Loader2,
+  X,
+  ListTodo,
+  FileText,
+  FolderOpen,
+  AlertTriangle,
+  Plus,
+  Search,
+  Unlink,
+} from "lucide-react";
 import { queryKeys } from "@/lib/query-keys";
 import { useInvalidateAfterItemAndCategoryMutation } from "@/hooks/use-invalidate";
 
@@ -68,14 +71,26 @@ export function LinkedItemsSection({
     enabled: item.type === "note",
   });
 
-  // Fetch linked note title for backlink display on todos
-  // Must use same queryFn shape as ItemDetail (parseItem) to keep cache consistent
-  const { data: linkedNoteTitle } = useQuery({
-    queryKey: queryKeys.items.detail(item.linked_note_id ?? ""),
-    queryFn: () => getItem(item.linked_note_id!).then(parseItem),
-    select: (data) => data.title,
-    enabled: item.type === "todo" && !!item.linked_note_id,
-  });
+  // Linked note info is enriched server-side onto `item.linked_note_title` /
+  // `linked_note_origin` / `linked_note_prefix`, so we branch on those fields
+  // directly — no extra fetch needed.
+  const linkedNoteOrigin = item.linked_note_origin ?? null;
+  const linkedNoteTitle = item.linked_note_title ?? null;
+  const linkedNotePrefix = item.linked_note_prefix ?? null;
+
+  // Warn (via sonner, which already routes to screen readers) the first time we
+  // render a missing linked-note on a given todo.
+  const warnedMissingId = useRef<string | null>(null);
+  useEffect(() => {
+    if (
+      item.type === "todo" &&
+      linkedNoteOrigin === "missing" &&
+      warnedMissingId.current !== item.id
+    ) {
+      warnedMissingId.current = item.id;
+      toast.warning("連結已失效：原筆記已從 Sparkle 記錄移除");
+    }
+  }, [item.id, item.type, linkedNoteOrigin]);
 
   // Reset state when item changes
   useEffect(() => {
@@ -180,15 +195,46 @@ export function LinkedItemsSection({
       {item.type === "todo" && (
         <div>
           <label className="text-sm text-muted-foreground block mb-1">關聯筆記</label>
-          {item.linked_note_id && linkedNoteTitle ? (
+          {item.linked_note_id && linkedNoteOrigin === "missing" ? (
+            /* Dangling: linked note was released from Sparkle */
+            <div className="space-y-1" data-testid="linked-note-missing">
+              <div className="flex items-center gap-2 p-2 rounded-md border border-destructive/40 bg-destructive/5 text-destructive text-sm">
+                <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                <span className="flex-1 break-words">
+                  此連結已失效（vault 中找不到檔案）
+                  {linkedNotePrefix ? (
+                    <span className="ml-1 font-mono text-xs opacity-70">· {linkedNotePrefix}</span>
+                  ) : null}
+                </span>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 px-2 text-xs gap-1 text-muted-foreground hover:text-destructive"
+                onClick={handleUnlinkNote}
+                disabled={!isOnline}
+              >
+                <Unlink className="h-3 w-3" />
+                解除關聯
+              </Button>
+            </div>
+          ) : item.linked_note_id && linkedNoteTitle && linkedNoteOrigin ? (
+            /* Resolved: linked note is in items_active or items_vault */
             <div className="space-y-1">
               <button
                 type="button"
                 className="w-full text-left p-2 rounded-md border hover:bg-accent transition-colors flex items-center gap-2"
                 onClick={() => onNavigate?.(item.linked_note_id!)}
               >
-                <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                {linkedNoteOrigin === "vault" ? (
+                  <FolderOpen className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                ) : (
+                  <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                )}
                 <span className="text-sm truncate flex-1">{linkedNoteTitle}</span>
+                {linkedNoteOrigin === "vault" && (
+                  <span className="text-xs text-muted-foreground shrink-0">位於 vault 內</span>
+                )}
               </button>
               <Button
                 variant="ghost"
@@ -201,6 +247,12 @@ export function LinkedItemsSection({
                 解除關聯
               </Button>
             </div>
+          ) : item.linked_note_id && !linkedNoteOrigin ? (
+            /* Stale: linked info not yet resolved (async/offline load) */
+            <div
+              className="h-9 w-full animate-pulse bg-muted rounded"
+              aria-label="載入關聯筆記中"
+            />
           ) : (
             <>
               {showNoteSearch ? (

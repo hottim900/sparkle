@@ -82,7 +82,7 @@ export function ItemDetail({ itemId, onDeleted, onBack, onNavigate }: ItemDetail
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { obsidianEnabled, isOnline } = useAppContext();
-  const { handleDelete, handleExport, exporting } = useItemActions(item, {
+  const { handleDelete, handleExport, handleRelease, exporting, releasing } = useItemActions(item, {
     isOnline,
     obsidianEnabled,
     invalidateAfterSave,
@@ -173,11 +173,13 @@ export function ItemDetail({ itemId, onDeleted, onBack, onNavigate }: ItemDetail
         canGoBack={false}
         saveStatus={saveStatus}
         exporting={exporting}
+        releasing={releasing}
         isOnline={isOnline}
         onBack={handleBack}
         onClose={handleBack}
         onExport={handleExport}
         onDelete={handleDelete}
+        onRelease={handleRelease}
         onOpenCreateTodo={() => setCreateTodoRequested(true)}
         onOpenShare={() => setShareOpen(true)}
         onMarkAsPrivate={handleMarkAsPrivate}
@@ -187,34 +189,27 @@ export function ItemDetail({ itemId, onDeleted, onBack, onNavigate }: ItemDetail
       {item.origin === "vault" ? (
         /* ── Exported: Read-only view ── */
         <div className="flex-1 overflow-y-auto p-4 space-y-4 animate-fade-in break-words">
-          {/* Banner */}
-          <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-green-50 dark:bg-green-950 text-green-800 dark:text-green-200 text-sm">
+          {/* Vault link (the header slate bar already shows "位於 vault · path") */}
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <span>已匯出至 Obsidian</span>
             {vaultPath ? (
-              <>
-                <span className="text-green-600 dark:text-green-400 font-mono text-xs truncate">
-                  {vaultPath.path}
-                </span>
-                <a
-                  href={`/vault?file=${encodeURIComponent(vaultPath.path)}`}
-                  className={`inline-flex items-center gap-1 text-xs ${isOnline ? "text-green-700 dark:text-green-300 hover:underline" : "text-muted-foreground pointer-events-none"}`}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    if (isOnline) {
-                      navigate({
-                        to: "/vault",
-                        search: { file: vaultPath.path, filter: undefined },
-                      });
-                    }
-                  }}
-                >
-                  <ExternalLink className="h-3 w-3" />在 Vault 中查看
-                </a>
-              </>
+              <a
+                href={`/vault?file=${encodeURIComponent(vaultPath.path)}`}
+                className={`inline-flex items-center gap-1 ${isOnline ? "text-foreground hover:underline" : "pointer-events-none"}`}
+                onClick={(e) => {
+                  e.preventDefault();
+                  if (isOnline) {
+                    navigate({
+                      to: "/vault",
+                      search: { file: vaultPath.path, filter: undefined },
+                    });
+                  }
+                }}
+              >
+                <ExternalLink className="h-3 w-3" />在 Vault 中查看
+              </a>
             ) : (
-              <span className="text-green-600 dark:text-green-400 text-xs">
-                Vault 中未找到對應檔案
-              </span>
+              <span>Vault 中未找到對應檔案</span>
             )}
           </div>
 

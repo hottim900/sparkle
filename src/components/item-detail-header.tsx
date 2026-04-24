@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -24,6 +25,7 @@ import {
   Link,
   Globe,
   Lock,
+  FolderOpen,
 } from "lucide-react";
 
 interface ItemDetailHeaderProps {
@@ -32,11 +34,13 @@ interface ItemDetailHeaderProps {
   canGoBack?: boolean;
   saveStatus: "idle" | "saving" | "saved";
   exporting: boolean;
+  releasing?: boolean;
   isOnline?: boolean;
   onBack?: () => void;
   onClose?: () => void;
   onExport: () => void;
   onDelete: () => void;
+  onRelease?: () => void;
   onOpenCreateTodo: () => void;
   onOpenShare: () => void;
   onMarkAsPrivate: () => void;
@@ -49,10 +53,12 @@ export function ItemDetailHeader({
   canGoBack,
   saveStatus,
   exporting,
+  releasing = false,
   onBack,
   onClose,
   onExport,
   onDelete,
+  onRelease,
   onOpenCreateTodo,
   isOnline = true,
   onOpenShare,
@@ -60,8 +66,15 @@ export function ItemDetailHeader({
   markingAsPrivate = false,
 }: ItemDetailHeaderProps) {
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [releaseOpen, setReleaseOpen] = useState(false);
   const showExportButton = obsidianEnabled && item.type === "note" && item.status === "permanent";
   const isExported = item.origin === "vault";
+
+  const handleCopyPath = () => {
+    if (!item.export_path) return;
+    navigator.clipboard.writeText(item.export_path);
+    toast.success("已複製 vault 路徑");
+  };
 
   return (
     <>
@@ -175,41 +188,87 @@ export function ItemDetailHeader({
               )}
             </>
           )}
-          <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-            <DialogTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                disabled={!isOnline}
-                aria-label="刪除"
-                title="刪除"
-              >
-                <Trash2 className="h-4 w-4 text-destructive" />
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>確認刪除</DialogTitle>
-                <DialogDescription>
-                  確定要刪除「{item.title}」嗎？此操作無法復原。
-                </DialogDescription>
-              </DialogHeader>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setDeleteOpen(false)}>
-                  取消
-                </Button>
+          {isExported ? (
+            <Dialog open={releaseOpen} onOpenChange={setReleaseOpen}>
+              <DialogTrigger asChild>
                 <Button
                   variant="destructive"
-                  onClick={() => {
-                    onDelete();
-                    setDeleteOpen(false);
-                  }}
+                  size="sm"
+                  className="gap-1 text-xs"
+                  disabled={!isOnline || releasing || !onRelease}
+                  aria-label="釋出"
+                  title="釋出 Sparkle 記錄；vault 檔案保留"
                 >
-                  刪除
+                  {releasing ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-3 w-3" />
+                  )}
+                  釋出
                 </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>釋出 Sparkle 記錄</DialogTitle>
+                  <DialogDescription>
+                    Sparkle 將不再記錄這筆筆記。vault 檔案
+                    {item.export_path ? ` ${item.export_path} ` : " "}
+                    保留不變動。
+                  </DialogDescription>
+                </DialogHeader>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setReleaseOpen(false)}>
+                    取消
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    onClick={() => {
+                      onRelease?.();
+                      setReleaseOpen(false);
+                    }}
+                  >
+                    釋出
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          ) : (
+            <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+              <DialogTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  disabled={!isOnline}
+                  aria-label="刪除"
+                  title="刪除"
+                >
+                  <Trash2 className="h-4 w-4 text-destructive" />
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>確認刪除</DialogTitle>
+                  <DialogDescription>
+                    確定要刪除「{item.title}」嗎？此操作無法復原。
+                  </DialogDescription>
+                </DialogHeader>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setDeleteOpen(false)}>
+                    取消
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    onClick={() => {
+                      onDelete();
+                      setDeleteOpen(false);
+                    }}
+                  >
+                    刪除
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          )}
         </div>
       </div>
 
@@ -232,6 +291,26 @@ export function ItemDetailHeader({
         )}
         {item.type === "note" ? "筆記" : item.type === "todo" ? "待辦" : "暫存"}
       </div>
+
+      {/* Vault-origin indicator bar (third bar, slate; amber is owned by paused) */}
+      {isExported && (
+        <button
+          type="button"
+          onClick={handleCopyPath}
+          disabled={!item.export_path}
+          className="flex items-center gap-1.5 w-full px-4 py-1.5 text-xs font-medium bg-slate-50 text-slate-700 dark:bg-slate-800 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors disabled:cursor-default disabled:hover:bg-slate-50 dark:disabled:hover:bg-slate-800"
+          title={item.export_path ? "點擊複製 vault 路徑" : "vault 路徑未知"}
+          aria-label={
+            item.export_path ? `位於 vault · ${item.export_path}，點擊複製` : "位於 vault"
+          }
+        >
+          <FolderOpen className="h-3.5 w-3.5 shrink-0" />
+          <span className="truncate">
+            位於 vault
+            {item.export_path ? ` · ${item.export_path}` : ""}
+          </span>
+        </button>
+      )}
     </>
   );
 }

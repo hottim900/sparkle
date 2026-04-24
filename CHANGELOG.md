@@ -1,5 +1,25 @@
 # Changelog
 
+## [1.4.1.0] - 2026-04-24
+
+### Added
+
+- **Vault stub release** — `DELETE /api/items/:id/vault-stub` hard-deletes an `items_vault` row and nulls the matching `vault_files.sparkle_id` atomically. vault .md is preserved; Sparkle just stops tracking it. Linked todos become dangling (rendered as `linked_note_origin: 'missing'`).
+- **MCP `sparkle_release_note`** — wraps the vault-stub endpoint; requires `confirm: true` + vault-origin pre-check.
+- **Header vault-origin indicator bar** (slate-50 / dark:slate-800, `FolderOpen` icon, click-to-copy `export_path`) sits below the type indicator. Slate was chosen because amber is reserved for paused.
+- **Release button + dialog** replaces the trash icon when `origin === 'vault'`: destructive variant, reuses the existing `<Dialog>` primitive, copy per the plan (`釋出 Sparkle 記錄` / `Sparkle 將不再記錄這筆筆記。vault 檔案 {export_path} 保留不變動。`).
+- **Dangling linked-note UX** — `linked-items-section.tsx` now branches on `linked_note_origin`:
+  - `active` → `FileText` + title + `解除關聯`
+  - `vault` → `FolderOpen` + title + `位於 vault 內` muted badge
+  - `missing` → destructive `AlertTriangle` + `此連結已失效（vault 中找不到檔案）` + short-id prefix + `解除關聯`; sonner `toast.warning` fires once per item on first missing render.
+  - `vault-stale` (linked_note_id set but origin absent) → `animate-pulse` skeleton.
+- Tests: 5-case route suite (`items-vault-stub.test.ts`) including D2 dangling verification via FK-bypassed seed; 6-test E2E spec (`vault-release.spec.ts`); component tests for all three dangling states + missing-state toast; MCP tests for confirm-false / non-vault / happy / API-failure paths.
+
+### Changed
+
+- `use-item-actions.ts` exposes `handleRelease` + `releasing`. 404 from vault-stub collapses to `此筆記已釋出` toast (idempotent); other failures to `釋出失敗，請重試`.
+- `linked-items-section.tsx` reads `linked_note_title` / `linked_note_origin` / `linked_note_prefix` from the enriched item response directly, dropping the redundant `getItem` fetch.
+
 ## [1.4.0.0] - 2026-04-24
 
 ### BREAKING
