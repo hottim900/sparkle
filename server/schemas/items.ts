@@ -83,18 +83,23 @@ export const updateItemSchema = z.object({
 });
 
 export const listItemsSchema = z.object({
-  status: statusEnum.optional(),
+  // List accepts "exported" (synthesized from items_vault); create/update still
+  // reject it via statusEnum. importStatusEnum already enumerates exactly these 8.
+  status: importStatusEnum.optional(),
   type: z.enum(["note", "todo", "scratch"]).optional(),
   tag: z.string().min(1).max(50).optional(),
   sort: z.enum(["created", "priority", "due", "modified"]).default("created"),
   order: z.enum(["asc", "desc"]).default("desc"),
   limit: z.coerce.number().int().min(1).max(100).default(50),
-  offset: z.coerce.number().int().min(0).default(0),
+  // Offset capped to prevent memory blow-up in include_vault mode, which over-fetches
+  // `limit + offset` rows from each table. 10_000 * 2 * 100 rows is still sub-MB.
+  offset: z.coerce.number().int().min(0).max(10000).default(0),
   excludeStatus: z
     .union([z.string().transform((s) => s.split(",").filter(Boolean)), z.array(z.string())])
     .optional(),
   category_id: z.string().uuid().optional(),
   paused: z.enum(["true", "false", "all"]).optional(),
+  include_vault: z.enum(["true", "false"]).optional(),
 });
 
 export const batchSchema = z.object({

@@ -52,6 +52,7 @@ itemsRouter.get("/", (c) => {
       limit: c.req.query("limit"),
       offset: c.req.query("offset"),
       paused: c.req.query("paused"),
+      include_vault: c.req.query("include_vault"),
     });
     const result = listItems(db, query);
     return c.json(result);

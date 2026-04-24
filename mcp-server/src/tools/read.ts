@@ -42,7 +42,7 @@ If the prefix matches rows in both tables, returns 409 Conflict with candidate I
     "sparkle_list_notes",
     {
       title: "List Sparkle Notes",
-      description: `List notes from items_active with filter support. As of v1.4.0, default excludes vault-exported notes. Pass \`status='exported'\` to list items_vault (returns metadata + 500-char content_snippet; NOT full content — use \`sparkle_read_obsidian\` for that). For "all notes" queries, prefer \`sparkle_search_all\`.
+      description: `List notes from items_active with filter support. As of v1.4.0, default excludes vault-exported notes. Pass \`status='exported'\` to list items_vault only (returns metadata + 500-char content_snippet; NOT full content — use \`sparkle_read_obsidian\` for that), or \`include_vault=true\` to merge items_vault rows alongside items_active filter results. For "all notes" search queries, prefer \`sparkle_search_all\`.
 
 Note statuses (items_active): fleeting → developing → permanent → archived
 Note-exported (items_vault): \`status='exported'\` synthesized
@@ -50,12 +50,13 @@ Todo statuses: active → done → archived
 Scratch statuses: draft → archived
 
 Args:
-  - status (string, optional): Filter by status ("exported" lists items_vault; all other values list items_active)
-  - tag (string, optional): Filter by tag name
-  - type (string, optional): "note", "todo", or "scratch", default "note"
+  - status (string, optional): Filter by status ("exported" lists items_vault only; all other values list items_active)
+  - tag (string, optional): Filter by tag name (applied to both tables when include_vault=true)
+  - type (string, optional): "note", "todo", or "scratch", default "note" (todo/scratch skip vault — those types don't exist there)
   - category_id (string, optional): Filter by category UUID
   - paused (string, optional): 篩選暫停狀態 — "true"（僅暫停）、"false"（僅未暫停）、"all"（全部，預設）
-  - sort (string, optional): "created", "modified", "priority", or "due" (default: "created")
+  - include_vault (boolean, optional): If true, merge items_vault rows into the result (default false). Mutually exclusive with status='exported'.
+  - sort (string, optional): "created", "modified", "priority", or "due" (default: "created"). For vault rows: "modified" maps to exported_at; "priority"/"due" sort vault rows as null.
   - order (string, optional): "asc" or "desc" (default: "desc")
   - limit (number, optional): Max results 1-100, default 50
   - offset (number, optional): Pagination offset, default 0
@@ -82,6 +83,12 @@ Returns: List of items with total count and pagination info.`,
           .enum(["true", "false", "all"])
           .optional()
           .describe("篩選暫停狀態 (default: all)"),
+        include_vault: z
+          .boolean()
+          .optional()
+          .describe(
+            "Merge items_vault rows alongside active-table results (default false). Mutually exclusive with status='exported'.",
+          ),
         sort: z
           .enum(["created", "modified", "priority", "due"])
           .default("created")
@@ -97,9 +104,20 @@ Returns: List of items with total count and pagination info.`,
         openWorldHint: false,
       },
     },
-    async ({ status, tag, type, category_id, paused, sort, order, limit, offset }) => {
+    async ({ status, tag, type, category_id, paused, include_vault, sort, order, limit, offset }) => {
       try {
-        const data = await listItems({ status, tag, type, category_id, paused, sort, order, limit, offset });
+        const data = await listItems({
+          status,
+          tag,
+          type,
+          category_id,
+          paused,
+          include_vault,
+          sort,
+          order,
+          limit,
+          offset,
+        });
         const text = formatItemList(data.items, data.total, { offset, limit });
         return {
           content: [{ type: "text", text }],

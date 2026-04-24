@@ -227,6 +227,127 @@ describe("Data Access Layer", () => {
       expect(result.items[0]!.title).toBe("Third");
       expect(result.items[2]!.title).toBe("First");
     });
+
+    describe("v1.4.0 cross-table modes", () => {
+      const { v4: uuidv4 } = require("uuid");
+
+      function insertVaultRow(
+        title: string,
+        exportedAt: string,
+        opts: { tags?: string[]; category_id?: string | null; is_private?: 0 | 1 } = {},
+      ): string {
+        const id = uuidv4();
+        sqlite
+          .prepare(
+            `INSERT INTO items_vault (id, title, tags, aliases, origin, exported_at, created, is_private, content_snippet, category_id)
+             VALUES (?, ?, ?, '[]', '', ?, ?, ?, '', ?)`,
+          )
+          .run(
+            id,
+            title,
+            JSON.stringify(opts.tags ?? []),
+            exportedAt,
+            exportedAt,
+            opts.is_private ?? 0,
+            opts.category_id ?? null,
+          );
+        return id;
+      }
+
+      it("status='exported' routes to items_vault only", () => {
+        createItem(db, { title: "Active note" });
+        insertVaultRow("Vault note", "2026-04-01T00:00:00.000Z");
+        const result = listItems(db, { status: "exported" });
+        expect(result.items).toHaveLength(1);
+        expect(result.items[0]!.title).toBe("Vault note");
+        expect(result.items[0]!.origin).toBe("vault");
+        expect(result.total).toBe(1);
+      });
+
+      it("include_vault='true' merges items_active + items_vault", () => {
+        createItem(db, { title: "Active" });
+        insertVaultRow("Vault", "2026-04-01T00:00:00.000Z");
+        const result = listItems(db, { include_vault: "true" });
+        const titles = result.items.map((i) => i.title).sort();
+        expect(titles).toEqual(["Active", "Vault"]);
+        expect(result.total).toBe(2);
+      });
+
+      it("include_vault='true' sorts merged rows by created desc", () => {
+        sqlite
+          .prepare(
+            "INSERT INTO items_active (id, title, type, status, tags, origin, aliases, created, modified) VALUES (?, ?, 'note', 'fleeting', '[]', '', '[]', ?, ?)",
+          )
+          .run(uuidv4(), "Active-2026-02", "2026-02-01T00:00:00.000Z", "2026-02-01T00:00:00.000Z");
+        insertVaultRow("Vault-2026-04", "2026-04-01T00:00:00.000Z");
+        insertVaultRow("Vault-2026-01", "2026-01-15T00:00:00.000Z");
+        const result = listItems(db, { include_vault: "true", sort: "created", order: "desc" });
+        expect(result.items.map((i) => i.title)).toEqual([
+          "Vault-2026-04",
+          "Active-2026-02",
+          "Vault-2026-01",
+        ]);
+      });
+
+      it("include_vault='true' with category_id filters both tables", () => {
+        const catId = uuidv4();
+        sqlite
+          .prepare(
+            "INSERT INTO categories (id, name, sort_order, created, modified) VALUES (?, ?, 0, ?, ?)",
+          )
+          .run(catId, "Work", new Date().toISOString(), new Date().toISOString());
+        createItem(db, { title: "Active-cat", category_id: catId });
+        createItem(db, { title: "Active-other" });
+        insertVaultRow("Vault-cat", "2026-04-01T00:00:00.000Z", { category_id: catId });
+        insertVaultRow("Vault-other", "2026-04-02T00:00:00.000Z");
+        const result = listItems(db, { include_vault: "true", category_id: catId });
+        const titles = result.items.map((i) => i.title).sort();
+        expect(titles).toEqual(["Active-cat", "Vault-cat"]);
+      });
+
+      it("include_vault='true' applies tag filter to vault rows", () => {
+        createItem(db, { title: "Active-tagged", tags: ["work"] });
+        createItem(db, { title: "Active-untagged" });
+        insertVaultRow("Vault-tagged", "2026-04-01T00:00:00.000Z", { tags: ["work"] });
+        insertVaultRow("Vault-untagged", "2026-04-02T00:00:00.000Z");
+        const result = listItems(db, { include_vault: "true", tag: "work" });
+        const titles = result.items.map((i) => i.title).sort();
+        expect(titles).toEqual(["Active-tagged", "Vault-tagged"]);
+      });
+
+      it("include_vault='true' with type='todo' skips vault (vault has no todos)", () => {
+        createItem(db, { title: "A todo", type: "todo" });
+        insertVaultRow("Vault-note", "2026-04-01T00:00:00.000Z");
+        const result = listItems(db, { include_vault: "true", type: "todo" });
+        expect(result.items).toHaveLength(1);
+        expect(result.items[0]!.title).toBe("A todo");
+      });
+
+      it("include_vault='true' paginates merged window", () => {
+        for (let i = 0; i < 3; i++) {
+          sqlite
+            .prepare(
+              "INSERT INTO items_active (id, title, type, status, tags, origin, aliases, created, modified) VALUES (?, ?, 'note', 'fleeting', '[]', '', '[]', ?, ?)",
+            )
+            .run(
+              uuidv4(),
+              `A-${i}`,
+              `2026-0${i + 1}-01T00:00:00.000Z`,
+              `2026-0${i + 1}-01T00:00:00.000Z`,
+            );
+        }
+        for (let i = 0; i < 2; i++) {
+          insertVaultRow(`V-${i}`, `2026-0${4 + i}-01T00:00:00.000Z`);
+        }
+        const page1 = listItems(db, { include_vault: "true", limit: 2, offset: 0 });
+        const page2 = listItems(db, { include_vault: "true", limit: 2, offset: 2 });
+        expect(page1.items).toHaveLength(2);
+        expect(page2.items).toHaveLength(2);
+        expect(page1.total).toBe(5);
+        expect(page2.total).toBe(5);
+        expect(page1.items[0]!.title).toBe("V-1");
+      });
+    });
   });
 
   describe("updateItem", () => {

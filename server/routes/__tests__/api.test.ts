@@ -595,6 +595,72 @@ describe("Items CRUD", () => {
       });
       expect(res.status).toBe(400);
     });
+
+    describe("v1.4.0 cross-table flags", () => {
+      function seedVaultRow(title: string, exportedAt = "2026-04-01T00:00:00.000Z"): string {
+        const id = crypto.randomUUID();
+        testSqlite
+          .prepare(
+            `INSERT INTO items_vault (id, title, tags, aliases, origin, exported_at, created, is_private, content_snippet)
+             VALUES (?, ?, '[]', '[]', '', ?, ?, 0, '')`,
+          )
+          .run(id, title, exportedAt, exportedAt);
+        return id;
+      }
+
+      it("status=exported returns items_vault only", async () => {
+        await app.request("/api/items", {
+          method: "POST",
+          headers: jsonHeaders(),
+          body: JSON.stringify({ title: "Active note" }),
+        });
+        seedVaultRow("Vault note");
+
+        const res = await app.request("/api/items?status=exported", { headers: authHeaders() });
+        expect(res.status).toBe(200);
+        const body = await res.json();
+        expect(body.items).toHaveLength(1);
+        expect(body.items[0].title).toBe("Vault note");
+        expect(body.items[0].origin).toBe("vault");
+      });
+
+      it("include_vault=true merges active + vault rows", async () => {
+        await app.request("/api/items", {
+          method: "POST",
+          headers: jsonHeaders(),
+          body: JSON.stringify({ title: "Active note" }),
+        });
+        seedVaultRow("Vault note");
+
+        const res = await app.request("/api/items?include_vault=true", { headers: authHeaders() });
+        expect(res.status).toBe(200);
+        const body = await res.json();
+        expect(body.items).toHaveLength(2);
+        expect(body.total).toBe(2);
+        const origins = body.items.map((i: { origin: string }) => i.origin).sort();
+        expect(origins).toEqual(["active", "vault"]);
+      });
+
+      it("default (no flag) excludes vault rows", async () => {
+        await app.request("/api/items", {
+          method: "POST",
+          headers: jsonHeaders(),
+          body: JSON.stringify({ title: "Active note" }),
+        });
+        seedVaultRow("Vault note");
+
+        const res = await app.request("/api/items", { headers: authHeaders() });
+        expect(res.status).toBe(200);
+        const body = await res.json();
+        expect(body.items).toHaveLength(1);
+        expect(body.items[0].title).toBe("Active note");
+      });
+
+      it("rejects invalid include_vault value", async () => {
+        const res = await app.request("/api/items?include_vault=maybe", { headers: authHeaders() });
+        expect(res.status).toBe(400);
+      });
+    });
   });
 
   describe("GET /api/items/:id", () => {

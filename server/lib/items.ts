@@ -157,35 +157,58 @@ export function getItemForLookup(
   return { ...vaultMatches[0]!, origin: "vault" };
 }
 
-export function listItems(
+export type ListItemsResult = { items: ItemWithLinkedInfo[]; total: number };
+
+export type ListItemsFilters = {
+  status?: string;
+  excludeStatus?: string[];
+  type?: string;
+  tag?: string;
+  linked_note_id?: string;
+  category_id?: string;
+  sort?: "created" | "priority" | "due" | "modified";
+  order?: "asc" | "desc";
+  limit?: number;
+  offset?: number;
+  is_private?: 0 | 1;
+  paused?: "true" | "false" | "all";
+  include_vault?: "true" | "false";
+};
+
+export function listItems(db: DB, filters?: ListItemsFilters, enrich = true): ListItemsResult {
+  if (filters?.status === "exported") {
+    return listVaultItems(
+      db,
+      {
+        category_id: filters.category_id,
+        is_private: filters.is_private,
+        tag: filters.tag,
+        limit: filters.limit,
+        offset: filters.offset,
+        sort: filters.sort === "created" ? "created" : "exported_at",
+        order: filters.order,
+      },
+      enrich,
+    );
+  }
+  if (filters?.include_vault === "true") {
+    return listItemsAcross(db, filters, enrich);
+  }
+  return listActiveItems(db, filters, enrich);
+}
+
+function listActiveItems(
   db: DB,
-  filters?: {
-    status?: string;
-    excludeStatus?: string[];
-    type?: string;
-    tag?: string;
-    linked_note_id?: string;
-    category_id?: string;
-    sort?: "created" | "priority" | "due" | "modified";
-    order?: "asc" | "desc";
-    limit?: number;
-    offset?: number;
-    is_private?: 0 | 1;
-    paused?: "true" | "false" | "all";
-  },
-  enrich = true,
-) {
+  filters: ListItemsFilters | undefined,
+  enrich: boolean,
+): ListItemsResult {
   const conditions = [];
 
-  // Default: show public items only. Pass is_private=1 to see private items.
   conditions.push(eq(itemsActive.is_private, filters?.is_private ?? 0));
 
-  // Paused filter
   if (filters?.paused === "true") {
     conditions.push(eq(itemsActive.paused, 1));
-  } else if (filters?.paused === "all") {
-    // No filter
-  } else {
+  } else if (filters?.paused !== "all") {
     conditions.push(eq(itemsActive.paused, 0));
   }
 
@@ -265,22 +288,25 @@ export function listItems(
   return { items: resolveLinkedInfoActive(db, rows, enrich), total };
 }
 
-/** List vault-origin items (exported notes). Used by /notes/exported, MCP sparkle_list_notes(status='exported'). */
 export function listVaultItems(
   db: DB,
   filters?: {
     category_id?: string;
     is_private?: 0 | 1;
+    tag?: string;
     limit?: number;
     offset?: number;
     sort?: "exported_at" | "created";
     order?: "asc" | "desc";
   },
   enrich = true,
-) {
+): ListItemsResult {
   const conditions = [eq(itemsVault.is_private, filters?.is_private ?? 0)];
   if (filters?.category_id) {
     conditions.push(eq(itemsVault.category_id, filters.category_id));
+  }
+  if (filters?.tag) {
+    conditions.push(sql`json_each.value = ${filters.tag}`);
   }
 
   const limit = filters?.limit ?? 50;
@@ -289,6 +315,29 @@ export function listVaultItems(
   const sortOrder = filters?.order ?? "desc";
   const orderFn = sortOrder === "asc" ? asc : desc;
   const sortColumn = sortField === "created" ? itemsVault.created : itemsVault.exported_at;
+
+  if (filters?.tag) {
+    const whereClause = sql`WHERE ${and(...conditions)}`;
+    const countResult = db.all<{ count: number }>(
+      sql`SELECT COUNT(DISTINCT items_vault.id) as count FROM items_vault, json_each(items_vault.tags) ${whereClause}`,
+    );
+    const total = countResult[0]?.count ?? 0;
+    const orderSql =
+      sortOrder === "asc" ? sql`ORDER BY ${sortColumn} ASC` : sql`ORDER BY ${sortColumn} DESC`;
+    type VaultRow = typeof itemsVault.$inferSelect;
+    const rows = db.all<VaultRow>(
+      sql`SELECT DISTINCT items_vault.* FROM items_vault, json_each(items_vault.tags) ${whereClause} ${orderSql} LIMIT ${limit} OFFSET ${offset}`,
+    );
+    return {
+      items: resolveLinkedInfo(
+        db,
+        rows.map((row) => ({ kind: "vault" as const, row })),
+        enrich,
+        filters.is_private === 1,
+      ),
+      total,
+    };
+  }
 
   const whereClause = and(...conditions);
 
@@ -316,6 +365,60 @@ export function listVaultItems(
       filters?.is_private === 1,
     ),
     total,
+  };
+}
+
+function listItemsAcross(db: DB, filters: ListItemsFilters, enrich: boolean): ListItemsResult {
+  const limit = filters.limit ?? 50;
+  const offset = filters.offset ?? 0;
+  // Over-fetch so the merge window contains the true top-window regardless of
+  // how the two tables interleave on the sort key.
+  const window = limit + offset;
+
+  const activeResult = listActiveItems(db, { ...filters, limit: window, offset: 0 }, enrich);
+
+  const vaultIncompatible =
+    filters.linked_note_id !== undefined ||
+    (filters.type !== undefined && filters.type !== "note") ||
+    filters.status !== undefined;
+
+  // Align vault's fetch ordering with the caller's sort — otherwise the merge
+  // loses top-ranked vault rows.
+  const vaultSort: "exported_at" | "created" =
+    filters.sort === "created" ? "created" : "exported_at";
+  const vaultResult = vaultIncompatible
+    ? { items: [] as ItemWithLinkedInfo[], total: 0 }
+    : listVaultItems(
+        db,
+        {
+          category_id: filters.category_id,
+          is_private: filters.is_private,
+          tag: filters.tag,
+          limit: window,
+          offset: 0,
+          sort: vaultSort,
+          order: filters.order,
+        },
+        enrich,
+      );
+
+  const sortField = filters.sort ?? "created";
+  const descending = (filters.order ?? "desc") === "desc";
+  const merged = [...activeResult.items, ...vaultResult.items];
+  merged.sort((a, b) => {
+    const av = a[sortField];
+    const bv = b[sortField];
+    if (av == null && bv == null) return 0;
+    if (av == null) return descending ? 1 : -1;
+    if (bv == null) return descending ? -1 : 1;
+    if (av < bv) return descending ? 1 : -1;
+    if (av > bv) return descending ? -1 : 1;
+    return 0;
+  });
+
+  return {
+    items: merged.slice(offset, offset + limit),
+    total: activeResult.total + vaultResult.total,
   };
 }
 

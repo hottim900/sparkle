@@ -52,10 +52,11 @@ fi
 # === v1.4.0 split-table guard ===
 # Block raw FROM/UPDATE/DELETE FROM "items" references in staged server/src code.
 # Word boundaries (\b...\b) avoid false positives on `items.id`, `items_fts`, `items_active`.
-# Migration code in server/db/index.ts legitimately mentions legacy `items` during
-# v11→v12 and v22→v23; exclude it from the guard.
+# Legacy `items` table references are legitimate in two places and excluded:
+#   - server/db/index.ts: migration runner (v11→v12, v22→v23)
+#   - server/db/__tests__/migration*.test.ts: regression tests for pre-v23 states
 staged_items_refs=$(git diff --cached --name-only -- server/ src/ mcp-server/src/ 2>/dev/null \
-  | grep -v '^server/db/index\.ts$' \
+  | grep -vE '^server/db/index\.ts$|^server/db/__tests__/migration(-v[0-9]+)?\.test\.ts$' \
   | xargs -r grep -nE '\b(FROM|UPDATE|DELETE FROM)\s+items\b' 2>/dev/null || true)
 if [ -n "$staged_items_refs" ]; then
   echo ""

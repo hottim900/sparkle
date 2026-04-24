@@ -113,6 +113,28 @@ describe("listItems", () => {
     expect(url).toContain("limit=10");
     expect(url).toContain("offset=5");
   });
+
+  it("encodes include_vault=true in the query string", async () => {
+    const fetchMock = mockFetchOk({ items: [], total: 0 });
+    vi.stubGlobal("fetch", fetchMock);
+    const { listItems } = await loadClient();
+
+    await listItems({ include_vault: true });
+
+    const [url] = fetchMock.mock.calls[0];
+    expect(url).toContain("include_vault=true");
+  });
+
+  it("omits include_vault when false (server defaults to active-only)", async () => {
+    const fetchMock = mockFetchOk({ items: [], total: 0 });
+    vi.stubGlobal("fetch", fetchMock);
+    const { listItems } = await loadClient();
+
+    await listItems({ include_vault: false });
+
+    const [url] = fetchMock.mock.calls[0];
+    expect(url).not.toContain("include_vault");
+  });
 });
 
 describe("getStats", () => {
