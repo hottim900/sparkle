@@ -1,5 +1,48 @@
 # Changelog
 
+## [1.4.0.0] - 2026-04-24
+
+### BREAKING
+
+- **Database schema**: `items` table split into `items_active` (fleeting/developing/permanent/archived) and `items_vault` (exported metadata + 500-char `content_snippet`). Existing raw SQL queries against `items` will fail. Dry-run: `ops/migration-23-dryrun.sh`. Rollback: `ops/rollback-migration-23.sh`.
+- **REST API**: `DELETE /api/items/:id` on an exported item now returns `409 Conflict` with `VAULT_READONLY` payload (was: hard delete pre-v1.4.0). Release endpoint (`DELETE /api/items/:id/vault-stub`) ships in v1.4.1.
+- **MCP tools**: `sparkle_update_note`, `sparkle_pause_note`, `sparkle_resume_note`, `sparkle_advance_note` return `VAULT_READONLY` (409) on vault items. `sparkle_search` no longer returns exported items — use `sparkle_search_obsidian` or `sparkle_search_all`. `sparkle_list_notes` default excludes vault; pass `status='exported'` to access.
+- **UI**: Revert button removed from exported notes. Exported is now one-way; use the vault-stub release endpoint (v1.4.1) if the record truly needs to leave Sparkle.
+- **Claude.ai users**: reconnect the Sparkle MCP connector after upgrading to pick up new tool descriptions.
+
+### Added
+
+- `items_vault.content_snippet` — 500-char immutable preview, captured at export time.
+- `ops/migration-23-dryrun.sh` — validates row count, FK integrity, viewed_at preservation, content_snippet overflow, and idempotency on a copy of the production DB.
+- `ops/rollback-migration-23.sh` — stop/restore/checkout/rebuild/start with schema-version sanity check and named-branch checkout (no detached HEAD).
+- `server/lib/vault-errors.ts` — single source for `VAULT_READONLY` 409 payload, shared by routes and MCP.
+- Pre-commit hook blocks raw `FROM|UPDATE|DELETE FROM items` references (word-boundary matched, excludes `server/db/index.ts` migration code).
+- 14 migration-v23 regression tests: Stage A row count, viewed_at preservation, category cascade-null, share_tokens drop-count, cross-table linked_note_id cleanup, content_snippet derivation, CHECK constraint enforcement, pre-scan violation detection, idempotency (State B / State C / inconsistent-state error), FK pragma safety.
+
+### Changed
+
+- `server/db/fts.ts` — `items_fts` → `items_active_fts`.
+- `server/lib/stats.ts getStats` — two-query rewrite; `exported_this_{week,month}` now keyed by `items_vault.exported_at`.
+- `server/lib/vault-watcher.ts` — content-sync removed; self-heal gets 2-scan debounce + DEBUG→WARN escalation so boot-window ENOENT doesn't log-spam.
+- `server/lib/item-enrichment.ts` — `ItemWithLinkedInfo` gains `origin: 'active' | 'vault'` marker + `linked_note_origin` + `linked_note_prefix` for future dangling-todo UX.
+- `server/lib/export.ts commitExportToVault` — file-write-first, tx-after atomic move of items_active → items_vault.
+- `server/routes/items.ts` — cross-table `GET /:id` (active first, vault fallback); `POST /:id/export` uses `commitExportToVault`; batch export counter is O(n) not O(n²).
+- MCP tool descriptions rewritten to reflect the split; `sparkle_advance_note` precheck rejects vault-origin with `VAULT_READONLY` instead of a misleading "must be developing" error.
+
+### Removed
+
+- Revert button and `handleRevert` flow from item-detail UI (exported notes are one-way).
+- vault-watcher content-sync plumbing (`contentHash`, `stripFrontmatter`, mtime content cache). Vault edits no longer round-trip into Sparkle's DB — vault is the content source of truth post-export.
+- `server/lib/exported-guard.ts` (`EXPORTED_BLOCKED_FIELDS`) — superseded by the route-layer 409.
+
+### Deferred (PR 2/3)
+
+- `DELETE /api/items/:id/vault-stub` release endpoint + `sparkle_release_note` MCP tool.
+- Vault-origin visual treatment (third indicator bar) + dangling linked-todo UX (3 states).
+- Dashboard query audit (recent / weekData / categoryDistribution / daily-note 2-SELECT+merge).
+- `docs/migration-v23.md` + `server/db/README.md` migration guides.
+- `CLAUDE.md` / `.claude/skills/*` data-model section sync.
+
 ## [1.3.3.0] - 2026-04-09
 
 ### Added
