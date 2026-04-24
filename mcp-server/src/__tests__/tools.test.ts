@@ -241,6 +241,52 @@ describe("sparkle_list_notes", () => {
     const call = listItems.mock.calls[0]![0]!;
     expect(call.include_vault).toBeUndefined();
   });
+
+  it("renders vault rows (status='exported') returned when include_vault=true", async () => {
+    const handler = getListHandler();
+    listItems.mockResolvedValue({
+      items: [
+        makeItem({ title: "Active note", status: "developing" }),
+        makeItem({
+          id: "bbbbbbbb-cccc-dddd-eeee-ffffffffffff",
+          title: "Vault note",
+          status: "exported",
+          origin: "vault",
+        }),
+      ],
+      total: 2,
+    });
+
+    const result = await handler({
+      type: "note",
+      include_vault: true,
+      sort: "created",
+      order: "desc",
+      limit: 50,
+      offset: 0,
+    });
+    const text = result.content[0].text;
+    expect(text).toContain("Active note");
+    expect(text).toContain("Vault note");
+    expect(text).toContain("exported");
+  });
+
+  it("with status='exported' passes the filter to listItems", async () => {
+    const handler = getListHandler();
+    listItems.mockResolvedValue({ items: [], total: 0 });
+
+    await handler({
+      type: "note",
+      status: "exported",
+      sort: "created",
+      order: "desc",
+      limit: 50,
+      offset: 0,
+    });
+    expect(listItems).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "exported", type: "note" }),
+    );
+  });
 });
 
 describe("sparkle_get_note", () => {
