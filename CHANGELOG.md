@@ -16,8 +16,16 @@
 - `ops/migration-23-dryrun.sh` — validates row count, FK integrity, viewed_at preservation, content_snippet overflow, and idempotency on a copy of the production DB.
 - `ops/rollback-migration-23.sh` — stop/restore/checkout/rebuild/start with schema-version sanity check and named-branch checkout (no detached HEAD).
 - `server/lib/vault-errors.ts` — single source for `VAULT_READONLY` 409 payload, shared by routes and MCP.
-- Pre-commit hook blocks raw `FROM|UPDATE|DELETE FROM items` references (word-boundary matched, excludes `server/db/index.ts` migration code).
+- Pre-commit hook blocks raw `FROM|UPDATE|DELETE FROM items` references (word-boundary matched, excludes `server/db/index.ts` migration code and `server/db/__tests__/migration*.test.ts` pre-v23 regression tests).
 - 14 migration-v23 regression tests: Stage A row count, viewed_at preservation, category cascade-null, share_tokens drop-count, cross-table linked_note_id cleanup, content_snippet derivation, CHECK constraint enforcement, pre-scan violation detection, idempotency (State B / State C / inconsistent-state error), FK pragma safety.
+- `GET /api/items?include_vault=true` and `sparkle_list_notes({include_vault:true})` — cross-table merge escape hatch that returns items_active + items_vault rows interleaved, sorted on the caller's requested field.
+- `GET /api/items?status=exported` and `sparkle_list_notes({status:'exported'})` — vault-only listing (previously rejected by Zod as invalid status).
+- `listVaultItems` now supports `tag` filter via `json_each(items_vault.tags)` SQL so vault pagination is correct when the caller filters by tag.
+- 11 new unit/route tests for the cross-table list modes + 4 MCP tests covering the `include_vault` handler passthrough and URL encoding.
+
+### Fixed
+
+- MCP `tools.test.ts` description regex now matches the v1.4.0 `VAULT_READONLY` phrasing (the old regex looked for "exported...read-only" wording that was removed when the tool descriptions were rewritten).
 
 ### Changed
 
@@ -28,6 +36,9 @@
 - `server/lib/export.ts commitExportToVault` — file-write-first, tx-after atomic move of items_active → items_vault.
 - `server/routes/items.ts` — cross-table `GET /:id` (active first, vault fallback); `POST /:id/export` uses `commitExportToVault`; batch export counter is O(n) not O(n²).
 - MCP tool descriptions rewritten to reflect the split; `sparkle_advance_note` precheck rejects vault-origin with `VAULT_READONLY` instead of a misleading "must be developing" error.
+- `server/lib/items.ts listItems` split into a dispatcher + private `listActiveItems` helper so `listItemsAcross` can call the active path directly (no recursion through the public entry point).
+- `server/schemas/items.ts listItemsSchema.offset` capped at `10_000` to prevent memory amplification under `include_vault=true` (fetches `limit + offset` from each table).
+- `listItemsSchema.status` reuses `importStatusEnum` instead of redefining the same 8 values inline.
 
 ### Removed
 
