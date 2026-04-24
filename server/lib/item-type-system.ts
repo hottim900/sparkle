@@ -1,8 +1,11 @@
 // server/lib/item-type-system.ts
 // Single source of truth for type<->status rules (TD-013)
 
+// v1.4.0: "exported" removed from note statuses — exported notes move to items_vault
+// where they have no status column at all. Type conversions from vault-origin items
+// are not possible; vault items can only be released (hard-delete) via vault-stub endpoint.
 export const TYPE_STATUS_MAP = {
-  note: ["fleeting", "developing", "permanent", "exported", "archived"],
+  note: ["fleeting", "developing", "permanent", "archived"],
   todo: ["active", "done", "archived"],
   scratch: ["draft", "archived"],
 } as const;
@@ -34,7 +37,6 @@ const TYPE_CONVERSION_MAP: Record<string, Record<string, string>> = {
     fleeting: "active",
     developing: "active",
     permanent: "done",
-    exported: "done",
     archived: "archived",
   },
   "scratch\u2192note": {
@@ -49,7 +51,6 @@ const TYPE_CONVERSION_MAP: Record<string, Record<string, string>> = {
     fleeting: "draft",
     developing: "draft",
     permanent: "archived",
-    exported: "archived",
     archived: "archived",
   },
   "todo\u2192scratch": {

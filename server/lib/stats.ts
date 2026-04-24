@@ -59,34 +59,53 @@ export interface Stats {
 }
 
 /**
- * Return aggregated statistics from the items table.
+ * Return aggregated statistics — two-query merge over items_active + items_vault.
+ *
+ * Query 1 (items_active): all maturity states except exported. Counts include
+ *   fleeting, developing, permanent, active (todos), done, scratch, overdue,
+ *   created_this_week/month, unreviewed (viewed_at IS NULL — D15 R4-BLOCKER-1).
+ *
+ * Query 2 (items_vault): exported_this_week / exported_this_month keyed by
+ *   items_vault.exported_at (NOT modified — vault-watcher does not mutate
+ *   items_vault.exported_at, so it is the authoritative export timestamp).
  */
 export function getStats(sqlite: Database.Database): Stats {
   const weekStart = getISOWeekStart();
   const monthStart = getMonthStart();
   const today = getTodayDate();
 
-  const row = sqlite
+  const activeRow = sqlite
     .prepare(
       `SELECT
         COALESCE(SUM(CASE WHEN status = 'fleeting' THEN 1 ELSE 0 END), 0) AS fleeting_count,
         COALESCE(SUM(CASE WHEN status = 'developing' THEN 1 ELSE 0 END), 0) AS developing_count,
         COALESCE(SUM(CASE WHEN status = 'permanent' THEN 1 ELSE 0 END), 0) AS permanent_count,
-        COALESCE(SUM(CASE WHEN status = 'exported' AND modified >= ? THEN 1 ELSE 0 END), 0) AS exported_this_week,
-        COALESCE(SUM(CASE WHEN status = 'exported' AND modified >= ? THEN 1 ELSE 0 END), 0) AS exported_this_month,
         COALESCE(SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END), 0) AS active_count,
         COALESCE(SUM(CASE WHEN status = 'done' AND modified >= ? THEN 1 ELSE 0 END), 0) AS done_this_week,
         COALESCE(SUM(CASE WHEN status = 'done' AND modified >= ? THEN 1 ELSE 0 END), 0) AS done_this_month,
         COALESCE(SUM(CASE WHEN status = 'draft' AND type = 'scratch' THEN 1 ELSE 0 END), 0) AS scratch_count,
         COALESCE(SUM(CASE WHEN created >= ? THEN 1 ELSE 0 END), 0) AS created_this_week,
         COALESCE(SUM(CASE WHEN created >= ? THEN 1 ELSE 0 END), 0) AS created_this_month,
-        COALESCE(SUM(CASE WHEN due < ? AND type = 'todo' AND status NOT IN ('done', 'exported', 'archived') AND paused = 0 THEN 1 ELSE 0 END), 0) AS overdue_count
-      FROM items
+        COALESCE(SUM(CASE WHEN due < ? AND type = 'todo' AND status NOT IN ('done', 'archived') AND paused = 0 THEN 1 ELSE 0 END), 0) AS overdue_count
+      FROM items_active
       WHERE is_private = 0`,
     )
-    .get(weekStart, monthStart, weekStart, monthStart, weekStart, monthStart, today) as Stats;
+    .get(weekStart, monthStart, weekStart, monthStart, today) as Omit<
+    Stats,
+    "exported_this_week" | "exported_this_month"
+  >;
 
-  return row;
+  const vaultRow = sqlite
+    .prepare(
+      `SELECT
+        COALESCE(SUM(CASE WHEN exported_at >= ? THEN 1 ELSE 0 END), 0) AS exported_this_week,
+        COALESCE(SUM(CASE WHEN exported_at >= ? THEN 1 ELSE 0 END), 0) AS exported_this_month
+      FROM items_vault
+      WHERE is_private = 0`,
+    )
+    .get(weekStart, monthStart) as Pick<Stats, "exported_this_week" | "exported_this_month">;
+
+  return { ...activeRow, ...vaultRow };
 }
 
 export interface DashboardItem {
@@ -132,7 +151,7 @@ export function getStaleNotes(
     .prepare(
       `SELECT i.id, i.title, c.name AS category_name, i.modified,
         CAST(julianday('now') - julianday(i.modified) AS INTEGER) AS days_stale
-       FROM items i
+       FROM items_active i
        LEFT JOIN categories c ON i.category_id = c.id
        WHERE i.status = 'developing'
          AND i.modified < datetime('now', '-' || ? || ' days')
@@ -146,7 +165,7 @@ export function getStaleNotes(
   const countRow = sqlite
     .prepare(
       `SELECT COUNT(*) AS count
-       FROM items i
+       FROM items_active i
        WHERE i.status = 'developing'
          AND i.modified < datetime('now', '-' || ? || ' days')
          AND i.is_private = 0
@@ -165,7 +184,7 @@ export function getUnreviewedItems(
   const items = sqlite
     .prepare(
       `SELECT i.*, c.name AS category_name
-       FROM items i
+       FROM items_active i
        LEFT JOIN categories c ON i.category_id = c.id
        WHERE i.viewed_at IS NULL
          AND i.status NOT IN ('archived', 'done')
@@ -179,7 +198,7 @@ export function getUnreviewedItems(
   const countRow = sqlite
     .prepare(
       `SELECT COUNT(*) AS count
-       FROM items i
+       FROM items_active i
        WHERE i.viewed_at IS NULL
          AND i.status NOT IN ('archived', 'done')
          AND i.is_private = 0
@@ -203,7 +222,7 @@ export function getRecentItems(
           WHEN (julianday(i.modified) - julianday(i.created)) * 1440 < 1 THEN 'created'
           ELSE 'updated'
         END AS activity
-       FROM items i
+       FROM items_active i
        LEFT JOIN categories c ON i.category_id = c.id
        WHERE i.modified >= datetime('now', '-' || ? || ' days')
          AND i.status != 'archived'
@@ -216,7 +235,7 @@ export function getRecentItems(
   const countRow = sqlite
     .prepare(
       `SELECT COUNT(*) AS count
-       FROM items i
+       FROM items_active i
        WHERE i.modified >= datetime('now', '-' || ? || ' days')
          AND i.status != 'archived'
          AND i.is_private = 0`,
@@ -236,7 +255,7 @@ export function getAttentionItems(
     .prepare(
       `SELECT i.*, c.name AS category_name,
         CASE WHEN i.type = 'todo' AND i.due < :today THEN 'overdue' ELSE 'high_priority' END AS attention_reason
-       FROM items i
+       FROM items_active i
        LEFT JOIN categories c ON i.category_id = c.id
        WHERE i.status NOT IN ('done', 'archived') AND i.type != 'scratch'
          AND ((i.type = 'todo' AND i.due < :today) OR i.priority = 'high')
@@ -250,7 +269,7 @@ export function getAttentionItems(
   const countRow = sqlite
     .prepare(
       `SELECT COUNT(*) AS count
-       FROM items i
+       FROM items_active i
        WHERE i.status NOT IN ('done', 'archived') AND i.type != 'scratch'
          AND ((i.type = 'todo' AND i.due < :today) OR i.priority = 'high')
          AND i.is_private = 0
@@ -276,7 +295,7 @@ export function getCategoryDistribution(sqlite: Database.Database): CategoryDist
         COALESCE(c.name, '未分類') AS category_name,
         c.color,
         COUNT(*) AS count
-       FROM items i
+       FROM items_active i
        LEFT JOIN categories c ON i.category_id = c.id
        WHERE i.status NOT IN ('archived', 'done')
          AND i.is_private = 0
@@ -317,7 +336,7 @@ export function getFocusItems(sqlite: Database.Database): FocusItem[] {
   const rows = sqlite
     .prepare(
       `SELECT * FROM (
-        SELECT items.*,
+        SELECT items_active.*,
           CASE
             WHEN type = 'todo' AND due < :today THEN 1
             WHEN type = 'todo' AND due = :today THEN 2
@@ -330,8 +349,8 @@ export function getFocusItems(sqlite: Database.Database): FocusItem[] {
             WHEN type = 'todo' AND due IS NOT NULL AND due <= date(:today, '+7 days') THEN due
             ELSE created
           END AS focus_sort
-        FROM items
-        WHERE status NOT IN ('done', 'exported', 'archived')
+        FROM items_active
+        WHERE status NOT IN ('done', 'archived')
           AND type != 'scratch'
           AND is_private = 0
           AND paused = 0
@@ -426,7 +445,7 @@ export function getWeekData(sqlite: Database.Database, startDate: string): WeekD
   const todosDueWithDate = sqlite
     .prepare(
       `SELECT id, title, priority, status, due
-       FROM items
+       FROM items_active
        WHERE type = 'todo'
          AND status NOT IN ('archived')
          AND due >= ? AND due <= ?
@@ -457,7 +476,7 @@ export function getWeekData(sqlite: Database.Database, startDate: string): WeekD
   const notesCreated = sqlite
     .prepare(
       `SELECT id, title, status, created
-       FROM items
+       FROM items_active
        WHERE type = 'note'
          AND created >= ? AND created < ?
          AND status != 'archived'
@@ -483,7 +502,7 @@ export function getWeekData(sqlite: Database.Database, startDate: string): WeekD
   const notesModified = sqlite
     .prepare(
       `SELECT id, title, status, modified
-       FROM items
+       FROM items_active
        WHERE type = 'note'
          AND modified >= ? AND modified < ?
          AND status != 'archived'
@@ -514,9 +533,9 @@ export function getWeekData(sqlite: Database.Database, startDate: string): WeekD
   const activeTodosWithDue = sqlite
     .prepare(
       `SELECT due
-       FROM items
+       FROM items_active
        WHERE type = 'todo'
-         AND status NOT IN ('done', 'exported', 'archived')
+         AND status NOT IN ('done', 'archived')
          AND due IS NOT NULL
          AND due < ?
          AND is_private = 0`,

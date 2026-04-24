@@ -59,8 +59,8 @@ describe("is_private default filtering", () => {
   it("getAllTags excludes private item tags", () => {
     const pub = listItems(db, { is_private: 0 }, false).items[0]!;
     const priv = listItems(db, { is_private: 1 }, false).items[0]!;
-    sqlite.prepare("UPDATE items SET tags = ? WHERE id = ?").run('["公開標籤"]', pub.id);
-    sqlite.prepare("UPDATE items SET tags = ? WHERE id = ?").run('["私密標籤"]', priv.id);
+    sqlite.prepare("UPDATE items_active SET tags = ? WHERE id = ?").run('["公開標籤"]', pub.id);
+    sqlite.prepare("UPDATE items_active SET tags = ? WHERE id = ?").run('["私密標籤"]', priv.id);
 
     const tags = getAllTags(sqlite);
     expect(tags).toContain("公開標籤");
@@ -69,7 +69,7 @@ describe("is_private default filtering", () => {
 
   it("getAllTags includes private item tags when includePrivate=true", () => {
     const priv = listItems(db, { is_private: 1 }, false).items[0]!;
-    sqlite.prepare("UPDATE items SET tags = ? WHERE id = ?").run('["私密標籤"]', priv.id);
+    sqlite.prepare("UPDATE items_active SET tags = ? WHERE id = ?").run('["私密標籤"]', priv.id);
 
     const tags = getAllTags(sqlite, true);
     expect(tags).toContain("私密標籤");
@@ -77,7 +77,7 @@ describe("is_private default filtering", () => {
 
   it("createItem with is_private stores as integer 1", () => {
     const item = createItem(db, { title: "New Private", type: "note", is_private: true });
-    const row = sqlite.prepare("SELECT is_private FROM items WHERE id = ?").get(item.id) as {
+    const row = sqlite.prepare("SELECT is_private FROM items_active WHERE id = ?").get(item.id) as {
       is_private: number;
     };
     expect(row.is_private).toBe(1);
@@ -85,7 +85,7 @@ describe("is_private default filtering", () => {
 
   it("createItem without is_private stores as integer 0", () => {
     const item = createItem(db, { title: "New Public", type: "note" });
-    const row = sqlite.prepare("SELECT is_private FROM items WHERE id = ?").get(item.id) as {
+    const row = sqlite.prepare("SELECT is_private FROM items_active WHERE id = ?").get(item.id) as {
       is_private: number;
     };
     expect(row.is_private).toBe(0);

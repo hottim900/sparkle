@@ -38,7 +38,7 @@ import { settingsRouter } from "../settings.js";
 import { getAllTags } from "../../lib/items.js";
 import { logger } from "../../lib/logger.js";
 import { getObsidianSettings } from "../../lib/settings.js";
-import { items, categories } from "../../db/schema.js";
+import { itemsActive, categories } from "../../db/schema.js";
 import { eq, inArray } from "drizzle-orm";
 import { ZodError } from "zod";
 import { importSchema } from "../../schemas/items.js";
@@ -87,7 +87,7 @@ function createApp() {
 
   // Export all items
   app.get("/api/export", (c) => {
-    const allItems = testDb.select().from(items).all();
+    const allItems = testDb.select().from(itemsActive).all();
     return c.json({
       version: 2,
       exported_at: new Date().toISOString(),
@@ -150,9 +150,9 @@ function createApp() {
       const existingLinkedIds = new Set(
         referencedLinkedIds.length > 0
           ? testDb
-              .select({ id: items.id })
-              .from(items)
-              .where(inArray(items.id, referencedLinkedIds))
+              .select({ id: itemsActive.id })
+              .from(itemsActive)
+              .where(inArray(itemsActive.id, referencedLinkedIds))
               .all()
               .map((r) => r.id)
           : [],
@@ -195,7 +195,11 @@ function createApp() {
             }
           }
 
-          const existing = testDb.select().from(items).where(eq(items.id, item.id)).get();
+          const existing = testDb
+            .select()
+            .from(itemsActive)
+            .where(eq(itemsActive.id, item.id))
+            .get();
 
           if (existing) {
             // Skip private items — don't overwrite private content via import
@@ -204,7 +208,7 @@ function createApp() {
               continue;
             }
             testDb
-              .update(items)
+              .update(itemsActive)
               .set({
                 type: item.type,
                 title: item.title,
@@ -221,13 +225,13 @@ function createApp() {
                 created: item.created,
                 modified: item.modified,
               })
-              .where(eq(items.id, item.id))
+              .where(eq(itemsActive.id, item.id))
               .run();
             updated++;
           } else {
             // Strip is_private from imported data — imports always create public items
             testDb
-              .insert(items)
+              .insert(itemsActive)
               .values({
                 ...item,
                 tags: JSON.stringify(item.tags),

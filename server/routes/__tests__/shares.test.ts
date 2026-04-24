@@ -88,7 +88,7 @@ function insertNote(
   const now = new Date().toISOString();
   testSqlite
     .prepare(
-      "INSERT INTO items (id, type, title, content, status, tags, created, modified) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      "INSERT INTO items_active (id, type, title, content, status, tags, created, modified) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .run(
       id,

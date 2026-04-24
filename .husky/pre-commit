@@ -49,6 +49,23 @@ if [ "$SKIP_TSC" != "1" ]; then
   npx tsc --noEmit -p tsconfig.server.json || exit 1
 fi
 
+# === v1.4.0 split-table guard ===
+# Block raw FROM/UPDATE/DELETE FROM "items" references in staged server/src code.
+# Word boundaries (\b...\b) avoid false positives on `items.id`, `items_fts`, `items_active`.
+# Migration code in server/db/index.ts legitimately mentions legacy `items` during
+# v11→v12 and v22→v23; exclude it from the guard.
+staged_items_refs=$(git diff --cached --name-only -- server/ src/ mcp-server/src/ 2>/dev/null \
+  | grep -v '^server/db/index\.ts$' \
+  | xargs -r grep -nE '\b(FROM|UPDATE|DELETE FROM)\s+items\b' 2>/dev/null || true)
+if [ -n "$staged_items_refs" ]; then
+  echo ""
+  echo "❌ Raw 'FROM|UPDATE|DELETE FROM items' references blocked."
+  echo "   Use items_active or items_vault."
+  echo ""
+  echo "$staged_items_refs"
+  exit 1
+fi
+
 # === lint-staged ===
 npx lint-staged
 

@@ -1,7 +1,21 @@
 import { z } from "zod";
 import { isValidTypeStatus } from "../lib/item-type-system.js";
 
+// v1.4.0: "exported" removed — exported notes live in items_vault, not items_active.
+// For imports that still contain status='exported' rows, use importStatusEnum below.
 export const statusEnum = z.enum([
+  "fleeting",
+  "developing",
+  "permanent",
+  "active",
+  "done",
+  "draft",
+  "archived",
+]);
+
+// Accepted in import payloads for backward-compat. v1.4.0 import handler routes
+// status='exported' rows directly into items_vault (preserving pre-split exports).
+export const importStatusEnum = z.enum([
   "fleeting",
   "developing",
   "permanent",
@@ -127,7 +141,7 @@ export const importItemSchema = z
     type: z.enum(["note", "todo", "scratch"]).default("note"),
     title: z.string().min(1).max(500),
     content: z.string().max(50000).default(""),
-    status: statusEnum.default("fleeting"),
+    status: importStatusEnum.default("fleeting"),
     priority: z.enum(["low", "medium", "high"]).nullable().default(null),
     due: z
       .string()
@@ -143,13 +157,18 @@ export const importItemSchema = z
     paused: z.coerce.number().int().min(0).max(1).default(0),
     paused_at: z.string().nullable().default(null),
     paused_context: z.string().max(500).nullable().default(null),
+    export_path: z.string().nullable().default(null),
     created: z.string().min(1),
     modified: z.string().min(1),
   })
-  .refine((data) => isValidTypeStatus(data.type, data.status), {
-    message: "Invalid status for the given type",
-    path: ["status"],
-  });
+  .refine(
+    (data) =>
+      data.status === "exported" ? data.type === "note" : isValidTypeStatus(data.type, data.status),
+    {
+      message: "Invalid status for the given type",
+      path: ["status"],
+    },
+  );
 
 export const importSchema = z.object({
   items: z.array(importItemSchema).max(10000),

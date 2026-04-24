@@ -9,7 +9,17 @@ export function createTestDb() {
   sqlite.pragma("foreign_keys = ON");
 
   sqlite.exec(`
-    CREATE TABLE items (
+    CREATE TABLE categories (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL UNIQUE,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      color TEXT DEFAULT NULL,
+      created TEXT NOT NULL,
+      modified TEXT NOT NULL
+    );
+    CREATE INDEX idx_categories_sort_order ON categories(sort_order);
+
+    CREATE TABLE items_active (
       id TEXT PRIMARY KEY,
       type TEXT NOT NULL DEFAULT 'note',
       title TEXT NOT NULL,
@@ -28,15 +38,33 @@ export function createTestDb() {
       paused INTEGER NOT NULL DEFAULT 0,
       paused_at TEXT DEFAULT NULL,
       paused_context TEXT DEFAULT NULL,
-      export_path TEXT DEFAULT NULL,
       created TEXT NOT NULL,
       modified TEXT NOT NULL,
-      FOREIGN KEY (linked_note_id) REFERENCES items(id) ON DELETE SET NULL,
+      FOREIGN KEY (linked_note_id) REFERENCES items_active(id) ON DELETE SET NULL,
       FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL
     );
-    CREATE INDEX idx_items_status ON items(status);
-    CREATE INDEX idx_items_type ON items(type);
-    CREATE INDEX idx_items_created ON items(created DESC);
+    CREATE INDEX idx_items_active_type_status ON items_active(type, status);
+    CREATE INDEX idx_items_active_category_id ON items_active(category_id);
+    CREATE INDEX idx_items_active_modified ON items_active(modified);
+    CREATE INDEX idx_items_active_viewed_at ON items_active(viewed_at);
+
+    CREATE TABLE items_vault (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      category_id TEXT,
+      tags TEXT NOT NULL DEFAULT '[]',
+      aliases TEXT NOT NULL DEFAULT '[]',
+      source TEXT,
+      origin TEXT,
+      export_path TEXT,
+      exported_at TEXT NOT NULL,
+      created TEXT NOT NULL,
+      is_private INTEGER NOT NULL DEFAULT 0,
+      content_snippet TEXT NOT NULL DEFAULT '',
+      FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL
+    );
+    CREATE INDEX idx_items_vault_category_id ON items_vault(category_id);
+    CREATE INDEX idx_items_vault_exported_at ON items_vault(exported_at);
 
     CREATE TABLE settings (
       key TEXT PRIMARY KEY,
@@ -56,21 +84,10 @@ export function createTestDb() {
       token TEXT NOT NULL UNIQUE,
       visibility TEXT NOT NULL DEFAULT 'unlisted',
       created TEXT NOT NULL,
-      FOREIGN KEY (item_id) REFERENCES items(id) ON DELETE CASCADE
+      FOREIGN KEY (item_id) REFERENCES items_active(id) ON DELETE CASCADE
     );
     CREATE INDEX idx_share_tokens_token ON share_tokens(token);
     CREATE INDEX idx_share_tokens_item_id ON share_tokens(item_id);
-
-    CREATE TABLE categories (
-      id TEXT PRIMARY KEY,
-      name TEXT NOT NULL UNIQUE,
-      sort_order INTEGER NOT NULL DEFAULT 0,
-      color TEXT DEFAULT NULL,
-      created TEXT NOT NULL,
-      modified TEXT NOT NULL
-    );
-    CREATE INDEX idx_categories_sort_order ON categories(sort_order);
-    CREATE INDEX idx_items_category_id ON items(category_id);
 
     CREATE TABLE vault_files (
       path TEXT PRIMARY KEY,

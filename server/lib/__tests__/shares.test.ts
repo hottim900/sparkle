@@ -15,7 +15,7 @@ function createTestDb() {
   sqlite.pragma("foreign_keys = ON");
 
   sqlite.exec(`
-    CREATE TABLE items (
+    CREATE TABLE items_active (
       id TEXT PRIMARY KEY,
       type TEXT NOT NULL DEFAULT 'note',
       title TEXT NOT NULL,
@@ -31,7 +31,7 @@ function createTestDb() {
       is_private INTEGER DEFAULT 0,
       created TEXT NOT NULL,
       modified TEXT NOT NULL,
-      FOREIGN KEY (linked_note_id) REFERENCES items(id) ON DELETE SET NULL
+      FOREIGN KEY (linked_note_id) REFERENCES items_active(id) ON DELETE SET NULL
     );
 
     CREATE TABLE share_tokens (
@@ -40,7 +40,7 @@ function createTestDb() {
       token TEXT NOT NULL UNIQUE,
       visibility TEXT NOT NULL DEFAULT 'unlisted',
       created TEXT NOT NULL,
-      FOREIGN KEY (item_id) REFERENCES items(id) ON DELETE CASCADE
+      FOREIGN KEY (item_id) REFERENCES items_active(id) ON DELETE CASCADE
     );
     CREATE INDEX idx_share_tokens_token ON share_tokens(token);
     CREATE INDEX idx_share_tokens_item_id ON share_tokens(item_id);
@@ -65,7 +65,7 @@ function insertNote(
   const now = new Date().toISOString();
   sqlite
     .prepare(
-      `INSERT INTO items (id, type, title, content, status, tags, origin, aliases, created, modified)
+      `INSERT INTO items_active (id, type, title, content, status, tags, origin, aliases, created, modified)
        VALUES (?, ?, ?, ?, ?, ?, '', ?, ?, ?)`,
     )
     .run(
@@ -266,7 +266,7 @@ describe("Share Tokens", () => {
       expect(share).not.toBeNull();
 
       // Delete the item
-      sqlite.prepare("DELETE FROM items WHERE id = ?").run(itemId);
+      sqlite.prepare("DELETE FROM items_active WHERE id = ?").run(itemId);
 
       // Share should be gone
       const found = getShareByToken(sqlite, share!.token);
@@ -283,7 +283,7 @@ describe("Share Tokens", () => {
       const share2 = createShareToken(sqlite, id2);
 
       // Delete only the first item
-      sqlite.prepare("DELETE FROM items WHERE id = ?").run(id1);
+      sqlite.prepare("DELETE FROM items_active WHERE id = ?").run(id1);
 
       // share2 should still exist
       const found = getShareByToken(sqlite, share2!.token);

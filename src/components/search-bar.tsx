@@ -213,9 +213,9 @@ export function SearchBar({ onSelect, autoFocus }: SearchBarProps) {
                     </Badge>
                   ))}
                   {item.due && <span className="text-xs text-muted-foreground">{item.due}</span>}
-                  {item.origin && (
+                  {item.origin_source && (
                     <span className="text-[10px] text-muted-foreground/70">
-                      來源：{item.origin}
+                      來源：{item.origin_source}
                     </span>
                   )}
                 </div>

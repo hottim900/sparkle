@@ -25,7 +25,7 @@ vi.mock("../../db/index.js", () => ({
 import { Hono } from "hono";
 import { authMiddleware } from "../../middleware/auth.js";
 import { webhookRouter } from "../webhook.js";
-import { items } from "../../db/schema.js";
+import { itemsActive } from "../../db/schema.js";
 import { updateSettings } from "../../lib/settings.js";
 
 // ============================================================
@@ -210,7 +210,7 @@ describe("POST /api/webhook/line", () => {
     expect(json.ok).toBe(true);
 
     // Verify the item was created in the database
-    const allItems = testDb.select().from(items).all();
+    const allItems = testDb.select().from(itemsActive).all();
     expect(allItems).toHaveLength(1);
     expect(allItems[0].title).toBe("Buy milk");
     expect(allItems[0].status).toBe("fleeting");
@@ -247,7 +247,7 @@ describe("POST /api/webhook/line", () => {
     expect(json.ok).toBe(true);
 
     // Verify no items were created
-    const allItems = testDb.select().from(items).all();
+    const allItems = testDb.select().from(itemsActive).all();
     expect(allItems).toHaveLength(0);
   });
 
@@ -286,7 +286,7 @@ describe("POST /api/webhook/line", () => {
     const yesterdayStr = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, "0")}-${String(yesterday.getDate()).padStart(2, "0")}`;
 
     testSqlite.exec(`
-      INSERT INTO items (id, type, title, content, status, priority, due, tags, origin, source, aliases, created, modified) VALUES
+      INSERT INTO items_active (id, type, title, content, status, priority, due, tags, origin, source, aliases, created, modified) VALUES
         ('id-1', 'todo', '買牛奶', '', 'active', NULL, NULL, '[]', 'LINE', NULL, '[]', '${now}', '${now}'),
         ('id-2', 'note', '研究 Hono', '', 'fleeting', NULL, NULL, '[]', 'LINE', NULL, '[]', '${now}', '${now}'),
         ('id-3', 'todo', '繳電費', '', 'active', 'high', '${yesterdayStr}', '[]', '', NULL, '[]', '${now}', '${now}'),
@@ -306,7 +306,7 @@ describe("POST /api/webhook/line", () => {
       expect(res.status).toBe(200);
 
       // Should NOT create any new items
-      const allItems = testDb.select().from(items).all();
+      const allItems = testDb.select().from(itemsActive).all();
       expect(allItems).toHaveLength(6); // Only seeded items
 
       // Verify reply was sent with quick reply
@@ -337,7 +337,7 @@ describe("POST /api/webhook/line", () => {
       process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
 
       await sendLineMessage(app, "!inbox");
-      const allItems = testDb.select().from(items).all();
+      const allItems = testDb.select().from(itemsActive).all();
       expect(allItems).toHaveLength(0);
     });
   });
@@ -349,7 +349,7 @@ describe("POST /api/webhook/line", () => {
       // Use ASCII text for FTS5 default tokenizer compatibility
       const now = new Date().toISOString();
       testSqlite.exec(`
-        INSERT INTO items (id, type, title, content, status, priority, due, tags, origin, source, aliases, created, modified) VALUES
+        INSERT INTO items_active (id, type, title, content, status, priority, due, tags, origin, source, aliases, created, modified) VALUES
           ('id-f1', 'note', 'Hono middleware research', '', 'fleeting', NULL, NULL, '[]', 'LINE', NULL, '[]', '${now}', '${now}'),
           ('id-f2', 'todo', 'Hono framework setup', '', 'active', NULL, NULL, '[]', '', NULL, '[]', '${now}', '${now}');
       `);
@@ -382,7 +382,7 @@ describe("POST /api/webhook/line", () => {
       process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
 
       await sendLineMessage(app, "!find something");
-      const allItems = testDb.select().from(items).all();
+      const allItems = testDb.select().from(itemsActive).all();
       expect(allItems).toHaveLength(0);
     });
   });
@@ -423,7 +423,7 @@ describe("POST /api/webhook/line", () => {
       process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
 
       await sendLineMessage(app, "!today");
-      const allItems = testDb.select().from(items).all();
+      const allItems = testDb.select().from(itemsActive).all();
       expect(allItems).toHaveLength(0);
     });
   });
@@ -453,7 +453,7 @@ describe("POST /api/webhook/line", () => {
       process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
 
       await sendLineMessage(app, "!stats");
-      const allItems = testDb.select().from(items).all();
+      const allItems = testDb.select().from(itemsActive).all();
       expect(allItems).toHaveLength(0);
     });
   });
@@ -601,7 +601,7 @@ describe("POST /api/webhook/line", () => {
       process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
       const now = new Date().toISOString();
       testSqlite.exec(`
-        INSERT INTO items (id, type, title, content, status, priority, due, tags, origin, source, aliases, created, modified) VALUES
+        INSERT INTO items_active (id, type, title, content, status, priority, due, tags, origin, source, aliases, created, modified) VALUES
           ('id-t1', 'todo', '寫報告', '', 'active', NULL, NULL, '["工作"]', '', NULL, '[]', '${now}', '${now}'),
           ('id-t2', 'todo', '回信', '', 'active', NULL, NULL, '["工作","重要"]', '', NULL, '[]', '${now}', '${now}');
       `);
@@ -686,7 +686,7 @@ describe("POST /api/webhook/line", () => {
       expect(replyText).toContain("2026-03-15");
 
       // Verify DB was updated
-      const allItems = testDb.select().from(items).all();
+      const allItems = testDb.select().from(itemsActive).all();
       const updated = allItems.find((i) => i.due === "2026-03-15");
       expect(updated).toBeDefined();
     });
@@ -782,7 +782,7 @@ describe("POST /api/webhook/line", () => {
       process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
       const now = new Date().toISOString();
       testSqlite.exec(`
-        INSERT INTO items (id, type, title, content, status, priority, due, tags, origin, source, aliases, created, modified) VALUES
+        INSERT INTO items_active (id, type, title, content, status, priority, due, tags, origin, source, aliases, created, modified) VALUES
           ('id-dup', 'todo', '有標籤的項目', '', 'active', NULL, NULL, '["工作"]', '', NULL, '[]', '${now}', '${now}');
       `);
 
@@ -792,7 +792,7 @@ describe("POST /api/webhook/line", () => {
       await sendLineMessage(app, "!tag 1 工作 新標籤");
 
       // Check DB: should have ["工作", "新標籤"] not ["工作", "工作", "新標籤"]
-      const allItems = testDb.select().from(items).all();
+      const allItems = testDb.select().from(itemsActive).all();
       const item = allItems.find((i) => i.id === "id-dup")!;
       const tags = JSON.parse(item.tags);
       expect(tags).toEqual(["工作", "新標籤"]);
@@ -832,7 +832,9 @@ describe("POST /api/webhook/line", () => {
       expect(replyText).toContain("已完成");
 
       // Verify at least one item is now done
-      const doneItems = testSqlite.prepare("SELECT * FROM items WHERE status = 'done'").all() as {
+      const doneItems = testSqlite
+        .prepare("SELECT * FROM items_active WHERE status = 'done'")
+        .all() as {
         status: string;
       }[];
       expect(doneItems.length).toBeGreaterThanOrEqual(1);
@@ -873,7 +875,7 @@ describe("POST /api/webhook/line", () => {
 
       // Verify at least one inbox item is now archived
       const archivedItems = testSqlite
-        .prepare("SELECT * FROM items WHERE status = 'archived'")
+        .prepare("SELECT * FROM items_active WHERE status = 'archived'")
         .all() as { status: string }[];
       expect(archivedItems.length).toBeGreaterThanOrEqual(1);
     });
@@ -911,7 +913,7 @@ describe("POST /api/webhook/line", () => {
 
       // Verify at least one item now has high priority
       const highItems = testSqlite
-        .prepare("SELECT * FROM items WHERE priority = 'high' AND status = 'fleeting'")
+        .prepare("SELECT * FROM items_active WHERE priority = 'high' AND status = 'fleeting'")
         .all() as { priority: string }[];
       expect(highItems.length).toBeGreaterThanOrEqual(1);
     });
@@ -933,7 +935,9 @@ describe("POST /api/webhook/line", () => {
       expect(callBody.messages[0].text).toContain("已清除");
 
       // Verify DB state - id-3 (繳電費) is the first focus item (overdue)
-      const item = testSqlite.prepare("SELECT priority FROM items WHERE id = ?").get("id-3") as {
+      const item = testSqlite
+        .prepare("SELECT priority FROM items_active WHERE id = ?")
+        .get("id-3") as {
         priority: string | null;
       };
       expect(item.priority).toBeNull();
@@ -958,7 +962,7 @@ describe("POST /api/webhook/line", () => {
       process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
       const now = new Date().toISOString();
       testSqlite.exec(`
-        INSERT INTO items (id, type, title, content, status, priority, due, tags, origin, source, aliases, created, modified) VALUES
+        INSERT INTO items_active (id, type, title, content, status, priority, due, tags, origin, source, aliases, created, modified) VALUES
           ('id-ut1', 'todo', '有很多標籤', '', 'active', NULL, NULL, '["工作","個人","重要"]', '', NULL, '[]', '${now}', '${now}');
       `);
 
@@ -977,7 +981,9 @@ describe("POST /api/webhook/line", () => {
       expect(replyText).toContain("重要");
 
       // Verify DB state
-      const item = testSqlite.prepare("SELECT tags FROM items WHERE id = ?").get("id-ut1") as {
+      const item = testSqlite
+        .prepare("SELECT tags FROM items_active WHERE id = ?")
+        .get("id-ut1") as {
         tags: string;
       };
       const tags = JSON.parse(item.tags);
@@ -1059,7 +1065,9 @@ describe("POST /api/webhook/line", () => {
       expect(replyText).toContain("發展中");
 
       // Verify DB
-      const item = testSqlite.prepare("SELECT status FROM items WHERE id = ?").get("id-2") as {
+      const item = testSqlite
+        .prepare("SELECT status FROM items_active WHERE id = ?")
+        .get("id-2") as {
         status: string;
       };
       expect(item.status).toBe("developing");
@@ -1107,7 +1115,7 @@ describe("POST /api/webhook/line", () => {
       seedItems();
 
       // Update id-2 to developing directly
-      testSqlite.exec("UPDATE items SET status='developing' WHERE id='id-2'");
+      testSqlite.exec("UPDATE items_active SET status='developing' WHERE id='id-2'");
 
       // Establish session with developing notes
       await sendLineMessage(app, "!developing");
@@ -1122,7 +1130,9 @@ describe("POST /api/webhook/line", () => {
       expect(replyText).toContain("永久筆記");
 
       // Verify DB
-      const item = testSqlite.prepare("SELECT status FROM items WHERE id = ?").get("id-2") as {
+      const item = testSqlite
+        .prepare("SELECT status FROM items_active WHERE id = ?")
+        .get("id-2") as {
         status: string;
       };
       expect(item.status).toBe("permanent");
@@ -1238,7 +1248,7 @@ describe("POST /api/webhook/line", () => {
       process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
       const now = new Date().toISOString();
       testSqlite.exec(`
-        INSERT INTO items (id, type, title, content, status, priority, due, tags, origin, source, aliases, created, modified) VALUES
+        INSERT INTO items_active (id, type, title, content, status, priority, due, tags, origin, source, aliases, created, modified) VALUES
           ('id-scratch-done', 'scratch', 'scratch done test', '', 'draft', NULL, NULL, '[]', 'LINE', NULL, '[]', '${now}', '${now}');
       `);
 
@@ -1260,7 +1270,7 @@ describe("POST /api/webhook/line", () => {
       process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
       const now = new Date().toISOString();
       testSqlite.exec(`
-        INSERT INTO items (id, type, title, content, status, priority, due, tags, origin, source, aliases, created, modified) VALUES
+        INSERT INTO items_active (id, type, title, content, status, priority, due, tags, origin, source, aliases, created, modified) VALUES
           ('id-scratch-due', 'scratch', 'scratch due test', '', 'draft', NULL, NULL, '[]', 'LINE', NULL, '[]', '${now}', '${now}');
       `);
 
@@ -1331,7 +1341,7 @@ describe("POST /api/webhook/line", () => {
       expect(replyText).toContain("處理：研究 Hono");
 
       // Verify the linked todo was created in the database
-      const allItems = testDb.select().from(items).all();
+      const allItems = testDb.select().from(itemsActive).all();
       const linkedTodo = allItems.find((i: Record<string, unknown>) => i.linked_note_id === "id-2");
       expect(linkedTodo).toBeTruthy();
       expect(linkedTodo!.type).toBe("todo");
@@ -1358,7 +1368,7 @@ describe("POST /api/webhook/line", () => {
       expect(replyText).toContain("2026-03-15");
 
       // Verify the linked todo has due date
-      const allItems = testDb.select().from(items).all();
+      const allItems = testDb.select().from(itemsActive).all();
       const linkedTodo = allItems.find((i: Record<string, unknown>) => i.linked_note_id === "id-2");
       expect(linkedTodo).toBeTruthy();
       expect(linkedTodo!.due).toBe("2026-03-15");
@@ -1407,7 +1417,7 @@ describe("POST /api/webhook/line", () => {
       process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
       const now = new Date().toISOString();
       testSqlite.exec(`
-        INSERT INTO items (id, type, title, content, status, priority, due, tags, origin, source, aliases, created, modified) VALUES
+        INSERT INTO items_active (id, type, title, content, status, priority, due, tags, origin, source, aliases, created, modified) VALUES
           ('id-s1', 'scratch', 'temp note 1', '', 'draft', NULL, NULL, '[]', 'LINE', NULL, '[]', '${now}', '${now}'),
           ('id-s2', 'scratch', 'temp note 2', '', 'draft', NULL, NULL, '[]', 'LINE', NULL, '[]', '${now}', '${now}');
       `);
@@ -1463,7 +1473,7 @@ describe("POST /api/webhook/line", () => {
       expect(replyText).toContain("quick note");
 
       // Verify item was created as scratch with draft status
-      const allItems = testDb.select().from(items).all();
+      const allItems = testDb.select().from(itemsActive).all();
       expect(allItems).toHaveLength(1);
       expect(allItems[0].type).toBe("scratch");
       expect(allItems[0].status).toBe("draft");
@@ -1477,7 +1487,7 @@ describe("POST /api/webhook/line", () => {
       process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
       const now = new Date().toISOString();
       testSqlite.exec(`
-        INSERT INTO items (id, type, title, content, status, priority, due, tags, origin, source, aliases, created, modified) VALUES
+        INSERT INTO items_active (id, type, title, content, status, priority, due, tags, origin, source, aliases, created, modified) VALUES
           ('id-d1', 'scratch', 'deletable note', '', 'draft', NULL, NULL, '[]', 'LINE', NULL, '[]', '${now}', '${now}');
       `);
 
@@ -1496,7 +1506,7 @@ describe("POST /api/webhook/line", () => {
       expect(replyText).toContain("deletable note");
 
       // Verify item was actually deleted from DB
-      const allItems = testDb.select().from(items).all();
+      const allItems = testDb.select().from(itemsActive).all();
       expect(allItems).toHaveLength(0);
     });
 
@@ -1519,7 +1529,7 @@ describe("POST /api/webhook/line", () => {
       process.env.LINE_CHANNEL_ACCESS_TOKEN = TEST_LINE_ACCESS_TOKEN;
       const now = new Date().toISOString();
       testSqlite.exec(`
-        INSERT INTO items (id, type, title, content, status, priority, due, tags, origin, source, aliases, created, modified) VALUES
+        INSERT INTO items_active (id, type, title, content, status, priority, due, tags, origin, source, aliases, created, modified) VALUES
           ('id-u1', 'scratch', 'upgrade me', '', 'draft', NULL, NULL, '[]', 'LINE', NULL, '[]', '${now}', '${now}');
       `);
 
@@ -1539,7 +1549,7 @@ describe("POST /api/webhook/line", () => {
 
       // Verify DB: type changed to note, status auto-mapped to fleeting
       const item = testSqlite
-        .prepare("SELECT type, status FROM items WHERE id = ?")
+        .prepare("SELECT type, status FROM items_active WHERE id = ?")
         .get("id-u1") as { type: string; status: string };
       expect(item.type).toBe("note");
       expect(item.status).toBe("fleeting");
@@ -1593,7 +1603,7 @@ describe("POST /api/webhook/line", () => {
       expect(res.status).toBe(200);
 
       // Should NOT create any items
-      const allItems = testDb.select().from(items).all();
+      const allItems = testDb.select().from(itemsActive).all();
       expect(allItems).toHaveLength(0);
 
       // Should reply with rejection message
@@ -1612,7 +1622,7 @@ describe("POST /api/webhook/line", () => {
       expect(res.status).toBe(200);
 
       // Item should be created
-      const allItems = testDb.select().from(items).all();
+      const allItems = testDb.select().from(itemsActive).all();
       expect(allItems).toHaveLength(1);
       expect(allItems[0].title).toBe("Buy milk");
     });
@@ -1625,7 +1635,7 @@ describe("POST /api/webhook/line", () => {
       const res = await sendLineMessage(app, "Buy milk", "any-random-user");
       expect(res.status).toBe(200);
 
-      const allItems = testDb.select().from(items).all();
+      const allItems = testDb.select().from(itemsActive).all();
       expect(allItems).toHaveLength(1);
       expect(allItems[0].title).toBe("Buy milk");
     });

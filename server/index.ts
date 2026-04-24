@@ -29,7 +29,7 @@ import { dashboardRouter } from "./routes/dashboard.js";
 import { vaultRouter } from "./routes/vault.js";
 import { publicRouter } from "./routes/public.js";
 import { db, sqlite, DB_PATH } from "./db/index.js";
-import { items, categories } from "./db/schema.js";
+import { itemsActive, itemsVault, categories } from "./db/schema.js";
 import { checkHealth } from "./lib/health.js";
 import { dirname } from "node:path";
 import { eq, inArray, sql } from "drizzle-orm";
@@ -241,16 +241,58 @@ app.get("/api/config", (c) => {
   });
 });
 
-// Export all items (new field names) — excludes private items
+// Export all items (v1.4.0: UNION of items_active + items_vault with status='exported'
+// synthesized for vault rows, preserving export round-trip compatibility).
 app.get("/api/export", (c) => {
   const EXPORT_LIMIT = 50000;
-  const allItems = db.select().from(items).where(eq(items.is_private, 0)).limit(EXPORT_LIMIT).all();
-  const total = db
-    .select({ count: sql<number>`count(*)` })
-    .from(items)
-    .where(eq(items.is_private, 0))
-    .get();
-  const totalCount = total?.count ?? allItems.length;
+  const activeRows = db
+    .select()
+    .from(itemsActive)
+    .where(eq(itemsActive.is_private, 0))
+    .limit(EXPORT_LIMIT)
+    .all();
+  const remaining = Math.max(0, EXPORT_LIMIT - activeRows.length);
+  const vaultRows =
+    remaining > 0
+      ? db.select().from(itemsVault).where(eq(itemsVault.is_private, 0)).limit(remaining).all()
+      : [];
+  const synthesized = vaultRows.map((r) => ({
+    id: r.id,
+    type: "note" as const,
+    title: r.title,
+    content: r.content_snippet,
+    status: "exported" as const,
+    priority: null,
+    due: null,
+    tags: r.tags,
+    origin: r.origin ?? "",
+    source: r.source,
+    aliases: r.aliases,
+    linked_note_id: null,
+    category_id: r.category_id,
+    viewed_at: null,
+    is_private: r.is_private,
+    paused: 0,
+    paused_at: null,
+    paused_context: null,
+    export_path: r.export_path,
+    created: r.created,
+    modified: r.exported_at,
+  }));
+  const allItems = [...activeRows, ...synthesized];
+  const activeTotal =
+    db
+      .select({ count: sql<number>`count(*)` })
+      .from(itemsActive)
+      .where(eq(itemsActive.is_private, 0))
+      .get()?.count ?? 0;
+  const vaultTotal =
+    db
+      .select({ count: sql<number>`count(*)` })
+      .from(itemsVault)
+      .where(eq(itemsVault.is_private, 0))
+      .get()?.count ?? 0;
+  const totalCount = activeTotal + vaultTotal;
   return c.json({
     version: 2,
     exported_at: new Date().toISOString(),
@@ -317,9 +359,9 @@ app.post("/api/import", async (c) => {
     const existingLinkedIds = new Set(
       referencedLinkedIds.length > 0
         ? db
-            .select({ id: items.id })
-            .from(items)
-            .where(inArray(items.id, referencedLinkedIds))
+            .select({ id: itemsActive.id })
+            .from(itemsActive)
+            .where(inArray(itemsActive.id, referencedLinkedIds))
             .all()
             .map((r) => r.id)
         : [],
@@ -361,20 +403,72 @@ app.post("/api/import", async (c) => {
           }
         }
 
-        const existing = db.select().from(items).where(eq(items.id, item.id)).get();
+        // v1.4.0: route status='exported' rows into items_vault; others → items_active.
+        if (item.status === "exported") {
+          const existingVault = db
+            .select()
+            .from(itemsVault)
+            .where(eq(itemsVault.id, item.id))
+            .get();
+          const snippet = (item.content ?? "").substring(0, 500);
+          const exportedAt = item.modified || new Date().toISOString();
+          if (existingVault) {
+            if (existingVault.is_private) {
+              skipped++;
+              continue;
+            }
+            db.update(itemsVault)
+              .set({
+                title: item.title,
+                category_id: item.category_id,
+                tags: JSON.stringify(item.tags),
+                aliases: JSON.stringify(item.aliases),
+                source: item.source,
+                origin: item.origin,
+                export_path: item.export_path ?? existingVault.export_path,
+                exported_at: exportedAt,
+                created: item.created,
+                content_snippet: snippet,
+              })
+              .where(eq(itemsVault.id, item.id))
+              .run();
+            updated++;
+          } else {
+            db.insert(itemsVault)
+              .values({
+                id: item.id,
+                title: item.title,
+                category_id: item.category_id,
+                tags: JSON.stringify(item.tags),
+                aliases: JSON.stringify(item.aliases),
+                source: item.source,
+                origin: item.origin,
+                export_path: item.export_path,
+                exported_at: exportedAt,
+                created: item.created,
+                is_private: 0,
+                content_snippet: snippet,
+              })
+              .run();
+            imported++;
+          }
+          processedIds.add(item.id);
+          continue;
+        }
+
+        const existing = db.select().from(itemsActive).where(eq(itemsActive.id, item.id)).get();
 
         if (existing) {
-          // Skip private items — don't overwrite private content via import
           if (existing.is_private) {
             skipped++;
             continue;
           }
-          db.update(items)
+          db.update(itemsActive)
             .set({
               type: item.type,
               title: item.title,
               content: item.content,
-              status: item.status,
+              status: item.status as "fleeting",
               priority: item.priority,
               due: item.due,
               tags: JSON.stringify(item.tags),
@@ -386,14 +480,14 @@ app.post("/api/import", async (c) => {
               created: item.created,
               modified: item.modified,
             })
-            .where(eq(items.id, item.id))
+            .where(eq(itemsActive.id, item.id))
             .run();
           updated++;
         } else {
-          // Strip is_private from imported data — imports always create public items
-          db.insert(items)
+          db.insert(itemsActive)
             .values({
               ...item,
+              status: item.status as "fleeting",
               tags: JSON.stringify(item.tags),
               aliases: JSON.stringify(item.aliases),
               is_private: 0,

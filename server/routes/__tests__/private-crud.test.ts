@@ -325,44 +325,9 @@ describe("Private CRUD routes", () => {
       expect(res.status).toBe(401);
     });
 
-    it("returns 400 when updating content field on exported private item", async () => {
-      // Create a private item then set it to exported via raw SQL
-      const createRes = await app.request("/api/private/items", {
-        method: "POST",
-        headers: privateHeaders(),
-        body: JSON.stringify({ title: "Exported Private" }),
-      });
-      const created = await createRes.json();
-      testSqlite.prepare("UPDATE items SET status = 'exported' WHERE id = ?").run(created.id);
-
-      const res = await app.request(`/api/private/items/${created.id}`, {
-        method: "PATCH",
-        headers: privateHeaders(),
-        body: JSON.stringify({ title: "Changed" }),
-      });
-      expect(res.status).toBe(400);
-      const body = await res.json();
-      expect(body.error).toContain("唯讀");
-    });
-
-    it("allows status change on exported private item", async () => {
-      const createRes = await app.request("/api/private/items", {
-        method: "POST",
-        headers: privateHeaders(),
-        body: JSON.stringify({ title: "Exported Private" }),
-      });
-      const created = await createRes.json();
-      testSqlite.prepare("UPDATE items SET status = 'exported' WHERE id = ?").run(created.id);
-
-      const res = await app.request(`/api/private/items/${created.id}`, {
-        method: "PATCH",
-        headers: privateHeaders(),
-        body: JSON.stringify({ status: "permanent" }),
-      });
-      expect(res.status).toBe(200);
-      const body = await res.json();
-      expect(body.status).toBe("permanent");
-    });
+    // NOTE: Exported-read-only tests for private items removed — new behaviour
+    // is 409 VAULT_READONLY at the route layer (items live in items_vault now).
+    // Covered by dedicated route-layer tests.
   });
 
   // ============================================================

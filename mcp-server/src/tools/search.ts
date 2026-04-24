@@ -11,7 +11,7 @@ export function registerSearchTools(server: McpServer): void {
     "sparkle_search",
     {
       title: "Search Sparkle",
-      description: `Full-text search across all Sparkle notes and todos using FTS5.
+      description: `Full-text search over items_active only (fleeting/developing/permanent/archived). As of v1.4.0, exported notes live in items_vault and are NOT searchable from this tool — use \`sparkle_search_obsidian\` (vault FTS via obsidian-cli) or \`sparkle_search_all\` (union of DB + vault) for "all notes" queries.
 
 Searches title and content fields. Supports Chinese characters (trigram tokenizer).
 Queries shorter than 3 characters fall back to LIKE matching.

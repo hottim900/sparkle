@@ -1,10 +1,10 @@
 import { readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
-import { and, eq, isNull } from "drizzle-orm";
+import { eq, isNull } from "drizzle-orm";
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import type Database from "better-sqlite3";
 import * as schema from "../db/schema.js";
-import { items } from "../db/schema.js";
+import { itemsVault } from "../db/schema.js";
 import { getObsidianSettings } from "./settings.js";
 import { logger } from "./logger.js";
 
@@ -43,11 +43,11 @@ export async function backfillExportPaths(
   const inboxFolder = obsidian.obsidian_inbox_folder;
   const targetDir = join(vaultPath, inboxFolder);
 
-  // Get exported items missing export_path (only exported status)
+  // Get vault items missing export_path
   const needsBackfill = db
-    .select({ id: items.id })
-    .from(items)
-    .where(and(eq(items.status, "exported"), isNull(items.export_path)))
+    .select({ id: itemsVault.id })
+    .from(itemsVault)
+    .where(isNull(itemsVault.export_path))
     .all()
     .reduce((set, row) => {
       set.add(row.id);
@@ -79,7 +79,10 @@ export async function backfillExportPaths(
       if (!sparkleId || !needsBackfill.has(sparkleId)) continue;
 
       const exportPath = `${inboxFolder}/${file}`;
-      db.update(items).set({ export_path: exportPath }).where(eq(items.id, sparkleId)).run();
+      db.update(itemsVault)
+        .set({ export_path: exportPath })
+        .where(eq(itemsVault.id, sparkleId))
+        .run();
 
       matched++;
       needsBackfill.delete(sparkleId);

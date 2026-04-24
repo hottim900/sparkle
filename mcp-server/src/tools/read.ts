@@ -9,13 +9,12 @@ export function registerReadTools(server: McpServer): void {
     "sparkle_get_note",
     {
       title: "Get Sparkle Note",
-      description: `Read a single Sparkle note or todo by ID. Supports full UUID or short ID prefix (min 4 chars, e.g. "a4662876").
+      description: `Fetch a single item by id or short_id prefix. Returns items_active row (with full content) OR items_vault row (metadata + 500-char content_snippet + vault_path). For full content of vault items, call \`sparkle_read_obsidian\` (by sparkle_id) or \`sparkle_read_obsidian_by_path\` (if you have vault_path). Response includes \`origin: 'active' | 'vault'\` marker.
 
 Args:
-  - id (string): Full UUID or short ID prefix (min 4 chars)
+  - id (string): Full UUID or short ID prefix (min 4 chars, e.g. "a4662876")
 
-Returns: Full item with title, content, status, tags, aliases, linked items, and metadata.
-If prefix matches multiple items, returns error with candidate IDs.`,
+If the prefix matches rows in both tables, returns 409 Conflict with candidate IDs.`,
       inputSchema: z.object({
         id: z.string().min(4).describe("Item UUID or short ID prefix (min 4 chars)"),
       }).strict(),
@@ -43,14 +42,15 @@ If prefix matches multiple items, returns error with candidate IDs.`,
     "sparkle_list_notes",
     {
       title: "List Sparkle Notes",
-      description: `List Sparkle notes with optional filters. Default: all notes sorted by creation date (newest first).
+      description: `List notes from items_active with filter support. As of v1.4.0, default excludes vault-exported notes. Pass \`status='exported'\` to list items_vault (returns metadata + 500-char content_snippet; NOT full content — use \`sparkle_read_obsidian\` for that). For "all notes" queries, prefer \`sparkle_search_all\`.
 
-Note statuses: fleeting → developing → permanent → exported → archived
+Note statuses (items_active): fleeting → developing → permanent → archived
+Note-exported (items_vault): \`status='exported'\` synthesized
 Todo statuses: active → done → archived
 Scratch statuses: draft → archived
 
 Args:
-  - status (string, optional): Filter by status
+  - status (string, optional): Filter by status ("exported" lists items_vault; all other values list items_active)
   - tag (string, optional): Filter by tag name
   - type (string, optional): "note", "todo", or "scratch", default "note"
   - category_id (string, optional): Filter by category UUID

@@ -8,7 +8,7 @@ import { logger } from "../lib/logger.js";
 
 const DB_PATH = process.env.DATABASE_URL || "./data/todo.db";
 
-const TARGET_VERSION = 22;
+const TARGET_VERSION = 23;
 
 function getSchemaVersion(sqlite: Database.Database): number {
   // Check if schema_version table exists
@@ -409,51 +409,319 @@ function runMigrations(sqlite: Database.Database) {
     );
     setSchemaVersion(sqlite, 22);
   }
+
+  // Step 22→23: Split items → items_active + items_vault (see docs/migration-v23.md)
+  if (version < 23) {
+    migrateV22toV23(sqlite);
+  }
 }
 
-export function initializeDatabase(sqlite: Database.Database) {
-  // Check if the items table exists
-  const tableExists = sqlite
-    .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='items'")
-    .get();
+export function migrateV22toV23(sqlite: Database.Database) {
+  // Idempotency: detect partial-completion states before running.
+  const schemaRows = sqlite
+    .prepare(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('items','items_active','items_vault')",
+    )
+    .all() as { name: string }[];
+  const have = new Set(schemaRows.map((r) => r.name));
 
-  if (!tableExists) {
-    // Fresh install: create table with new schema directly
+  // State A: only legacy `items` table → run full Stage A+B
+  // State B: items_active exists but FTS empty → only rebuild FTS
+  // State C: items_active exists and FTS populated → only bump version
+  const hasLegacy = have.has("items");
+  const hasActive = have.has("items_active");
+
+  if (!hasLegacy && hasActive) {
+    // State B or C: main schema already migrated, make sure FTS + version are in sync
+    try {
+      const ftsRow = sqlite.prepare("SELECT COUNT(*) AS n FROM items_active_fts").get() as
+        | { n: number }
+        | undefined;
+      if (ftsRow && ftsRow.n === 0) {
+        sqlite.exec("INSERT INTO items_active_fts(items_active_fts) VALUES ('rebuild')");
+      }
+    } catch {
+      // items_active_fts not created yet — setupFTS will build it after migrations
+    }
+    setSchemaVersion(sqlite, 23);
+    return;
+  }
+
+  if (!hasLegacy && !hasActive) {
+    // Fresh install path should not have reached here; safety net
+    setSchemaVersion(sqlite, 23);
+    return;
+  }
+
+  sqlite.pragma("foreign_keys = OFF");
+
+  const runStageA = sqlite.transaction(() => {
+    // A-0. Cross-table linked_note_id cleanup (D12): null out active→vault refs
+    //      before split so items_active FK does not violate.
     sqlite.exec(`
-      CREATE TABLE items (
+      UPDATE items SET linked_note_id = NULL
+      WHERE linked_note_id IS NOT NULL
+        AND linked_note_id IN (SELECT id FROM items WHERE status = 'exported')
+        AND status != 'exported';
+    `);
+
+    // A-1. items_active: status-bearing table (D15 viewed_at, D16 category_id FK,
+    //      D17 content default, D1 linked_note_id FK).
+    sqlite.exec(`
+      CREATE TABLE items_active (
         id TEXT PRIMARY KEY,
-        type TEXT NOT NULL DEFAULT 'note',
+        type TEXT NOT NULL,
+        status TEXT NOT NULL,
         title TEXT NOT NULL,
         content TEXT DEFAULT '',
-        status TEXT NOT NULL DEFAULT 'fleeting',
+        is_private INTEGER NOT NULL DEFAULT 0,
+        category_id TEXT,
         priority TEXT,
         due TEXT,
         tags TEXT NOT NULL DEFAULT '[]',
-        origin TEXT DEFAULT '',
-        source TEXT DEFAULT NULL,
         aliases TEXT NOT NULL DEFAULT '[]',
-        linked_note_id TEXT DEFAULT NULL,
-        category_id TEXT DEFAULT NULL,
+        source TEXT,
+        origin TEXT,
+        linked_note_id TEXT,
         viewed_at TEXT DEFAULT NULL,
-        is_private INTEGER DEFAULT 0,
         paused INTEGER NOT NULL DEFAULT 0,
-        paused_at TEXT DEFAULT NULL,
-        paused_context TEXT DEFAULT NULL,
-        export_path TEXT DEFAULT NULL,
+        paused_at TEXT,
+        paused_context TEXT,
         created TEXT NOT NULL,
         modified TEXT NOT NULL,
-        FOREIGN KEY (linked_note_id) REFERENCES items(id) ON DELETE SET NULL,
+        CHECK (
+          (type = 'note' AND status IN ('fleeting', 'developing', 'permanent', 'archived')) OR
+          (type = 'todo' AND status IN ('active', 'done', 'archived')) OR
+          (type = 'scratch' AND status IN ('draft', 'archived'))
+        ),
+        FOREIGN KEY (linked_note_id) REFERENCES items_active(id) ON DELETE SET NULL,
+        FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL
+      );
+    `);
+
+    // A-2. items_vault: metadata + immutable preview cache (D11 content_snippet,
+    //      D16 category_id FK, D18 export_path items_vault-only).
+    sqlite.exec(`
+      CREATE TABLE items_vault (
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        category_id TEXT,
+        tags TEXT NOT NULL DEFAULT '[]',
+        aliases TEXT NOT NULL DEFAULT '[]',
+        source TEXT,
+        origin TEXT,
+        export_path TEXT,
+        exported_at TEXT NOT NULL,
+        created TEXT NOT NULL,
+        is_private INTEGER NOT NULL DEFAULT 0,
+        content_snippet TEXT NOT NULL DEFAULT '',
+        FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL
+      );
+    `);
+
+    // A-3. Data migration → items_active
+    sqlite.exec(`
+      INSERT INTO items_active (
+        id, type, status, title, content, is_private, category_id, priority, due,
+        tags, aliases, source, origin, linked_note_id, viewed_at,
+        paused, paused_at, paused_context, created, modified
+      )
+      SELECT id, type, status, title, COALESCE(content, ''), COALESCE(is_private, 0), category_id,
+             priority, due, tags, aliases, source, origin, linked_note_id, viewed_at,
+             paused, paused_at, paused_context, created, modified
+      FROM items WHERE status != 'exported';
+    `);
+
+    // A-4. Data migration → items_vault (content_snippet derived from content)
+    sqlite.exec(`
+      INSERT INTO items_vault (
+        id, title, category_id, tags, aliases, source, origin,
+        export_path, exported_at, created, is_private, content_snippet
+      )
+      SELECT id, title, category_id, tags, aliases, source, origin,
+             export_path, modified, created, COALESCE(is_private, 0),
+             COALESCE(SUBSTR(content, 1, 500), '')
+      FROM items WHERE status = 'exported';
+    `);
+
+    // A-5. Rebuild share_tokens with FK → items_active (drops tokens for exported items).
+    const dropCount =
+      (
+        sqlite
+          .prepare(
+            `SELECT COUNT(*) AS n FROM share_tokens WHERE item_id IN (SELECT id FROM items WHERE status = 'exported')`,
+          )
+          .get() as { n: number } | undefined
+      )?.n ?? 0;
+    if (dropCount > 0) {
+      logger.info(`Migration 23: dropping ${dropCount} share_tokens referencing exported items`);
+    }
+    sqlite.exec(`
+      CREATE TABLE share_tokens_new (
+        id TEXT PRIMARY KEY,
+        item_id TEXT NOT NULL,
+        token TEXT NOT NULL UNIQUE,
+        visibility TEXT NOT NULL DEFAULT 'unlisted',
+        created TEXT NOT NULL,
+        FOREIGN KEY (item_id) REFERENCES items_active(id) ON DELETE CASCADE
+      );
+      INSERT INTO share_tokens_new (id, item_id, token, visibility, created)
+        SELECT id, item_id, token, visibility, created
+        FROM share_tokens
+        WHERE item_id IN (SELECT id FROM items_active);
+      DROP TABLE share_tokens;
+      ALTER TABLE share_tokens_new RENAME TO share_tokens;
+    `);
+
+    // A-6. Drop legacy triggers + items + items_fts.
+    sqlite.exec(`
+      DROP TRIGGER IF EXISTS items_ai;
+      DROP TRIGGER IF EXISTS items_ad;
+      DROP TRIGGER IF EXISTS items_au;
+      DROP TABLE items;
+      DROP TABLE IF EXISTS items_fts;
+    `);
+
+    // A-7. FTS5 external-content (D13, R4-FINDING-6 — keep 2-column scope to match legacy fts.ts).
+    sqlite.exec(`
+      CREATE VIRTUAL TABLE items_active_fts USING fts5(
+        title, content,
+        content = items_active,
+        content_rowid = rowid,
+        tokenize = 'trigram'
+      );
+      CREATE TRIGGER items_active_ai AFTER INSERT ON items_active BEGIN
+        INSERT INTO items_active_fts(rowid, title, content)
+        VALUES (new.rowid, new.title, new.content);
+      END;
+      CREATE TRIGGER items_active_ad AFTER DELETE ON items_active BEGIN
+        INSERT INTO items_active_fts(items_active_fts, rowid, title, content)
+        VALUES ('delete', old.rowid, old.title, old.content);
+      END;
+      CREATE TRIGGER items_active_au AFTER UPDATE ON items_active BEGIN
+        INSERT INTO items_active_fts(items_active_fts, rowid, title, content)
+        VALUES ('delete', old.rowid, old.title, old.content);
+        INSERT INTO items_active_fts(rowid, title, content)
+        VALUES (new.rowid, new.title, new.content);
+      END;
+    `);
+  });
+
+  runStageA();
+
+  sqlite.pragma("foreign_keys = ON");
+
+  // FK validation (D15 + D16 post-check)
+  const activeViolations = sqlite.pragma("foreign_key_check(items_active)") as unknown[];
+  const vaultViolations = sqlite.pragma("foreign_key_check(items_vault)") as unknown[];
+  if (activeViolations.length > 0 || vaultViolations.length > 0) {
+    throw new Error(
+      `Migration 23 FK violations: active=${JSON.stringify(activeViolations)} vault=${JSON.stringify(vaultViolations)}`,
+    );
+  }
+
+  // Stage B: indexes + FTS backfill + version bump (outside transaction).
+  sqlite.exec(`
+    CREATE INDEX IF NOT EXISTS idx_items_active_type_status ON items_active(type, status);
+    CREATE INDEX IF NOT EXISTS idx_items_active_category_id ON items_active(category_id);
+    CREATE INDEX IF NOT EXISTS idx_items_active_paused ON items_active(paused) WHERE paused = 1;
+    CREATE INDEX IF NOT EXISTS idx_items_active_modified ON items_active(modified);
+    CREATE INDEX IF NOT EXISTS idx_items_active_due ON items_active(due) WHERE due IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS idx_items_active_linked_note_id
+      ON items_active(linked_note_id) WHERE linked_note_id IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS idx_items_active_viewed_at ON items_active(viewed_at);
+
+    CREATE INDEX IF NOT EXISTS idx_items_vault_category_id ON items_vault(category_id);
+    CREATE INDEX IF NOT EXISTS idx_items_vault_exported_at ON items_vault(exported_at);
+
+    CREATE INDEX IF NOT EXISTS idx_share_tokens_token ON share_tokens(token);
+    CREATE INDEX IF NOT EXISTS idx_share_tokens_item_id ON share_tokens(item_id);
+
+    INSERT INTO items_active_fts(items_active_fts) VALUES ('rebuild');
+  `);
+
+  setSchemaVersion(sqlite, 23);
+}
+
+export function initializeDatabase(sqlite: Database.Database) {
+  // Check if either the legacy items table OR the new items_active table exists.
+  const existing = sqlite
+    .prepare(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('items', 'items_active')",
+    )
+    .all() as { name: string }[];
+  const tableExists = existing.length > 0;
+
+  if (!tableExists) {
+    // Fresh install: categories must exist before items_active/items_vault since
+    // both tables declare FOREIGN KEY (category_id) REFERENCES categories(id).
+    sqlite.exec(`
+      CREATE TABLE categories (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL UNIQUE,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        color TEXT DEFAULT NULL,
+        created TEXT NOT NULL,
+        modified TEXT NOT NULL
+      );
+      CREATE INDEX idx_categories_sort_order ON categories(sort_order);
+
+      CREATE TABLE items_active (
+        id TEXT PRIMARY KEY,
+        type TEXT NOT NULL,
+        status TEXT NOT NULL,
+        title TEXT NOT NULL,
+        content TEXT DEFAULT '',
+        is_private INTEGER NOT NULL DEFAULT 0,
+        category_id TEXT,
+        priority TEXT,
+        due TEXT,
+        tags TEXT NOT NULL DEFAULT '[]',
+        aliases TEXT NOT NULL DEFAULT '[]',
+        source TEXT,
+        origin TEXT,
+        linked_note_id TEXT,
+        viewed_at TEXT DEFAULT NULL,
+        paused INTEGER NOT NULL DEFAULT 0,
+        paused_at TEXT,
+        paused_context TEXT,
+        created TEXT NOT NULL,
+        modified TEXT NOT NULL,
+        CHECK (
+          (type = 'note' AND status IN ('fleeting', 'developing', 'permanent', 'archived')) OR
+          (type = 'todo' AND status IN ('active', 'done', 'archived')) OR
+          (type = 'scratch' AND status IN ('draft', 'archived'))
+        ),
+        FOREIGN KEY (linked_note_id) REFERENCES items_active(id) ON DELETE SET NULL,
         FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL
       );
 
-      CREATE INDEX idx_items_status ON items(status);
-      CREATE INDEX idx_items_type ON items(type);
-      CREATE INDEX idx_items_created ON items(created DESC);
-      CREATE INDEX idx_items_viewed_at ON items(viewed_at);
-      CREATE INDEX idx_items_status_modified ON items(status, modified);
-      CREATE INDEX idx_items_private_status ON items(is_private, status);
-      CREATE INDEX idx_items_private_status_modified ON items(is_private, status, modified);
-      CREATE INDEX idx_items_paused ON items(paused) WHERE paused = 1;
+      CREATE INDEX idx_items_active_type_status ON items_active(type, status);
+      CREATE INDEX idx_items_active_category_id ON items_active(category_id);
+      CREATE INDEX idx_items_active_modified ON items_active(modified);
+      CREATE INDEX idx_items_active_viewed_at ON items_active(viewed_at);
+      CREATE INDEX idx_items_active_paused ON items_active(paused) WHERE paused = 1;
+      CREATE INDEX idx_items_active_due ON items_active(due) WHERE due IS NOT NULL;
+      CREATE INDEX idx_items_active_linked_note_id
+        ON items_active(linked_note_id) WHERE linked_note_id IS NOT NULL;
+
+      CREATE TABLE items_vault (
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        category_id TEXT,
+        tags TEXT NOT NULL DEFAULT '[]',
+        aliases TEXT NOT NULL DEFAULT '[]',
+        source TEXT,
+        origin TEXT,
+        export_path TEXT,
+        exported_at TEXT NOT NULL,
+        created TEXT NOT NULL,
+        is_private INTEGER NOT NULL DEFAULT 0,
+        content_snippet TEXT NOT NULL DEFAULT '',
+        FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL
+      );
+      CREATE INDEX idx_items_vault_category_id ON items_vault(category_id);
+      CREATE INDEX idx_items_vault_exported_at ON items_vault(exported_at);
 
       CREATE TABLE settings (
         key TEXT PRIMARY KEY,
@@ -479,21 +747,10 @@ export function initializeDatabase(sqlite: Database.Database) {
         token TEXT NOT NULL UNIQUE,
         visibility TEXT NOT NULL DEFAULT 'unlisted',
         created TEXT NOT NULL,
-        FOREIGN KEY (item_id) REFERENCES items(id) ON DELETE CASCADE
+        FOREIGN KEY (item_id) REFERENCES items_active(id) ON DELETE CASCADE
       );
       CREATE INDEX idx_share_tokens_token ON share_tokens(token);
       CREATE INDEX idx_share_tokens_item_id ON share_tokens(item_id);
-
-      CREATE TABLE categories (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL UNIQUE,
-        sort_order INTEGER NOT NULL DEFAULT 0,
-        color TEXT DEFAULT NULL,
-        created TEXT NOT NULL,
-        modified TEXT NOT NULL
-      );
-      CREATE INDEX idx_categories_sort_order ON categories(sort_order);
-      CREATE INDEX idx_items_category_id ON items(category_id);
 
       CREATE TABLE vault_files (
         path TEXT PRIMARY KEY,
@@ -513,14 +770,6 @@ export function initializeDatabase(sqlite: Database.Database) {
   } else {
     // Existing database: run migrations
     runMigrations(sqlite);
-
-    // Recreate indexes with new column names (idempotent)
-    try {
-      sqlite.exec("DROP INDEX IF EXISTS idx_items_created_at");
-      sqlite.exec("CREATE INDEX IF NOT EXISTS idx_items_created ON items(created DESC)");
-    } catch {
-      // Index operations are best-effort
-    }
   }
 
   setupFTS(sqlite);

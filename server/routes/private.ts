@@ -20,7 +20,6 @@ import {
   searchSchema,
 } from "../schemas/items.js";
 import { deriveTitleFromContent } from "../lib/title-derivation.js";
-import { EXPORTED_BLOCKED_FIELDS } from "../lib/exported-guard.js";
 
 const privateRouter = new Hono();
 
@@ -184,13 +183,15 @@ privateRouter.patch("/items/:id", async (c) => {
       return c.json({ error: "Item not found" }, 404);
     }
 
-    // Exported items are read-only (content fields blocked)
-    if (existing.status === "exported") {
-      if (
-        EXPORTED_BLOCKED_FIELDS.some((f) => (input as Record<string, unknown>)[f] !== undefined)
-      ) {
-        return c.json({ error: "已匯出項目為唯讀" }, 400);
-      }
+    if (existing.origin === "vault") {
+      return c.json(
+        {
+          error: "此項目為 vault-origin，Sparkle DB 僅持 metadata；內容以 vault 為準",
+          code: "VAULT_READONLY",
+          vault_path: existing.export_path,
+        },
+        409,
+      );
     }
 
     const updated = updateItem(db, id, input, true);
@@ -240,8 +241,8 @@ privateRouter.get("/search", (c) => {
 privateRouter.get("/tags", (c) => {
   const stmt = sqlite.prepare(`
     SELECT DISTINCT value as tag
-    FROM items, json_each(items.tags)
-    WHERE value != '' AND items.is_private = 1
+    FROM items_active, json_each(items_active.tags)
+    WHERE value != '' AND items_active.is_private = 1
     ORDER BY value
   `);
   const rows = stmt.all() as { tag: string }[];

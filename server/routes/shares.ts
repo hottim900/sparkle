@@ -17,7 +17,7 @@ sharesRouter.post("/items/:id/share", async (c) => {
     if (!share) {
       // Check why it failed — item not found, private, or not a note
       const item = sqlite
-        .prepare("SELECT id, type FROM items WHERE id = ? AND is_private = 0")
+        .prepare("SELECT id, type FROM items_active WHERE id = ? AND is_private = 0")
         .get(itemId) as { id: string; type: string } | undefined;
 
       if (!item) {

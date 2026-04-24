@@ -2,16 +2,23 @@ import { eq, desc, asc, sql, and, notInArray, like } from "drizzle-orm";
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import type Database from "better-sqlite3";
 import { v4 as uuidv4 } from "uuid";
-import { items } from "../db/schema.js";
+import { itemsActive, itemsVault } from "../db/schema.js";
 import type { CreateItemInput, UpdateItemInput } from "../schemas/items.js";
 import type * as schema from "../db/schema.js";
 import { getAutoMappedStatus, defaultStatusForType } from "./item-type-system.js";
-import { resolveLinkedInfo, type ItemWithLinkedInfo } from "./item-enrichment.js";
+import {
+  resolveLinkedInfo,
+  resolveLinkedInfoActive,
+  type ItemWithLinkedInfo,
+} from "./item-enrichment.js";
 import { logger } from "./logger.js";
-import { EXPORTED_BLOCKED_FIELDS } from "./exported-guard.js";
 import { escapeFts5Query } from "./fts-utils.js";
 
 type DB = BetterSQLite3Database<typeof schema>;
+type ActiveRow = typeof itemsActive.$inferSelect;
+
+export const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const LIKE_SAFE_RE = /^[^%_]{4,36}$/;
 
 export function createItem(
   db: DB,
@@ -42,51 +49,112 @@ export function createItem(
     modified: now,
   };
 
-  db.insert(items).values(values).run();
-  return db.select().from(items).where(eq(items.id, id)).get()!;
+  db.insert(itemsActive).values(values).run();
+  return db.select().from(itemsActive).where(eq(itemsActive.id, id)).get()!;
 }
 
-export const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const LIKE_SAFE_RE = /^[^%_]{4,36}$/;
-
+/**
+ * Cross-table item lookup for API routes. Throws 409 on ambiguous prefix.
+ * Returns vault row (origin='vault') if not found in items_active.
+ */
 export function getItem(
   db: DB,
   id: string,
   enrich = true,
   includePrivate = false,
 ): ItemWithLinkedInfo | null {
-  // Full UUID — exact match (fast path)
+  // Full UUID — exact match (fast path): check active first, fall back to vault
   if (UUID_RE.test(id)) {
-    const row = db.select().from(items).where(eq(items.id, id)).get() ?? null;
-    if (!row) return null;
-    if (!includePrivate && row.is_private) return null;
-    return resolveLinkedInfo(db, [row], enrich, includePrivate)[0]!;
+    const active = db.select().from(itemsActive).where(eq(itemsActive.id, id)).get() ?? null;
+    if (active) {
+      if (!includePrivate && active.is_private) return null;
+      return resolveLinkedInfo(db, [{ kind: "active", row: active }], enrich, includePrivate)[0]!;
+    }
+    const vault = db.select().from(itemsVault).where(eq(itemsVault.id, id)).get() ?? null;
+    if (!vault) return null;
+    if (!includePrivate && vault.is_private) return null;
+    return resolveLinkedInfo(db, [{ kind: "vault", row: vault }], enrich, includePrivate)[0]!;
   }
 
-  // Short prefix — LIKE match (hex only, 4–36 chars)
+  // Short prefix — LIKE match (hex only, 4–36 chars); search both tables
   if (!LIKE_SAFE_RE.test(id)) return null;
-  const conditions = [like(items.id, `${id}%`)];
-  if (!includePrivate) {
-    conditions.push(eq(items.is_private, 0));
-  }
-  const rows = db
+
+  const activeConditions = [like(itemsActive.id, `${id}%`)];
+  if (!includePrivate) activeConditions.push(eq(itemsActive.is_private, 0));
+  const activeMatches = db
     .select()
-    .from(items)
-    .where(and(...conditions))
-    .orderBy(asc(items.id))
+    .from(itemsActive)
+    .where(and(...activeConditions))
+    .orderBy(asc(itemsActive.id))
     .limit(2)
     .all();
-  if (rows.length === 0) return null;
-  if (rows.length > 1) {
+
+  const vaultConditions = [like(itemsVault.id, `${id}%`)];
+  if (!includePrivate) vaultConditions.push(eq(itemsVault.is_private, 0));
+  const vaultMatches = db
+    .select()
+    .from(itemsVault)
+    .where(and(...vaultConditions))
+    .orderBy(asc(itemsVault.id))
+    .limit(2)
+    .all();
+
+  const total = activeMatches.length + vaultMatches.length;
+  if (total === 0) return null;
+  if (total > 1) {
+    const allIds = [...activeMatches.map((r) => r.id), ...vaultMatches.map((r) => r.id)];
     const error = new Error(`Ambiguous ID prefix '${id}' matches multiple items`) as Error & {
       status: number;
       matches: string[];
     };
     error.status = 409;
-    error.matches = rows.map((r) => r.id);
+    error.matches = allIds;
     throw error;
   }
-  return resolveLinkedInfo(db, [rows[0]!], enrich, includePrivate)[0]!;
+  if (activeMatches.length === 1) {
+    return resolveLinkedInfo(
+      db,
+      [{ kind: "active", row: activeMatches[0]! }],
+      enrich,
+      includePrivate,
+    )[0]!;
+  }
+  return resolveLinkedInfo(
+    db,
+    [{ kind: "vault", row: vaultMatches[0]! }],
+    enrich,
+    includePrivate,
+  )[0]!;
+}
+
+/**
+ * Lookup for wikilink resolution (export.ts). Returns null on miss OR collision
+ * across either table. Preserves the original 筆記（xxxx） text in the exported
+ * markdown rather than picking an arbitrary row on ambiguity.
+ */
+export function getItemForLookup(
+  db: DB,
+  shortId: string,
+): { id: string; title: string; origin: "active" | "vault" } | null {
+  if (!LIKE_SAFE_RE.test(shortId) && !UUID_RE.test(shortId)) return null;
+  const activeMatches = db
+    .select({ id: itemsActive.id, title: itemsActive.title })
+    .from(itemsActive)
+    .where(and(like(itemsActive.id, `${shortId}%`), eq(itemsActive.is_private, 0)))
+    .limit(2)
+    .all();
+  const vaultMatches = db
+    .select({ id: itemsVault.id, title: itemsVault.title })
+    .from(itemsVault)
+    .where(and(like(itemsVault.id, `${shortId}%`), eq(itemsVault.is_private, 0)))
+    .limit(2)
+    .all();
+  const total = activeMatches.length + vaultMatches.length;
+  if (total !== 1) return null;
+  if (activeMatches.length === 1) {
+    return { ...activeMatches[0]!, origin: "active" };
+  }
+  return { ...vaultMatches[0]!, origin: "vault" };
 }
 
 export function listItems(
@@ -110,35 +178,34 @@ export function listItems(
   const conditions = [];
 
   // Default: show public items only. Pass is_private=1 to see private items.
-  conditions.push(eq(items.is_private, filters?.is_private ?? 0));
+  conditions.push(eq(itemsActive.is_private, filters?.is_private ?? 0));
 
-  // Paused filter: default (no param) → exclude paused; "true" → only paused; "false" → only non-paused; "all" → all
+  // Paused filter
   if (filters?.paused === "true") {
-    conditions.push(eq(items.paused, 1));
+    conditions.push(eq(itemsActive.paused, 1));
   } else if (filters?.paused === "all") {
-    // No filter — show all
+    // No filter
   } else {
-    // Default or "false" — exclude paused
-    conditions.push(eq(items.paused, 0));
+    conditions.push(eq(itemsActive.paused, 0));
   }
 
   if (filters?.status) {
     // SAFETY: Drizzle requires literal union type; value is validated by Zod in route layer
-    conditions.push(eq(items.status, filters.status as "fleeting"));
+    conditions.push(eq(itemsActive.status, filters.status as "fleeting"));
   }
   if (filters?.excludeStatus && filters.excludeStatus.length > 0) {
     // SAFETY: Drizzle requires literal union type; values are validated by Zod in route layer
-    conditions.push(notInArray(items.status, filters.excludeStatus as ["fleeting"]));
+    conditions.push(notInArray(itemsActive.status, filters.excludeStatus as ["fleeting"]));
   }
   if (filters?.type) {
     // SAFETY: Drizzle requires literal union type; value is validated by Zod in route layer
-    conditions.push(eq(items.type, filters.type as "note"));
+    conditions.push(eq(itemsActive.type, filters.type as "note"));
   }
   if (filters?.linked_note_id) {
-    conditions.push(eq(items.linked_note_id, filters.linked_note_id));
+    conditions.push(eq(itemsActive.linked_note_id, filters.linked_note_id));
   }
   if (filters?.category_id) {
-    conditions.push(eq(items.category_id, filters.category_id));
+    conditions.push(eq(itemsActive.category_id, filters.category_id));
   }
   if (filters?.tag) {
     conditions.push(sql`json_each.value = ${filters.tag}`);
@@ -151,51 +218,105 @@ export function listItems(
 
   const sortColumn =
     sortField === "priority"
-      ? items.priority
+      ? itemsActive.priority
       : sortField === "due"
-        ? items.due
+        ? itemsActive.due
         : sortField === "modified"
-          ? items.modified
-          : items.created;
+          ? itemsActive.modified
+          : itemsActive.created;
   const orderFn = sortOrder === "asc" ? asc : desc;
 
   if (filters?.tag) {
     const whereClause = conditions.length > 0 ? sql`WHERE ${and(...conditions)}` : sql``;
 
     const countResult = db.all<{ count: number }>(
-      sql`SELECT COUNT(DISTINCT items.id) as count FROM items, json_each(items.tags) ${whereClause}`,
+      sql`SELECT COUNT(DISTINCT items_active.id) as count FROM items_active, json_each(items_active.tags) ${whereClause}`,
     );
     const total = countResult[0]?.count ?? 0;
 
     const orderSql =
       sortOrder === "asc" ? sql`ORDER BY ${sortColumn} ASC` : sql`ORDER BY ${sortColumn} DESC`;
 
-    const rows = db.all<typeof items.$inferSelect>(
-      sql`SELECT DISTINCT items.* FROM items, json_each(items.tags) ${whereClause} ${orderSql} LIMIT ${limit} OFFSET ${offset}`,
+    const rows = db.all<ActiveRow>(
+      sql`SELECT DISTINCT items_active.* FROM items_active, json_each(items_active.tags) ${whereClause} ${orderSql} LIMIT ${limit} OFFSET ${offset}`,
     );
 
-    return { items: resolveLinkedInfo(db, rows, enrich), total };
+    return { items: resolveLinkedInfoActive(db, rows, enrich), total };
   }
 
   const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
   const countResult = db
     .select({ count: sql<number>`count(*)` })
-    .from(items)
+    .from(itemsActive)
     .where(whereClause)
     .get();
   const total = countResult?.count ?? 0;
 
   const rows = db
     .select()
-    .from(items)
+    .from(itemsActive)
     .where(whereClause)
     .orderBy(orderFn(sortColumn))
     .limit(limit)
     .offset(offset)
     .all();
 
-  return { items: resolveLinkedInfo(db, rows, enrich), total };
+  return { items: resolveLinkedInfoActive(db, rows, enrich), total };
+}
+
+/** List vault-origin items (exported notes). Used by /notes/exported, MCP sparkle_list_notes(status='exported'). */
+export function listVaultItems(
+  db: DB,
+  filters?: {
+    category_id?: string;
+    is_private?: 0 | 1;
+    limit?: number;
+    offset?: number;
+    sort?: "exported_at" | "created";
+    order?: "asc" | "desc";
+  },
+  enrich = true,
+) {
+  const conditions = [eq(itemsVault.is_private, filters?.is_private ?? 0)];
+  if (filters?.category_id) {
+    conditions.push(eq(itemsVault.category_id, filters.category_id));
+  }
+
+  const limit = filters?.limit ?? 50;
+  const offset = filters?.offset ?? 0;
+  const sortField = filters?.sort ?? "exported_at";
+  const sortOrder = filters?.order ?? "desc";
+  const orderFn = sortOrder === "asc" ? asc : desc;
+  const sortColumn = sortField === "created" ? itemsVault.created : itemsVault.exported_at;
+
+  const whereClause = and(...conditions);
+
+  const countResult = db
+    .select({ count: sql<number>`count(*)` })
+    .from(itemsVault)
+    .where(whereClause)
+    .get();
+  const total = countResult?.count ?? 0;
+
+  const rows = db
+    .select()
+    .from(itemsVault)
+    .where(whereClause)
+    .orderBy(orderFn(sortColumn))
+    .limit(limit)
+    .offset(offset)
+    .all();
+
+  return {
+    items: resolveLinkedInfo(
+      db,
+      rows.map((row) => ({ kind: "vault" as const, row })),
+      enrich,
+      filters?.is_private === 1,
+    ),
+    total,
+  };
 }
 
 export function updateItem(
@@ -208,6 +329,13 @@ export function updateItem(
   const existing =
     prefetchedExisting !== undefined ? prefetchedExisting : getItem(db, id, false, includePrivate);
   if (!existing) return null;
+
+  // Vault-origin items are read-only via this path. Route layer should have
+  // already short-circuited with a 409 VAULT_READONLY; this is a defensive layer.
+  if (existing.origin === "vault") {
+    logger.warn({ id: existing.id }, "Blocked update on vault-origin item");
+    return existing;
+  }
 
   const now = new Date().toISOString();
   const updates: Record<string, unknown> = { modified: now };
@@ -238,30 +366,19 @@ export function updateItem(
     updates.paused_at = null;
     updates.paused_context = null;
   } else if (input.paused_context !== undefined && existing.paused) {
-    // Update context on an already-paused item without toggling paused
     updates.paused_context = input.paused_context;
   }
-  // If paused_context sent without paused=true on a non-paused item → silently ignore (no else branch)
 
   // Type conversion auto-mapping (Section 9)
   if (input.type !== undefined && input.type !== existing.type) {
-    const mappedStatus = getAutoMappedStatus(existing.type, input.type, existing.status);
+    const mappedStatus = getAutoMappedStatus(
+      existing.type,
+      input.type,
+      existing.status ?? "fleeting",
+    );
     if (mappedStatus) {
       updates.status = mappedStatus;
     }
-  }
-
-  // Exported items read-only guard (defensive layer — route handlers are primary)
-  if (existing.status === "exported") {
-    if (EXPORTED_BLOCKED_FIELDS.some((f) => (input as Record<string, unknown>)[f] !== undefined)) {
-      logger.warn({ id: existing.id }, "Blocked content update on exported item");
-      return existing;
-    }
-  }
-
-  // Clear export_path when leaving exported status
-  if (existing.status === "exported" && updates.status && updates.status !== "exported") {
-    updates.export_path = null;
   }
 
   const effectiveType = (updates.type as string) ?? existing.type;
@@ -269,21 +386,17 @@ export function updateItem(
   // Notes don't have linked_note_id; clear on todo→note conversion, ignore for notes
   if (effectiveType === "note") {
     if (input.type !== undefined && input.type !== existing.type) {
-      // Converting to note: explicitly clear linked_note_id
       updates.linked_note_id = null;
     } else {
-      // Already a note: ignore any linked_note_id update
       delete updates.linked_note_id;
     }
   }
 
-  // Notes don't support due dates — clear due on todo→note conversion, ignore due updates for notes
+  // Notes don't support due dates
   if (effectiveType === "note") {
     if (input.type !== undefined && input.type !== existing.type) {
-      // Converting to note: explicitly clear existing due
       updates.due = null;
     } else {
-      // Already a note: ignore any due update attempt
       delete updates.due;
     }
   }
@@ -291,14 +404,12 @@ export function updateItem(
   // Scratch doesn't support tags, priority, due, aliases, linked_note_id
   if (effectiveType === "scratch") {
     if (input.type !== undefined && input.type !== existing.type) {
-      // Converting to scratch: clear all unsupported fields
       updates.tags = "[]";
       updates.priority = null;
       updates.due = null;
       updates.aliases = "[]";
       updates.linked_note_id = null;
     } else {
-      // Already a scratch: ignore updates to unsupported fields
       delete updates.tags;
       delete updates.priority;
       delete updates.due;
@@ -307,21 +418,22 @@ export function updateItem(
     }
   }
 
-  // Auto-clear paused when transitioning to archived or exported
+  // Auto-clear paused when transitioning to archived (exported path is the
+  // export flow in routes/items.ts which moves the row to items_vault entirely).
   const finalStatus = (updates.status as string) ?? existing.status;
-  if (finalStatus === "archived" || finalStatus === "exported") {
+  if (finalStatus === "archived") {
     updates.paused = 0;
     updates.paused_at = null;
     updates.paused_context = null;
   }
 
-  db.update(items).set(updates).where(eq(items.id, id)).run();
+  db.update(itemsActive).set(updates).where(eq(itemsActive.id, id)).run();
 
   return getItem(db, id, true, includePrivate);
 }
 
 export function deleteItem(db: DB, id: string): boolean {
-  const result = db.delete(items).where(eq(items.id, id)).run();
+  const result = db.delete(itemsActive).where(eq(itemsActive.id, id)).run();
   return result.changes > 0;
 }
 
@@ -335,45 +447,45 @@ export function searchItems(
 ): ItemWithLinkedInfo[] {
   const privateClause =
     includePrivate === "only"
-      ? "AND items.is_private = 1"
+      ? "AND items_active.is_private = 1"
       : includePrivate
         ? ""
-        : "AND items.is_private = 0";
+        : "AND items_active.is_private = 0";
 
   // Trigram tokenizer requires at least 3 characters; fall back to LIKE for shorter queries
   if (query.length < 3) {
     const pattern = `%${query}%`;
     const stmt = sqlite.prepare(`
-      SELECT * FROM items
+      SELECT * FROM items_active
       WHERE (title LIKE ? OR content LIKE ?) ${privateClause}
       ORDER BY created DESC
       LIMIT ?
     `);
-    // SAFETY: better-sqlite3 returns unknown[]; columns match items schema by migration
-    const rows = stmt.all(pattern, pattern, limit) as (typeof items.$inferSelect)[];
-    return resolveLinkedInfo(db, rows, enrich, !!includePrivate);
+    // SAFETY: better-sqlite3 returns unknown[]; columns match items_active schema by migration
+    const rows = stmt.all(pattern, pattern, limit) as ActiveRow[];
+    return resolveLinkedInfoActive(db, rows, enrich, !!includePrivate);
   }
 
   const escaped = escapeFts5Query(query);
   const stmt = sqlite.prepare(`
-    SELECT items.*
-    FROM items_fts
-    JOIN items ON items.rowid = items_fts.rowid
-    WHERE items_fts MATCH ? ${privateClause}
+    SELECT items_active.*
+    FROM items_active_fts
+    JOIN items_active ON items_active.rowid = items_active_fts.rowid
+    WHERE items_active_fts MATCH ? ${privateClause}
     ORDER BY rank
     LIMIT ?
   `);
 
-  // SAFETY: better-sqlite3 returns unknown[]; columns match items schema by migration
-  const rows = stmt.all(escaped, limit) as (typeof items.$inferSelect)[];
-  return resolveLinkedInfo(db, rows, enrich, !!includePrivate);
+  // SAFETY: better-sqlite3 returns unknown[]; columns match items_active schema by migration
+  const rows = stmt.all(escaped, limit) as ActiveRow[];
+  return resolveLinkedInfoActive(db, rows, enrich, !!includePrivate);
 }
 
 export function getAllTags(sqlite: Database.Database, includePrivate = false): string[] {
-  const privateClause = includePrivate ? "" : "AND items.is_private = 0";
+  const privateClause = includePrivate ? "" : "AND items_active.is_private = 0";
   const stmt = sqlite.prepare(`
     SELECT DISTINCT value as tag
-    FROM items, json_each(items.tags)
+    FROM items_active, json_each(items_active.tags)
     WHERE value != '' ${privateClause}
     ORDER BY value
   `);

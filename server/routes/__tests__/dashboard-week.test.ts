@@ -1,5 +1,4 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { createTestDb } from "../../test-utils.js";
 
 const mockGetWeekData = vi.fn();
 

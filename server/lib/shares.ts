@@ -37,7 +37,7 @@ export function createShareToken(
   // Verify item exists, is a note, and is not private
   // SAFETY: better-sqlite3 .get() returns unknown; schema enforced by migration
   const item = sqlite
-    .prepare("SELECT id, type FROM items WHERE id = ? AND is_private = 0")
+    .prepare("SELECT id, type FROM items_active WHERE id = ? AND is_private = 0")
     .get(itemId) as { id: string; type: string } | undefined;
 
   if (!item) return null;
@@ -73,7 +73,7 @@ export function getShareByToken(sqlite: Database.Database, token: string): Share
         i.created AS item_created,
         i.modified AS item_modified
       FROM share_tokens s
-      JOIN items i ON i.id = s.item_id
+      JOIN items_active i ON i.id = s.item_id
       WHERE s.token = ? AND i.is_private = 0`,
     )
     // SAFETY: better-sqlite3 .get() returns unknown; columns match ShareWithItem by query + migration schema
@@ -90,7 +90,7 @@ export function listShares(sqlite: Database.Database): ShareListItem[] {
         s.id, s.item_id, s.token, s.visibility, s.created,
         i.title AS item_title
       FROM share_tokens s
-      JOIN items i ON i.id = s.item_id
+      JOIN items_active i ON i.id = s.item_id
       WHERE i.is_private = 0
       ORDER BY s.created DESC
       LIMIT 1000`,
@@ -108,7 +108,7 @@ export function listPublicShares(sqlite: Database.Database): ShareListItem[] {
         s.id, s.item_id, s.token, s.visibility, s.created,
         i.title AS item_title
       FROM share_tokens s
-      JOIN items i ON i.id = s.item_id
+      JOIN items_active i ON i.id = s.item_id
       WHERE s.visibility = 'public' AND i.is_private = 0
       ORDER BY s.created DESC
       LIMIT 1000`,

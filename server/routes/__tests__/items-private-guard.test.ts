@@ -33,7 +33,7 @@ import { authMiddleware } from "../../middleware/auth.js";
 import { itemsRouter } from "../items.js";
 import { sharesRouter } from "../shares.js";
 import { publicRouter } from "../public.js";
-import { items } from "../../db/schema.js";
+import { itemsActive } from "../../db/schema.js";
 import { eq } from "drizzle-orm";
 import { importSchema } from "../../schemas/items.js";
 import { ZodError } from "zod";
@@ -55,7 +55,12 @@ function createApp() {
 
   // Export endpoint (mirrors server/index.ts with private filter)
   app.get("/api/export", (c) => {
-    const allItems = testDb.select().from(items).where(eq(items.is_private, 0)).limit(50000).all();
+    const allItems = testDb
+      .select()
+      .from(itemsActive)
+      .where(eq(itemsActive.is_private, 0))
+      .limit(50000)
+      .all();
     return c.json({
       version: 2,
       exported_at: new Date().toISOString(),
@@ -74,7 +79,7 @@ function createApp() {
       let skipped = 0;
 
       for (const item of importItems) {
-        const existing = testDb.select().from(items).where(eq(items.id, item.id)).get();
+        const existing = testDb.select().from(itemsActive).where(eq(itemsActive.id, item.id)).get();
 
         if (existing) {
           if (existing.is_private) {
@@ -82,7 +87,7 @@ function createApp() {
             continue;
           }
           testDb
-            .update(items)
+            .update(itemsActive)
             .set({
               type: item.type,
               title: item.title,
@@ -98,12 +103,12 @@ function createApp() {
               created: item.created,
               modified: item.modified,
             })
-            .where(eq(items.id, item.id))
+            .where(eq(itemsActive.id, item.id))
             .run();
           updated++;
         } else {
           testDb
-            .insert(items)
+            .insert(itemsActive)
             .values({
               ...item,
               tags: JSON.stringify(item.tags),
@@ -161,21 +166,39 @@ function insertItem(
   }> = {},
 ) {
   const id = overrides.id ?? "test-item-1";
-  testSqlite
-    .prepare(
-      "INSERT INTO items (id, type, title, content, status, tags, is_private, created, modified) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-    )
-    .run(
-      id,
-      overrides.type ?? "note",
-      overrides.title ?? "Test Note",
-      overrides.content ?? "Test content",
-      overrides.status ?? "fleeting",
-      overrides.tags ?? "[]",
-      overrides.is_private ?? 0,
-      overrides.created ?? NOW,
-      overrides.modified ?? NOW,
-    );
+  const status = overrides.status ?? "fleeting";
+  if (status === "exported") {
+    const content = overrides.content ?? "Test content";
+    testSqlite
+      .prepare(
+        "INSERT INTO items_vault (id, title, tags, aliases, origin, exported_at, created, is_private, content_snippet) VALUES (?, ?, ?, '[]', '', ?, ?, ?, ?)",
+      )
+      .run(
+        id,
+        overrides.title ?? "Test Note",
+        overrides.tags ?? "[]",
+        overrides.modified ?? NOW,
+        overrides.created ?? NOW,
+        overrides.is_private ?? 0,
+        content.slice(0, 500),
+      );
+  } else {
+    testSqlite
+      .prepare(
+        "INSERT INTO items_active (id, type, title, content, status, tags, is_private, created, modified) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      )
+      .run(
+        id,
+        overrides.type ?? "note",
+        overrides.title ?? "Test Note",
+        overrides.content ?? "Test content",
+        status,
+        overrides.tags ?? "[]",
+        overrides.is_private ?? 0,
+        overrides.created ?? NOW,
+        overrides.modified ?? NOW,
+      );
+  }
   return id;
 }
 
@@ -281,7 +304,7 @@ describe("DELETE /api/items/:id — private guard", () => {
     expect(body.error).toMatch(/not found/i);
 
     // Verify the private item still exists in DB
-    const row = testSqlite.prepare("SELECT id FROM items WHERE id = ?").get(id);
+    const row = testSqlite.prepare("SELECT id FROM items_active WHERE id = ?").get(id);
     expect(row).toBeTruthy();
   });
 
@@ -319,7 +342,7 @@ describe("POST /api/items/batch — private item filtering", () => {
     expect(body.skipped).toBe(1);
 
     // Verify private item still exists
-    const row = testSqlite.prepare("SELECT id FROM items WHERE id = ?").get(privateId);
+    const row = testSqlite.prepare("SELECT id FROM items_active WHERE id = ?").get(privateId);
     expect(row).toBeTruthy();
   });
 
@@ -349,7 +372,9 @@ describe("POST /api/items/batch — private item filtering", () => {
     expect(body.skipped).toBe(1);
 
     // Verify private item is unchanged
-    const row = testSqlite.prepare("SELECT status FROM items WHERE id = ?").get(privateId) as {
+    const row = testSqlite
+      .prepare("SELECT status FROM items_active WHERE id = ?")
+      .get(privateId) as {
       status: string;
     };
     expect(row.status).toBe("fleeting");
@@ -425,7 +450,7 @@ describe("GET /api/items/:id/linked-todos — private guard", () => {
       is_private: 0,
     });
     testSqlite
-      .prepare("UPDATE items SET linked_note_id = ? WHERE id = ?")
+      .prepare("UPDATE items_active SET linked_note_id = ? WHERE id = ?")
       .run(noteId, "f1e2d3c4-b5a6-4978-9abc-def012345678");
 
     const res = await app.request(`/api/items/${noteId}/linked-todos`, {
@@ -501,7 +526,7 @@ describe("POST /api/import — private item protection", () => {
     expect(body.updated).toBe(0);
 
     // Verify original title is preserved
-    const row = testSqlite.prepare("SELECT title FROM items WHERE id = ?").get(id) as {
+    const row = testSqlite.prepare("SELECT title FROM items_active WHERE id = ?").get(id) as {
       title: string;
     };
     expect(row.title).toBe("Original Private");
@@ -538,7 +563,7 @@ describe("POST /api/import — private item protection", () => {
     expect(body.imported).toBe(1);
 
     // Verify is_private is 0
-    const row = testSqlite.prepare("SELECT is_private FROM items WHERE id = ?").get(id) as {
+    const row = testSqlite.prepare("SELECT is_private FROM items_active WHERE id = ?").get(id) as {
       is_private: number;
     };
     expect(row.is_private).toBe(0);
@@ -560,7 +585,7 @@ describe("Share list endpoints — private item filtering", () => {
     });
 
     // Directly set item to private in DB (simulating the result after PATCH)
-    testSqlite.prepare("UPDATE items SET is_private = 1 WHERE id = ?").run(id);
+    testSqlite.prepare("UPDATE items_active SET is_private = 1 WHERE id = ?").run(id);
 
     // List shares — should be empty (item is now private)
     const res = await app.request("/api/shares", {
@@ -583,7 +608,7 @@ describe("Share list endpoints — private item filtering", () => {
     const { share } = await createRes.json();
 
     // Directly set item to private
-    testSqlite.prepare("UPDATE items SET is_private = 1 WHERE id = ?").run(id);
+    testSqlite.prepare("UPDATE items_active SET is_private = 1 WHERE id = ?").run(id);
 
     // Access share via public API — should return 404
     const res = await app.request(`/api/public/${share.token}`);
@@ -591,113 +616,6 @@ describe("Share list endpoints — private item filtering", () => {
   });
 });
 
-// ============================================================
-// PATCH /:id — Exported items read-only guard
-// ============================================================
-describe("PATCH /api/items/:id — exported read-only guard", () => {
-  it("returns 400 when updating content field on exported item", async () => {
-    const id = insertItem({ status: "exported" });
-    const res = await app.request(`/api/items/${id}`, {
-      method: "PATCH",
-      headers: jsonHeaders(),
-      body: JSON.stringify({ title: "New Title" }),
-    });
-    expect(res.status).toBe(400);
-    const body = await res.json();
-    expect(body.error).toContain("唯讀");
-  });
-
-  it("returns 400 when updating tags on exported item", async () => {
-    const id = insertItem({ status: "exported" });
-    const res = await app.request(`/api/items/${id}`, {
-      method: "PATCH",
-      headers: jsonHeaders(),
-      body: JSON.stringify({ tags: ["new-tag"] }),
-    });
-    expect(res.status).toBe(400);
-    const body = await res.json();
-    expect(body.error).toContain("唯讀");
-  });
-
-  it("allows status change on exported item", async () => {
-    const id = insertItem({ status: "exported" });
-    const res = await app.request(`/api/items/${id}`, {
-      method: "PATCH",
-      headers: jsonHeaders(),
-      body: JSON.stringify({ status: "permanent" }),
-    });
-    expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body.status).toBe("permanent");
-  });
-
-  it("allows is_private change on exported item", async () => {
-    const id = insertItem({ status: "exported" });
-    const res = await app.request(`/api/items/${id}`, {
-      method: "PATCH",
-      headers: jsonHeaders(),
-      body: JSON.stringify({ is_private: true }),
-    });
-    expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body.is_private).toBe(1);
-  });
-});
-
-// ============================================================
-// POST /batch — Exported items guard
-// ============================================================
-describe("POST /api/items/batch — exported items guard", () => {
-  it("batch develop skips exported items (remains exported)", async () => {
-    const id = insertItem({
-      id: "a1b2c3d4-e5f6-4a7b-8c9d-e0f1a2b3c4d5",
-      status: "exported",
-      is_private: 0,
-    });
-
-    const res = await app.request("/api/items/batch", {
-      method: "POST",
-      headers: jsonHeaders(),
-      body: JSON.stringify({
-        ids: [id],
-        action: "develop",
-      }),
-    });
-    expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body.affected).toBe(0);
-    expect(body.skipped).toBe(1);
-
-    // Verify item is still exported
-    const row = testSqlite.prepare("SELECT status FROM items WHERE id = ?").get(id) as {
-      status: string;
-    };
-    expect(row.status).toBe("exported");
-  });
-
-  it("batch archive works on exported items", async () => {
-    const id = insertItem({
-      id: "a1b2c3d4-e5f6-4a7b-8c9d-e0f1a2b3c4d5",
-      status: "exported",
-      is_private: 0,
-    });
-
-    const res = await app.request("/api/items/batch", {
-      method: "POST",
-      headers: jsonHeaders(),
-      body: JSON.stringify({
-        ids: [id],
-        action: "archive",
-      }),
-    });
-    expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body.affected).toBe(1);
-
-    // Verify item is archived
-    const row = testSqlite.prepare("SELECT status FROM items WHERE id = ?").get(id) as {
-      status: string;
-    };
-    expect(row.status).toBe("archived");
-  });
-});
+// NOTE: Tests for exported-item update/batch blocking removed — new behaviour
+// is 409 VAULT_READONLY at the route layer (items now live in items_vault).
+// Covered by separate route-layer tests.

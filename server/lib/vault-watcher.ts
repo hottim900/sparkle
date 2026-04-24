@@ -1,11 +1,10 @@
-import { readFile, stat } from "node:fs/promises";
+import { stat } from "node:fs/promises";
 import { join } from "node:path";
-import { createHash } from "node:crypto";
-import { and, eq, isNotNull } from "drizzle-orm";
+import { eq, isNotNull } from "drizzle-orm";
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import type Database from "better-sqlite3";
 import * as schema from "../db/schema.js";
-import { items, vaultFiles } from "../db/schema.js";
+import { itemsVault, vaultFiles } from "../db/schema.js";
 
 type DB = BetterSQLite3Database<typeof schema>;
 import { getObsidianSettings } from "./settings.js";
@@ -13,116 +12,102 @@ import { logger } from "./logger.js";
 
 const SCAN_INTERVAL_MS = 60_000;
 
-/** Track last-seen mtime per export_path to avoid re-reading unchanged files */
-const mtimeCache = new Map<string, number>();
-
 /**
- * Extract body content from a markdown file, stripping YAML frontmatter.
+ * 2-scan debounce (D10 / Round 3 item 11): suppress the first ENOENT as a
+ * transient boot-window miss (vault mount race on NFS/external drives). Only
+ * on the SECOND consecutive miss do we run the sparkle_id lookup + UPDATE +
+ * WARN log. Avoids a log-storm if the vault is briefly unmounted at boot.
+ *
+ * Process-lifetime map: id → consecutive miss count. Cleared when the miss
+ * eventually resolves (file found) or when self-heal fires.
  */
-export function stripFrontmatter(raw: string): string {
-  if (!raw.startsWith("---\n")) return raw;
-  const endIdx = raw.indexOf("\n---", 4);
-  if (endIdx === -1) return raw;
-  return raw.slice(endIdx + 4).replace(/^\n+/, "");
-}
-
-function contentHash(content: string): string {
-  return createHash("sha256").update(content, "utf-8").digest("hex");
-}
+const missCountMap = new Map<string, number>();
 
 /**
- * Single scan pass: check all items with export_path for vault-side edits.
- * Updates items.content when file content differs (by hash).
- * Does NOT update items.modified — this is a sync, not a user edit.
+ * Single scan pass: check all items_vault rows with export_path. If a file is
+ * missing we try to self-heal via vault_files.sparkle_id. Content sync has been
+ * removed in v1.4.0 — vault is the source of truth for exported content, so we
+ * do not round-trip edits from .md files back into Sparkle's DB.
  */
 export async function scanExportedItems(
   db: DB,
   sqlite: Database.Database,
-): Promise<{ scanned: number; updated: number; errors: number }> {
+): Promise<{ scanned: number; patched: number; errors: number }> {
   const obsidian = getObsidianSettings(sqlite);
   if (!obsidian.obsidian_enabled || !obsidian.obsidian_vault_path) {
-    return { scanned: 0, updated: 0, errors: 0 };
+    return { scanned: 0, patched: 0, errors: 0 };
   }
 
   const vaultPath = obsidian.obsidian_vault_path;
 
-  // Get exported items with an export_path (only sync items still in exported status)
   const exported = db
     .select({
-      id: items.id,
-      export_path: items.export_path,
-      content: items.content,
+      id: itemsVault.id,
+      export_path: itemsVault.export_path,
     })
-    .from(items)
-    .where(and(eq(items.status, "exported"), isNotNull(items.export_path)))
+    .from(itemsVault)
+    .where(isNotNull(itemsVault.export_path))
     .all();
 
-  let updated = 0;
+  let patched = 0;
   let errors = 0;
 
   for (const item of exported) {
     if (!item.export_path) continue;
-
     const fullPath = join(vaultPath, item.export_path);
 
     try {
-      const fileStat = await stat(fullPath);
-      const mtime = fileStat.mtimeMs;
-
-      // Skip if mtime hasn't changed since last scan
-      const cachedMtime = mtimeCache.get(item.export_path);
-      if (cachedMtime !== undefined && cachedMtime === mtime) {
+      await stat(fullPath);
+      // File exists — clear any accumulated miss count.
+      missCountMap.delete(item.id);
+    } catch (e) {
+      const code = (e as NodeJS.ErrnoException).code;
+      if (code !== "ENOENT") {
+        errors++;
+        logger.warn(`vault-watcher: error stat'ing ${item.export_path}: ${(e as Error).message}`);
         continue;
       }
 
-      // mtime changed (or first scan) — read and compare content
-      const raw = await readFile(fullPath, "utf-8");
-      const body = stripFrontmatter(raw);
-      const fileHash = contentHash(body);
-      const dbHash = contentHash(item.content || "");
-
-      // Update mtime cache regardless of content match
-      mtimeCache.set(item.export_path, mtime);
-
-      if (fileHash !== dbHash) {
-        // Only update if item is still exported (race condition: revert during scan)
-        db.update(items)
-          .set({ content: body })
-          .where(and(eq(items.id, item.id), eq(items.status, "exported")))
-          .run();
-        updated++;
-        logger.info(`vault-watcher: synced ${item.export_path} → item ${item.id}`);
+      const count = (missCountMap.get(item.id) ?? 0) + 1;
+      missCountMap.set(item.id, count);
+      if (count < 2) {
+        logger.debug(
+          { id: item.id, path: item.export_path },
+          `vault-watcher: export_path missing (miss ${count}/2)`,
+        );
+        continue;
       }
-    } catch (e) {
-      const code = (e as NodeJS.ErrnoException).code;
-      if (code === "ENOENT") {
-        // export_path invalid — try self-healing via sparkle_id lookup
-        mtimeCache.delete(item.export_path!);
-        const row = db
-          .select({ path: vaultFiles.path })
-          .from(vaultFiles)
-          .where(eq(vaultFiles.sparkle_id, item.id))
-          .get();
-        if (row) {
-          // Self-heal: update export_path. Content sync happens on next scan pass (60s).
-          db.update(items).set({ export_path: row.path }).where(eq(items.id, item.id)).run();
-          logger.info(
-            `vault-watcher: self-healed ${item.export_path} → ${row.path} for item ${item.id}`,
-          );
-        }
+
+      // Second consecutive miss — attempt self-heal via sparkle_id
+      missCountMap.delete(item.id);
+      const row = db
+        .select({ path: vaultFiles.path })
+        .from(vaultFiles)
+        .where(eq(vaultFiles.sparkle_id, item.id))
+        .get();
+      if (row) {
+        db.update(itemsVault)
+          .set({ export_path: row.path })
+          .where(eq(itemsVault.id, item.id))
+          .run();
+        patched++;
+        logger.warn(
+          `vault-watcher: self-healed ${item.export_path} → ${row.path} for item ${item.id}`,
+        );
       } else {
-        errors++;
-        logger.warn(`vault-watcher: error reading ${item.export_path}: ${(e as Error).message}`);
+        logger.warn(
+          `vault-watcher: export_path ${item.export_path} missing and no vault_files match for item ${item.id}`,
+        );
       }
     }
   }
 
-  return { scanned: exported.length, updated, errors };
+  return { scanned: exported.length, patched, errors };
 }
 
-/** Clear the mtime cache (for testing). */
-export function clearMtimeCache(): void {
-  mtimeCache.clear();
+/** Clear debounce state (for testing). */
+export function clearMissCountCache(): void {
+  missCountMap.clear();
 }
 
 let scanTimer: ReturnType<typeof setInterval> | null = null;
@@ -132,7 +117,6 @@ let scanTimer: ReturnType<typeof setInterval> | null = null;
  * Safe to call when Obsidian is not configured — will no-op.
  */
 export function startVaultWatcher(db: DB, sqlite: Database.Database): void {
-  // Run initial scan (fire and forget)
   scanExportedItems(db, sqlite).catch((e) =>
     logger.warn(`vault-watcher: initial scan failed: ${(e as Error).message}`),
   );

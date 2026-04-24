@@ -96,28 +96,11 @@ export function ItemDetail({ itemId, onDeleted, onBack, onNavigate }: ItemDetail
   const { data: vaultPath } = useQuery({
     queryKey: queryKeys.vault.bySparkleId(item?.id ?? ""),
     queryFn: () => getVaultPathBySparkleId(item!.id),
-    enabled: !!item && item.status === "exported",
+    enabled: !!item && item.origin === "vault",
     retry: false,
   });
   const [markingAsPrivate, setMarkingAsPrivate] = useState(false);
-  const [reverting, setReverting] = useState(false);
   const { handleResume, resuming } = usePauseResume(item, setItem);
-
-  const handleRevert = useCallback(async () => {
-    if (!item) return;
-    setReverting(true);
-    try {
-      await updateItem(item.id, { status: "permanent" });
-      queryClient.invalidateQueries({ queryKey: queryKeys.items.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.items.detail(item.id) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.stats });
-      toast.success("已退回為永久筆記，可以開始編輯");
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "退回失敗");
-    } finally {
-      setReverting(false);
-    }
-  }, [item, queryClient]);
 
   const handleMarkAsPrivate = useCallback(async () => {
     if (!item) return;
@@ -199,11 +182,9 @@ export function ItemDetail({ itemId, onDeleted, onBack, onNavigate }: ItemDetail
         onOpenShare={() => setShareOpen(true)}
         onMarkAsPrivate={handleMarkAsPrivate}
         markingAsPrivate={markingAsPrivate}
-        onRevert={handleRevert}
-        reverting={reverting}
       />
 
-      {item.status === "exported" ? (
+      {item.origin === "vault" ? (
         /* ── Exported: Read-only view ── */
         <div className="flex-1 overflow-y-auto p-4 space-y-4 animate-fade-in break-words">
           {/* Banner */}
@@ -475,10 +456,10 @@ export function ItemDetail({ itemId, onDeleted, onBack, onNavigate }: ItemDetail
             </div>
 
             {/* Origin (read-only) */}
-            {item.origin && (
+            {item.origin_source && (
               <div>
                 <label className="text-sm text-muted-foreground block mb-1">捕捉來源</label>
-                <p className="text-sm px-3 py-2 bg-muted rounded-md">{item.origin}</p>
+                <p className="text-sm px-3 py-2 bg-muted rounded-md">{item.origin_source}</p>
               </div>
             )}
 

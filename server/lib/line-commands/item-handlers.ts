@@ -2,14 +2,12 @@ import type { CommandHandler } from "./types.js";
 import type { LineCommand } from "../line.js";
 import { resolveSessionItem } from "./shared.js";
 import { updateItem, deleteItem } from "../items.js";
-import { exportToObsidian } from "../export.js";
+import { exportToObsidian, commitExportToVault } from "../export.js";
 import { getObsidianSettings } from "../settings.js";
 import { parseDate } from "../line-date.js";
 import { formatDetail, STATUS_LABELS } from "../line-format.js";
-import { items } from "../../db/schema.js";
-import { eq } from "drizzle-orm";
 
-const EXPORTED_MSG = "❌ 此筆記已匯出至 Obsidian，如需修改請先退回永久筆記";
+const EXPORTED_MSG = "❌ 此筆記已匯出至 Obsidian；內容以 vault 為準，無法從 LINE 編輯。";
 
 // Each handler is registered by command.type in the dispatcher, so the Extract cast is always safe.
 
@@ -24,7 +22,7 @@ const handleDue: CommandHandler = async ({ userId, command, db }) => {
   const cmd = command as Extract<LineCommand, { type: "due" }>;
   const resolved = resolveSessionItem(db, userId, cmd.index);
   if (!resolved.ok) return resolved.error;
-  if (resolved.item.status === "exported") return EXPORTED_MSG;
+  if (resolved.item.origin === "vault") return EXPORTED_MSG;
   if (resolved.item.type !== "todo") return "❌ 到期日只適用於待辦";
   const dateParsed = parseDate(cmd.dateInput);
   if (!dateParsed.success) return "❌ 無法辨識日期，請用 YYYY-MM-DD 或中文如『明天』『3天後』";
@@ -39,7 +37,7 @@ const handleTag: CommandHandler = async ({ userId, command, db }) => {
   const cmd = command as Extract<LineCommand, { type: "tag" }>;
   const resolved = resolveSessionItem(db, userId, cmd.index);
   if (!resolved.ok) return resolved.error;
-  if (resolved.item.status === "exported") return EXPORTED_MSG;
+  if (resolved.item.origin === "vault") return EXPORTED_MSG;
   const existingTags: string[] = JSON.parse(resolved.item.tags || "[]");
   const newTags = [...new Set([...existingTags, ...cmd.tags])].slice(0, 20);
   updateItem(db, resolved.itemId, { tags: newTags });
@@ -59,10 +57,12 @@ const handleDevelop: CommandHandler = async ({ userId, command, db }) => {
   const cmd = command as Extract<LineCommand, { type: "develop" }>;
   const resolved = resolveSessionItem(db, userId, cmd.index);
   if (!resolved.ok) return resolved.error;
+  if (resolved.item.origin === "vault") return EXPORTED_MSG;
   if (resolved.item.type !== "note") return "❌ 此指令只適用於筆記";
-  if (resolved.item.status === "developing") return `「${resolved.item.title}」已經是發展中狀態`;
-  if (resolved.item.status !== "fleeting") {
-    return `❌ 目前狀態為「${STATUS_LABELS[resolved.item.status] ?? resolved.item.status}」，無法執行此操作`;
+  const devStatus = resolved.item.status ?? "";
+  if (devStatus === "developing") return `「${resolved.item.title}」已經是發展中狀態`;
+  if (devStatus !== "fleeting") {
+    return `❌ 目前狀態為「${STATUS_LABELS[devStatus] ?? devStatus}」，無法執行此操作`;
   }
   updateItem(db, resolved.itemId, { status: "developing" });
   return `✅ 已將「${resolved.item.title}」推進為發展中`;
@@ -72,10 +72,12 @@ const handleMature: CommandHandler = async ({ userId, command, db }) => {
   const cmd = command as Extract<LineCommand, { type: "mature" }>;
   const resolved = resolveSessionItem(db, userId, cmd.index);
   if (!resolved.ok) return resolved.error;
+  if (resolved.item.origin === "vault") return EXPORTED_MSG;
   if (resolved.item.type !== "note") return "❌ 此指令只適用於筆記";
-  if (resolved.item.status === "permanent") return `「${resolved.item.title}」已經是永久筆記`;
-  if (resolved.item.status !== "developing") {
-    return `❌ 目前狀態為「${STATUS_LABELS[resolved.item.status] ?? resolved.item.status}」，無法執行此操作`;
+  const matStatus = resolved.item.status ?? "";
+  if (matStatus === "permanent") return `「${resolved.item.title}」已經是永久筆記`;
+  if (matStatus !== "developing") {
+    return `❌ 目前狀態為「${STATUS_LABELS[matStatus] ?? matStatus}」，無法執行此操作`;
   }
   updateItem(db, resolved.itemId, { status: "permanent" });
   return `✅ 已將「${resolved.item.title}」提升為永久筆記`;
@@ -85,9 +87,11 @@ const handleExport: CommandHandler = async ({ userId, command, db, sqlite }) => 
   const cmd = command as Extract<LineCommand, { type: "export" }>;
   const resolved = resolveSessionItem(db, userId, cmd.index);
   if (!resolved.ok) return resolved.error;
+  if (resolved.item.origin === "vault") return EXPORTED_MSG;
   if (resolved.item.type !== "note") return "❌ 此指令只適用於筆記";
   if (resolved.item.status !== "permanent") {
-    const label = STATUS_LABELS[resolved.item.status] ?? resolved.item.status;
+    const s = resolved.item.status ?? "";
+    const label = STATUS_LABELS[s] ?? s;
     return `❌ 只有永久筆記可以匯出，目前狀態：${label}`;
   }
   const obsidian = getObsidianSettings(sqlite);
@@ -95,7 +99,22 @@ const handleExport: CommandHandler = async ({ userId, command, db, sqlite }) => 
     return "❌ Obsidian 匯出未設定，請至設定頁面啟用";
   }
   try {
-    const result = await exportToObsidian(resolved.item, {
+    // Build ExportableItem from active-origin ItemWithLinkedInfo (status="permanent"
+    // guaranteed by the check above, and modified is non-null for active rows).
+    const exportItem = {
+      id: resolved.item.id,
+      title: resolved.item.title,
+      content: resolved.item.content,
+      tags: resolved.item.tags,
+      aliases: resolved.item.aliases,
+      source: resolved.item.source,
+      created: resolved.item.created,
+      modified: resolved.item.modified ?? resolved.item.created,
+      origin: resolved.item.origin_source,
+      priority: resolved.item.priority,
+      due: resolved.item.due,
+    };
+    const result = await exportToObsidian(exportItem, {
       vaultPath: obsidian.obsidian_vault_path,
       inboxFolder: obsidian.obsidian_inbox_folder,
       exportMode: obsidian.obsidian_export_mode,
@@ -103,19 +122,23 @@ const handleExport: CommandHandler = async ({ userId, command, db, sqlite }) => 
     if (result.skipped) {
       return `⏭️ 已存在相同筆記，跳過匯出: ${result.path}`;
     }
-    // Set status + export_path directly (export_path not in UpdateItemInput schema)
-    const now = new Date().toISOString();
-    db.update(items)
-      .set({
-        status: "exported",
-        export_path: result.path,
-        modified: now,
-        paused: 0,
-        paused_at: null,
-        paused_context: null,
-      })
-      .where(eq(items.id, resolved.itemId))
-      .run();
+    // Atomic move items_active → items_vault (file already written above).
+    commitExportToVault(
+      sqlite,
+      {
+        id: resolved.item.id,
+        title: resolved.item.title,
+        category_id: resolved.item.category_id,
+        tags: resolved.item.tags,
+        aliases: resolved.item.aliases,
+        source: resolved.item.source,
+        origin: resolved.item.origin_source,
+        created: resolved.item.created,
+        is_private: resolved.item.is_private,
+        content: resolved.item.content,
+      },
+      result.path,
+    );
     return `✅ 已匯出到 Obsidian: ${result.path}`;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -135,7 +158,7 @@ const handlePriority: CommandHandler = async ({ userId, command, db }) => {
   const cmd = command as Extract<LineCommand, { type: "priority" }>;
   const resolved = resolveSessionItem(db, userId, cmd.index);
   if (!resolved.ok) return resolved.error;
-  if (resolved.item.status === "exported") return EXPORTED_MSG;
+  if (resolved.item.origin === "vault") return EXPORTED_MSG;
   updateItem(db, resolved.itemId, { priority: cmd.priority });
   return cmd.priority === null
     ? `✅ 已清除「${resolved.item.title}」的優先度`
@@ -146,7 +169,7 @@ const handleUntag: CommandHandler = async ({ userId, command, db }) => {
   const cmd = command as Extract<LineCommand, { type: "untag" }>;
   const resolved = resolveSessionItem(db, userId, cmd.index);
   if (!resolved.ok) return resolved.error;
-  if (resolved.item.status === "exported") return EXPORTED_MSG;
+  if (resolved.item.origin === "vault") return EXPORTED_MSG;
   const currentTags: string[] = JSON.parse(resolved.item.tags || "[]");
   const remaining = currentTags.filter((t) => !cmd.tags.includes(t));
   updateItem(db, resolved.itemId, { tags: remaining });

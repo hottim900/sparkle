@@ -169,10 +169,12 @@ describe("Categories", () => {
       const item = createItem(db, { title: "Test item" });
 
       // Manually set category_id on the item
-      sqlite.prepare("UPDATE items SET category_id = ? WHERE id = ?").run(cat.id, item.id);
+      sqlite.prepare("UPDATE items_active SET category_id = ? WHERE id = ?").run(cat.id, item.id);
 
       // Verify it's set
-      const before = sqlite.prepare("SELECT category_id FROM items WHERE id = ?").get(item.id) as {
+      const before = sqlite
+        .prepare("SELECT category_id FROM items_active WHERE id = ?")
+        .get(item.id) as {
         category_id: string | null;
       };
       expect(before.category_id).toBe(cat.id);
@@ -181,7 +183,9 @@ describe("Categories", () => {
       deleteCategory(db, cat.id);
 
       // Item's category_id should be NULL
-      const after = sqlite.prepare("SELECT category_id FROM items WHERE id = ?").get(item.id) as {
+      const after = sqlite
+        .prepare("SELECT category_id FROM items_active WHERE id = ?")
+        .get(item.id) as {
         category_id: string | null;
       };
       expect(after.category_id).toBeNull();
