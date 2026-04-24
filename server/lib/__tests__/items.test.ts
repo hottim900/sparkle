@@ -1,10 +1,11 @@
 import { describe, it, expect, beforeEach, afterAll } from "vitest";
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
-import { createTestDb } from "../../test-utils.js";
+import { createTestDb, insertActiveRow, insertVaultRow } from "../../test-utils.js";
 import {
   createItem,
   getItem,
+  getItemForLookup,
   listItems,
   updateItem,
   deleteItem,
@@ -150,7 +151,7 @@ describe("Data Access Layer", () => {
       ] as const) {
         sqlite
           .prepare(
-            "INSERT INTO items (id, title, type, status, tags, origin, aliases, created, modified) VALUES (?, ?, 'note', 'fleeting', '[\"dev\"]', '', '[]', ?, ?)",
+            "INSERT INTO items_active (id, title, type, status, tags, origin, aliases, created, modified) VALUES (?, ?, 'note', 'fleeting', '[\"dev\"]', '', '[]', ?, ?)",
           )
           .run(uuidv4(), title, ts, ts);
       }
@@ -182,7 +183,7 @@ describe("Data Access Layer", () => {
       ] as const) {
         sqlite
           .prepare(
-            "INSERT INTO items (id, title, type, status, tags, origin, aliases, created, modified) VALUES (?, ?, 'note', 'fleeting', '[]', '', '[]', ?, ?)",
+            "INSERT INTO items_active (id, title, type, status, tags, origin, aliases, created, modified) VALUES (?, ?, 'note', 'fleeting', '[]', '', '[]', ?, ?)",
           )
           .run(uuidv4(), title, created, modified);
       }
@@ -200,7 +201,7 @@ describe("Data Access Layer", () => {
       ] as const) {
         sqlite
           .prepare(
-            "INSERT INTO items (id, title, type, status, tags, origin, aliases, created, modified) VALUES (?, ?, 'note', 'fleeting', '[]', '', '[]', ?, ?)",
+            "INSERT INTO items_active (id, title, type, status, tags, origin, aliases, created, modified) VALUES (?, ?, 'note', 'fleeting', '[]', '', '[]', ?, ?)",
           )
           .run(uuidv4(), title, created, modified);
       }
@@ -219,13 +220,137 @@ describe("Data Access Layer", () => {
       ] as const) {
         sqlite
           .prepare(
-            "INSERT INTO items (id, title, type, status, tags, origin, aliases, created, modified) VALUES (?, ?, 'note', 'fleeting', '[]', '', '[]', ?, ?)",
+            "INSERT INTO items_active (id, title, type, status, tags, origin, aliases, created, modified) VALUES (?, ?, 'note', 'fleeting', '[]', '', '[]', ?, ?)",
           )
           .run(uuidv4(), title, ts, ts);
       }
       const result = listItems(db);
       expect(result.items[0]!.title).toBe("Third");
       expect(result.items[2]!.title).toBe("First");
+    });
+
+    describe("v1.4.0 cross-table modes", () => {
+      const { v4: uuidv4 } = require("uuid");
+
+      // Local shim (positional args for concise `it.each`-style tables below).
+      // Named distinctly from the shared insertVaultRow in test-utils to avoid
+      // shadowing confusion.
+      function insertVaultAtDate(
+        title: string,
+        exportedAt: string,
+        opts: { tags?: string[]; category_id?: string | null; is_private?: 0 | 1 } = {},
+      ): string {
+        const id = uuidv4();
+        sqlite
+          .prepare(
+            `INSERT INTO items_vault (id, title, tags, aliases, origin, exported_at, created, is_private, content_snippet, category_id)
+             VALUES (?, ?, ?, '[]', '', ?, ?, ?, '', ?)`,
+          )
+          .run(
+            id,
+            title,
+            JSON.stringify(opts.tags ?? []),
+            exportedAt,
+            exportedAt,
+            opts.is_private ?? 0,
+            opts.category_id ?? null,
+          );
+        return id;
+      }
+
+      it("status='exported' routes to items_vault only", () => {
+        createItem(db, { title: "Active note" });
+        insertVaultAtDate("Vault note", "2026-04-01T00:00:00.000Z");
+        const result = listItems(db, { status: "exported" });
+        expect(result.items).toHaveLength(1);
+        expect(result.items[0]!.title).toBe("Vault note");
+        expect(result.items[0]!.origin).toBe("vault");
+        expect(result.total).toBe(1);
+      });
+
+      it("include_vault='true' merges items_active + items_vault", () => {
+        createItem(db, { title: "Active" });
+        insertVaultAtDate("Vault", "2026-04-01T00:00:00.000Z");
+        const result = listItems(db, { include_vault: "true" });
+        const titles = result.items.map((i) => i.title).sort();
+        expect(titles).toEqual(["Active", "Vault"]);
+        expect(result.total).toBe(2);
+      });
+
+      it("include_vault='true' sorts merged rows by created desc", () => {
+        sqlite
+          .prepare(
+            "INSERT INTO items_active (id, title, type, status, tags, origin, aliases, created, modified) VALUES (?, ?, 'note', 'fleeting', '[]', '', '[]', ?, ?)",
+          )
+          .run(uuidv4(), "Active-2026-02", "2026-02-01T00:00:00.000Z", "2026-02-01T00:00:00.000Z");
+        insertVaultAtDate("Vault-2026-04", "2026-04-01T00:00:00.000Z");
+        insertVaultAtDate("Vault-2026-01", "2026-01-15T00:00:00.000Z");
+        const result = listItems(db, { include_vault: "true", sort: "created", order: "desc" });
+        expect(result.items.map((i) => i.title)).toEqual([
+          "Vault-2026-04",
+          "Active-2026-02",
+          "Vault-2026-01",
+        ]);
+      });
+
+      it("include_vault='true' with category_id filters both tables", () => {
+        const catId = uuidv4();
+        sqlite
+          .prepare(
+            "INSERT INTO categories (id, name, sort_order, created, modified) VALUES (?, ?, 0, ?, ?)",
+          )
+          .run(catId, "Work", new Date().toISOString(), new Date().toISOString());
+        createItem(db, { title: "Active-cat", category_id: catId });
+        createItem(db, { title: "Active-other" });
+        insertVaultAtDate("Vault-cat", "2026-04-01T00:00:00.000Z", { category_id: catId });
+        insertVaultAtDate("Vault-other", "2026-04-02T00:00:00.000Z");
+        const result = listItems(db, { include_vault: "true", category_id: catId });
+        const titles = result.items.map((i) => i.title).sort();
+        expect(titles).toEqual(["Active-cat", "Vault-cat"]);
+      });
+
+      it("include_vault='true' applies tag filter to vault rows", () => {
+        createItem(db, { title: "Active-tagged", tags: ["work"] });
+        createItem(db, { title: "Active-untagged" });
+        insertVaultAtDate("Vault-tagged", "2026-04-01T00:00:00.000Z", { tags: ["work"] });
+        insertVaultAtDate("Vault-untagged", "2026-04-02T00:00:00.000Z");
+        const result = listItems(db, { include_vault: "true", tag: "work" });
+        const titles = result.items.map((i) => i.title).sort();
+        expect(titles).toEqual(["Active-tagged", "Vault-tagged"]);
+      });
+
+      it("include_vault='true' with type='todo' skips vault (vault has no todos)", () => {
+        createItem(db, { title: "A todo", type: "todo" });
+        insertVaultAtDate("Vault-note", "2026-04-01T00:00:00.000Z");
+        const result = listItems(db, { include_vault: "true", type: "todo" });
+        expect(result.items).toHaveLength(1);
+        expect(result.items[0]!.title).toBe("A todo");
+      });
+
+      it("include_vault='true' paginates merged window", () => {
+        for (let i = 0; i < 3; i++) {
+          sqlite
+            .prepare(
+              "INSERT INTO items_active (id, title, type, status, tags, origin, aliases, created, modified) VALUES (?, ?, 'note', 'fleeting', '[]', '', '[]', ?, ?)",
+            )
+            .run(
+              uuidv4(),
+              `A-${i}`,
+              `2026-0${i + 1}-01T00:00:00.000Z`,
+              `2026-0${i + 1}-01T00:00:00.000Z`,
+            );
+        }
+        for (let i = 0; i < 2; i++) {
+          insertVaultAtDate(`V-${i}`, `2026-0${4 + i}-01T00:00:00.000Z`);
+        }
+        const page1 = listItems(db, { include_vault: "true", limit: 2, offset: 0 });
+        const page2 = listItems(db, { include_vault: "true", limit: 2, offset: 2 });
+        expect(page1.items).toHaveLength(2);
+        expect(page2.items).toHaveLength(2);
+        expect(page1.total).toBe(5);
+        expect(page2.total).toBe(5);
+        expect(page1.items[0]!.title).toBe("V-1");
+      });
     });
   });
 
@@ -281,12 +406,9 @@ describe("Data Access Layer", () => {
       expect(updated!.due).toBeNull(); // due cleared on todo→note conversion
     });
 
-    it("blocks content field update on exported item (returns existing unchanged)", () => {
-      const item = createItem(db, { title: "Note", type: "note", status: "exported" });
-      const updated = updateItem(db, item.id, { title: "Changed title" });
-      expect(updated!.title).toBe("Note");
-      expect(updated!.status).toBe("exported");
-    });
+    // NOTE: "blocks updates on exported item" tests removed — exported items now
+    // live in items_vault and are short-circuited with 409 VAULT_READONLY at the
+    // route layer. Guard covered by route-layer tests.
   });
 
   describe("deleteItem", () => {
@@ -394,13 +516,8 @@ describe("Data Access Layer", () => {
       expect(updated!.status).toBe("done");
     });
 
-    it("blocks type conversion on exported note (read-only guard)", () => {
-      const item = createItem(db, { title: "Exported note", type: "note", status: "exported" });
-      const updated = updateItem(db, item.id, { type: "todo" });
-      // Type change is a content field — blocked by exported guard
-      expect(updated!.type).toBe("note");
-      expect(updated!.status).toBe("exported");
-    });
+    // NOTE: exported-note type-conversion block test removed — covered by
+    // route-layer 409 VAULT_READONLY guard in the new schema-split world.
 
     it("preserves archived status across type conversion", () => {
       const noteItem = createItem(db, { title: "Archived note", type: "note", status: "archived" });
@@ -683,111 +800,10 @@ describe("Data Access Layer", () => {
     });
   });
 
-  describe("exported items read-only guard", () => {
-    it("blocks title update on exported item", () => {
-      const item = createItem(db, { title: "Exported Note", type: "note", status: "exported" });
-      const updated = updateItem(db, item.id, { title: "New Title" });
-      expect(updated!.title).toBe("Exported Note");
-      expect(updated!.status).toBe("exported");
-    });
-
-    it("blocks content update on exported item", () => {
-      const item = createItem(db, {
-        title: "Note",
-        content: "original",
-        type: "note",
-        status: "exported",
-      });
-      const updated = updateItem(db, item.id, { content: "changed content" });
-      expect(updated!.content).toBe("original");
-      expect(updated!.status).toBe("exported");
-    });
-
-    it("blocks tags update on exported item", () => {
-      const item = createItem(db, {
-        title: "Note",
-        type: "note",
-        status: "exported",
-        tags: ["existing"],
-      });
-      const updated = updateItem(db, item.id, { tags: ["new-tag"] });
-      expect(JSON.parse(updated!.tags)).toEqual(["existing"]);
-      expect(updated!.status).toBe("exported");
-    });
-
-    it("blocks type change on exported item", () => {
-      const item = createItem(db, { title: "Note", type: "note", status: "exported" });
-      const updated = updateItem(db, item.id, { type: "todo" });
-      expect(updated!.type).toBe("note");
-      expect(updated!.status).toBe("exported");
-    });
-
-    it("blocks priority update on exported item", () => {
-      const item = createItem(db, { title: "Note", type: "note", status: "exported" });
-      const updated = updateItem(db, item.id, { priority: "high" });
-      expect(updated!.priority).toBeNull();
-      expect(updated!.status).toBe("exported");
-    });
-
-    it("blocks category_id update on exported item", () => {
-      const catId = crypto.randomUUID();
-      const now = new Date().toISOString();
-      sqlite
-        .prepare(
-          "INSERT INTO categories (id, name, sort_order, created, modified) VALUES (?, ?, 0, ?, ?)",
-        )
-        .run(catId, "Work", now, now);
-      const item = createItem(db, { title: "Note", type: "note", status: "exported" });
-      const updated = updateItem(db, item.id, { category_id: catId });
-      expect(updated!.category_id).toBeNull();
-      expect(updated!.status).toBe("exported");
-    });
-
-    it("allows status change to permanent and clears export_path", () => {
-      const item = createItem(db, { title: "Note", type: "note", status: "exported" });
-      // Set export_path directly via raw SQL (not in UpdateItemInput schema)
-      sqlite
-        .prepare("UPDATE items SET export_path = ? WHERE id = ?")
-        .run("0_Inbox/Note.md", item.id);
-      const updated = updateItem(db, item.id, { status: "permanent" });
-      expect(updated!.status).toBe("permanent");
-      // Verify export_path is cleared in DB
-      const row = sqlite.prepare("SELECT export_path FROM items WHERE id = ?").get(item.id) as {
-        export_path: string | null;
-      };
-      expect(row.export_path).toBeNull();
-    });
-
-    it("allows status change to archived on exported item", () => {
-      const item = createItem(db, { title: "Note", type: "note", status: "exported" });
-      sqlite
-        .prepare("UPDATE items SET export_path = ? WHERE id = ?")
-        .run("0_Inbox/Note.md", item.id);
-      const updated = updateItem(db, item.id, { status: "archived" });
-      expect(updated!.status).toBe("archived");
-      // export_path cleared when leaving exported status
-      const row = sqlite.prepare("SELECT export_path FROM items WHERE id = ?").get(item.id) as {
-        export_path: string | null;
-      };
-      expect(row.export_path).toBeNull();
-    });
-
-    it("allows is_private update on exported item", () => {
-      const item = createItem(db, { title: "Note", type: "note", status: "exported" });
-      // Pass includePrivate=true so the return value is visible after marking private
-      const updated = updateItem(db, item.id, { is_private: true }, true);
-      expect(updated!.is_private).toBe(1);
-      expect(updated!.status).toBe("exported");
-    });
-
-    it("allows viewed_at update on exported item", () => {
-      const item = createItem(db, { title: "Note", type: "note", status: "exported" });
-      const viewedAt = new Date().toISOString();
-      const updated = updateItem(db, item.id, { viewed_at: viewedAt });
-      expect(updated!.viewed_at).toBe(viewedAt);
-      expect(updated!.status).toBe("exported");
-    });
-  });
+  // NOTE: "exported items read-only guard" suite removed. Exported items now
+  // live in items_vault (no status='exported' in items_active); read-only
+  // enforcement is a 409 VAULT_READONLY short-circuit at the route layer.
+  // Replaced by dedicated route-layer tests.
 
   describe("share_visibility resolution", () => {
     function insertShare(itemId: string, visibility: "unlisted" | "public" = "unlisted") {
@@ -887,6 +903,130 @@ describe("Data Access Layer", () => {
       expect(results.length).toBe(1);
       expect(results[0]!.linked_note_title).toBeNull();
       expect(results[0]!.linked_todo_count).toBe(0);
+    });
+  });
+
+  describe("getItemForLookup — cross-table wikilink resolution", () => {
+    // Local shorthand: these tests need explicit ids (to control prefix under
+    // test) + is_private toggle; everything else is irrelevant.
+    const insertActiveWithId = (id: string, title: string, isPrivate: 0 | 1 = 0): void => {
+      insertActiveRow(sqlite, { id, title, is_private: isPrivate });
+    };
+    const insertVaultWithId = (id: string, title: string, isPrivate: 0 | 1 = 0): void => {
+      insertVaultRow(sqlite, { id, title, is_private: isPrivate });
+    };
+
+    it("returns origin='active' when prefix matches a unique active row", () => {
+      const id = "aaaaaaaa-1234-4567-8abc-def012345678";
+      insertActiveWithId(id, "Active-only note");
+
+      const result = getItemForLookup(db, "aaaaaaaa");
+      expect(result).toEqual({
+        id,
+        title: "Active-only note",
+        origin: "active",
+      });
+    });
+
+    it("returns origin='vault' when prefix matches a unique vault row", () => {
+      const id = "bbbbbbbb-1234-4567-8abc-def012345678";
+      insertVaultWithId(id, "Vault-only note");
+
+      const result = getItemForLookup(db, "bbbbbbbb");
+      expect(result).toEqual({
+        id,
+        title: "Vault-only note",
+        origin: "vault",
+      });
+    });
+
+    it("returns null when prefix collides across active and vault (preserves wikilink text)", () => {
+      // Both rows share prefix 'cccccccc' — different full ids.
+      const activeId = "cccccccc-1111-4111-8abc-def012345678";
+      const vaultId = "cccccccc-2222-4222-8bcd-ef1234567890";
+      insertActiveWithId(activeId, "Active C");
+      insertVaultWithId(vaultId, "Vault C");
+
+      const result = getItemForLookup(db, "cccccccc");
+      expect(result).toBeNull();
+    });
+
+    it("returns null when prefix collides within the active table alone", () => {
+      // Two active rows with shared prefix — cross-table total is still > 1.
+      insertActiveWithId("dddddddd-1111-4111-8abc-def012345678", "A1");
+      insertActiveWithId("dddddddd-2222-4222-8bcd-ef1234567890", "A2");
+
+      const result = getItemForLookup(db, "dddddddd");
+      expect(result).toBeNull();
+    });
+
+    it("returns null on empty db (no match anywhere)", () => {
+      const result = getItemForLookup(db, "deadbeef");
+      expect(result).toBeNull();
+    });
+
+    it("returns null when no row matches the prefix", () => {
+      insertActiveWithId("11111111-1111-4111-8abc-def012345678", "Active");
+      insertVaultWithId("22222222-2222-4222-8bcd-ef1234567890", "Vault");
+
+      const result = getItemForLookup(db, "99999999");
+      expect(result).toBeNull();
+    });
+
+    it("returns null when prefix is too short (< 4 chars) — LIKE_SAFE_RE guard", () => {
+      // Even if a row would match, the regex must reject short prefixes
+      // before any LIKE runs (SQL injection / runaway match guard).
+      insertActiveWithId("abc12345-1234-4567-8abc-def012345678", "Short prefix target");
+
+      const result = getItemForLookup(db, "abc");
+      expect(result).toBeNull();
+    });
+
+    it("returns null when prefix is non-hex and has no matching row", () => {
+      // LIKE_SAFE_RE accepts any non-%/_ chars (not hex-only), so "ghij"
+      // passes the regex and runs a LIKE query — which finds nothing because
+      // all our ids are hex.
+      insertActiveWithId("11111111-1111-4111-8abc-def012345678", "Hex row");
+
+      const result = getItemForLookup(db, "ghij");
+      expect(result).toBeNull();
+    });
+
+    it("matches on full UUID in items_active → origin='active'", () => {
+      const id = "ffffffff-1234-4567-8abc-def012345678";
+      insertActiveWithId(id, "Full UUID active");
+
+      const result = getItemForLookup(db, id);
+      expect(result).toEqual({ id, title: "Full UUID active", origin: "active" });
+    });
+
+    it("matches on full UUID in items_vault → origin='vault'", () => {
+      const id = "eeeeeeee-1234-4567-8abc-def012345678";
+      insertVaultWithId(id, "Full UUID vault");
+
+      const result = getItemForLookup(db, id);
+      expect(result).toEqual({ id, title: "Full UUID vault", origin: "vault" });
+    });
+
+    it("skips private rows in active (is_private=1 treated as miss)", () => {
+      // A private active row and a public vault row with matching prefix —
+      // since private is filtered out, only the vault row survives → origin='vault'.
+      insertActiveWithId("77777777-1111-4111-8abc-def012345678", "Private active", 1);
+      const vaultId = "77777777-2222-4222-8bcd-ef1234567890";
+      insertVaultWithId(vaultId, "Public vault");
+
+      const result = getItemForLookup(db, "77777777");
+      expect(result).toEqual({ id: vaultId, title: "Public vault", origin: "vault" });
+    });
+
+    it("skips private rows in vault (is_private=1 treated as miss)", () => {
+      // Public active + private vault sharing prefix → only active matches.
+      const activeId = "88888888-1111-4111-8abc-def012345678";
+      insertActiveWithId(activeId, "Public active");
+      insertVaultWithId("88888888-2222-4222-8bcd-ef1234567890", "Private vault", 1);
+
+      const result = getItemForLookup(db, "88888888");
+      expect(result).toEqual({ id: activeId, title: "Public active", origin: "active" });
     });
   });
 });

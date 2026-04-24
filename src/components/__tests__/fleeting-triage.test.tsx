@@ -34,7 +34,9 @@ function makeFleetingItem(overrides: Record<string, unknown> = {}) {
     due: null,
     tags: "[]",
     source: null,
-    origin: "web",
+    origin_source: "web",
+
+    origin: "active",
     aliases: "[]",
     linked_note_id: null,
     linked_note_title: null,
@@ -43,7 +45,7 @@ function makeFleetingItem(overrides: Record<string, unknown> = {}) {
     category_name: null,
     share_visibility: null,
     viewed_at: "2026-02-28T10:00:00Z",
-    is_private: false,
+    is_private: 0,
     paused: 0,
     paused_at: null,
     paused_context: null,
@@ -129,7 +131,9 @@ describe("FleetingTriage", () => {
       makeFleetingItem({
         title: "My Idea",
         content: "Details about the idea",
-        origin: "LINE",
+        origin_source: "LINE",
+
+        origin: "active",
       }),
     ]);
 

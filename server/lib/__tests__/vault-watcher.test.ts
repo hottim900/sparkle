@@ -1,240 +1,302 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync, utimesSync } from "node:fs";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { join } from "node:path";
-import { tmpdir } from "node:os";
-import { createTestDb } from "../../test-utils.js";
-import { scanExportedItems, stripFrontmatter, clearMtimeCache } from "../vault-watcher.js";
-import { vaultFiles } from "../../db/schema.js";
 
-function insertItem(
-  sqlite: ReturnType<typeof createTestDb>["sqlite"],
-  id: string,
-  content: string,
-  exportPath: string | null = null,
-) {
-  sqlite
-    .prepare(
-      `INSERT INTO items (id, title, content, status, export_path, created, modified)
-     VALUES (?, ?, ?, 'exported', ?, '2026-01-01', '2026-01-01')`,
-    )
-    .run(id, `Title ${id}`, content, exportPath);
+// Mock node:fs/promises.stat — each test wires up the behaviour it wants.
+// NOTE: vi.mock factories are hoisted to the top of the file. References to
+// module-level consts from within the factory trigger TDZ errors, so we pull
+// the mocks back out via vi.hoisted to make them safely usable.
+const { mockStat, mockLogger } = vi.hoisted(() => ({
+  mockStat: vi.fn(),
+  mockLogger: {
+    debug: vi.fn(),
+    warn: vi.fn(),
+    info: vi.fn(),
+    error: vi.fn(),
+    fatal: vi.fn(),
+  },
+}));
+
+vi.mock("node:fs/promises", () => ({
+  stat: (...args: unknown[]) => mockStat(...args),
+}));
+
+vi.mock("../logger.js", () => ({ logger: mockLogger }));
+
+// Import under test AFTER the mocks are registered.
+import { scanExportedItems, clearMissCountCache } from "../vault-watcher.js";
+import { createTestDb, insertVaultRow } from "../../test-utils.js";
+
+const VAULT_PATH = "/fake/vault";
+
+/**
+ * Build an ENOENT error object shaped like a Node fs error so the watcher's
+ * `(e as NodeJS.ErrnoException).code` branch picks it up.
+ */
+function enoentError(): NodeJS.ErrnoException {
+  const err = new Error("ENOENT: no such file or directory") as NodeJS.ErrnoException;
+  err.code = "ENOENT";
+  return err;
 }
 
-function enableObsidian(sqlite: ReturnType<typeof createTestDb>["sqlite"], vaultPath: string) {
+function eaccesError(): NodeJS.ErrnoException {
+  const err = new Error("EACCES: permission denied") as NodeJS.ErrnoException;
+  err.code = "EACCES";
+  return err;
+}
+
+/**
+ * Configure the fs.stat mock from a path → behaviour map.
+ * 'exists'  → resolve
+ * 'enoent'  → reject with ENOENT
+ * 'eacces'  → reject with EACCES
+ */
+function mockStatByPath(
+  behaviours: Record<string, "exists" | "enoent" | "eacces">,
+  defaultBehaviour: "enoent" | "exists" = "enoent",
+): void {
+  mockStat.mockImplementation((path: string) => {
+    const behaviour = behaviours[path] ?? defaultBehaviour;
+    if (behaviour === "exists") return Promise.resolve();
+    if (behaviour === "eacces") return Promise.reject(eaccesError());
+    return Promise.reject(enoentError());
+  });
+}
+
+function enableObsidian(
+  sqlite: ReturnType<typeof createTestDb>["sqlite"],
+  vaultPath = VAULT_PATH,
+): void {
   sqlite.prepare("UPDATE settings SET value = ? WHERE key = 'obsidian_enabled'").run("true");
   sqlite.prepare("UPDATE settings SET value = ? WHERE key = 'obsidian_vault_path'").run(vaultPath);
 }
 
-describe("stripFrontmatter", () => {
-  it("strips YAML frontmatter", () => {
-    const raw = `---\nsparkle_id: "abc"\ntags: []\n---\nHello world`;
-    expect(stripFrontmatter(raw)).toBe("Hello world");
+// Local helper wraps the shared insertVaultRow; legacy tests used a `snippet`
+// default rather than "" so keep that for test-readability.
+function insertVaultItem(
+  sqlite: ReturnType<typeof createTestDb>["sqlite"],
+  overrides: {
+    id: string;
+    export_path: string | null;
+    title?: string;
+    content_snippet?: string;
+  },
+): void {
+  insertVaultRow(sqlite, {
+    id: overrides.id,
+    title: overrides.title ?? "Vault item",
+    export_path: overrides.export_path,
+    content_snippet: overrides.content_snippet ?? "snippet",
   });
+}
 
-  it("returns content as-is when no frontmatter", () => {
-    expect(stripFrontmatter("No frontmatter here")).toBe("No frontmatter here");
-  });
+function insertVaultFileRow(
+  sqlite: ReturnType<typeof createTestDb>["sqlite"],
+  row: { path: string; sparkle_id: string | null; title?: string; content?: string },
+): void {
+  sqlite
+    .prepare(
+      `INSERT INTO vault_files (path, title, content, mtime, content_hash, sparkle_id)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+    )
+    .run(
+      row.path,
+      row.title ?? "File",
+      row.content ?? "body",
+      Date.now(),
+      `hash-${row.path}`,
+      row.sparkle_id,
+    );
+}
 
-  it("returns content as-is when frontmatter is unclosed", () => {
-    expect(stripFrontmatter("---\nunclosed")).toBe("---\nunclosed");
-  });
-});
-
-describe("scanExportedItems", () => {
-  let tmpDir: string;
+describe("vault-watcher.scanExportedItems", () => {
   let db: ReturnType<typeof createTestDb>["db"];
   let sqlite: ReturnType<typeof createTestDb>["sqlite"];
 
   beforeEach(() => {
-    tmpDir = mkdtempSync(join(tmpdir(), "vault-watcher-test-"));
-    mkdirSync(join(tmpDir, "0_Inbox"), { recursive: true });
     const testDb = createTestDb();
     db = testDb.db;
     sqlite = testDb.sqlite;
-    clearMtimeCache();
+    mockStat.mockReset();
+    mockLogger.debug.mockReset();
+    mockLogger.warn.mockReset();
+    mockLogger.info.mockReset();
+    mockLogger.error.mockReset();
+    mockLogger.fatal.mockReset();
+    // Process-level map — mandatory reset between tests.
+    clearMissCountCache();
   });
 
-  afterEach(() => {
-    rmSync(tmpDir, { recursive: true, force: true });
-  });
-
-  it("skips when obsidian is not enabled", async () => {
-    insertItem(sqlite, "item-1", "Original", "0_Inbox/Test.md");
-    const result = await scanExportedItems(db, sqlite);
-    expect(result).toEqual({ scanned: 0, updated: 0, errors: 0 });
-  });
-
-  it("skips when vault_path is empty", async () => {
-    sqlite.prepare("UPDATE settings SET value = 'true' WHERE key = 'obsidian_enabled'").run();
-    insertItem(sqlite, "item-1", "Original", "0_Inbox/Test.md");
-    const result = await scanExportedItems(db, sqlite);
-    expect(result).toEqual({ scanned: 0, updated: 0, errors: 0 });
-  });
-
-  it("updates content when vault file has changed", async () => {
-    enableObsidian(sqlite, tmpDir);
-    insertItem(sqlite, "item-1", "Original content", "0_Inbox/Test.md");
-
-    // Write vault file with different content
-    const filePath = join(tmpDir, "0_Inbox/Test.md");
-    writeFileSync(filePath, `---\nsparkle_id: "item-1"\n---\nUpdated content from vault`);
+  it("returns zero-result early when Obsidian is disabled", async () => {
+    // Leave obsidian_enabled='false' (fresh-install default).
+    insertVaultItem(sqlite, { id: "vault-a", export_path: "Inbox/a.md" });
 
     const result = await scanExportedItems(db, sqlite);
-    expect(result.scanned).toBe(1);
-    expect(result.updated).toBe(1);
 
-    // Verify DB was updated
-    const row = sqlite.prepare("SELECT content FROM items WHERE id = 'item-1'").get() as {
-      content: string;
-    };
-    expect(row.content).toBe("Updated content from vault");
+    expect(result).toEqual({ scanned: 0, patched: 0, errors: 0 });
+    expect(mockStat).not.toHaveBeenCalled();
   });
 
-  it("does NOT update items.modified on content sync", async () => {
-    enableObsidian(sqlite, tmpDir);
-    insertItem(sqlite, "item-1", "Original", "0_Inbox/Test.md");
-
-    writeFileSync(join(tmpDir, "0_Inbox/Test.md"), `---\nsparkle_id: "item-1"\n---\nNew content`);
-
-    await scanExportedItems(db, sqlite);
-
-    const row = sqlite.prepare("SELECT modified FROM items WHERE id = 'item-1'").get() as {
-      modified: string;
-    };
-    expect(row.modified).toBe("2026-01-01");
-  });
-
-  it("skips when file content matches DB (hash match)", async () => {
-    enableObsidian(sqlite, tmpDir);
-    const content = "Same content";
-    insertItem(sqlite, "item-1", content, "0_Inbox/Test.md");
-
-    writeFileSync(join(tmpDir, "0_Inbox/Test.md"), `---\nsparkle_id: "item-1"\n---\n${content}`);
+  it("returns zero-result early when Obsidian is enabled but vault_path is empty", async () => {
+    sqlite.prepare("UPDATE settings SET value = ? WHERE key = 'obsidian_enabled'").run("true");
+    // obsidian_vault_path stays '' (fresh-install default).
+    insertVaultItem(sqlite, { id: "vault-a", export_path: "Inbox/a.md" });
 
     const result = await scanExportedItems(db, sqlite);
-    expect(result.scanned).toBe(1);
-    expect(result.updated).toBe(0);
+
+    expect(result).toEqual({ scanned: 0, patched: 0, errors: 0 });
+    expect(mockStat).not.toHaveBeenCalled();
   });
 
-  it("skips when mtime has not changed since last scan", async () => {
-    enableObsidian(sqlite, tmpDir);
-    insertItem(sqlite, "item-1", "Original", "0_Inbox/Test.md");
-
-    const filePath = join(tmpDir, "0_Inbox/Test.md");
-    writeFileSync(filePath, `---\nsparkle_id: "item-1"\n---\nChanged`);
-
-    // First scan: reads and updates
-    const first = await scanExportedItems(db, sqlite);
-    expect(first.updated).toBe(1);
-
-    // Second scan: same mtime, should skip
-    const second = await scanExportedItems(db, sqlite);
-    expect(second.updated).toBe(0);
-  });
-
-  it("re-scans when mtime changes after initial scan", async () => {
-    enableObsidian(sqlite, tmpDir);
-    insertItem(sqlite, "item-1", "Original", "0_Inbox/Test.md");
-
-    const filePath = join(tmpDir, "0_Inbox/Test.md");
-    writeFileSync(filePath, `---\nsparkle_id: "item-1"\n---\nFirst edit`);
-
-    await scanExportedItems(db, sqlite);
-
-    // Touch the file with a new mtime and different content
-    writeFileSync(filePath, `---\nsparkle_id: "item-1"\n---\nSecond edit`);
-    // Force different mtime by shifting 2 seconds into the future
-    const futureTime = new Date(Date.now() + 2000);
-    utimesSync(filePath, futureTime, futureTime);
+  it("file exists → no patch, miss count cleared", async () => {
+    enableObsidian(sqlite);
+    insertVaultItem(sqlite, { id: "vault-ok", export_path: "Inbox/ok.md" });
+    mockStatByPath({ [join(VAULT_PATH, "Inbox/ok.md")]: "exists" });
 
     const result = await scanExportedItems(db, sqlite);
-    expect(result.updated).toBe(1);
 
-    const row = sqlite.prepare("SELECT content FROM items WHERE id = 'item-1'").get() as {
-      content: string;
-    };
-    expect(row.content).toBe("Second edit");
-  });
+    expect(result).toEqual({ scanned: 1, patched: 0, errors: 0 });
+    expect(mockStat).toHaveBeenCalledTimes(1);
+    expect(mockLogger.debug).not.toHaveBeenCalled();
+    expect(mockLogger.warn).not.toHaveBeenCalled();
 
-  it("handles deleted vault file gracefully (ENOENT)", async () => {
-    enableObsidian(sqlite, tmpDir);
-    insertItem(sqlite, "item-1", "Original", "0_Inbox/Deleted.md");
-    // File doesn't exist — should not throw, not count as error
-    const result = await scanExportedItems(db, sqlite);
-    expect(result.scanned).toBe(1);
-    expect(result.updated).toBe(0);
-    expect(result.errors).toBe(0);
-  });
-
-  it("counts non-ENOENT errors", async () => {
-    enableObsidian(sqlite, tmpDir);
-    // Point to a directory instead of a file — will cause EISDIR or similar
-    insertItem(sqlite, "item-1", "Original", "0_Inbox");
-    const result = await scanExportedItems(db, sqlite);
-    expect(result.errors).toBe(1);
-  });
-
-  it("self-heals export_path via sparkle_id when file not found (ENOENT)", async () => {
-    enableObsidian(sqlite, tmpDir);
-    // Item has wrong export_path, but vault_files has correct mapping via sparkle_id
-    insertItem(sqlite, "item-heal", "Original", "0_Inbox/Wrong.md");
-
-    // Insert vault_files entry with correct path and matching sparkle_id
-    db.insert(vaultFiles)
-      .values({
-        path: "Correct.md",
-        title: "Correct File",
-        content: "Content",
-        mtime: 1700000000,
-        content_hash: "hash",
-        sparkle_id: "item-heal",
-      })
-      .run();
-
-    const result = await scanExportedItems(db, sqlite);
-    expect(result.errors).toBe(0);
-
-    // Verify export_path was self-healed
-    const row = sqlite.prepare("SELECT export_path FROM items WHERE id = 'item-heal'").get() as {
-      export_path: string;
-    };
-    expect(row.export_path).toBe("Correct.md");
-  });
-
-  it("does not self-heal when sparkle_id not in vault_files", async () => {
-    enableObsidian(sqlite, tmpDir);
-    insertItem(sqlite, "item-no-match", "Original", "0_Inbox/Missing.md");
-
-    const result = await scanExportedItems(db, sqlite);
-    expect(result.errors).toBe(0);
-
-    // export_path should remain unchanged
+    // export_path unchanged
     const row = sqlite
-      .prepare("SELECT export_path FROM items WHERE id = 'item-no-match'")
-      .get() as { export_path: string };
-    expect(row.export_path).toBe("0_Inbox/Missing.md");
+      .prepare("SELECT export_path FROM items_vault WHERE id = ?")
+      .get("vault-ok") as { export_path: string };
+    expect(row.export_path).toBe("Inbox/ok.md");
   });
 
-  it("skips items reverted to permanent (no longer exported)", async () => {
-    enableObsidian(sqlite, tmpDir);
-    insertItem(sqlite, "item-1", "Original content", "0_Inbox/Reverted.md");
-
-    // Revert the item to permanent status (simulating user action)
-    sqlite.prepare("UPDATE items SET status = 'permanent' WHERE id = 'item-1'").run();
-
-    // Write a different file in the vault
-    const filePath = join(tmpDir, "0_Inbox/Reverted.md");
-    writeFileSync(filePath, `---\nsparkle_id: "item-1"\n---\nChanged in vault`);
+  it("first ENOENT → debounce: DEBUG log, no patch, export_path unchanged", async () => {
+    enableObsidian(sqlite);
+    insertVaultItem(sqlite, { id: "vault-miss-1", export_path: "Inbox/miss.md" });
+    mockStatByPath({}, "enoent");
 
     const result = await scanExportedItems(db, sqlite);
-    // Item is no longer exported, so it should not be scanned
-    expect(result.scanned).toBe(0);
-    expect(result.updated).toBe(0);
 
-    // Verify DB content is unchanged
-    const row = sqlite.prepare("SELECT content FROM items WHERE id = 'item-1'").get() as {
-      content: string;
-    };
-    expect(row.content).toBe("Original content");
+    expect(result).toEqual({ scanned: 1, patched: 0, errors: 0 });
+    expect(mockLogger.debug).toHaveBeenCalledTimes(1);
+    expect(mockLogger.warn).not.toHaveBeenCalled();
+
+    const row = sqlite
+      .prepare("SELECT export_path FROM items_vault WHERE id = ?")
+      .get("vault-miss-1") as { export_path: string };
+    expect(row.export_path).toBe("Inbox/miss.md");
+  });
+
+  it("second consecutive ENOENT with vault_files match → patches export_path (WARN)", async () => {
+    enableObsidian(sqlite);
+    insertVaultItem(sqlite, { id: "vault-renamed", export_path: "Inbox/old.md" });
+    insertVaultFileRow(sqlite, { path: "Inbox/renamed.md", sparkle_id: "vault-renamed" });
+    mockStatByPath({}, "enoent");
+
+    // First scan: debounce (DEBUG, count=1).
+    await scanExportedItems(db, sqlite);
+    // Second scan: self-heal.
+    const result = await scanExportedItems(db, sqlite);
+
+    expect(result).toEqual({ scanned: 1, patched: 1, errors: 0 });
+    expect(mockLogger.warn).toHaveBeenCalledTimes(1);
+    expect(mockLogger.warn.mock.calls[0]?.[0]).toMatch(/self-healed/);
+
+    const row = sqlite
+      .prepare("SELECT export_path FROM items_vault WHERE id = ?")
+      .get("vault-renamed") as { export_path: string };
+    expect(row.export_path).toBe("Inbox/renamed.md");
+  });
+
+  it("second consecutive ENOENT, no vault_files match → WARN, export_path unchanged, not counted as patched", async () => {
+    enableObsidian(sqlite);
+    insertVaultItem(sqlite, { id: "vault-lost", export_path: "Inbox/lost.md" });
+    mockStatByPath({}, "enoent");
+
+    await scanExportedItems(db, sqlite);
+    const result = await scanExportedItems(db, sqlite);
+
+    expect(result).toEqual({ scanned: 1, patched: 0, errors: 0 });
+    expect(mockLogger.warn).toHaveBeenCalledTimes(1);
+    expect(mockLogger.warn.mock.calls[0]?.[0]).toMatch(/no vault_files match/);
+
+    const row = sqlite
+      .prepare("SELECT export_path FROM items_vault WHERE id = ?")
+      .get("vault-lost") as { export_path: string };
+    expect(row.export_path).toBe("Inbox/lost.md");
+  });
+
+  it("non-ENOENT error (EACCES) → increments errors, WARN, does not touch miss count", async () => {
+    enableObsidian(sqlite);
+    insertVaultItem(sqlite, { id: "vault-eacces", export_path: "Inbox/protected.md" });
+    mockStatByPath({ [join(VAULT_PATH, "Inbox/protected.md")]: "eacces" });
+
+    const result = await scanExportedItems(db, sqlite);
+
+    expect(result).toEqual({ scanned: 1, patched: 0, errors: 1 });
+    expect(mockLogger.warn).toHaveBeenCalledTimes(1);
+    expect(mockLogger.warn.mock.calls[0]?.[0]).toMatch(/EACCES/);
+
+    // Miss count NOT incremented — next scan on ENOENT should still be DEBUG (first miss).
+    mockLogger.warn.mockReset();
+    mockLogger.debug.mockReset();
+    mockStatByPath({ [join(VAULT_PATH, "Inbox/protected.md")]: "enoent" });
+    await scanExportedItems(db, sqlite);
+    expect(mockLogger.debug).toHaveBeenCalledTimes(1);
+    expect(mockLogger.warn).not.toHaveBeenCalled();
+  });
+
+  it("file reappears after first miss → miss count cleared, subsequent miss starts from DEBUG again", async () => {
+    enableObsidian(sqlite);
+    insertVaultItem(sqlite, { id: "vault-flaky", export_path: "Inbox/flaky.md" });
+    const fullPath = join(VAULT_PATH, "Inbox/flaky.md");
+
+    // Scan 1: ENOENT → miss count = 1, DEBUG log.
+    mockStatByPath({ [fullPath]: "enoent" });
+    await scanExportedItems(db, sqlite);
+    expect(mockLogger.debug).toHaveBeenCalledTimes(1);
+
+    // Scan 2: file back → count cleared.
+    mockLogger.debug.mockReset();
+    mockStatByPath({ [fullPath]: "exists" });
+    await scanExportedItems(db, sqlite);
+    expect(mockLogger.debug).not.toHaveBeenCalled();
+    expect(mockLogger.warn).not.toHaveBeenCalled();
+
+    // Scan 3: ENOENT again → should be DEBUG (treated as first miss, count=1).
+    mockStatByPath({ [fullPath]: "enoent" });
+    await scanExportedItems(db, sqlite);
+    expect(mockLogger.debug).toHaveBeenCalledTimes(1);
+    expect(mockLogger.warn).not.toHaveBeenCalled();
+  });
+
+  it("clearMissCountCache() resets state between scans", async () => {
+    enableObsidian(sqlite);
+    insertVaultItem(sqlite, { id: "vault-reset", export_path: "Inbox/reset.md" });
+    mockStatByPath({}, "enoent");
+
+    // Scan 1: miss count 1 (DEBUG).
+    await scanExportedItems(db, sqlite);
+    expect(mockLogger.debug).toHaveBeenCalledTimes(1);
+
+    // Simulate "process restart" mid-test.
+    clearMissCountCache();
+    mockLogger.debug.mockReset();
+    mockLogger.warn.mockReset();
+
+    // Scan 2: without the clear this would be miss #2 (WARN); with it, it's miss #1 (DEBUG).
+    await scanExportedItems(db, sqlite);
+    expect(mockLogger.debug).toHaveBeenCalledTimes(1);
+    expect(mockLogger.warn).not.toHaveBeenCalled();
+  });
+
+  it("skips rows with null export_path (counted in scanned, no stat call)", async () => {
+    enableObsidian(sqlite);
+    // Row with null export_path — watcher SELECT filters on isNotNull so this
+    // row is NOT included; we add a second row with a path to sanity-check the count.
+    insertVaultItem(sqlite, { id: "vault-null", export_path: null });
+    insertVaultItem(sqlite, { id: "vault-ok-2", export_path: "Inbox/ok2.md" });
+    mockStatByPath({ [join(VAULT_PATH, "Inbox/ok2.md")]: "exists" });
+
+    const result = await scanExportedItems(db, sqlite);
+
+    expect(result).toEqual({ scanned: 1, patched: 0, errors: 0 });
+    expect(mockStat).toHaveBeenCalledTimes(1);
   });
 });

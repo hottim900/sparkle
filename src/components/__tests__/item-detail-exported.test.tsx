@@ -1,11 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { screen, waitFor } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import { type AppContextValue } from "@/lib/app-context";
 import { ItemDetail } from "@/components/item-detail";
 import type { Item } from "@/lib/types";
 import * as api from "@/lib/api";
-import { toast } from "sonner";
 import { renderWithContext } from "@/test-utils";
 
 vi.mock("@/lib/api");
@@ -30,7 +28,7 @@ const mockExportedItem: Item = {
   due: null,
   tags: '["test"]',
   source: null,
-  origin: "web",
+  origin_source: "web",
   aliases: "[]",
   linked_note_id: null,
   linked_note_title: null,
@@ -39,7 +37,8 @@ const mockExportedItem: Item = {
   category_id: null,
   category_name: null,
   viewed_at: "2026-01-01T00:00:00.000Z",
-  is_private: false,
+  is_private: 0,
+  origin: "vault",
   paused: 0,
   paused_at: null,
   paused_context: null,
@@ -185,115 +184,5 @@ describe("ItemDetail - exported read-only mode", () => {
     // Priority — rendered as "高" + "優先" in separate text nodes
     expect(screen.getByText(/高/)).toBeInTheDocument();
     expect(screen.getByText(/優先/)).toBeInTheDocument();
-  });
-});
-
-describe("ItemDetail - exported 退回 functionality", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    setupDefaultMocks();
-  });
-
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
-  it("退回 button triggers confirmation dialog", async () => {
-    const user = userEvent.setup();
-    renderItemDetail();
-
-    await waitFor(() => {
-      expect(screen.getByText("退回")).toBeInTheDocument();
-    });
-
-    await user.click(screen.getByRole("button", { name: /退回/ }));
-
-    // Dialog should appear with confirmation details
-    await waitFor(() => {
-      expect(screen.getByText("退回為永久筆記")).toBeInTheDocument();
-    });
-    expect(screen.getByText("確認退回")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "取消" })).toBeInTheDocument();
-  });
-
-  it("退回 success shows toast and triggers re-fetch", async () => {
-    const user = userEvent.setup();
-
-    // First load: exported item
-    vi.mocked(api.getItem).mockResolvedValue(mockExportedItem);
-    vi.mocked(api.updateItem).mockResolvedValue({
-      ...mockExportedItem,
-      status: "permanent",
-      modified: "2026-01-01T00:01:00.000Z",
-    });
-
-    renderItemDetail();
-
-    await waitFor(() => {
-      expect(screen.getByText("退回")).toBeInTheDocument();
-    });
-
-    // Click 退回
-    await user.click(screen.getByRole("button", { name: /退回/ }));
-
-    // Wait for dialog
-    await waitFor(() => {
-      expect(screen.getByText("確認退回")).toBeInTheDocument();
-    });
-
-    // Confirm
-    await user.click(screen.getByRole("button", { name: "確認退回" }));
-
-    // Should call updateItem with status: "permanent"
-    await waitFor(() => {
-      expect(api.updateItem).toHaveBeenCalledWith("test-exported-1", {
-        status: "permanent",
-      });
-    });
-
-    // Should show success toast
-    await waitFor(() => {
-      expect(toast.success).toHaveBeenCalledWith("已退回為永久筆記，可以開始編輯");
-    });
-  });
-
-  it("退回 cancel stays exported", async () => {
-    const user = userEvent.setup();
-    renderItemDetail();
-
-    await waitFor(() => {
-      expect(screen.getByText("退回")).toBeInTheDocument();
-    });
-
-    // Click 退回
-    await user.click(screen.getByRole("button", { name: /退回/ }));
-
-    // Wait for dialog
-    await waitFor(() => {
-      expect(screen.getByText("確認退回")).toBeInTheDocument();
-    });
-
-    // Click cancel
-    await user.click(screen.getByRole("button", { name: "取消" }));
-
-    // Dialog should close; updateItem should NOT be called
-    await waitFor(() => {
-      expect(screen.queryByText("退回為永久筆記")).not.toBeInTheDocument();
-    });
-    expect(api.updateItem).not.toHaveBeenCalled();
-
-    // Should still show the exported banner
-    expect(screen.getByText("已匯出至 Obsidian")).toBeInTheDocument();
-  });
-
-  it("退回 button disabled when offline", async () => {
-    renderItemDetail({ isOnline: false });
-
-    await waitFor(() => {
-      expect(screen.getByText("退回")).toBeInTheDocument();
-    });
-
-    const revertBtn = screen.getByRole("button", { name: /退回/ });
-    expect(revertBtn).toBeDisabled();
   });
 });

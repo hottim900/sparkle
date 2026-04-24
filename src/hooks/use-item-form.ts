@@ -78,7 +78,7 @@ export function useItemForm(itemId: string, options: UseItemFormOptions = {}) {
   const saveField = useCallback(
     async (field: string, value: unknown) => {
       if (!item) return;
-      if (item.status === "exported") return;
+      if (item.origin === "vault") return;
       if (!isOnline) {
         toast.error("離線中，無法儲存變更");
         return;
@@ -93,7 +93,7 @@ export function useItemForm(itemId: string, options: UseItemFormOptions = {}) {
           const next = { ...prev, modified: serverModified };
           // Keep local is_private in sync after toggle
           if (field === "is_private" && typeof value === "boolean") {
-            next.is_private = value;
+            next.is_private = value ? 1 : 0;
           }
           return next;
         });

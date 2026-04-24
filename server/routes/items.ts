@@ -1,11 +1,17 @@
 import { Hono } from "hono";
 import { and, eq, inArray } from "drizzle-orm";
 import { db, sqlite } from "../db/index.js";
-import { items } from "../db/schema.js";
-import { createItem, getItem, listItems, updateItem, deleteItem } from "../lib/items.js";
-import { resolveLinkedInfo } from "../lib/item-enrichment.js";
+import { itemsActive } from "../db/schema.js";
+import {
+  createItem,
+  getItem,
+  getItemForLookup,
+  listItems,
+  updateItem,
+  deleteItem,
+} from "../lib/items.js";
+import { resolveLinkedInfoActive } from "../lib/item-enrichment.js";
 import { isValidTypeStatus, getAutoMappedStatus } from "../lib/item-type-system.js";
-import { EXPORTED_BLOCKED_FIELDS } from "../lib/exported-guard.js";
 import type { ExportableItem } from "../lib/export.js";
 import {
   createItemSchema,
@@ -13,20 +19,26 @@ import {
   listItemsSchema,
   batchSchema,
 } from "../schemas/items.js";
-import { exportToObsidian, resolveSparkleReferences, type ItemLookup } from "../lib/export.js";
+import {
+  exportToObsidian,
+  resolveSparkleReferences,
+  commitExportToVault,
+  type ItemLookup,
+} from "../lib/export.js";
 import { getObsidianSettings } from "../lib/settings.js";
 import { ZodError } from "zod";
 import { revokeSharesByItemId } from "../lib/shares.js";
 import { deriveTitleFromContent } from "../lib/title-derivation.js";
+import { vaultReadonlyPayload } from "../lib/vault-errors.js";
 
 const lookupItem: ItemLookup = (shortId) => {
-  const found = getItem(db, shortId, false);
+  const found = getItemForLookup(db, shortId);
   return found ? { title: found.title } : null;
 };
 
 const itemsRouter = new Hono();
 
-// List items with filters
+// List items with filters (active table only)
 itemsRouter.get("/", (c) => {
   try {
     const query = listItemsSchema.parse({
@@ -40,6 +52,7 @@ itemsRouter.get("/", (c) => {
       limit: c.req.query("limit"),
       offset: c.req.query("offset"),
       paused: c.req.query("paused"),
+      include_vault: c.req.query("include_vault"),
     });
     const result = listItems(db, query);
     return c.json(result);
@@ -51,7 +64,7 @@ itemsRouter.get("/", (c) => {
   }
 });
 
-// Create item
+// Create item (always active)
 itemsRouter.post("/", async (c) => {
   try {
     const body = await c.req.json();
@@ -59,7 +72,7 @@ itemsRouter.post("/", async (c) => {
 
     const title = input.title ?? deriveTitleFromContent(input.content ?? "");
     const created = createItem(db, { ...input, title });
-    const [item] = resolveLinkedInfo(db, [created]);
+    const [item] = resolveLinkedInfoActive(db, [created]);
     return c.json(item, 201);
   } catch (e) {
     if (e instanceof ZodError) {
@@ -82,45 +95,42 @@ itemsRouter.post("/batch", async (c) => {
 
     if (action === "delete") {
       const result = db
-        .delete(items)
-        .where(and(inArray(items.id, ids), eq(items.is_private, 0)))
+        .delete(itemsActive)
+        .where(and(inArray(itemsActive.id, ids), eq(itemsActive.is_private, 0)))
         .run();
       affected = result.changes;
       skipped = ids.length - affected;
     } else if (action === "develop") {
-      // fleeting → developing (notes only)
       const result = db
-        .update(items)
+        .update(itemsActive)
         .set({ status: "developing", modified: now })
         .where(
           and(
-            inArray(items.id, ids),
-            eq(items.type, "note"),
-            eq(items.status, "fleeting"),
-            eq(items.is_private, 0),
+            inArray(itemsActive.id, ids),
+            eq(itemsActive.type, "note"),
+            eq(itemsActive.status, "fleeting"),
+            eq(itemsActive.is_private, 0),
           ),
         )
         .run();
       affected = result.changes;
       skipped = ids.length - affected;
     } else if (action === "mature") {
-      // developing → permanent (notes only)
       const result = db
-        .update(items)
+        .update(itemsActive)
         .set({ status: "permanent", modified: now })
         .where(
           and(
-            inArray(items.id, ids),
-            eq(items.type, "note"),
-            eq(items.status, "developing"),
-            eq(items.is_private, 0),
+            inArray(itemsActive.id, ids),
+            eq(itemsActive.type, "note"),
+            eq(itemsActive.status, "developing"),
+            eq(itemsActive.is_private, 0),
           ),
         )
         .run();
       affected = result.changes;
       skipped = ids.length - affected;
     } else if (action === "export") {
-      // permanent → exported (notes only, writes .md)
       const obsidian = getObsidianSettings(sqlite);
       if (!obsidian.obsidian_enabled || !obsidian.obsidian_vault_path) {
         return c.json({ error: "Obsidian export is not configured" }, 400);
@@ -130,101 +140,135 @@ itemsRouter.post("/batch", async (c) => {
         inboxFolder: obsidian.obsidian_inbox_folder,
         exportMode: obsidian.obsidian_export_mode,
       };
-      // 1. Bulk fetch eligible items with category names
+      // 1. Bulk fetch eligible permanent notes from items_active.
       const eligible = db
         .select({
-          id: items.id,
-          type: items.type,
-          title: items.title,
-          content: items.content,
-          status: items.status,
-          priority: items.priority,
-          due: items.due,
-          tags: items.tags,
-          origin: items.origin,
-          source: items.source,
-          aliases: items.aliases,
-          linked_note_id: items.linked_note_id,
-          category_id: items.category_id,
-          created: items.created,
-          modified: items.modified,
+          id: itemsActive.id,
+          type: itemsActive.type,
+          title: itemsActive.title,
+          content: itemsActive.content,
+          status: itemsActive.status,
+          priority: itemsActive.priority,
+          due: itemsActive.due,
+          tags: itemsActive.tags,
+          origin: itemsActive.origin,
+          source: itemsActive.source,
+          aliases: itemsActive.aliases,
+          linked_note_id: itemsActive.linked_note_id,
+          category_id: itemsActive.category_id,
+          is_private: itemsActive.is_private,
+          created: itemsActive.created,
+          modified: itemsActive.modified,
         })
-        .from(items)
+        .from(itemsActive)
         .where(
           and(
-            inArray(items.id, ids),
-            eq(items.type, "note"),
-            eq(items.status, "permanent"),
-            eq(items.is_private, 0),
+            inArray(itemsActive.id, ids),
+            eq(itemsActive.type, "note"),
+            eq(itemsActive.status, "permanent"),
+            eq(itemsActive.is_private, 0),
           ),
         )
         .all();
-      // 2. Loop export (file I/O, unavoidable)
       const errors: { id: string; error: string }[] = [];
-      const exportedResults: { id: string; path: string }[] = [];
+      const exportedResults: {
+        id: string;
+        path: string;
+        item: (typeof eligible)[number];
+      }[] = [];
       const skippedIds: string[] = [];
+      // 2. Loop: file-write-first (exportToObsidian), then atomic DB move below.
       for (const item of eligible) {
         try {
           const resolvedContent = resolveSparkleReferences(item.content || "", lookupItem);
-          const exportItem = { ...item, content: resolvedContent } as ExportableItem;
+          const exportItem = {
+            ...item,
+            content: resolvedContent,
+          } as ExportableItem;
           const result = await exportToObsidian(exportItem, exportConfig);
           if (result.skipped) {
             skippedIds.push(item.id);
           } else {
-            exportedResults.push({ id: item.id, path: result.path });
+            exportedResults.push({ id: item.id, path: result.path, item });
           }
         } catch (e) {
           errors.push({ id: item.id, error: (e as Error).message });
         }
       }
-      // 3. Per-item update with export_path; auto-clear paused
-      for (const { id, path } of exportedResults) {
-        db.update(items)
-          .set({
-            status: "exported",
-            export_path: path,
-            modified: now,
-            paused: 0,
-            paused_at: null,
-            paused_context: null,
-          })
-          .where(eq(items.id, id))
-          .run();
+      // 3. Atomic move per item: INSERT vault + DELETE active.
+      let committed = 0;
+      for (const { path, item } of exportedResults) {
+        try {
+          commitExportToVault(
+            sqlite,
+            {
+              id: item.id,
+              title: item.title,
+              category_id: item.category_id,
+              tags: item.tags,
+              aliases: item.aliases,
+              source: item.source,
+              origin: item.origin,
+              created: item.created,
+              is_private: item.is_private ?? 0,
+              content: item.content,
+            },
+            path,
+          );
+          committed++;
+        } catch (e) {
+          errors.push({ id: item.id, error: (e as Error).message });
+        }
       }
-      affected = exportedResults.length;
+      affected = committed;
       skipped = skippedIds.length + (ids.length - eligible.length);
       return c.json({ affected, skipped, errors });
     } else if (action === "done") {
-      // → done (todo only, any status); auto-clear paused
       const result = db
-        .update(items)
-        .set({ status: "done", modified: now, paused: 0, paused_at: null, paused_context: null })
-        .where(and(inArray(items.id, ids), eq(items.type, "todo"), eq(items.is_private, 0)))
+        .update(itemsActive)
+        .set({
+          status: "done",
+          modified: now,
+          paused: 0,
+          paused_at: null,
+          paused_context: null,
+        })
+        .where(
+          and(
+            inArray(itemsActive.id, ids),
+            eq(itemsActive.type, "todo"),
+            eq(itemsActive.is_private, 0),
+          ),
+        )
         .run();
       affected = result.changes;
       skipped = ids.length - affected;
     } else if (action === "active") {
-      // → active (todo only, any status)
       const result = db
-        .update(items)
+        .update(itemsActive)
         .set({ status: "active", modified: now })
-        .where(and(inArray(items.id, ids), eq(items.type, "todo"), eq(items.is_private, 0)))
+        .where(
+          and(
+            inArray(itemsActive.id, ids),
+            eq(itemsActive.type, "todo"),
+            eq(itemsActive.is_private, 0),
+          ),
+        )
         .run();
       affected = result.changes;
       skipped = ids.length - affected;
     } else {
-      // archive — any type; auto-clear paused
+      // archive
       const result = db
-        .update(items)
+        .update(itemsActive)
         .set({
           status: "archived",
           modified: now,
           paused: 0,
           paused_at: null,
           paused_context: null,
-          export_path: null,
         })
-        .where(and(inArray(items.id, ids), eq(items.is_private, 0)))
+        .where(and(inArray(itemsActive.id, ids), eq(itemsActive.is_private, 0)))
         .run();
       affected = result.changes;
       skipped = ids.length - affected;
@@ -239,21 +283,26 @@ itemsRouter.post("/batch", async (c) => {
   }
 });
 
-// Get linked todos for a note
+// Get linked todos for a note — active-only (todos that reference this note)
 itemsRouter.get("/:id/linked-todos", (c) => {
   const id = c.req.param("id");
-  // Verify the note exists and is not private (prevents confirming private note IDs exist)
   const note = getItem(db, id, false);
   if (!note) return c.json({ error: "Item not found" }, 404);
   const result = listItems(db, { linked_note_id: id, paused: "all" });
   return c.json({ items: result.items });
 });
 
-// Export item to Obsidian
+// Export item to Obsidian — moves items_active → items_vault atomically
 itemsRouter.post("/:id/export", async (c) => {
   const item = getItem(db, c.req.param("id"));
   if (!item) {
     return c.json({ error: "Item not found" }, 404);
+  }
+  if (item.origin === "vault") {
+    return c.json(
+      { ...vaultReadonlyPayload(item.export_path), error: "已匯出的項目無法再次匯出" },
+      409,
+    );
   }
   if (item.type !== "note") {
     return c.json({ error: "Only notes can be exported" }, 400);
@@ -268,25 +317,29 @@ itemsRouter.post("/:id/export", async (c) => {
 
   try {
     const resolvedContent = resolveSparkleReferences(item.content || "", lookupItem);
-    const exportItem = { ...item, content: resolvedContent };
+    const exportItem = { ...item, content: resolvedContent } as ExportableItem;
     const result = await exportToObsidian(exportItem, {
       vaultPath: obsidian.obsidian_vault_path,
       inboxFolder: obsidian.obsidian_inbox_folder,
       exportMode: obsidian.obsidian_export_mode,
     });
     if (!result.skipped) {
-      const now = new Date().toISOString();
-      db.update(items)
-        .set({
-          status: "exported",
-          export_path: result.path,
-          modified: now,
-          paused: 0,
-          paused_at: null,
-          paused_context: null,
-        })
-        .where(eq(items.id, item.id))
-        .run();
+      commitExportToVault(
+        sqlite,
+        {
+          id: item.id,
+          title: item.title,
+          category_id: item.category_id,
+          tags: item.tags,
+          aliases: item.aliases,
+          source: item.source,
+          origin: item.origin_source,
+          created: item.created,
+          is_private: item.is_private,
+          content: item.content,
+        },
+        result.path,
+      );
     }
     return c.json({ path: result.path, skipped: result.skipped });
   } catch (e) {
@@ -294,7 +347,7 @@ itemsRouter.post("/:id/export", async (c) => {
   }
 });
 
-// Get single item (supports full UUID or short ID prefix)
+// Get single item (supports full UUID or short ID prefix; cross-table)
 itemsRouter.get("/:id", (c) => {
   try {
     const item = getItem(db, c.req.param("id"));
@@ -316,7 +369,7 @@ itemsRouter.get("/:id", (c) => {
   }
 });
 
-// Update item
+// Update item — vault-origin returns 409 VAULT_READONLY
 itemsRouter.patch("/:id", async (c) => {
   try {
     const body = await c.req.json();
@@ -328,25 +381,30 @@ itemsRouter.patch("/:id", async (c) => {
       return c.json({ error: "Item not found" }, 404);
     }
 
+    if (existing.origin === "vault") {
+      return c.json(vaultReadonlyPayload(existing.export_path), 409);
+    }
+
     // Private items cannot be converted to scratch
     if (input.type === "scratch" && (existing.is_private || input.is_private)) {
       return c.json({ error: "Private items cannot be converted to scratch" }, 400);
     }
 
-    // Determine effective type and status after update
     const effectiveType = input.type ?? existing.type;
-    let effectiveStatus = input.status ?? existing.status;
+    let effectiveStatus = input.status ?? existing.status ?? "fleeting";
 
-    // Type conversion auto-mapping overrides explicit status
     if (input.type !== undefined && input.type !== existing.type) {
-      const mappedStatus = getAutoMappedStatus(existing.type, input.type, existing.status);
+      const mappedStatus = getAutoMappedStatus(
+        existing.type,
+        input.type,
+        existing.status ?? "fleeting",
+      );
       if (mappedStatus) {
         effectiveStatus = mappedStatus as typeof effectiveStatus;
         input.status = effectiveStatus as typeof input.status;
       }
     }
 
-    // Validate type-status combination
     if (!isValidTypeStatus(effectiveType, effectiveStatus)) {
       return c.json(
         { error: `Invalid status '${effectiveStatus}' for type '${effectiveType}'` },
@@ -354,24 +412,12 @@ itemsRouter.patch("/:id", async (c) => {
       );
     }
 
-    // Exported items are read-only (content fields blocked)
-    if (existing.status === "exported") {
-      if (
-        EXPORTED_BLOCKED_FIELDS.some((f) => (input as Record<string, unknown>)[f] !== undefined)
-      ) {
-        return c.json({ error: "已匯出項目為唯讀" }, 400);
-      }
-    }
-
-    // When marking as private, use includePrivate for the return value
     const markingPrivate = input.is_private === true && !existing.is_private;
-    // Pass pre-fetched existing to avoid redundant getItem inside updateItem
     const updated = updateItem(db, id, input, markingPrivate, existing);
     if (!updated) {
       return c.json({ error: "Item not found" }, 404);
     }
 
-    // When marking an item as private, revoke all existing share tokens
     if (markingPrivate) {
       revokeSharesByItemId(sqlite, id);
     }
@@ -385,13 +431,15 @@ itemsRouter.patch("/:id", async (c) => {
   }
 });
 
-// Delete item
+// Delete item — vault-origin returns 409 (use /vault-stub endpoint to release)
 itemsRouter.delete("/:id", (c) => {
   const id = c.req.param("id");
-  // Guard: private items cannot be deleted through public API
   const existing = getItem(db, id, false);
   if (!existing) {
     return c.json({ error: "Item not found" }, 404);
+  }
+  if (existing.origin === "vault") {
+    return c.json(vaultReadonlyPayload(existing.export_path), 409);
   }
   const deleted = deleteItem(db, id);
   if (!deleted) {

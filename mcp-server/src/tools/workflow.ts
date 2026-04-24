@@ -9,13 +9,11 @@ export function registerWorkflowTools(server: McpServer): void {
     "sparkle_advance_note",
     {
       title: "Advance Note Maturity",
-      description: `Advance a note's maturity stage in the Zettelkasten flow.
+      description: `Advance an items_active note along the maturity path (fleeting → developing → permanent). Not applicable to vault items (no status field) — returns \`VAULT_READONLY\`. Once a note is exported (moved to items_vault), its maturity journey in Sparkle is complete.
 
 Valid progressions:
   - fleeting → developing (note has been expanded with initial thoughts)
   - developing → permanent (note is well-developed and complete)
-
-The note must be type "note" and in the correct current status for the target.
 
 Args:
   - id (string, required): Note UUID
@@ -37,9 +35,35 @@ Returns: The updated note.`,
       try {
         // Validate the note exists and is in the right state
         const current = await getItem(id);
+
+        // v1.4.0: vault-origin items have no maturity journey in Sparkle
+        if ((current as { origin?: string }).origin === "vault") {
+          return {
+            isError: true,
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify({
+                  code: "VAULT_READONLY",
+                  error: "此項目為 vault-origin，無法 advance（成熟度路線只適用於 items_active）",
+                  error_en: "Vault items have no maturity status; advance_note does not apply.",
+                  vault_path: (current as { export_path?: string | null }).export_path ?? null,
+                  hint_tool_by_path: "sparkle_write_obsidian_by_path",
+                  doc_url: "sparkle://docs/data-model#vault-items",
+                }),
+              },
+            ],
+          };
+        }
+
         if (current.type !== "note") {
           return {
-            content: [{ type: "text", text: `Error: Item is a ${current.type}, not a note. Only notes can be advanced.` }],
+            content: [
+              {
+                type: "text",
+                text: `Error: Item is a ${current.type}, not a note. Only notes can be advanced.`,
+              },
+            ],
             isError: true,
           };
         }
@@ -51,7 +75,12 @@ Returns: The updated note.`,
         const requiredStatus = validTransitions[target_status];
         if (current.status !== requiredStatus) {
           return {
-            content: [{ type: "text", text: `Error: Note is "${current.status}", but must be "${requiredStatus}" to advance to "${target_status}".` }],
+            content: [
+              {
+                type: "text",
+                text: `Error: Note is "${current.status}", but must be "${requiredStatus}" to advance to "${target_status}".`,
+              },
+            ],
             isError: true,
           };
         }
@@ -71,7 +100,9 @@ Returns: The updated note.`,
     "sparkle_pause_note",
     {
       title: "Pause Sparkle Note",
-      description: `暫停項目。暫停的項目不會出現在 stale、attention 等提醒列表中，但可透過搜尋或暫停清單找到。可選填恢復備忘（下次回來時想記住什麼）。
+      description: `Pause an items_active item (any type). Not applicable to vault items — returns \`VAULT_READONLY\`. paused is cross-type (orthogonal to status/type), cleared automatically on archive/export/done.
+
+暫停的項目不會出現在 stale、attention 等提醒列表中，但可透過搜尋或暫停清單找到。可選填恢復備忘（下次回來時想記住什麼）。
 
 Args:
   - id (string, required): Item UUID
@@ -114,7 +145,9 @@ Returns: The updated item.`,
     "sparkle_resume_note",
     {
       title: "Resume Sparkle Note",
-      description: `恢復暫停的項目。恢復後 stale 天數從現在起算。
+      description: `Resume a previously paused items_active item. Not applicable to vault items — returns \`VAULT_READONLY\`.
+
+恢復後 stale 天數從現在起算。
 
 Args:
   - id (string, required): Item UUID

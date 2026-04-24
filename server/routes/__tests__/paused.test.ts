@@ -90,7 +90,7 @@ function insertItem(fields: {
   const now = new Date().toISOString();
   testSqlite
     .prepare(
-      `INSERT INTO items (id, type, title, content, status, priority, due, tags, origin, source, aliases, paused, paused_at, paused_context, created, modified)
+      `INSERT INTO items_active (id, type, title, content, status, priority, due, tags, origin, source, aliases, paused, paused_at, paused_context, created, modified)
        VALUES (?, ?, ?, '', ?, ?, ?, '[]', '', NULL, '[]', ?, ?, ?, ?, ?)`,
     )
     .run(
@@ -648,9 +648,9 @@ describe("Daily note excludes paused items", () => {
     const overdue = testSqlite
       .prepare(
         `SELECT id, title, priority, due
-         FROM items
+         FROM items_active
          WHERE type = 'todo'
-           AND status NOT IN ('done', 'exported', 'archived')
+           AND status NOT IN ('done', 'archived')
            AND due IS NOT NULL
            AND due < ?
            AND is_private = 0
@@ -688,9 +688,9 @@ describe("Daily note excludes paused items", () => {
     const todosDue = testSqlite
       .prepare(
         `SELECT id, title, priority, due
-         FROM items
+         FROM items_active
          WHERE type = 'todo'
-           AND status NOT IN ('done', 'exported', 'archived')
+           AND status NOT IN ('done', 'archived')
            AND due = ?
            AND is_private = 0
            AND paused = 0`,

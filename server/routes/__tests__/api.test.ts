@@ -38,7 +38,7 @@ import { settingsRouter } from "../settings.js";
 import { getAllTags } from "../../lib/items.js";
 import { logger } from "../../lib/logger.js";
 import { getObsidianSettings } from "../../lib/settings.js";
-import { items, categories } from "../../db/schema.js";
+import { itemsActive, categories } from "../../db/schema.js";
 import { eq, inArray } from "drizzle-orm";
 import { ZodError } from "zod";
 import { importSchema } from "../../schemas/items.js";
@@ -87,7 +87,7 @@ function createApp() {
 
   // Export all items
   app.get("/api/export", (c) => {
-    const allItems = testDb.select().from(items).all();
+    const allItems = testDb.select().from(itemsActive).all();
     return c.json({
       version: 2,
       exported_at: new Date().toISOString(),
@@ -150,9 +150,9 @@ function createApp() {
       const existingLinkedIds = new Set(
         referencedLinkedIds.length > 0
           ? testDb
-              .select({ id: items.id })
-              .from(items)
-              .where(inArray(items.id, referencedLinkedIds))
+              .select({ id: itemsActive.id })
+              .from(itemsActive)
+              .where(inArray(itemsActive.id, referencedLinkedIds))
               .all()
               .map((r) => r.id)
           : [],
@@ -195,7 +195,11 @@ function createApp() {
             }
           }
 
-          const existing = testDb.select().from(items).where(eq(items.id, item.id)).get();
+          const existing = testDb
+            .select()
+            .from(itemsActive)
+            .where(eq(itemsActive.id, item.id))
+            .get();
 
           if (existing) {
             // Skip private items — don't overwrite private content via import
@@ -204,7 +208,7 @@ function createApp() {
               continue;
             }
             testDb
-              .update(items)
+              .update(itemsActive)
               .set({
                 type: item.type,
                 title: item.title,
@@ -221,13 +225,13 @@ function createApp() {
                 created: item.created,
                 modified: item.modified,
               })
-              .where(eq(items.id, item.id))
+              .where(eq(itemsActive.id, item.id))
               .run();
             updated++;
           } else {
             // Strip is_private from imported data — imports always create public items
             testDb
-              .insert(items)
+              .insert(itemsActive)
               .values({
                 ...item,
                 tags: JSON.stringify(item.tags),
@@ -590,6 +594,72 @@ describe("Items CRUD", () => {
         headers: jsonHeaders(),
       });
       expect(res.status).toBe(400);
+    });
+
+    describe("v1.4.0 cross-table flags", () => {
+      function seedVaultRow(title: string, exportedAt = "2026-04-01T00:00:00.000Z"): string {
+        const id = crypto.randomUUID();
+        testSqlite
+          .prepare(
+            `INSERT INTO items_vault (id, title, tags, aliases, origin, exported_at, created, is_private, content_snippet)
+             VALUES (?, ?, '[]', '[]', '', ?, ?, 0, '')`,
+          )
+          .run(id, title, exportedAt, exportedAt);
+        return id;
+      }
+
+      it("status=exported returns items_vault only", async () => {
+        await app.request("/api/items", {
+          method: "POST",
+          headers: jsonHeaders(),
+          body: JSON.stringify({ title: "Active note" }),
+        });
+        seedVaultRow("Vault note");
+
+        const res = await app.request("/api/items?status=exported", { headers: authHeaders() });
+        expect(res.status).toBe(200);
+        const body = await res.json();
+        expect(body.items).toHaveLength(1);
+        expect(body.items[0].title).toBe("Vault note");
+        expect(body.items[0].origin).toBe("vault");
+      });
+
+      it("include_vault=true merges active + vault rows", async () => {
+        await app.request("/api/items", {
+          method: "POST",
+          headers: jsonHeaders(),
+          body: JSON.stringify({ title: "Active note" }),
+        });
+        seedVaultRow("Vault note");
+
+        const res = await app.request("/api/items?include_vault=true", { headers: authHeaders() });
+        expect(res.status).toBe(200);
+        const body = await res.json();
+        expect(body.items).toHaveLength(2);
+        expect(body.total).toBe(2);
+        const origins = body.items.map((i: { origin: string }) => i.origin).sort();
+        expect(origins).toEqual(["active", "vault"]);
+      });
+
+      it("default (no flag) excludes vault rows", async () => {
+        await app.request("/api/items", {
+          method: "POST",
+          headers: jsonHeaders(),
+          body: JSON.stringify({ title: "Active note" }),
+        });
+        seedVaultRow("Vault note");
+
+        const res = await app.request("/api/items", { headers: authHeaders() });
+        expect(res.status).toBe(200);
+        const body = await res.json();
+        expect(body.items).toHaveLength(1);
+        expect(body.items[0].title).toBe("Active note");
+      });
+
+      it("rejects invalid include_vault value", async () => {
+        const res = await app.request("/api/items?include_vault=maybe", { headers: authHeaders() });
+        expect(res.status).toBe(400);
+      });
     });
   });
 

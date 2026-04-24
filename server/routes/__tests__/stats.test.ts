@@ -54,7 +54,8 @@ beforeEach(() => {
   app = createApp();
 });
 
-// Helper to insert an item directly into the DB
+// Helper to insert an item directly into the DB. Route-splits "exported"
+// fixtures to items_vault (new schema), everything else to items_active.
 function insertItem(fields: {
   id: string;
   title: string;
@@ -66,21 +67,31 @@ function insertItem(fields: {
   modified?: string;
 }) {
   const now = new Date().toISOString();
-  testSqlite
-    .prepare(
-      `INSERT INTO items (id, type, title, content, status, priority, due, tags, origin, source, aliases, created, modified)
-       VALUES (?, ?, ?, '', ?, ?, ?, '[]', '', NULL, '[]', ?, ?)`,
-    )
-    .run(
-      fields.id,
-      fields.type ?? "todo",
-      fields.title,
-      fields.status ?? "active",
-      fields.priority ?? null,
-      fields.due ?? null,
-      fields.created ?? now,
-      fields.modified ?? now,
-    );
+  const status = fields.status ?? "active";
+  if (status === "exported") {
+    testSqlite
+      .prepare(
+        `INSERT INTO items_vault (id, title, tags, aliases, origin, exported_at, created, is_private, content_snippet)
+         VALUES (?, ?, '[]', '[]', '', ?, ?, 0, '')`,
+      )
+      .run(fields.id, fields.title, fields.modified ?? now, fields.created ?? now);
+  } else {
+    testSqlite
+      .prepare(
+        `INSERT INTO items_active (id, type, title, content, status, priority, due, tags, origin, source, aliases, created, modified)
+         VALUES (?, ?, ?, '', ?, ?, ?, '[]', '', NULL, '[]', ?, ?)`,
+      )
+      .run(
+        fields.id,
+        fields.type ?? "todo",
+        fields.title,
+        status,
+        fields.priority ?? null,
+        fields.due ?? null,
+        fields.created ?? now,
+        fields.modified ?? now,
+      );
+  }
 }
 
 // Helper to get dates relative to today for testing
@@ -501,7 +512,7 @@ describe("GET /api/stats/stale", () => {
       status: "developing",
       modified: now,
     });
-    testSqlite.prepare("UPDATE items SET modified = ? WHERE id = ?").run(oldDate, "stale1");
+    testSqlite.prepare("UPDATE items_active SET modified = ? WHERE id = ?").run(oldDate, "stale1");
 
     // Recent developing note (should NOT appear)
     insertItem({
@@ -520,7 +531,9 @@ describe("GET /api/stats/stale", () => {
       status: "fleeting",
       modified: now,
     });
-    testSqlite.prepare("UPDATE items SET modified = ? WHERE id = ?").run(oldDate, "fleeting1");
+    testSqlite
+      .prepare("UPDATE items_active SET modified = ? WHERE id = ?")
+      .run(oldDate, "fleeting1");
 
     const res = await app.request("/api/stats/stale", {
       headers: authHeaders(),
@@ -550,7 +563,7 @@ describe("GET /api/stats/stale", () => {
       modified: new Date().toISOString(),
     });
     testSqlite
-      .prepare("UPDATE items SET modified = ?, category_id = ? WHERE id = ?")
+      .prepare("UPDATE items_active SET modified = ?, category_id = ? WHERE id = ?")
       .run(oldDate, "cat1", "stale-cat");
 
     const res = await app.request("/api/stats/stale", {
@@ -626,12 +639,12 @@ describe("GET /api/stats/category-distribution", () => {
     insertItem({ id: "a2", title: "A2", type: "note", status: "developing" });
     insertItem({ id: "a3", title: "A3", type: "todo", status: "active" });
     testSqlite
-      .prepare("UPDATE items SET category_id = ? WHERE id IN ('a1','a2','a3')")
+      .prepare("UPDATE items_active SET category_id = ? WHERE id IN ('a1','a2','a3')")
       .run("cat-a");
 
     // 1 item in Category B
     insertItem({ id: "b1", title: "B1", type: "todo", status: "active" });
-    testSqlite.prepare("UPDATE items SET category_id = ? WHERE id = ?").run("cat-b", "b1");
+    testSqlite.prepare("UPDATE items_active SET category_id = ? WHERE id = ?").run("cat-b", "b1");
 
     // 2 uncategorized items
     insertItem({ id: "u1", title: "U1", type: "note", status: "fleeting" });

@@ -10,13 +10,14 @@ function insertItem(
   id: string,
   opts: { exportPath?: string | null; status?: string } = {},
 ) {
-  const { exportPath = null, status = "exported" } = opts;
+  const { exportPath = null } = opts;
+  // Backfill operates on items_vault only (exported rows live there post-split).
   sqlite
     .prepare(
-      `INSERT INTO items (id, title, content, status, export_path, created, modified)
-     VALUES (?, ?, 'content', ?, ?, '2026-01-01', '2026-01-01')`,
+      `INSERT INTO items_vault (id, title, export_path, exported_at, created, is_private, content_snippet)
+       VALUES (?, ?, ?, '2026-01-01', '2026-01-01', 0, 'content')`,
     )
-    .run(id, `Title ${id}`, status, exportPath);
+    .run(id, `Title ${id}`, exportPath);
 }
 
 function enableObsidian(sqlite: ReturnType<typeof createTestDb>["sqlite"], vaultPath: string) {
@@ -90,7 +91,7 @@ describe("backfillExportPaths", () => {
     expect(result.matched).toBe(1);
     expect(result.scanned).toBe(1);
 
-    const row = sqlite.prepare("SELECT export_path FROM items WHERE id = 'item-1'").get() as {
+    const row = sqlite.prepare("SELECT export_path FROM items_vault WHERE id = 'item-1'").get() as {
       export_path: string | null;
     };
     expect(row.export_path).toBe("0_Inbox/Test Note.md");
@@ -130,7 +131,7 @@ describe("backfillExportPaths", () => {
     expect(result.matched).toBe(0);
 
     // Original export_path preserved
-    const row = sqlite.prepare("SELECT export_path FROM items WHERE id = 'item-1'").get() as {
+    const row = sqlite.prepare("SELECT export_path FROM items_vault WHERE id = 'item-1'").get() as {
       export_path: string;
     };
     expect(row.export_path).toBe("0_Inbox/Existing.md");

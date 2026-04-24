@@ -46,7 +46,7 @@ function insertItem(overrides: Record<string, unknown> = {}) {
   const item = { ...defaults, ...overrides };
   sqlite
     .prepare(
-      `INSERT INTO items (id, type, title, content, status, priority, due, tags, origin, source, aliases, linked_note_id, category_id, viewed_at, is_private, created, modified)
+      `INSERT INTO items_active (id, type, title, content, status, priority, due, tags, origin, source, aliases, linked_note_id, category_id, viewed_at, is_private, created, modified)
        VALUES (@id, @type, @title, @content, @status, @priority, @due, @tags, @origin, @source, @aliases, @linked_note_id, @category_id, @viewed_at, @is_private, @created, @modified)`,
     )
     .run(item);

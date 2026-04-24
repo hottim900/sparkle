@@ -2,6 +2,9 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, rmSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import type Database from "better-sqlite3";
+import { v4 as uuidv4 } from "uuid";
+import { createTestDb, insertActiveRow } from "../../test-utils.js";
 import {
   sanitizeFilename,
   generateFrontmatter,
@@ -10,6 +13,7 @@ import {
   yamlEscape,
   normalizeTags,
   resolveSparkleReferences,
+  commitExportToVault,
   ExportableItem,
   ExportConfig,
 } from "../export.js";
@@ -610,5 +614,289 @@ describe("exportToObsidian", () => {
     // Should have collision suffix
     expect(result.path).not.toBe("0_Inbox/Same Title.md");
     expect(result.path).toMatch(/^0_Inbox\/Same Title \(\d{8}-\d{6}\)\.md$/);
+  });
+});
+
+// ============================================================
+// commitExportToVault — atomic move items_active → items_vault
+// ============================================================
+describe("commitExportToVault", () => {
+  let sqlite: Database.Database;
+
+  // Defaults: permanent note with a body. Override fields the specific test
+  // cares about (content length, is_private, category_id, tags, etc.).
+  function insertActive(
+    overrides: {
+      id?: string;
+      title?: string;
+      content?: string | null;
+      category_id?: string | null;
+      tags?: string[];
+      aliases?: string[];
+      source?: string | null;
+      origin?: string;
+      is_private?: 0 | 1;
+      created?: string;
+    } = {},
+  ): string {
+    return insertActiveRow(sqlite, {
+      id: overrides.id,
+      type: "note",
+      status: "permanent",
+      title: overrides.title ?? "Active note",
+      content: "content" in overrides ? overrides.content! : "some body content",
+      tags: overrides.tags,
+      aliases: overrides.aliases,
+      origin: overrides.origin,
+      source: overrides.source,
+      category_id: overrides.category_id,
+      is_private: overrides.is_private,
+      created: overrides.created,
+      modified: overrides.created,
+    });
+  }
+
+  /** Build the ItemForExport object commitExportToVault expects. */
+  function makeExportItem(
+    id: string,
+    overrides: Partial<{
+      title: string;
+      category_id: string | null;
+      tags: string;
+      aliases: string;
+      source: string | null;
+      origin: string | null;
+      created: string;
+      is_private: number;
+      content: string | null;
+    }> = {},
+  ) {
+    return {
+      id,
+      title: overrides.title ?? "Active note",
+      category_id: overrides.category_id ?? null,
+      tags: overrides.tags ?? "[]",
+      aliases: overrides.aliases ?? "[]",
+      source: overrides.source ?? null,
+      origin: overrides.origin ?? "",
+      created: overrides.created ?? "2026-01-01T00:00:00.000Z",
+      is_private: overrides.is_private ?? 0,
+      // Use `in` to distinguish explicit null/undefined from absent property
+      content: "content" in overrides ? overrides.content! : "some body content",
+    };
+  }
+
+  beforeEach(() => {
+    const testDb = createTestDb();
+    sqlite = testDb.sqlite;
+  });
+
+  afterEach(() => {
+    sqlite?.close();
+  });
+
+  it("happy path: moves active row to vault, preserves fields, stamps exported_at + content_snippet", () => {
+    const id = insertActive({
+      title: "Export me",
+      content: "Line 1\nLine 2\nLine 3",
+      tags: ["work", "note"],
+      aliases: ["alt"],
+      source: "https://example.com",
+      origin: "web",
+      is_private: 0,
+      created: "2026-02-14T09:00:00.000Z",
+    });
+
+    const beforeExport = Date.now();
+    commitExportToVault(
+      sqlite,
+      makeExportItem(id, {
+        title: "Export me",
+        tags: '["work","note"]',
+        aliases: '["alt"]',
+        source: "https://example.com",
+        origin: "web",
+        created: "2026-02-14T09:00:00.000Z",
+        is_private: 0,
+        content: "Line 1\nLine 2\nLine 3",
+      }),
+      "0_Inbox/Export me.md",
+    );
+    const afterExport = Date.now();
+
+    // items_active row is gone
+    const activeRow = sqlite.prepare("SELECT id FROM items_active WHERE id = ?").get(id) as
+      | { id: string }
+      | undefined;
+    expect(activeRow).toBeUndefined();
+
+    // items_vault row is present with all fields preserved
+    const vaultRow = sqlite
+      .prepare(
+        `SELECT id, title, category_id, tags, aliases, source, origin,
+                export_path, exported_at, created, is_private, content_snippet
+         FROM items_vault WHERE id = ?`,
+      )
+      .get(id) as {
+      id: string;
+      title: string;
+      category_id: string | null;
+      tags: string;
+      aliases: string;
+      source: string | null;
+      origin: string | null;
+      export_path: string;
+      exported_at: string;
+      created: string;
+      is_private: number;
+      content_snippet: string;
+    };
+
+    expect(vaultRow).toBeDefined();
+    expect(vaultRow.id).toBe(id);
+    expect(vaultRow.title).toBe("Export me");
+    expect(vaultRow.category_id).toBeNull();
+    expect(vaultRow.tags).toBe('["work","note"]');
+    expect(vaultRow.aliases).toBe('["alt"]');
+    expect(vaultRow.source).toBe("https://example.com");
+    expect(vaultRow.origin).toBe("web");
+    expect(vaultRow.export_path).toBe("0_Inbox/Export me.md");
+    expect(vaultRow.created).toBe("2026-02-14T09:00:00.000Z");
+    expect(vaultRow.is_private).toBe(0);
+    expect(vaultRow.content_snippet).toBe("Line 1\nLine 2\nLine 3");
+
+    // exported_at is a valid ISO timestamp taken during the call
+    expect(vaultRow.exported_at).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+    const exportedMs = new Date(vaultRow.exported_at).getTime();
+    expect(Number.isNaN(exportedMs)).toBe(false);
+    expect(exportedMs).toBeGreaterThanOrEqual(beforeExport);
+    expect(exportedMs).toBeLessThanOrEqual(afterExport);
+  });
+
+  it("preserves category_id foreign key to existing category", () => {
+    const catId = uuidv4();
+    const now = new Date().toISOString();
+    sqlite
+      .prepare(
+        "INSERT INTO categories (id, name, sort_order, created, modified) VALUES (?, ?, 0, ?, ?)",
+      )
+      .run(catId, "Work", now, now);
+
+    const id = insertActive({ category_id: catId });
+
+    commitExportToVault(sqlite, makeExportItem(id, { category_id: catId }), "0_Inbox/foo.md");
+
+    const vaultRow = sqlite.prepare("SELECT category_id FROM items_vault WHERE id = ?").get(id) as {
+      category_id: string | null;
+    };
+    expect(vaultRow.category_id).toBe(catId);
+  });
+
+  it("truncates content_snippet at 500 chars when content is long", () => {
+    const id = insertActive();
+    const longContent = "a".repeat(600);
+
+    commitExportToVault(sqlite, makeExportItem(id, { content: longContent }), "0_Inbox/long.md");
+
+    const vaultRow = sqlite
+      .prepare("SELECT content_snippet FROM items_vault WHERE id = ?")
+      .get(id) as { content_snippet: string };
+    expect(vaultRow.content_snippet).toHaveLength(500);
+    expect(vaultRow.content_snippet).toBe("a".repeat(500));
+  });
+
+  it("stores content_snippet as empty string when content is empty", () => {
+    const id = insertActive();
+
+    commitExportToVault(sqlite, makeExportItem(id, { content: "" }), "0_Inbox/empty.md");
+
+    const vaultRow = sqlite
+      .prepare("SELECT content_snippet FROM items_vault WHERE id = ?")
+      .get(id) as { content_snippet: string };
+    expect(vaultRow.content_snippet).toBe("");
+  });
+
+  it("stores content_snippet as empty string when content is null", () => {
+    const id = insertActive();
+
+    commitExportToVault(sqlite, makeExportItem(id, { content: null }), "0_Inbox/null.md");
+
+    const vaultRow = sqlite
+      .prepare("SELECT content_snippet FROM items_vault WHERE id = ?")
+      .get(id) as { content_snippet: string };
+    expect(vaultRow.content_snippet).toBe("");
+  });
+
+  it("passes content <= 500 chars through unchanged (no truncation)", () => {
+    const id = insertActive();
+    const body = "a".repeat(500);
+
+    commitExportToVault(sqlite, makeExportItem(id, { content: body }), "0_Inbox/edge.md");
+
+    const vaultRow = sqlite
+      .prepare("SELECT content_snippet FROM items_vault WHERE id = ?")
+      .get(id) as { content_snippet: string };
+    expect(vaultRow.content_snippet).toBe(body);
+    expect(vaultRow.content_snippet).toHaveLength(500);
+  });
+
+  it("transaction atomicity: throws and rolls back DELETE when INSERT conflicts on PK", () => {
+    const id = insertActive({ title: "Original active" });
+
+    // Pre-insert a vault row with the same id so the INSERT in commitExportToVault
+    // fails with a PRIMARY KEY conflict. The DELETE that follows MUST NOT run.
+    sqlite
+      .prepare(
+        `INSERT INTO items_vault
+           (id, title, tags, aliases, origin, exported_at, created, is_private, content_snippet, export_path)
+         VALUES (?, ?, '[]', '[]', '', ?, ?, 0, ?, ?)`,
+      )
+      .run(
+        id,
+        "Pre-existing vault row",
+        "2025-12-01T00:00:00.000Z",
+        "2025-12-01T00:00:00.000Z",
+        "pre-existing snippet",
+        "0_Inbox/pre-existing.md",
+      );
+
+    expect(() =>
+      commitExportToVault(
+        sqlite,
+        makeExportItem(id, {
+          title: "Original active",
+          content: "new snippet attempt",
+        }),
+        "0_Inbox/should-not-apply.md",
+      ),
+    ).toThrow();
+
+    // items_active row MUST still exist — the DELETE was inside the same tx
+    // that threw on INSERT, so it rolled back.
+    const activeRow = sqlite.prepare("SELECT id, title FROM items_active WHERE id = ?").get(id) as
+      | { id: string; title: string }
+      | undefined;
+    expect(activeRow).toBeDefined();
+    expect(activeRow!.title).toBe("Original active");
+
+    // items_vault row is the pre-existing one — content_snippet and export_path
+    // were NOT overwritten.
+    const vaultRow = sqlite
+      .prepare("SELECT title, content_snippet, export_path FROM items_vault WHERE id = ?")
+      .get(id) as { title: string; content_snippet: string; export_path: string };
+    expect(vaultRow.title).toBe("Pre-existing vault row");
+    expect(vaultRow.content_snippet).toBe("pre-existing snippet");
+    expect(vaultRow.export_path).toBe("0_Inbox/pre-existing.md");
+  });
+
+  it("sets is_private=1 when caller passes is_private=1", () => {
+    const id = insertActive({ is_private: 1 });
+
+    commitExportToVault(sqlite, makeExportItem(id, { is_private: 1 }), "0_Inbox/private.md");
+
+    const vaultRow = sqlite.prepare("SELECT is_private FROM items_vault WHERE id = ?").get(id) as {
+      is_private: number;
+    };
+    expect(vaultRow.is_private).toBe(1);
   });
 });

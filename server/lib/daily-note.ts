@@ -89,9 +89,9 @@ function queryDayData(sqlite: Database.Database, dateStr: string): DayData {
   const todosDue = sqlite
     .prepare(
       `SELECT id, title, priority, due
-       FROM items
+       FROM items_active
        WHERE type = 'todo'
-         AND status NOT IN ('done', 'exported', 'archived')
+         AND status NOT IN ('done', 'archived')
          AND due = ?
          AND is_private = 0
          AND paused = 0`,
@@ -102,7 +102,7 @@ function queryDayData(sqlite: Database.Database, dateStr: string): DayData {
   const notesCreated = sqlite
     .prepare(
       `SELECT id, title, status, origin
-       FROM items
+       FROM items_active
        WHERE type = 'note'
          AND created >= ? AND created < ?
          AND status != 'archived'
@@ -115,7 +115,7 @@ function queryDayData(sqlite: Database.Database, dateStr: string): DayData {
   const notesModifiedRaw = sqlite
     .prepare(
       `SELECT id, title, status, origin
-       FROM items
+       FROM items_active
        WHERE type = 'note'
          AND modified >= ? AND modified < ?
          AND status != 'archived'
@@ -128,9 +128,9 @@ function queryDayData(sqlite: Database.Database, dateStr: string): DayData {
   const overdue = sqlite
     .prepare(
       `SELECT id, title, priority, due
-       FROM items
+       FROM items_active
        WHERE type = 'todo'
-         AND status NOT IN ('done', 'exported', 'archived')
+         AND status NOT IN ('done', 'archived')
          AND due IS NOT NULL
          AND due < ?
          AND is_private = 0

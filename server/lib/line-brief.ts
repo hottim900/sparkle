@@ -55,9 +55,9 @@ export function queryBriefData(sqlite: Database.Database, dateStr: string): Brie
   const overdue_todos = sqlite
     .prepare(
       `SELECT id, title, due, priority
-       FROM items
+       FROM items_active
        WHERE type = 'todo'
-         AND status NOT IN ('done', 'exported', 'archived')
+         AND status NOT IN ('done', 'archived')
          AND due IS NOT NULL
          AND due < ?
          AND is_private = 0
@@ -72,7 +72,7 @@ export function queryBriefData(sqlite: Database.Database, dateStr: string): Brie
     .prepare(
       `SELECT id, title,
         CAST(julianday(?) - julianday(modified) AS INTEGER) AS days_stale
-       FROM items
+       FROM items_active
        WHERE type = 'note'
          AND status = 'fleeting'
          AND modified < datetime(?, '-7 days')
@@ -87,7 +87,7 @@ export function queryBriefData(sqlite: Database.Database, dateStr: string): Brie
   const notesCreatedRow = sqlite
     .prepare(
       `SELECT COUNT(*) AS cnt
-       FROM items
+       FROM items_active
        WHERE type = 'note'
          AND created >= ? AND created < ?
          AND status != 'archived'
@@ -99,7 +99,7 @@ export function queryBriefData(sqlite: Database.Database, dateStr: string): Brie
   const notesModifiedRow = sqlite
     .prepare(
       `SELECT COUNT(*) AS cnt
-       FROM items
+       FROM items_active
        WHERE type = 'note'
          AND modified >= ? AND modified < ?
          AND created < ?
@@ -112,10 +112,10 @@ export function queryBriefData(sqlite: Database.Database, dateStr: string): Brie
   const todosDueRow = sqlite
     .prepare(
       `SELECT COUNT(*) AS cnt
-       FROM items
+       FROM items_active
        WHERE type = 'todo'
          AND due = ?
-         AND status NOT IN ('done', 'exported', 'archived')
+         AND status NOT IN ('done', 'archived')
          AND is_private = 0`,
     )
     .get(dateStr) as { cnt: number };
@@ -124,7 +124,7 @@ export function queryBriefData(sqlite: Database.Database, dateStr: string): Brie
   const todosDoneRow = sqlite
     .prepare(
       `SELECT COUNT(*) AS cnt
-       FROM items
+       FROM items_active
        WHERE type = 'todo'
          AND status = 'done'
          AND modified >= ? AND modified < ?

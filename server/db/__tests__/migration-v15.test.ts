@@ -8,6 +8,12 @@ function createV14Database() {
     CREATE TABLE schema_version (version INTEGER NOT NULL);
     INSERT INTO schema_version (version) VALUES (14);
 
+    CREATE TABLE categories (
+      id TEXT PRIMARY KEY, name TEXT NOT NULL UNIQUE,
+      sort_order INTEGER NOT NULL DEFAULT 0, color TEXT DEFAULT NULL,
+      created TEXT NOT NULL, modified TEXT NOT NULL
+    );
+
     CREATE TABLE items (
       id TEXT PRIMARY KEY,
       type TEXT NOT NULL DEFAULT 'note',
@@ -41,40 +47,43 @@ function createV14Database() {
       created TEXT NOT NULL,
       FOREIGN KEY (item_id) REFERENCES items(id) ON DELETE CASCADE
     );
-    CREATE TABLE categories (
-      id TEXT PRIMARY KEY, name TEXT NOT NULL UNIQUE,
-      sort_order INTEGER NOT NULL DEFAULT 0, color TEXT DEFAULT NULL,
-      created TEXT NOT NULL, modified TEXT NOT NULL
-    );
   `);
   return sqlite;
 }
 
-describe("Migration v15: is_private column", () => {
-  it("adds is_private column with default 0", () => {
+// v1.4.0 (migration v23): `items` table was split into `items_active` + `items_vault`.
+// Fresh installs jump straight to v23, so schema inspection targets `items_active`.
+// The v14 upgrade path still runs migrations 15→22→23, but at the end the legacy
+// `items` table is gone — the row is in `items_active`.
+describe("Migration v15: is_private column (post-v23 split-aware)", () => {
+  it("fresh install creates items_active with is_private column", () => {
     const sqlite = new Database(":memory:");
     initializeDatabase(sqlite);
-    const cols = sqlite.pragma("table_info(items)") as { name: string; dflt_value: string }[];
+    const cols = sqlite.pragma("table_info(items_active)") as {
+      name: string;
+      dflt_value: string;
+    }[];
     const col = cols.find((c) => c.name === "is_private");
     expect(col).toBeDefined();
     expect(col!.dflt_value).toBe("0");
   });
 
-  it("creates composite indexes", () => {
+  it("fresh install includes items_active composite indexes", () => {
     const sqlite = new Database(":memory:");
     initializeDatabase(sqlite);
-    const indexes = sqlite.pragma("index_list(items)") as { name: string }[];
+    const indexes = sqlite.pragma("index_list(items_active)") as { name: string }[];
     const names = indexes.map((i) => i.name);
-    expect(names).toContain("idx_items_private_status");
-    expect(names).toContain("idx_items_private_status_modified");
+    // v23 replaces `idx_items_private_status{,_modified}` with more targeted indexes.
+    expect(names).toContain("idx_items_active_type_status");
+    expect(names).toContain("idx_items_active_modified");
   });
 
-  it("preserves original indexes as safety net", () => {
+  it("fresh install preserves type/status-index safety net", () => {
     const sqlite = new Database(":memory:");
     initializeDatabase(sqlite);
-    const indexes = sqlite.pragma("index_list(items)") as { name: string }[];
+    const indexes = sqlite.pragma("index_list(items_active)") as { name: string }[];
     const names = indexes.map((i) => i.name);
-    expect(names).toContain("idx_items_status");
+    expect(names).toContain("idx_items_active_type_status");
   });
 
   it("is idempotent (running twice does not error)", () => {
@@ -83,20 +92,23 @@ describe("Migration v15: is_private column", () => {
     expect(() => initializeDatabase(sqlite)).not.toThrow();
   });
 
-  it("upgrade from v14: adds is_private column to existing rows", () => {
+  it("upgrade from v14: row ends up in items_active with is_private populated", () => {
     const sqlite = createV14Database();
     sqlite.exec(
       `INSERT INTO items (id, title, created, modified) VALUES ('item-1', 'Test', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')`,
     );
     initializeDatabase(sqlite);
 
-    const row = sqlite.prepare("SELECT is_private FROM items WHERE id = 'item-1'").get() as {
-      is_private: number;
-    };
-    expect(row.is_private).toBe(0);
+    const row = sqlite.prepare("SELECT is_private FROM items_active WHERE id = 'item-1'").get() as
+      | { is_private: number }
+      | undefined;
+    expect(row).toBeDefined();
+    expect(row!.is_private).toBe(0);
 
-    const ver = sqlite.prepare("SELECT version FROM schema_version").get() as { version: number };
-    expect(ver.version).toBe(22);
+    const ver = sqlite.prepare("SELECT version FROM schema_version").get() as {
+      version: number;
+    };
+    expect(ver.version).toBe(23);
   });
 
   it("upgrade from v14: is idempotent", () => {

@@ -1,5 +1,69 @@
 # Changelog
 
+## [1.4.0.0] - 2026-04-24
+
+### BREAKING
+
+- **Database schema**: `items` table split into `items_active` (fleeting/developing/permanent/archived) and `items_vault` (exported metadata + 500-char `content_snippet`). Existing raw SQL queries against `items` will fail. Dry-run: `ops/migration-23-dryrun.sh`. Rollback: `ops/rollback-migration-23.sh`.
+- **REST API**: `DELETE /api/items/:id` on an exported item now returns `409 Conflict` with `VAULT_READONLY` payload (was: hard delete pre-v1.4.0). Release endpoint (`DELETE /api/items/:id/vault-stub`) ships in v1.4.1.
+- **MCP tools**: `sparkle_update_note`, `sparkle_pause_note`, `sparkle_resume_note`, `sparkle_advance_note` return `VAULT_READONLY` (409) on vault items. `sparkle_search` no longer returns exported items — use `sparkle_search_obsidian` or `sparkle_search_all`. `sparkle_list_notes` default excludes vault; pass `status='exported'` to access.
+- **UI**: Revert button removed from exported notes. Exported is now one-way; use the vault-stub release endpoint (v1.4.1) if the record truly needs to leave Sparkle.
+- **Claude.ai users**: reconnect the Sparkle MCP connector after upgrading to pick up new tool descriptions.
+
+### Added
+
+- `items_vault.content_snippet` — 500-char immutable preview, captured at export time.
+- `ops/migration-23-dryrun.sh` — validates row count, FK integrity, viewed_at preservation, content_snippet overflow, and idempotency on a copy of the production DB.
+- `ops/rollback-migration-23.sh` — stop/restore/checkout/rebuild/start with schema-version sanity check and named-branch checkout (no detached HEAD).
+- `server/lib/vault-errors.ts` — single source for `VAULT_READONLY` 409 payload, shared by routes and MCP.
+- Pre-commit hook blocks raw `FROM|UPDATE|DELETE FROM items` references (word-boundary matched, excludes `server/db/index.ts` migration code and `server/db/__tests__/migration*.test.ts` pre-v23 regression tests).
+- 14 migration-v23 regression tests: Stage A row count, viewed_at preservation, category cascade-null, share_tokens drop-count, cross-table linked_note_id cleanup, content_snippet derivation, CHECK constraint enforcement, pre-scan violation detection, idempotency (State B / State C / inconsistent-state error), FK pragma safety.
+- `GET /api/items?include_vault=true` and `sparkle_list_notes({include_vault:true})` — cross-table merge escape hatch that returns items_active + items_vault rows interleaved, sorted on the caller's requested field.
+- `GET /api/items?status=exported` and `sparkle_list_notes({status:'exported'})` — vault-only listing (previously rejected by Zod as invalid status).
+- `listVaultItems` now supports `tag` filter via `json_each(items_vault.tags)` SQL so vault pagination is correct when the caller filters by tag.
+- 11 new unit/route tests for the cross-table list modes + 4 MCP tests covering the `include_vault` handler passthrough and URL encoding.
+
+### Fixed
+
+- MCP `tools.test.ts` description regex now matches the v1.4.0 `VAULT_READONLY` phrasing (the old regex looked for "exported...read-only" wording that was removed when the tool descriptions were rewritten).
+- `DELETE /api/private/items/:id` on a vault-origin item now returns `409 VAULT_READONLY` instead of silently responding `204` on a no-op delete (the handler used to claim success while `items_active` had no matching row to delete). Symmetric with the public `DELETE /api/items/:id` guard.
+- LINE `!archive` and `!delete` commands on a vault-origin item now return the "cannot edit from LINE" message instead of falsely claiming `✅ 已封存` / `🗑️ 已刪除` while `updateItem` / `deleteItem` silently no-op on vault rows.
+
+### Added (test coverage)
+
+- Route-layer VAULT_READONLY test suite (`server/routes/__tests__/items-vault-readonly.test.ts`): 13 tests covering GET/PATCH/DELETE/POST-share/POST-export/batch/linked-todos + private CRUD guards, asserting the complete VAULT_READONLY payload shape end-to-end.
+- Lib-layer atomicity + wikilink tests: 8 new `commitExportToVault` cases (happy path, snippet truncation at 500 chars, empty/null content, boundary, is_private propagation, transaction rollback on PK conflict) and 12 new `getItemForLookup` cross-table cases (unique active/vault, cross-table collision → null, intra-table collision, short-prefix guard, full UUID match, private-row skip).
+- Rewrote three post-v23 test files: `vault-watcher.test.ts` (10 self-heal debounce / fs-mock cases), `vault-sync-integration.test.ts` (4 export→scan cycle cases), `item-handlers.test.ts` (19 LINE handler guard cases using parametrized `it.each`).
+- `server/test-utils.ts` — shared `insertActiveRow` / `insertVaultRow` row-fixture helpers with schema-aware defaults (status enum, JSON-array columns, paused semantics); replaces 6 near-duplicate hand-rolled helpers across 5 test files.
+
+### Changed
+
+- `server/db/fts.ts` — `items_fts` → `items_active_fts`.
+- `server/lib/stats.ts getStats` — two-query rewrite; `exported_this_{week,month}` now keyed by `items_vault.exported_at`.
+- `server/lib/vault-watcher.ts` — content-sync removed; self-heal gets 2-scan debounce + DEBUG→WARN escalation so boot-window ENOENT doesn't log-spam.
+- `server/lib/item-enrichment.ts` — `ItemWithLinkedInfo` gains `origin: 'active' | 'vault'` marker + `linked_note_origin` + `linked_note_prefix` for future dangling-todo UX.
+- `server/lib/export.ts commitExportToVault` — file-write-first, tx-after atomic move of items_active → items_vault.
+- `server/routes/items.ts` — cross-table `GET /:id` (active first, vault fallback); `POST /:id/export` uses `commitExportToVault`; batch export counter is O(n) not O(n²).
+- MCP tool descriptions rewritten to reflect the split; `sparkle_advance_note` precheck rejects vault-origin with `VAULT_READONLY` instead of a misleading "must be developing" error.
+- `server/lib/items.ts listItems` split into a dispatcher + private `listActiveItems` helper so `listItemsAcross` can call the active path directly (no recursion through the public entry point).
+- `server/schemas/items.ts listItemsSchema.offset` capped at `10_000` to prevent memory amplification under `include_vault=true` (fetches `limit + offset` from each table).
+- `listItemsSchema.status` reuses `importStatusEnum` instead of redefining the same 8 values inline.
+- `server/lib/line-commands/item-handlers.ts` — `EXPORTED_MSG` now exported so tests import it instead of re-declaring the literal (drift protection).
+
+### Removed
+
+- Revert button and `handleRevert` flow from item-detail UI (exported notes are one-way).
+- vault-watcher content-sync plumbing (`contentHash`, `stripFrontmatter`, mtime content cache). Vault edits no longer round-trip into Sparkle's DB — vault is the content source of truth post-export.
+- `server/lib/exported-guard.ts` (`EXPORTED_BLOCKED_FIELDS`) — superseded by the route-layer 409.
+
+### Deferred (PR 2/3)
+
+- `DELETE /api/items/:id/vault-stub` release endpoint + `sparkle_release_note` MCP tool.
+- Vault-origin visual treatment (third indicator bar) + dangling linked-todo UX (3 states).
+- Dashboard query audit (recent / weekData / categoryDistribution / daily-note 2-SELECT+merge).
+- `docs/migration-v23.md` + `server/db/README.md` migration guides.
+- `CLAUDE.md` / `.claude/skills/*` data-model section sync.
+
 ## [1.3.3.0] - 2026-04-09
 
 ### Added

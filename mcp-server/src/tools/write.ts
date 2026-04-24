@@ -113,7 +113,7 @@ Returns: The created item with all fields including generated ID and timestamps.
     "sparkle_update_note",
     {
       title: "Update Sparkle Note",
-      description: `Update an existing item's content, title, tags, status, type, or other fields. Only provided fields are updated; omitted fields remain unchanged.
+      description: `Update an items_active note. Attempting to update a vault-origin item (origin='vault') returns \`VAULT_READONLY\` (409 Conflict) — use \`sparkle_write_obsidian_by_path\` to edit the vault .md directly, or \`sparkle_write_obsidian\` by sparkle_id. The vault file is the content source of truth post-export.
 
 Args:
   - id (string, required): Item UUID
@@ -141,8 +141,7 @@ Content editing modes:
 
 Side effects:
   - Type change to note: clears linked_note_id and due (not supported on notes).
-  - Type change to scratch: clears tags, priority, due, aliases, linked_note_id (scratch only keeps title + content). category_id is preserved.
-  - Exported items are read-only. Content fields (title, content, type, tags, priority, etc.) cannot be modified. To edit, first revert to permanent status.`,
+  - Type change to scratch: clears tags, priority, due, aliases, linked_note_id (scratch only keeps title + content). category_id is preserved.`,
       inputSchema: z
         .object({
           id: z.string().uuid().describe("Item UUID"),

@@ -1,5 +1,6 @@
 import { mkdir, writeFile, readdir, readFile, access } from "node:fs/promises";
 import { join } from "node:path";
+import type Database from "better-sqlite3";
 
 /**
  * Replace forbidden filename characters with '-', collapse consecutive dashes,
@@ -289,4 +290,59 @@ export async function exportToObsidian(
   await writeFile(finalPath, content, "utf-8");
 
   return { path: `${inboxFolder}/${filename}` };
+}
+
+/**
+ * Atomically move an items_active row to items_vault post-export.
+ *
+ * MUST be called AFTER exportToObsidian has successfully written the .md file
+ * (Round 3 item 10 — file-write-first, tx-after). If this transaction throws,
+ * the .md file remains on disk (orphan) and the active row stays put; the user
+ * re-runs export and the idempotent `findExistingBySparkleId` overwrites.
+ *
+ * content_snippet is derived from the active row's content (SUBSTR first 500
+ * chars). It is IMMUTABLE after this insert — vault-watcher never touches it.
+ */
+export function commitExportToVault(
+  db: Database.Database,
+  item: {
+    id: string;
+    title: string;
+    category_id: string | null;
+    tags: string;
+    aliases: string;
+    source: string | null;
+    origin: string | null;
+    created: string;
+    is_private: number;
+    content: string | null;
+  },
+  exportPath: string,
+): void {
+  const snippet = (item.content ?? "").substring(0, 500);
+  const exportedAt = new Date().toISOString();
+
+  const tx = db.transaction(() => {
+    db.prepare(
+      `INSERT INTO items_vault (
+         id, title, category_id, tags, aliases, source, origin,
+         export_path, exported_at, created, is_private, content_snippet
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      item.id,
+      item.title,
+      item.category_id,
+      item.tags,
+      item.aliases,
+      item.source,
+      item.origin,
+      exportPath,
+      exportedAt,
+      item.created,
+      item.is_private,
+      snippet,
+    );
+    db.prepare("DELETE FROM items_active WHERE id = ?").run(item.id);
+  });
+  tx();
 }

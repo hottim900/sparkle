@@ -80,6 +80,7 @@ export async function listItems(params?: {
   order?: string;
   limit?: number;
   offset?: number;
+  include_vault?: boolean;
 }): Promise<ListItemsResponse> {
   const search = new URLSearchParams();
   if (params?.status) search.set("status", params.status);
@@ -91,6 +92,7 @@ export async function listItems(params?: {
   if (params?.order) search.set("order", params.order);
   if (params?.limit) search.set("limit", String(params.limit));
   if (params?.offset) search.set("offset", String(params.offset));
+  if (params?.include_vault) search.set("include_vault", "true");
   const qs = search.toString();
   return sparkleApi<ListItemsResponse>(`/items${qs ? `?${qs}` : ""}`);
 }

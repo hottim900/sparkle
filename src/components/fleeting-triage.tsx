@@ -161,7 +161,7 @@ export function FleetingTriage({ onDone }: FleetingTriageProps) {
           </p>
         )}
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          {current.origin && <span>來源: {current.origin}</span>}
+          {current.origin_source && <span>來源: {current.origin_source}</span>}
           <span>{new Date(current.created).toLocaleString("zh-TW")}</span>
         </div>
       </div>

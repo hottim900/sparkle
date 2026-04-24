@@ -24,7 +24,7 @@ function insertRawItem(
   const id = overrides.id ?? crypto.randomUUID();
   sqlite
     .prepare(
-      `INSERT INTO items (id, type, title, content, status, priority, due, tags, origin, source, aliases, created, modified, is_private, viewed_at)
+      `INSERT INTO items_active (id, type, title, content, status, priority, due, tags, origin, source, aliases, created, modified, is_private, viewed_at)
        VALUES (?, ?, ?, '', ?, ?, ?, '[]', '', NULL, '[]', ?, ?, ?, NULL)`,
     )
     .run(

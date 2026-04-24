@@ -207,6 +207,38 @@ describe("sparkle_list_notes", () => {
       "Offset: 0 | Limit: 1 | Has more: yes | Next offset: 1",
     );
   });
+
+  it("forwards include_vault=true to listItems", async () => {
+    const handler = getListHandler();
+    listItems.mockResolvedValue({ items: [], total: 0 });
+
+    await handler({
+      type: "note",
+      include_vault: true,
+      sort: "created",
+      order: "desc",
+      limit: 50,
+      offset: 0,
+    });
+    expect(listItems).toHaveBeenCalledWith(
+      expect.objectContaining({ include_vault: true, type: "note" }),
+    );
+  });
+
+  it("omits include_vault when caller does not set it (default active-only)", async () => {
+    const handler = getListHandler();
+    listItems.mockResolvedValue({ items: [], total: 0 });
+
+    await handler({
+      type: "note",
+      sort: "created",
+      order: "desc",
+      limit: 50,
+      offset: 0,
+    });
+    const call = listItems.mock.calls[0]![0]!;
+    expect(call.include_vault).toBeUndefined();
+  });
 });
 
 describe("sparkle_get_note", () => {
@@ -713,8 +745,8 @@ describe("tool description completeness", () => {
     expect(content).toMatch(/[Tt]ype change.*scratch.*clear/);
   });
 
-  it("sparkle_update_note description warns about exported items read-only", () => {
+  it("sparkle_update_note description rejects vault-origin writes (VAULT_READONLY)", () => {
     const content = readToolSource("write.ts");
-    expect(content).toMatch(/exported.*read-only/i);
+    expect(content).toMatch(/vault-origin.*VAULT_READONLY/i);
   });
 });

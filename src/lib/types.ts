@@ -3,6 +3,9 @@ export interface Item {
   type: "note" | "todo" | "scratch";
   title: string;
   content: string;
+  // v1.4.0: "exported" is a server-synthesized sentinel for vault-origin rows
+  // (items_vault carries no status column). Branch on `origin === 'vault'` when
+  // behaviour differs (read-only UI, etc).
   status:
     | "fleeting"
     | "developing"
@@ -14,19 +17,25 @@ export interface Item {
     | "archived";
   priority: "low" | "medium" | "high" | null;
   due: string | null;
-  tags: string; // JSON array string from server
-  source: string | null; // Reference URL
-  origin: string; // Capture channel (was 'source')
-  aliases: string; // JSON array string
+  tags: string;
+  source: string | null;
+  origin_source: string | null; // Capture channel (legacy `origin` column renamed server-side)
+  aliases: string;
   linked_note_id: string | null;
   linked_note_title: string | null;
+  linked_note_origin?: "active" | "vault" | "missing" | null;
+  linked_note_prefix?: string | null;
   linked_todo_count: number;
   share_visibility: "unlisted" | "public" | null;
   category_id: string | null;
   category_name: string | null;
   viewed_at: string | null;
-  is_private: boolean;
+  is_private: number;
   export_path: string | null;
+  exported_at?: string | null;
+  content_snippet?: string | null;
+  // v1.4.0 origin marker: 'active' rows from items_active, 'vault' rows from items_vault
+  origin: "active" | "vault";
   paused: number;
   paused_at: string | null;
   paused_context: string | null;

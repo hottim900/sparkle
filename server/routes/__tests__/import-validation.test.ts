@@ -28,7 +28,7 @@ vi.mock("../../lib/logger.js", () => ({
 }));
 
 import { Hono } from "hono";
-import { items } from "../../db/schema.js";
+import { itemsActive } from "../../db/schema.js";
 import { eq } from "drizzle-orm";
 import { ZodError } from "zod";
 import { importSchema } from "../../schemas/items.js";
@@ -97,7 +97,11 @@ function createApp() {
           if (item.linked_note_id) {
             const linkedExists =
               importingIds.has(item.linked_note_id) ||
-              testDb.select().from(items).where(eq(items.id, item.linked_note_id)).get();
+              testDb
+                .select()
+                .from(itemsActive)
+                .where(eq(itemsActive.id, item.linked_note_id))
+                .get();
             if (!linkedExists) {
               logger.warn(
                 { itemId: item.id, linked_note_id: item.linked_note_id },
@@ -128,7 +132,11 @@ function createApp() {
             }
           }
 
-          const existing = testDb.select().from(items).where(eq(items.id, item.id)).get();
+          const existing = testDb
+            .select()
+            .from(itemsActive)
+            .where(eq(itemsActive.id, item.id))
+            .get();
 
           if (existing) {
             if (existing.is_private) {
@@ -136,7 +144,7 @@ function createApp() {
               continue;
             }
             testDb
-              .update(items)
+              .update(itemsActive)
               .set({
                 type: item.type,
                 title: item.title,
@@ -153,12 +161,12 @@ function createApp() {
                 created: item.created,
                 modified: item.modified,
               })
-              .where(eq(items.id, item.id))
+              .where(eq(itemsActive.id, item.id))
               .run();
             updated++;
           } else {
             testDb
-              .insert(items)
+              .insert(itemsActive)
               .values({
                 ...item,
                 tags: JSON.stringify(item.tags),
@@ -519,7 +527,7 @@ describe("POST /api/import — FK existence checks", () => {
     const now = new Date().toISOString();
     // First create the target item
     testDb
-      .insert(items)
+      .insert(itemsActive)
       .values({
         id: "550e8400-e29b-41d4-a716-446655440050",
         title: "Target note",

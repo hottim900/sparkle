@@ -3,52 +3,51 @@ import type Database from "better-sqlite3";
 export function setupFTS(sqlite: Database.Database) {
   // Check if existing FTS table uses trigram tokenizer; rebuild if not
   const ftsExists = sqlite
-    .prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='items_fts'")
+    .prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='items_active_fts'")
     .get() as { sql: string } | undefined;
 
   if (ftsExists && !ftsExists.sql.includes("trigram")) {
-    sqlite.exec("DROP TABLE IF EXISTS items_fts");
+    sqlite.exec("DROP TABLE IF EXISTS items_active_fts");
   }
 
   // Create FTS5 external content table with trigram tokenizer for CJK support
   sqlite.exec(`
-    CREATE VIRTUAL TABLE IF NOT EXISTS items_fts USING fts5(
+    CREATE VIRTUAL TABLE IF NOT EXISTS items_active_fts USING fts5(
       title,
       content,
-      content=items,
+      content=items_active,
       content_rowid=rowid,
       tokenize='trigram'
     );
   `);
 
-  // Sync triggers: keep FTS5 in sync with items table
-  // We use IF NOT EXISTS by checking if trigger already exists
+  // Sync triggers: keep FTS5 in sync with items_active table
   const triggers = [
     {
-      name: "items_ai",
+      name: "items_active_ai",
       sql: `
-        CREATE TRIGGER IF NOT EXISTS items_ai AFTER INSERT ON items BEGIN
-          INSERT INTO items_fts(rowid, title, content)
+        CREATE TRIGGER IF NOT EXISTS items_active_ai AFTER INSERT ON items_active BEGIN
+          INSERT INTO items_active_fts(rowid, title, content)
           VALUES (new.rowid, new.title, new.content);
         END;
       `,
     },
     {
-      name: "items_ad",
+      name: "items_active_ad",
       sql: `
-        CREATE TRIGGER IF NOT EXISTS items_ad AFTER DELETE ON items BEGIN
-          INSERT INTO items_fts(items_fts, rowid, title, content)
+        CREATE TRIGGER IF NOT EXISTS items_active_ad AFTER DELETE ON items_active BEGIN
+          INSERT INTO items_active_fts(items_active_fts, rowid, title, content)
           VALUES ('delete', old.rowid, old.title, old.content);
         END;
       `,
     },
     {
-      name: "items_au",
+      name: "items_active_au",
       sql: `
-        CREATE TRIGGER IF NOT EXISTS items_au AFTER UPDATE ON items BEGIN
-          INSERT INTO items_fts(items_fts, rowid, title, content)
+        CREATE TRIGGER IF NOT EXISTS items_active_au AFTER UPDATE ON items_active BEGIN
+          INSERT INTO items_active_fts(items_active_fts, rowid, title, content)
           VALUES ('delete', old.rowid, old.title, old.content);
-          INSERT INTO items_fts(rowid, title, content)
+          INSERT INTO items_active_fts(rowid, title, content)
           VALUES (new.rowid, new.title, new.content);
         END;
       `,
@@ -59,8 +58,14 @@ export function setupFTS(sqlite: Database.Database) {
     sqlite.exec(trigger.sql);
   }
 
-  // Rebuild FTS index from existing data
-  sqlite.exec("INSERT INTO items_fts(items_fts) VALUES ('rebuild')");
+  // Rebuild FTS index when empty (idempotent — rebuild is cheap at small scale).
+  const ftsRow = sqlite.prepare("SELECT COUNT(*) AS n FROM items_active_fts").get() as {
+    n: number;
+  };
+  const itemsRow = sqlite.prepare("SELECT COUNT(*) AS n FROM items_active").get() as { n: number };
+  if (ftsRow.n === 0 && itemsRow.n > 0) {
+    sqlite.exec("INSERT INTO items_active_fts(items_active_fts) VALUES ('rebuild')");
+  }
 }
 
 export function setupVaultFTS(sqlite: Database.Database) {
