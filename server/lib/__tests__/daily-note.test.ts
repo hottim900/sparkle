@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { mkdtempSync, rmSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { createTestDb } from "../../test-utils.js";
+import { createTestDb, insertVaultRow } from "../../test-utils.js";
 import type Database from "better-sqlite3";
 
 // Mock settings to control obsidian/daily-note config
@@ -541,5 +541,40 @@ describe("generateDailyNote — path security", () => {
     await expect(generateDailyNote(sqlite, "2026-03-24")).rejects.toThrow(
       "Path traversal detected",
     );
+  });
+});
+
+// ============================================================
+// Vault merge — items_vault exports contribute to notes_modified
+// ============================================================
+describe("generateDailyNote — items_vault merge", () => {
+  it("includes vault exports (bucketed by exported_at) in 活躍筆記", async () => {
+    insertVaultRow(sqlite, {
+      title: "Exported Today",
+      exported_at: "2026-03-24T09:00:00.000Z",
+    });
+    // Force non-empty day: also add a created note so output file is written.
+    insertItem({ title: "Seed", created: "2026-03-24T08:00:00.000Z" });
+
+    const result = await generateDailyNote(sqlite, "2026-03-24");
+    const content = readFileSync(join(tempDir, result.path), "utf-8");
+
+    expect(content).toContain("## 活躍筆記");
+    expect(content).toContain("Exported Today");
+    expect(content).toContain("(exported, 今日修改)");
+  });
+
+  it("excludes private vault exports", async () => {
+    insertVaultRow(sqlite, {
+      title: "Private Export",
+      exported_at: "2026-03-24T09:00:00.000Z",
+      is_private: 1,
+    });
+    insertItem({ title: "Seed", created: "2026-03-24T08:00:00.000Z" });
+
+    const result = await generateDailyNote(sqlite, "2026-03-24");
+    const content = readFileSync(join(tempDir, result.path), "utf-8");
+
+    expect(content).not.toContain("Private Export");
   });
 });

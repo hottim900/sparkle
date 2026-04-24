@@ -369,12 +369,12 @@ export function WeekView() {
 
   const handleItemClick = useCallback(
     (id: string, type: "todo" | "note", status: string) => {
-      let to: string;
-      if (type === "todo") {
-        to = status === "done" ? "/todos/done" : "/todos";
-      } else {
-        to = `/notes/${status}`;
+      if (type === "note" && status === "exported") {
+        navigate({ to: `/item/${id}` });
+        return;
       }
+      const to =
+        type === "todo" ? (status === "done" ? "/todos/done" : "/todos") : `/notes/${status}`;
       navigate({ to, search: { item: id } });
     },
     [navigate],

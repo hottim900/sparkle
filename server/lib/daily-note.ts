@@ -110,9 +110,10 @@ function queryDayData(sqlite: Database.Database, dateStr: string): DayData {
     )
     .all(rangeStart, rangeEnd) as DayNote[];
 
-  // Notes modified on this date (dedup: exclude same-day created)
+  // Notes modified on this date — merges items_active (by modified) with
+  // items_vault (by exported_at); deduped against same-day created rows.
   const createdIds = new Set(notesCreated.map((n) => n.id));
-  const notesModifiedRaw = sqlite
+  const notesModifiedActive = sqlite
     .prepare(
       `SELECT id, title, status, origin
        FROM items_active
@@ -122,6 +123,23 @@ function queryDayData(sqlite: Database.Database, dateStr: string): DayData {
          AND is_private = 0`,
     )
     .all(rangeStart, rangeEnd) as DayNote[];
+  const notesExportedVault = sqlite
+    .prepare(
+      `SELECT id, title, origin
+       FROM items_vault
+       WHERE exported_at >= ? AND exported_at < ?
+         AND is_private = 0`,
+    )
+    .all(rangeStart, rangeEnd) as Array<{ id: string; title: string; origin: string | null }>;
+  const notesModifiedRaw: DayNote[] = [
+    ...notesModifiedActive,
+    ...notesExportedVault.map((v) => ({
+      id: v.id,
+      title: v.title,
+      status: "exported",
+      origin: v.origin,
+    })),
+  ];
   const notesModified = notesModifiedRaw.filter((n) => !createdIds.has(n.id));
 
   // Overdue todos (due before this date, still active)

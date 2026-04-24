@@ -49,6 +49,10 @@ const ACTIVITY_STYLES: Record<ActivityType, { className: string; label: string }
     className: "text-blue-600 border-blue-300 dark:text-blue-400 dark:border-blue-700",
     label: "更新",
   },
+  exported: {
+    className: "text-slate-600 border-slate-300 dark:text-slate-400 dark:border-slate-700",
+    label: "匯出",
+  },
 };
 
 export function ActivityBadge({ activity }: { activity: ActivityType }) {
@@ -63,6 +67,8 @@ export function ActivityBadge({ activity }: { activity: ActivityType }) {
 function getItemRoute(item: ParsedItem): string {
   if (item.type === "todo") return item.status === "done" ? "/todos/done" : "/todos";
   if (item.type === "scratch") return "/scratch";
+  // Exported notes have no list route — the universal /item/:id resolver lands on the vault detail view.
+  if (item.status === "exported") return `/item/${item.id}`;
   return `/notes/${item.status}`;
 }
 

@@ -124,7 +124,7 @@ export interface DashboardItem {
   viewed_at: string | null;
 }
 
-export type ActivityType = "created" | "updated";
+export type ActivityType = "created" | "updated" | "exported";
 
 export interface RecentActivityItem extends DashboardItem {
   activity: ActivityType;
@@ -209,40 +209,63 @@ export function getUnreviewedItems(
   return { items, total: countRow.count };
 }
 
+/**
+ * Vault rows are projected into the RecentActivityItem shape at SQL time —
+ * status='exported', activity='exported', exported_at → modified — so both sides
+ * of the UNION share column order and LIMIT/OFFSET runs in the DB.
+ */
 export function getRecentItems(
   sqlite: Database.Database,
   days: number,
   limit = 5,
   offset = 0,
 ): { items: RecentActivityItem[]; total: number } {
+  const windowClause = "datetime('now', '-' || ? || ' days')";
+
   const items = sqlite
     .prepare(
-      `SELECT i.*, c.name AS category_name,
-        CASE
-          WHEN (julianday(i.modified) - julianday(i.created)) * 1440 < 1 THEN 'created'
-          ELSE 'updated'
-        END AS activity
-       FROM items_active i
-       LEFT JOIN categories c ON i.category_id = c.id
-       WHERE i.modified >= datetime('now', '-' || ? || ' days')
-         AND i.status != 'archived'
-         AND i.is_private = 0
-       ORDER BY i.modified DESC
+      `SELECT * FROM (
+        SELECT i.id, i.type, i.title, i.status, i.priority, i.due, i.tags, i.origin,
+          i.category_id, c.name AS category_name, i.created, i.modified, i.viewed_at,
+          CASE
+            WHEN (julianday(i.modified) - julianday(i.created)) * 1440 < 1 THEN 'created'
+            ELSE 'updated'
+          END AS activity
+         FROM items_active i
+         LEFT JOIN categories c ON i.category_id = c.id
+         WHERE i.modified >= ${windowClause}
+           AND i.status != 'archived'
+           AND i.is_private = 0
+        UNION ALL
+        SELECT v.id, 'note' AS type, v.title, 'exported' AS status, NULL AS priority,
+          NULL AS due, v.tags, v.origin, v.category_id, c.name AS category_name,
+          v.created, v.exported_at AS modified, NULL AS viewed_at, 'exported' AS activity
+         FROM items_vault v
+         LEFT JOIN categories c ON v.category_id = c.id
+         WHERE v.exported_at >= ${windowClause}
+           AND v.is_private = 0
+       )
+       ORDER BY modified DESC, id ASC
        LIMIT ? OFFSET ?`,
     )
-    .all(days, limit, offset) as RecentActivityItem[];
+    .all(days, days, limit, offset) as RecentActivityItem[];
 
-  const countRow = sqlite
+  const { count } = sqlite
     .prepare(
-      `SELECT COUNT(*) AS count
-       FROM items_active i
-       WHERE i.modified >= datetime('now', '-' || ? || ' days')
-         AND i.status != 'archived'
-         AND i.is_private = 0`,
+      `SELECT
+         (SELECT COUNT(*) FROM items_active
+           WHERE modified >= ${windowClause}
+             AND status != 'archived'
+             AND is_private = 0)
+         +
+         (SELECT COUNT(*) FROM items_vault
+           WHERE exported_at >= ${windowClause}
+             AND is_private = 0)
+         AS count`,
     )
-    .get(days) as { count: number };
+    .get(days, days) as { count: number };
 
-  return { items, total: countRow.count };
+  return { items, total: count };
 }
 
 export function getAttentionItems(
@@ -287,8 +310,13 @@ export interface CategoryDistribution {
   count: number;
 }
 
+/**
+ * Category color prefers whichever side produced the key first with a non-null
+ * row, so active + vault rows for the same deleted category both collapse into
+ * the same bucket without fighting over color.
+ */
 export function getCategoryDistribution(sqlite: Database.Database): CategoryDistribution[] {
-  return sqlite
+  const activeRows = sqlite
     .prepare(
       `SELECT
         i.category_id,
@@ -300,10 +328,38 @@ export function getCategoryDistribution(sqlite: Database.Database): CategoryDist
        WHERE i.status NOT IN ('archived', 'done')
          AND i.is_private = 0
          AND i.paused = 0
-       GROUP BY i.category_id
-       ORDER BY count DESC`,
+       GROUP BY i.category_id`,
     )
     .all() as CategoryDistribution[];
+
+  const vaultRows = sqlite
+    .prepare(
+      `SELECT
+        v.category_id,
+        COALESCE(c.name, '未分類') AS category_name,
+        c.color,
+        COUNT(*) AS count
+       FROM items_vault v
+       LEFT JOIN categories c ON v.category_id = c.id
+       WHERE v.is_private = 0
+       GROUP BY v.category_id`,
+    )
+    .all() as CategoryDistribution[];
+
+  const merged = new Map<string, CategoryDistribution>();
+  const keyOf = (r: CategoryDistribution) => r.category_id ?? "__null__";
+  for (const row of [...activeRows, ...vaultRows]) {
+    const key = keyOf(row);
+    const existing = merged.get(key);
+    if (existing) {
+      existing.count += row.count;
+      if (existing.color === null) existing.color = row.color;
+    } else {
+      merged.set(key, { ...row });
+    }
+  }
+
+  return [...merged.values()].sort((a, b) => b.count - a.count);
 }
 
 export interface FocusItem {
@@ -497,8 +553,7 @@ export function getWeekData(sqlite: Database.Database, startDate: string): WeekD
     }
   }
 
-  // Query 3: Notes modified in this week range
-  // Dedup: exclude items that appear in notes_created for the same day
+  // Dedup: exclude items that appear in notes_created for the same day.
   const notesModified = sqlite
     .prepare(
       `SELECT id, title, status, modified
@@ -524,6 +579,29 @@ export function getWeekData(sqlite: Database.Database, startDate: string): WeekD
       if (!isCreatedSameDay) {
         day.notes_modified.push({ id: note.id, title: note.title, status: note.status });
       }
+    }
+  }
+
+  // Vault exports bucket under notes_modified using exported_at as the
+  // "event-on-this-day" timestamp; status is synthesized 'exported'.
+  const vaultExported = sqlite
+    .prepare(
+      `SELECT id, title, exported_at
+       FROM items_vault
+       WHERE exported_at >= ? AND exported_at < ?
+         AND is_private = 0`,
+    )
+    .all(rangeStart, dayAfterEnd) as {
+    id: string;
+    title: string;
+    exported_at: string;
+  }[];
+
+  for (const v of vaultExported) {
+    const localDate = toLocalDateStr(new Date(v.exported_at));
+    const day = dayMap.get(localDate);
+    if (day) {
+      day.notes_modified.push({ id: v.id, title: v.title, status: "exported" });
     }
   }
 
