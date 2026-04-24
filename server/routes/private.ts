@@ -209,6 +209,10 @@ privateRouter.delete("/items/:id", (c) => {
     return c.json({ error: "Item not found" }, 404);
   }
 
+  if (existing.origin === "vault") {
+    return c.json(vaultReadonlyPayload(existing.export_path), 409);
+  }
+
   deleteItem(db, id);
   return c.body(null, 204);
 });

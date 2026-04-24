@@ -616,6 +616,5 @@ describe("Share list endpoints — private item filtering", () => {
   });
 });
 
-// NOTE: Tests for exported-item update/batch blocking removed — new behaviour
-// is 409 VAULT_READONLY at the route layer (items now live in items_vault).
-// Covered by separate route-layer tests.
+// Exported-item update/batch blocking now returns 409 VAULT_READONLY at the
+// route layer; see items-vault-readonly.test.ts.

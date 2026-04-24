@@ -325,9 +325,8 @@ describe("Private CRUD routes", () => {
       expect(res.status).toBe(401);
     });
 
-    // NOTE: Exported-read-only tests for private items removed — new behaviour
-    // is 409 VAULT_READONLY at the route layer (items live in items_vault now).
-    // Covered by dedicated route-layer tests.
+    // Exported-read-only tests for private items now return 409 VAULT_READONLY;
+    // see items-vault-readonly.test.ts.
   });
 
   // ============================================================
