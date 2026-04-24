@@ -14,7 +14,6 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { join } from "node:path";
-import { v4 as uuidv4 } from "uuid";
 import { eq } from "drizzle-orm";
 
 const { mockStat, mockLogger } = vi.hoisted(() => ({
@@ -37,7 +36,7 @@ vi.mock("../logger.js", () => ({ logger: mockLogger }));
 // Import AFTER mocks.
 import { scanExportedItems, clearMissCountCache } from "../vault-watcher.js";
 import { commitExportToVault } from "../export.js";
-import { createTestDb } from "../../test-utils.js";
+import { createTestDb, insertActiveRow } from "../../test-utils.js";
 import { itemsActive, itemsVault } from "../../db/schema.js";
 
 const VAULT_PATH = "/fake/vault";
@@ -66,24 +65,22 @@ function mockStatByPath(
 
 /**
  * Seed items_active with a permanent note ready for export.
- * Returns the id and the content (so assertions can compare against the snippet).
+ * Returns id/title/content so assertions can compare against the snippet.
  */
 function seedActiveForExport(
   sqlite: ReturnType<typeof createTestDb>["sqlite"],
   overrides: { id?: string; title?: string; content?: string } = {},
 ): { id: string; title: string; content: string } {
-  const id = overrides.id ?? uuidv4();
   const title = overrides.title ?? "Exportable Note";
   const content = overrides.content ?? "First line\nSecond line";
-  const now = new Date().toISOString();
-  sqlite
-    .prepare(
-      `INSERT INTO items_active
-         (id, title, type, status, content, tags, aliases, origin, source,
-          category_id, is_private, created, modified)
-       VALUES (?, ?, 'note', 'permanent', ?, '[]', '[]', 'app', NULL, NULL, 0, ?, ?)`,
-    )
-    .run(id, title, content, now, now);
+  const id = insertActiveRow(sqlite, {
+    id: overrides.id,
+    title,
+    type: "note",
+    status: "permanent",
+    content,
+    origin: "app",
+  });
   return { id, title, content };
 }
 

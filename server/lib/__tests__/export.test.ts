@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import type Database from "better-sqlite3";
 import { v4 as uuidv4 } from "uuid";
-import { createTestDb } from "../../test-utils.js";
+import { createTestDb, insertActiveRow } from "../../test-utils.js";
 import {
   sanitizeFilename,
   generateFrontmatter,
@@ -623,47 +623,37 @@ describe("exportToObsidian", () => {
 describe("commitExportToVault", () => {
   let sqlite: Database.Database;
 
-  /**
-   * Insert an items_active row via raw SQL (bypasses createItem to make it
-   * easy to control id, content length, etc.). Returns the inserted id.
-   */
+  // Defaults: permanent note with a body. Override fields the specific test
+  // cares about (content length, is_private, category_id, tags, etc.).
   function insertActive(
     overrides: {
       id?: string;
       title?: string;
       content?: string | null;
       category_id?: string | null;
-      tags?: string;
-      aliases?: string;
+      tags?: string[];
+      aliases?: string[];
       source?: string | null;
-      origin?: string | null;
+      origin?: string;
       is_private?: 0 | 1;
       created?: string;
     } = {},
   ): string {
-    const id = overrides.id ?? uuidv4();
-    const now = overrides.created ?? new Date().toISOString();
-    sqlite
-      .prepare(
-        `INSERT INTO items_active
-           (id, title, type, status, content, tags, aliases, origin, source,
-            category_id, is_private, created, modified)
-         VALUES (?, ?, 'note', 'permanent', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      )
-      .run(
-        id,
-        overrides.title ?? "Active note",
-        overrides.content ?? "some body content",
-        overrides.tags ?? "[]",
-        overrides.aliases ?? "[]",
-        overrides.origin ?? "",
-        overrides.source ?? null,
-        overrides.category_id ?? null,
-        overrides.is_private ?? 0,
-        now,
-        now,
-      );
-    return id;
+    return insertActiveRow(sqlite, {
+      id: overrides.id,
+      type: "note",
+      status: "permanent",
+      title: overrides.title ?? "Active note",
+      content: "content" in overrides ? overrides.content! : "some body content",
+      tags: overrides.tags,
+      aliases: overrides.aliases,
+      origin: overrides.origin,
+      source: overrides.source,
+      category_id: overrides.category_id,
+      is_private: overrides.is_private,
+      created: overrides.created,
+      modified: overrides.created,
+    });
   }
 
   /** Build the ItemForExport object commitExportToVault expects. */
@@ -709,8 +699,8 @@ describe("commitExportToVault", () => {
     const id = insertActive({
       title: "Export me",
       content: "Line 1\nLine 2\nLine 3",
-      tags: '["work","note"]',
-      aliases: '["alt"]',
+      tags: ["work", "note"],
+      aliases: ["alt"],
       source: "https://example.com",
       origin: "web",
       is_private: 0,

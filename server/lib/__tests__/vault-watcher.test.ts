@@ -24,7 +24,7 @@ vi.mock("../logger.js", () => ({ logger: mockLogger }));
 
 // Import under test AFTER the mocks are registered.
 import { scanExportedItems, clearMissCountCache } from "../vault-watcher.js";
-import { createTestDb } from "../../test-utils.js";
+import { createTestDb, insertVaultRow } from "../../test-utils.js";
 
 const VAULT_PATH = "/fake/vault";
 
@@ -70,7 +70,9 @@ function enableObsidian(
   sqlite.prepare("UPDATE settings SET value = ? WHERE key = 'obsidian_vault_path'").run(vaultPath);
 }
 
-function insertVaultRow(
+// Local helper wraps the shared insertVaultRow; legacy tests used a `snippet`
+// default rather than "" so keep that for test-readability.
+function insertVaultItem(
   sqlite: ReturnType<typeof createTestDb>["sqlite"],
   overrides: {
     id: string;
@@ -79,21 +81,12 @@ function insertVaultRow(
     content_snippet?: string;
   },
 ): void {
-  const now = new Date().toISOString();
-  sqlite
-    .prepare(
-      `INSERT INTO items_vault
-         (id, title, tags, aliases, export_path, exported_at, created, is_private, content_snippet)
-       VALUES (?, ?, '[]', '[]', ?, ?, ?, 0, ?)`,
-    )
-    .run(
-      overrides.id,
-      overrides.title ?? "Vault item",
-      overrides.export_path,
-      now,
-      now,
-      overrides.content_snippet ?? "snippet",
-    );
+  insertVaultRow(sqlite, {
+    id: overrides.id,
+    title: overrides.title ?? "Vault item",
+    export_path: overrides.export_path,
+    content_snippet: overrides.content_snippet ?? "snippet",
+  });
 }
 
 function insertVaultFileRow(
@@ -135,7 +128,7 @@ describe("vault-watcher.scanExportedItems", () => {
 
   it("returns zero-result early when Obsidian is disabled", async () => {
     // Leave obsidian_enabled='false' (fresh-install default).
-    insertVaultRow(sqlite, { id: "vault-a", export_path: "Inbox/a.md" });
+    insertVaultItem(sqlite, { id: "vault-a", export_path: "Inbox/a.md" });
 
     const result = await scanExportedItems(db, sqlite);
 
@@ -146,7 +139,7 @@ describe("vault-watcher.scanExportedItems", () => {
   it("returns zero-result early when Obsidian is enabled but vault_path is empty", async () => {
     sqlite.prepare("UPDATE settings SET value = ? WHERE key = 'obsidian_enabled'").run("true");
     // obsidian_vault_path stays '' (fresh-install default).
-    insertVaultRow(sqlite, { id: "vault-a", export_path: "Inbox/a.md" });
+    insertVaultItem(sqlite, { id: "vault-a", export_path: "Inbox/a.md" });
 
     const result = await scanExportedItems(db, sqlite);
 
@@ -156,7 +149,7 @@ describe("vault-watcher.scanExportedItems", () => {
 
   it("file exists → no patch, miss count cleared", async () => {
     enableObsidian(sqlite);
-    insertVaultRow(sqlite, { id: "vault-ok", export_path: "Inbox/ok.md" });
+    insertVaultItem(sqlite, { id: "vault-ok", export_path: "Inbox/ok.md" });
     mockStatByPath({ [join(VAULT_PATH, "Inbox/ok.md")]: "exists" });
 
     const result = await scanExportedItems(db, sqlite);
@@ -175,7 +168,7 @@ describe("vault-watcher.scanExportedItems", () => {
 
   it("first ENOENT → debounce: DEBUG log, no patch, export_path unchanged", async () => {
     enableObsidian(sqlite);
-    insertVaultRow(sqlite, { id: "vault-miss-1", export_path: "Inbox/miss.md" });
+    insertVaultItem(sqlite, { id: "vault-miss-1", export_path: "Inbox/miss.md" });
     mockStatByPath({}, "enoent");
 
     const result = await scanExportedItems(db, sqlite);
@@ -192,7 +185,7 @@ describe("vault-watcher.scanExportedItems", () => {
 
   it("second consecutive ENOENT with vault_files match → patches export_path (WARN)", async () => {
     enableObsidian(sqlite);
-    insertVaultRow(sqlite, { id: "vault-renamed", export_path: "Inbox/old.md" });
+    insertVaultItem(sqlite, { id: "vault-renamed", export_path: "Inbox/old.md" });
     insertVaultFileRow(sqlite, { path: "Inbox/renamed.md", sparkle_id: "vault-renamed" });
     mockStatByPath({}, "enoent");
 
@@ -213,7 +206,7 @@ describe("vault-watcher.scanExportedItems", () => {
 
   it("second consecutive ENOENT, no vault_files match → WARN, export_path unchanged, not counted as patched", async () => {
     enableObsidian(sqlite);
-    insertVaultRow(sqlite, { id: "vault-lost", export_path: "Inbox/lost.md" });
+    insertVaultItem(sqlite, { id: "vault-lost", export_path: "Inbox/lost.md" });
     mockStatByPath({}, "enoent");
 
     await scanExportedItems(db, sqlite);
@@ -231,7 +224,7 @@ describe("vault-watcher.scanExportedItems", () => {
 
   it("non-ENOENT error (EACCES) → increments errors, WARN, does not touch miss count", async () => {
     enableObsidian(sqlite);
-    insertVaultRow(sqlite, { id: "vault-eacces", export_path: "Inbox/protected.md" });
+    insertVaultItem(sqlite, { id: "vault-eacces", export_path: "Inbox/protected.md" });
     mockStatByPath({ [join(VAULT_PATH, "Inbox/protected.md")]: "eacces" });
 
     const result = await scanExportedItems(db, sqlite);
@@ -251,7 +244,7 @@ describe("vault-watcher.scanExportedItems", () => {
 
   it("file reappears after first miss → miss count cleared, subsequent miss starts from DEBUG again", async () => {
     enableObsidian(sqlite);
-    insertVaultRow(sqlite, { id: "vault-flaky", export_path: "Inbox/flaky.md" });
+    insertVaultItem(sqlite, { id: "vault-flaky", export_path: "Inbox/flaky.md" });
     const fullPath = join(VAULT_PATH, "Inbox/flaky.md");
 
     // Scan 1: ENOENT → miss count = 1, DEBUG log.
@@ -275,7 +268,7 @@ describe("vault-watcher.scanExportedItems", () => {
 
   it("clearMissCountCache() resets state between scans", async () => {
     enableObsidian(sqlite);
-    insertVaultRow(sqlite, { id: "vault-reset", export_path: "Inbox/reset.md" });
+    insertVaultItem(sqlite, { id: "vault-reset", export_path: "Inbox/reset.md" });
     mockStatByPath({}, "enoent");
 
     // Scan 1: miss count 1 (DEBUG).
@@ -297,8 +290,8 @@ describe("vault-watcher.scanExportedItems", () => {
     enableObsidian(sqlite);
     // Row with null export_path — watcher SELECT filters on isNotNull so this
     // row is NOT included; we add a second row with a path to sanity-check the count.
-    insertVaultRow(sqlite, { id: "vault-null", export_path: null });
-    insertVaultRow(sqlite, { id: "vault-ok-2", export_path: "Inbox/ok2.md" });
+    insertVaultItem(sqlite, { id: "vault-null", export_path: null });
+    insertVaultItem(sqlite, { id: "vault-ok-2", export_path: "Inbox/ok2.md" });
     mockStatByPath({ [join(VAULT_PATH, "Inbox/ok2.md")]: "exists" });
 
     const result = await scanExportedItems(db, sqlite);

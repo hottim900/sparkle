@@ -324,9 +324,6 @@ describe("Private CRUD routes", () => {
       });
       expect(res.status).toBe(401);
     });
-
-    // Exported-read-only tests for private items now return 409 VAULT_READONLY;
-    // see items-vault-readonly.test.ts.
   });
 
   // ============================================================

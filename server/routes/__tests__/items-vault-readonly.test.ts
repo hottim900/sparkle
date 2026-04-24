@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, beforeAll, vi } from "vitest";
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
-import { createTestDb } from "../../test-utils.js";
+import { createTestDb, insertActiveRow, insertVaultRow } from "../../test-utils.js";
 import { bodyLimit } from "hono/body-limit";
 
 // --- In-memory DB setup & module mock ---
@@ -36,6 +36,8 @@ import { itemsRouter } from "../items.js";
 import { sharesRouter } from "../shares.js";
 import { privateRouter } from "../private.js";
 import { clearExpiredPrivateSessions } from "../../lib/private-session.js";
+import { hashPin } from "../../lib/pin.js";
+import { VAULT_READONLY } from "../../lib/vault-errors.js";
 
 const TEST_TOKEN = "test-secret-token-12345";
 const TEST_PIN = "123456";
@@ -91,12 +93,17 @@ function privateHeaders(): Record<string, string> {
   return { ...jsonHeaders(), "X-Private-Token": sessionToken };
 }
 
-async function setupAndUnlock(testApp: Hono): Promise<string> {
-  await testApp.request("/api/private/setup", {
-    method: "POST",
-    headers: jsonHeaders(),
-    body: JSON.stringify({ pin: TEST_PIN }),
-  });
+/**
+ * Pre-computed once in beforeAll to avoid per-test scrypt cost (~100ms each).
+ * beforeEach seeds it into the fresh settings table directly, so the test only
+ * pays for the `/unlock` verifyPin — not setup's hashPin as well.
+ */
+let cachedPinHash: string;
+
+async function unlockWithSeededPin(testApp: Hono): Promise<string> {
+  testSqlite
+    .prepare("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)")
+    .run("private_pin_hash", cachedPinHash);
   const unlockRes = await testApp.request("/api/private/unlock", {
     method: "POST",
     headers: jsonHeaders(),
@@ -106,67 +113,29 @@ async function setupAndUnlock(testApp: Hono): Promise<string> {
   return body.token;
 }
 
-function insertVaultItem(
-  overrides: {
-    id?: string;
-    title?: string;
-    export_path?: string | null;
-    content_snippet?: string;
-    is_private?: 0 | 1;
-  } = {},
-): string {
-  const id = overrides.id ?? VAULT_ID;
-  testSqlite
-    .prepare(
-      `INSERT INTO items_vault
-         (id, title, category_id, tags, aliases, source, origin,
-          export_path, exported_at, created, is_private, content_snippet)
-       VALUES (?, ?, NULL, '[]', '[]', NULL, NULL, ?, ?, ?, ?, ?)`,
-    )
-    .run(
-      id,
-      overrides.title ?? "Exported Note",
-      overrides.export_path === undefined ? VAULT_EXPORT_PATH : overrides.export_path,
-      NOW,
-      NOW,
-      overrides.is_private ?? 0,
-      overrides.content_snippet ?? VAULT_SNIPPET,
-    );
-  return id;
-}
+// File-scoped defaults wrap the shared helpers so each test's call site stays
+// terse ({} for the happy-path vault/active item used by most tests).
+const insertVaultItem = (overrides: Parameters<typeof insertVaultRow>[1] = {}): string =>
+  insertVaultRow(testSqlite, {
+    id: VAULT_ID,
+    title: "Exported Note",
+    export_path: VAULT_EXPORT_PATH,
+    exported_at: NOW,
+    created: NOW,
+    content_snippet: VAULT_SNIPPET,
+    ...overrides,
+  });
 
-function insertActiveItem(
-  overrides: {
-    id?: string;
-    type?: string;
-    status?: string;
-    title?: string;
-    content?: string;
-    is_private?: 0 | 1;
-    linked_note_id?: string | null;
-  } = {},
-): string {
-  const id = overrides.id ?? ACTIVE_ID;
-  testSqlite
-    .prepare(
-      `INSERT INTO items_active
-         (id, type, title, content, status, tags, aliases, origin, source,
-          linked_note_id, is_private, created, modified)
-       VALUES (?, ?, ?, ?, ?, '[]', '[]', '', NULL, ?, ?, ?, ?)`,
-    )
-    .run(
-      id,
-      overrides.type ?? "note",
-      overrides.title ?? "Active Note",
-      overrides.content ?? "active content",
-      overrides.status ?? "permanent",
-      overrides.linked_note_id ?? null,
-      overrides.is_private ?? 0,
-      NOW,
-      NOW,
-    );
-  return id;
-}
+const insertActiveItem = (overrides: Parameters<typeof insertActiveRow>[1] = {}): string =>
+  insertActiveRow(testSqlite, {
+    id: ACTIVE_ID,
+    title: "Active Note",
+    content: "active content",
+    status: "permanent",
+    created: NOW,
+    modified: NOW,
+    ...overrides,
+  });
 
 /**
  * Assert every field of the standard VAULT_READONLY payload. Callers that
@@ -178,7 +147,7 @@ function expectFullReadonlyPayload(
   opts: { vaultPath?: string | null; skipError?: boolean } = {},
 ) {
   const vaultPath = opts.vaultPath === undefined ? VAULT_EXPORT_PATH : opts.vaultPath;
-  expect(body.code).toBe("VAULT_READONLY");
+  expect(body.code).toBe(VAULT_READONLY);
   expect(body.vault_path).toBe(vaultPath);
   expect(body.hint_endpoint).toBe("DELETE /api/items/:id/vault-stub");
   expect(body.hint_tool_by_id).toBe("sparkle_write_obsidian");
@@ -192,8 +161,9 @@ function expectFullReadonlyPayload(
   }
 }
 
-beforeAll(() => {
+beforeAll(async () => {
   process.env.AUTH_TOKEN = TEST_TOKEN;
+  cachedPinHash = await hashPin(TEST_PIN);
 });
 
 beforeEach(async () => {
@@ -202,7 +172,7 @@ beforeEach(async () => {
   testSqlite = fresh.sqlite;
   app = createApp();
   clearExpiredPrivateSessions(0);
-  sessionToken = await setupAndUnlock(app);
+  sessionToken = await unlockWithSeededPin(app);
 });
 
 // ============================================================

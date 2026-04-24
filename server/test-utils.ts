@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import * as schema from "./db/schema.js";
@@ -106,4 +107,123 @@ export function createTestDb() {
 
   const db = drizzle(sqlite, { schema });
   return { db, sqlite };
+}
+
+// ---------------------------------------------------------------------------
+// Row fixture helpers — prefer over hand-rolled per-file inserts.
+// Shared to keep schema defaults (status enum, JSON array columns, paused
+// semantics, etc.) in one place so column-shape changes touch one file.
+// ---------------------------------------------------------------------------
+
+export interface ActiveRowOverrides {
+  id?: string;
+  type?: "note" | "todo" | "scratch";
+  title?: string;
+  content?: string;
+  status?: string;
+  priority?: "low" | "medium" | "high" | null;
+  due?: string | null;
+  tags?: string[];
+  aliases?: string[];
+  source?: string | null;
+  origin?: string;
+  category_id?: string | null;
+  linked_note_id?: string | null;
+  viewed_at?: string | null;
+  is_private?: 0 | 1;
+  paused?: 0 | 1;
+  paused_at?: string | null;
+  paused_context?: string | null;
+  created?: string;
+  modified?: string;
+}
+
+function defaultActiveStatus(type: "note" | "todo" | "scratch"): string {
+  return type === "todo" ? "active" : type === "scratch" ? "draft" : "fleeting";
+}
+
+export function insertActiveRow(
+  sqlite: Database.Database,
+  overrides: ActiveRowOverrides = {},
+): string {
+  const id = overrides.id ?? randomUUID();
+  const now = new Date().toISOString();
+  const type = overrides.type ?? "note";
+  sqlite
+    .prepare(
+      `INSERT INTO items_active (
+         id, type, title, content, status, priority, due,
+         tags, aliases, origin, source, category_id, linked_note_id,
+         viewed_at, is_private, paused, paused_at, paused_context,
+         created, modified
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .run(
+      id,
+      type,
+      overrides.title ?? "Test Active Row",
+      overrides.content ?? "",
+      overrides.status ?? defaultActiveStatus(type),
+      overrides.priority ?? null,
+      overrides.due ?? null,
+      JSON.stringify(overrides.tags ?? []),
+      JSON.stringify(overrides.aliases ?? []),
+      overrides.origin ?? "",
+      overrides.source ?? null,
+      overrides.category_id ?? null,
+      overrides.linked_note_id ?? null,
+      overrides.viewed_at ?? null,
+      overrides.is_private ?? 0,
+      overrides.paused ?? 0,
+      overrides.paused_at ?? null,
+      overrides.paused_context ?? null,
+      overrides.created ?? now,
+      overrides.modified ?? now,
+    );
+  return id;
+}
+
+export interface VaultRowOverrides {
+  id?: string;
+  title?: string;
+  category_id?: string | null;
+  tags?: string[];
+  aliases?: string[];
+  source?: string | null;
+  origin?: string | null;
+  export_path?: string | null;
+  exported_at?: string;
+  created?: string;
+  is_private?: 0 | 1;
+  content_snippet?: string;
+}
+
+export function insertVaultRow(
+  sqlite: Database.Database,
+  overrides: VaultRowOverrides = {},
+): string {
+  const id = overrides.id ?? randomUUID();
+  const now = new Date().toISOString();
+  sqlite
+    .prepare(
+      `INSERT INTO items_vault (
+         id, title, category_id, tags, aliases, source, origin,
+         export_path, exported_at, created, is_private, content_snippet
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .run(
+      id,
+      overrides.title ?? "Test Vault Row",
+      overrides.category_id ?? null,
+      JSON.stringify(overrides.tags ?? []),
+      JSON.stringify(overrides.aliases ?? []),
+      overrides.source ?? null,
+      overrides.origin ?? null,
+      overrides.export_path ?? null,
+      overrides.exported_at ?? now,
+      overrides.created ?? now,
+      overrides.is_private ?? 0,
+      overrides.content_snippet ?? "",
+    );
+  return id;
 }

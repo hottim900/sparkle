@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterAll } from "vitest";
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
-import { createTestDb } from "../../test-utils.js";
+import { createTestDb, insertActiveRow, insertVaultRow } from "../../test-utils.js";
 import {
   createItem,
   getItem,
@@ -904,32 +904,14 @@ describe("Data Access Layer", () => {
   });
 
   describe("getItemForLookup — cross-table wikilink resolution", () => {
-    /**
-     * Insert an items_active row with an explicit id so we can control the
-     * prefix under test. Bypasses createItem which generates its own UUID.
-     */
-    function insertActiveWithId(id: string, title: string, isPrivate: 0 | 1 = 0): void {
-      const now = new Date().toISOString();
-      sqlite
-        .prepare(
-          `INSERT INTO items_active
-             (id, title, type, status, tags, aliases, origin, is_private, created, modified)
-           VALUES (?, ?, 'note', 'fleeting', '[]', '[]', '', ?, ?, ?)`,
-        )
-        .run(id, title, isPrivate, now, now);
-    }
-
-    /** Insert an items_vault row with an explicit id. */
-    function insertVaultWithId(id: string, title: string, isPrivate: 0 | 1 = 0): void {
-      const now = new Date().toISOString();
-      sqlite
-        .prepare(
-          `INSERT INTO items_vault
-             (id, title, tags, aliases, origin, exported_at, created, is_private, content_snippet)
-           VALUES (?, ?, '[]', '[]', '', ?, ?, ?, '')`,
-        )
-        .run(id, title, now, now, isPrivate);
-    }
+    // Local shorthand: these tests need explicit ids (to control prefix under
+    // test) + is_private toggle; everything else is irrelevant.
+    const insertActiveWithId = (id: string, title: string, isPrivate: 0 | 1 = 0): void => {
+      insertActiveRow(sqlite, { id, title, is_private: isPrivate });
+    };
+    const insertVaultWithId = (id: string, title: string, isPrivate: 0 | 1 = 0): void => {
+      insertVaultRow(sqlite, { id, title, is_private: isPrivate });
+    };
 
     it("returns origin='active' when prefix matches a unique active row", () => {
       const id = "aaaaaaaa-1234-4567-8abc-def012345678";

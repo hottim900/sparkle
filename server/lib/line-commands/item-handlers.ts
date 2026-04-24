@@ -7,7 +7,7 @@ import { getObsidianSettings } from "../settings.js";
 import { parseDate } from "../line-date.js";
 import { formatDetail, STATUS_LABELS } from "../line-format.js";
 
-const EXPORTED_MSG = "❌ 此筆記已匯出至 Obsidian；內容以 vault 為準，無法從 LINE 編輯。";
+export const EXPORTED_MSG = "❌ 此筆記已匯出至 Obsidian；內容以 vault 為準，無法從 LINE 編輯。";
 
 // Each handler is registered by command.type in the dispatcher, so the Extract cast is always safe.
 
