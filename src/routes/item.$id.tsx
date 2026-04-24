@@ -56,6 +56,22 @@ function ExportedItemView({ itemId }: { itemId: string }) {
     [navigate],
   );
 
+  // After release we redirect to /notes (per design): the user just returned a
+  // vault row to Sparkle's active-note surface area, so landing them on the
+  // notes list is the natural follow-up. We then focus the H1 for keyboard
+  // users — a short timeout lets the new route mount first (h1 is made
+  // focusable via tabindex=-1 at its usage site or via the querySelector).
+  const onReleased = useCallback(() => {
+    navigate({ to: "/notes/fleeting" });
+    setTimeout(() => {
+      const h1 = document.querySelector<HTMLElement>("main h1, h1");
+      if (h1) {
+        if (!h1.hasAttribute("tabindex")) h1.setAttribute("tabindex", "-1");
+        h1.focus({ preventScroll: false });
+      }
+    }, 80);
+  }, [navigate]);
+
   return (
     <div className="flex-1 overflow-y-auto">
       <div className="max-w-4xl mx-auto px-4 py-6">
@@ -69,7 +85,7 @@ function ExportedItemView({ itemId }: { itemId: string }) {
         <ItemDetail
           itemId={itemId}
           onBack={navigateToVault}
-          onDeleted={navigateToVault}
+          onDeleted={onReleased}
           onNavigate={(linkedId) => navigate({ to: "/item/$id", params: { id: linkedId } })}
         />
       </div>

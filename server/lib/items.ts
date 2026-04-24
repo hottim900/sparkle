@@ -540,6 +540,31 @@ export function deleteItem(db: DB, id: string): boolean {
   return result.changes > 0;
 }
 
+/**
+ * Hard-delete a vault stub row. Returns the deleted row's metadata (for logging)
+ * or null if the id was not in items_vault.
+ *
+ * Atomically nulls vault_files.sparkle_id for the same id so future vault-watcher
+ * self-heal scans don't mis-patch a short_id prefix collision onto the released row.
+ *
+ * Does NOT touch todos.linked_note_id — dangling refs are the surface that lets
+ * the UI render `linked_note_origin: 'missing'`.
+ */
+export function deleteVaultItem(
+  sqlite: Database.Database,
+  id: string,
+): { id: string; export_path: string | null } | null {
+  return sqlite.transaction(() => {
+    const row = sqlite.prepare("SELECT id, export_path FROM items_vault WHERE id = ?").get(id) as
+      | { id: string; export_path: string | null }
+      | undefined;
+    if (!row) return null;
+    sqlite.prepare("DELETE FROM items_vault WHERE id = ?").run(id);
+    sqlite.prepare("UPDATE vault_files SET sparkle_id = NULL WHERE sparkle_id = ?").run(id);
+    return row;
+  })();
+}
+
 export function searchItems(
   sqlite: Database.Database,
   db: DB,

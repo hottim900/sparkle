@@ -24,10 +24,9 @@ import { ItemContentEditor } from "@/components/item-content-editor";
 import { CategorySelect } from "@/components/category-select";
 import { PauseToggle } from "@/components/pause-toggle";
 import { PausedBanner } from "@/components/paused-banner";
-import { VaultMarkdownPreview } from "@/components/vault-markdown-preview";
 import { useItemForm } from "@/hooks/use-item-form";
 import { usePauseResume } from "@/hooks/use-pause-resume";
-import { updateItem, getVaultPathBySparkleId } from "@/lib/api";
+import { updateItem, getVaultPathBySparkleId, getSettings } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
 
 interface ItemDetailProps {
@@ -82,7 +81,7 @@ export function ItemDetail({ itemId, onDeleted, onBack, onNavigate }: ItemDetail
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { obsidianEnabled, isOnline } = useAppContext();
-  const { handleDelete, handleExport, exporting } = useItemActions(item, {
+  const { handleDelete, handleExport, handleRelease, exporting, releasing } = useItemActions(item, {
     isOnline,
     obsidianEnabled,
     invalidateAfterSave,
@@ -99,6 +98,23 @@ export function ItemDetail({ itemId, onDeleted, onBack, onNavigate }: ItemDetail
     enabled: !!item && item.origin === "vault",
     retry: false,
   });
+
+  // Vault name for the obsidian:// URI — derived from the configured vault path
+  // basename. Only fetched for vault-origin items to avoid an extra request
+  // on active-item views.
+  const { data: settings } = useQuery({
+    queryKey: queryKeys.settings,
+    queryFn: getSettings,
+    enabled: !!item && item.origin === "vault",
+    retry: false,
+  });
+  const vaultName = settings?.obsidian_vault_path
+    ? settings.obsidian_vault_path.replace(/\/+$/, "").split("/").pop() || ""
+    : "";
+  const obsidianUri =
+    vaultName && item?.export_path
+      ? `obsidian://open?vault=${encodeURIComponent(vaultName)}&file=${encodeURIComponent(item.export_path.replace(/\.md$/, ""))}`
+      : null;
   const [markingAsPrivate, setMarkingAsPrivate] = useState(false);
   const { handleResume, resuming } = usePauseResume(item, setItem);
 
@@ -173,11 +189,13 @@ export function ItemDetail({ itemId, onDeleted, onBack, onNavigate }: ItemDetail
         canGoBack={false}
         saveStatus={saveStatus}
         exporting={exporting}
+        releasing={releasing}
         isOnline={isOnline}
         onBack={handleBack}
         onClose={handleBack}
         onExport={handleExport}
         onDelete={handleDelete}
+        onRelease={handleRelease}
         onOpenCreateTodo={() => setCreateTodoRequested(true)}
         onOpenShare={() => setShareOpen(true)}
         onMarkAsPrivate={handleMarkAsPrivate}
@@ -187,34 +205,27 @@ export function ItemDetail({ itemId, onDeleted, onBack, onNavigate }: ItemDetail
       {item.origin === "vault" ? (
         /* ── Exported: Read-only view ── */
         <div className="flex-1 overflow-y-auto p-4 space-y-4 animate-fade-in break-words">
-          {/* Banner */}
-          <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-green-50 dark:bg-green-950 text-green-800 dark:text-green-200 text-sm">
+          {/* Vault link (the header slate bar already shows "位於 vault · path") */}
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <span>已匯出至 Obsidian</span>
             {vaultPath ? (
-              <>
-                <span className="text-green-600 dark:text-green-400 font-mono text-xs truncate">
-                  {vaultPath.path}
-                </span>
-                <a
-                  href={`/vault?file=${encodeURIComponent(vaultPath.path)}`}
-                  className={`inline-flex items-center gap-1 text-xs ${isOnline ? "text-green-700 dark:text-green-300 hover:underline" : "text-muted-foreground pointer-events-none"}`}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    if (isOnline) {
-                      navigate({
-                        to: "/vault",
-                        search: { file: vaultPath.path, filter: undefined },
-                      });
-                    }
-                  }}
-                >
-                  <ExternalLink className="h-3 w-3" />在 Vault 中查看
-                </a>
-              </>
+              <a
+                href={`/vault?file=${encodeURIComponent(vaultPath.path)}`}
+                className={`inline-flex items-center gap-1 ${isOnline ? "text-foreground hover:underline" : "pointer-events-none"}`}
+                onClick={(e) => {
+                  e.preventDefault();
+                  if (isOnline) {
+                    navigate({
+                      to: "/vault",
+                      search: { file: vaultPath.path, filter: undefined },
+                    });
+                  }
+                }}
+              >
+                <ExternalLink className="h-3 w-3" />在 Vault 中查看
+              </a>
             ) : (
-              <span className="text-green-600 dark:text-green-400 text-xs">
-                Vault 中未找到對應檔案
-              </span>
+              <span>Vault 中未找到對應檔案</span>
             )}
           </div>
 
@@ -284,8 +295,28 @@ export function ItemDetail({ itemId, onDeleted, onBack, onNavigate }: ItemDetail
             </div>
           )}
 
-          {/* Content (rendered markdown) */}
-          <VaultMarkdownPreview content={item.content} />
+          {/* Content snippet — immutable 500-char preview (vault .md is authoritative). */}
+          <div>
+            <label className="text-sm text-muted-foreground block mb-1">內容預覽</label>
+            <pre className="whitespace-pre-wrap break-words max-h-32 overflow-hidden text-xs text-muted-foreground relative bg-muted/30 rounded-md p-3">
+              {item.content_snippet ?? item.content ?? ""}
+              <span
+                aria-hidden="true"
+                className="pointer-events-none bg-gradient-to-b from-transparent to-slate-50 dark:to-slate-800 h-8 absolute bottom-0 inset-x-0"
+              />
+            </pre>
+            <div className="flex items-center gap-3 mt-1 text-[11px] text-muted-foreground">
+              <span>節錄前 500 字；完整內容請至 vault 查看</span>
+              {obsidianUri && (
+                <a
+                  href={obsidianUri}
+                  className="inline-flex items-center gap-1 text-foreground hover:underline"
+                >
+                  <ExternalLink className="h-3 w-3" />在 Obsidian 中開啟
+                </a>
+              )}
+            </div>
+          </div>
         </div>
       ) : (
         /* ── Normal: Editable view ── */

@@ -14,6 +14,7 @@ vi.mock("../client.js", async (importOriginal) => {
     getStats: vi.fn(),
     getTags: vi.fn(),
     exportToObsidian: vi.fn(),
+    releaseVaultNote: vi.fn(),
   };
 });
 
@@ -44,6 +45,7 @@ const updateItem = vi.mocked(client.updateItem);
 const getStats = vi.mocked(client.getStats);
 const getTags = vi.mocked(client.getTags);
 const exportToObsidian = vi.mocked(client.exportToObsidian);
+const releaseVaultNote = vi.mocked(client.releaseVaultNote);
 const readVaultFileBySparkleId = vi.mocked(vault.readVaultFileBySparkleId);
 const readVaultFileByPath = vi.mocked(vault.readVaultFileByPath);
 const writeVaultFileBySparkleId = vi.mocked(vault.writeVaultFileBySparkleId);
@@ -445,6 +447,68 @@ describe("sparkle_export_to_obsidian", () => {
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain("Not permanent");
     expect(result.content[0].text).toContain("permanent");
+  });
+});
+
+describe("sparkle_release_note", () => {
+  function getReleaseHandler() {
+    const server = makeMockServer();
+    registerWorkflowTools(server as never);
+    return server.getHandler("sparkle_release_note");
+  }
+
+  const VAULT_ID = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
+
+  it("refuses when confirm=false (does not call release)", async () => {
+    const handler = getReleaseHandler();
+    const result = await handler({ note_id: VAULT_ID, confirm: false });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain("confirm must be true");
+    expect(releaseVaultNote).not.toHaveBeenCalled();
+  });
+
+  it("refuses when item is not vault-origin", async () => {
+    const handler = getReleaseHandler();
+    getItem.mockResolvedValue(makeItem({ type: "note", status: "permanent" }));
+    const result = await handler({ note_id: VAULT_ID, confirm: true });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain("not a vault item");
+    expect(releaseVaultNote).not.toHaveBeenCalled();
+  });
+
+  it("releases the vault stub when confirm=true and item is vault-origin", async () => {
+    const handler = getReleaseHandler();
+    const vaultItem = makeItem({
+      id: VAULT_ID,
+      type: "note",
+      status: "exported",
+      export_path: "Notes/released.md",
+    });
+    // makeItem doesn't set origin; inject vault origin marker on the response
+    getItem.mockResolvedValue({ ...vaultItem, origin: "vault" } as never);
+    releaseVaultNote.mockResolvedValue({
+      ok: true,
+      id: VAULT_ID,
+      export_path: "Notes/released.md",
+    });
+
+    const result = await handler({ note_id: VAULT_ID, confirm: true });
+    expect(result.isError).toBeUndefined();
+    expect(result.content[0].text).toContain("已釋出");
+    expect(result.content[0].text).toContain("Notes/released.md");
+    expect(releaseVaultNote).toHaveBeenCalledWith(VAULT_ID);
+  });
+
+  it("returns formatted error when API request fails", async () => {
+    const handler = getReleaseHandler();
+    getItem.mockResolvedValue({
+      ...makeItem({ id: VAULT_ID }),
+      origin: "vault",
+    } as never);
+    releaseVaultNote.mockRejectedValue(new Error("network down"));
+
+    const result = await handler({ note_id: VAULT_ID, confirm: true });
+    expect(result.isError).toBe(true);
   });
 });
 

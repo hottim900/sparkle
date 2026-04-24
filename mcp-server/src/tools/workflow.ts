@@ -1,6 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { getItem, updateItem, exportToObsidian } from "../client.js";
+import { getItem, updateItem, exportToObsidian, releaseVaultNote } from "../client.js";
 import { formatItem } from "../format.js";
 import { formatToolError } from "../utils.js";
 
@@ -176,6 +176,71 @@ Returns: The updated item.`,
         }
         return {
           content: [{ type: "text", text }],
+        };
+      } catch (error) {
+        return formatToolError(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "sparkle_release_note",
+    {
+      title: "Release Vault Note from Sparkle",
+      description: `Hard-delete an items_vault row. vault .md file is preserved; Sparkle simply stops tracking it. Irreversible: linked todos become dangling (they keep linked_note_id pointing at the released id, with linked_note_origin='missing' in API responses). Requires \`confirm=true\` for safety. Corresponds to REST endpoint \`DELETE /api/items/:id/vault-stub\`.
+
+Args:
+  - note_id (string, required): Vault item UUID
+  - confirm (boolean, required): Must be true to proceed.
+
+Returns: { ok: true, id, export_path } on success.`,
+      inputSchema: z
+        .object({
+          note_id: z.string().uuid().describe("Vault item UUID"),
+          confirm: z.boolean().describe("Must be true to proceed (safety guard)"),
+        })
+        .strict(),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: false,
+        openWorldHint: false,
+      },
+    },
+    async ({ note_id, confirm }) => {
+      if (!confirm) {
+        return {
+          isError: true,
+          content: [
+            {
+              type: "text",
+              text: "Refusing to release: confirm must be true. This is irreversible — Sparkle will stop tracking this note.",
+            },
+          ],
+        };
+      }
+      try {
+        const current = await getItem(note_id);
+        if ((current as { origin?: string }).origin !== "vault") {
+          return {
+            isError: true,
+            content: [
+              {
+                type: "text",
+                text: `Refusing to release: item ${note_id} is not a vault item (origin='${(current as { origin?: string }).origin ?? "unknown"}'). This tool only releases vault-origin items; to archive an active item use sparkle_update_note with status='archived'.`,
+              },
+            ],
+          };
+        }
+        // else: vault-origin, proceed to release
+        const result = await releaseVaultNote(note_id);
+        return {
+          content: [
+            {
+              type: "text",
+              text: `已釋出 · vault 檔案保留。\nid: ${result.id}\nexport_path: ${result.export_path ?? "(unknown)"}`,
+            },
+          ],
         };
       } catch (error) {
         return formatToolError(error);

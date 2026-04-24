@@ -9,7 +9,7 @@ import { renderWithContext } from "@/test-utils";
 vi.mock("@/lib/api");
 
 vi.mock("sonner", () => ({
-  toast: { success: vi.fn(), error: vi.fn() },
+  toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
 }));
 
 const mockNavigate = vi.fn();
@@ -83,35 +83,78 @@ describe("ItemDetail - exported read-only mode", () => {
     vi.restoreAllMocks();
   });
 
-  it("renders VaultMarkdownPreview for exported items (no textarea)", async () => {
+  it("renders content_snippet as a read-only <pre> for exported items (no textarea)", async () => {
     renderItemDetail();
 
-    // Wait for content to load — VaultMarkdownPreview renders markdown
+    // Wait for the content_snippet pre block to mount. The item content in
+    // the fixture is "# Hello\n\nWorld", which the <pre> renders as raw text.
     await waitFor(() => {
-      // The markdown "# Hello" renders as a heading, and "World" as a paragraph
-      expect(screen.getByText("Hello")).toBeInTheDocument();
-      expect(screen.getByText("World")).toBeInTheDocument();
+      expect(screen.getByText("內容預覽")).toBeInTheDocument();
     });
+    const pre = document.querySelector("pre");
+    expect(pre).toBeTruthy();
+    // Raw markdown text is rendered verbatim, not parsed
+    expect(pre?.textContent).toContain("# Hello");
+    expect(pre?.textContent).toContain("World");
 
-    // Should NOT have a textarea (ItemContentEditor is not rendered)
+    // No editable textareas
     expect(screen.queryByRole("textbox", { name: /內容/ })).not.toBeInTheDocument();
-    // The content textarea from ItemContentEditor has a specific class; just verify no textarea
     const textareas = document.querySelectorAll("textarea");
     expect(textareas.length).toBe(0);
   });
 
-  it("shows exported banner with path", async () => {
+  it("content_snippet <pre> has overflow guards (whitespace-pre-wrap + break-words + max-h + overflow-hidden)", async () => {
+    const longSnippet = "a".repeat(500);
+    const itemWithSnippet: Item = {
+      ...mockExportedItem,
+      content: longSnippet,
+      content_snippet: longSnippet,
+    };
+    setupDefaultMocks(itemWithSnippet);
+    renderItemDetail();
+
+    await waitFor(() => {
+      expect(screen.getByText("內容預覽")).toBeInTheDocument();
+    });
+    const pre = document.querySelector("pre");
+    expect(pre).toBeTruthy();
+    const cls = pre!.className;
+    // Design contract per plan item 16: these classes prevent the horizontal-
+    // scroll regressions from PRs #298-#301.
+    expect(cls).toContain("whitespace-pre-wrap");
+    expect(cls).toContain("break-words");
+    expect(cls).toContain("max-h-32");
+    expect(cls).toContain("overflow-hidden");
+    // Gradient fade sibling exists to soften the clipped bottom edge.
+    expect(pre!.querySelector("span.bg-gradient-to-b")).toBeTruthy();
+  });
+
+  it("shows exported marker + header vault-origin bar with path + vault link", async () => {
     renderItemDetail();
 
     await waitFor(() => {
       expect(screen.getByText("已匯出至 Obsidian")).toBeInTheDocument();
     });
 
-    // Path and vault link appear after sparkle_id API resolves
+    // Vault-origin header bar: "位於 vault · {export_path}"
     await waitFor(() => {
-      expect(screen.getByText("inbox/test-exported-note.md")).toBeInTheDocument();
+      expect(screen.getByText(/位於 vault/)).toBeInTheDocument();
+      expect(screen.getByText(/inbox\/test-exported-note\.md/)).toBeInTheDocument();
+    });
+
+    // Vault link appears after sparkle_id API resolves
+    await waitFor(() => {
       expect(screen.getByText("在 Vault 中查看")).toBeInTheDocument();
     });
+  });
+
+  it("header shows release button on vault-origin item (not delete button)", async () => {
+    renderItemDetail();
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "釋出" })).toBeInTheDocument();
+    });
+    // The normal delete icon button should not appear for a vault item
+    expect(screen.queryByRole("button", { name: "刪除" })).not.toBeInTheDocument();
   });
 
   it("shows fallback when vault path not found", async () => {
