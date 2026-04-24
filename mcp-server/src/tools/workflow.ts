@@ -128,6 +128,23 @@ Returns: The updated item.`,
     },
     async ({ id, context }) => {
       try {
+        const current = await getItem(id);
+        if ((current as { origin?: string }).origin === "vault") {
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify({
+                  code: "VAULT_READONLY",
+                  error: "此項目為 vault-origin，無法 pause（paused 欄位只存在於 items_active）",
+                  error_en:
+                    "Vault items have no paused field; pause_note does not apply. paused lives on items_active only.",
+                }),
+              },
+            ],
+            isError: true,
+          };
+        }
         const update: { paused: boolean; paused_context?: string } = { paused: true };
         if (context !== undefined) update.paused_context = context;
         const item = await updateItem(id, update);
@@ -169,6 +186,22 @@ Returns: The updated item.`,
       try {
         // Fetch before resuming to capture paused_context (cleared on resume)
         const before = await getItem(id);
+        if ((before as { origin?: string }).origin === "vault") {
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify({
+                  code: "VAULT_READONLY",
+                  error: "此項目為 vault-origin，無法 resume（paused 欄位只存在於 items_active）",
+                  error_en:
+                    "Vault items have no paused field; resume_note does not apply. paused lives on items_active only.",
+                }),
+              },
+            ],
+            isError: true,
+          };
+        }
         const item = await updateItem(id, { paused: false });
         let text = `項目已恢復。\n\n${formatItem(item)}`;
         if (before.paused_context) {

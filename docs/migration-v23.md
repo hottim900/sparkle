@@ -215,17 +215,46 @@ If you need to roll back to a **pre-v23** backup, you must also revert Sparkle t
 
 ## 6. Claude.ai connector reconnect
 
-MCP tool descriptions changed in v1.4.0.0. Claude.ai caches tool schemas per connector; existing chats may see stale descriptions until you reconnect:
+MCP tool descriptions changed in v1.4.0.0 (and again in v1.4.1.0 with `sparkle_release_note`, v1.4.2.0 with MCP-layer `VAULT_READONLY` pre-checks on pause/resume). Claude.ai caches tool schemas per connector; existing chats see stale descriptions until you reconnect.
 
-1. Open Claude.ai → **Settings** → **Connectors**.
-2. Find the **Sparkle** connector and click **Reconnect** (not **Delete** — the connector config and OAuth credentials stay).
-3. Start a new chat to pick up the refreshed tool list.
+### Web UI steps (claude.ai)
 
-You should now see:
+1. Open `https://claude.ai/` in a browser (signed in to the same account that owns the Sparkle connector).
+2. Click your **profile avatar** (top-right corner) → **Settings**.
+3. In the left sidebar of Settings, choose **Connectors** (if you run on an Org/Team plan, you may see this tab titled **MCP Connectors** or grouped under **Integrations**).
+4. Locate the **Sparkle** connector card in the list. The card shows:
+   - **Name:** `Sparkle` (or your custom label).
+   - **Status:** `Connected` (green) or `Disconnected` (gray).
+   - **URL:** your Cloudflare Tunnel hostname, e.g. `https://sparkle.kalthor.cc/mcp`.
+5. Click the **⋮ (three-dot overflow menu)** on the Sparkle card, or the `Reconnect` / `Refresh` button if it is surfaced directly.
+   - Choose **Reconnect**, **Refresh schemas**, or **Re-authenticate** (label varies by claude.ai build). These options keep your existing OAuth credentials.
+   - **Do NOT choose Delete / Remove** — that discards the OAuth tokens and CF Access cookies, and you will have to re-pair from scratch.
+6. If Claude.ai prompts an OAuth round-trip (new tab with Cloudflare Access login + Sparkle `POST /oauth/token`), approve it. This is expected when the server has restarted or issued new JWKS keys.
+7. After the connector card's status returns to `Connected`, start a **new chat** (not a resumed one — cached tool definitions persist within an existing chat).
 
-- `sparkle_release_note` as a new tool.
-- `sparkle_list_notes` description mentions the `include_vault` parameter.
-- `sparkle_search` description guides to `sparkle_search_all` for cross-source search.
-- `sparkle_update_note` / `sparkle_advance_note` / `sparkle_pause_note` / `sparkle_resume_note` descriptions call out the `VAULT_READONLY` return on vault items.
+### How to verify the reconnect worked
 
-If tool descriptions still look stale, toggle the connector off and on once. A full delete + re-pair is **not** necessary (and costs you the OAuth handshake).
+In a fresh chat, ask Claude to call `sparkle_guide('vault-split')` or list Sparkle tools. Confirm each of these is visible with the new description text:
+
+| Tool                                         | Expected signal                                                               |
+| -------------------------------------------- | ----------------------------------------------------------------------------- |
+| `sparkle_release_note`                       | tool exists at all (added in v1.4.1.0).                                       |
+| `sparkle_list_notes`                         | description mentions `include_vault` parameter.                               |
+| `sparkle_search`                             | description guides you to `sparkle_search_all` for cross-source search.       |
+| `sparkle_update_note`                        | description calls out `VAULT_READONLY` return on vault items.                 |
+| `sparkle_advance_note`                       | description calls out `VAULT_READONLY` on vault items.                        |
+| `sparkle_pause_note` / `sparkle_resume_note` | description notes "Not applicable to vault items — returns `VAULT_READONLY`". |
+
+You can also ask Claude to call `sparkle_guide('data-model')` — the response should include the `## 資料模型` section (兩張表 / 移除項目路徑 / VAULT_READONLY 錯誤處理). If that section is missing, the server still has an old build: self-hosters should `cd mcp-server && npm run build && sudo systemctl restart sparkle` and reconnect once more.
+
+### If reconnect does not refresh descriptions
+
+Some claude.ai builds cache the tool list aggressively per-session:
+
+1. **Toggle the connector off and on** from the same card — disable, wait 5 seconds, enable.
+2. **Force a fresh chat in an incognito window** — rules out session-level caching.
+3. **Last resort:** click the card → **Disconnect** + re-pair. You will have to repeat the full CF Access + OAuth handshake (browser tab dance), and (on Sparkle ≥ v1.3) re-grant Dynamic Client Registration. Only do this if steps 1-2 failed.
+
+### Screenshots
+
+This guide is text-only because Claude.ai's Settings UI is under active iteration and inline screenshots would bit-rot within weeks (different label placements between web vs. desktop, A/B tests on the MCP panel layout). The step-by-step copy above should be stable regardless of those reshuffles. If your UI does not match, the overflow menu on the connector card is the canonical place to start.
