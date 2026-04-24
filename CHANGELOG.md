@@ -26,6 +26,15 @@
 ### Fixed
 
 - MCP `tools.test.ts` description regex now matches the v1.4.0 `VAULT_READONLY` phrasing (the old regex looked for "exported...read-only" wording that was removed when the tool descriptions were rewritten).
+- `DELETE /api/private/items/:id` on a vault-origin item now returns `409 VAULT_READONLY` instead of silently responding `204` on a no-op delete (the handler used to claim success while `items_active` had no matching row to delete). Symmetric with the public `DELETE /api/items/:id` guard.
+- LINE `!archive` and `!delete` commands on a vault-origin item now return the "cannot edit from LINE" message instead of falsely claiming `✅ 已封存` / `🗑️ 已刪除` while `updateItem` / `deleteItem` silently no-op on vault rows.
+
+### Added (test coverage)
+
+- Route-layer VAULT_READONLY test suite (`server/routes/__tests__/items-vault-readonly.test.ts`): 13 tests covering GET/PATCH/DELETE/POST-share/POST-export/batch/linked-todos + private CRUD guards, asserting the complete VAULT_READONLY payload shape end-to-end.
+- Lib-layer atomicity + wikilink tests: 8 new `commitExportToVault` cases (happy path, snippet truncation at 500 chars, empty/null content, boundary, is_private propagation, transaction rollback on PK conflict) and 12 new `getItemForLookup` cross-table cases (unique active/vault, cross-table collision → null, intra-table collision, short-prefix guard, full UUID match, private-row skip).
+- Rewrote three post-v23 test files: `vault-watcher.test.ts` (10 self-heal debounce / fs-mock cases), `vault-sync-integration.test.ts` (4 export→scan cycle cases), `item-handlers.test.ts` (19 LINE handler guard cases using parametrized `it.each`).
+- `server/test-utils.ts` — shared `insertActiveRow` / `insertVaultRow` row-fixture helpers with schema-aware defaults (status enum, JSON-array columns, paused semantics); replaces 6 near-duplicate hand-rolled helpers across 5 test files.
 
 ### Changed
 
@@ -39,6 +48,7 @@
 - `server/lib/items.ts listItems` split into a dispatcher + private `listActiveItems` helper so `listItemsAcross` can call the active path directly (no recursion through the public entry point).
 - `server/schemas/items.ts listItemsSchema.offset` capped at `10_000` to prevent memory amplification under `include_vault=true` (fetches `limit + offset` from each table).
 - `listItemsSchema.status` reuses `importStatusEnum` instead of redefining the same 8 values inline.
+- `server/lib/line-commands/item-handlers.ts` — `EXPORTED_MSG` now exported so tests import it instead of re-declaring the literal (drift protection).
 
 ### Removed
 
