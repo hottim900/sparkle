@@ -49,7 +49,7 @@
     "drizzle-orm": "^0.45.1",
     "hono": "^4.12.9",
     "hono-rate-limiter": "^0.5.3",
-    "lucide-react": "^0.577.0",
+    "lucide-react": "^1.11.0",
     "marked": "^17.0.5",
     "next-themes": "^0.4.6",
     "pino": "^10.3.1",
