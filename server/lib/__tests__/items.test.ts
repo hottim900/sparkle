@@ -5,6 +5,7 @@ import { createTestDb } from "../../test-utils.js";
 import {
   createItem,
   getItem,
+  getItemForLookup,
   listItems,
   updateItem,
   deleteItem,
@@ -899,6 +900,148 @@ describe("Data Access Layer", () => {
       expect(results.length).toBe(1);
       expect(results[0]!.linked_note_title).toBeNull();
       expect(results[0]!.linked_todo_count).toBe(0);
+    });
+  });
+
+  describe("getItemForLookup — cross-table wikilink resolution", () => {
+    /**
+     * Insert an items_active row with an explicit id so we can control the
+     * prefix under test. Bypasses createItem which generates its own UUID.
+     */
+    function insertActiveWithId(id: string, title: string, isPrivate: 0 | 1 = 0): void {
+      const now = new Date().toISOString();
+      sqlite
+        .prepare(
+          `INSERT INTO items_active
+             (id, title, type, status, tags, aliases, origin, is_private, created, modified)
+           VALUES (?, ?, 'note', 'fleeting', '[]', '[]', '', ?, ?, ?)`,
+        )
+        .run(id, title, isPrivate, now, now);
+    }
+
+    /** Insert an items_vault row with an explicit id. */
+    function insertVaultWithId(id: string, title: string, isPrivate: 0 | 1 = 0): void {
+      const now = new Date().toISOString();
+      sqlite
+        .prepare(
+          `INSERT INTO items_vault
+             (id, title, tags, aliases, origin, exported_at, created, is_private, content_snippet)
+           VALUES (?, ?, '[]', '[]', '', ?, ?, ?, '')`,
+        )
+        .run(id, title, now, now, isPrivate);
+    }
+
+    it("returns origin='active' when prefix matches a unique active row", () => {
+      const id = "aaaaaaaa-1234-4567-8abc-def012345678";
+      insertActiveWithId(id, "Active-only note");
+
+      const result = getItemForLookup(db, "aaaaaaaa");
+      expect(result).toEqual({
+        id,
+        title: "Active-only note",
+        origin: "active",
+      });
+    });
+
+    it("returns origin='vault' when prefix matches a unique vault row", () => {
+      const id = "bbbbbbbb-1234-4567-8abc-def012345678";
+      insertVaultWithId(id, "Vault-only note");
+
+      const result = getItemForLookup(db, "bbbbbbbb");
+      expect(result).toEqual({
+        id,
+        title: "Vault-only note",
+        origin: "vault",
+      });
+    });
+
+    it("returns null when prefix collides across active and vault (preserves wikilink text)", () => {
+      // Both rows share prefix 'cccccccc' — different full ids.
+      const activeId = "cccccccc-1111-4111-8abc-def012345678";
+      const vaultId = "cccccccc-2222-4222-8bcd-ef1234567890";
+      insertActiveWithId(activeId, "Active C");
+      insertVaultWithId(vaultId, "Vault C");
+
+      const result = getItemForLookup(db, "cccccccc");
+      expect(result).toBeNull();
+    });
+
+    it("returns null when prefix collides within the active table alone", () => {
+      // Two active rows with shared prefix — cross-table total is still > 1.
+      insertActiveWithId("dddddddd-1111-4111-8abc-def012345678", "A1");
+      insertActiveWithId("dddddddd-2222-4222-8bcd-ef1234567890", "A2");
+
+      const result = getItemForLookup(db, "dddddddd");
+      expect(result).toBeNull();
+    });
+
+    it("returns null on empty db (no match anywhere)", () => {
+      const result = getItemForLookup(db, "deadbeef");
+      expect(result).toBeNull();
+    });
+
+    it("returns null when no row matches the prefix", () => {
+      insertActiveWithId("11111111-1111-4111-8abc-def012345678", "Active");
+      insertVaultWithId("22222222-2222-4222-8bcd-ef1234567890", "Vault");
+
+      const result = getItemForLookup(db, "99999999");
+      expect(result).toBeNull();
+    });
+
+    it("returns null when prefix is too short (< 4 chars) — LIKE_SAFE_RE guard", () => {
+      // Even if a row would match, the regex must reject short prefixes
+      // before any LIKE runs (SQL injection / runaway match guard).
+      insertActiveWithId("abc12345-1234-4567-8abc-def012345678", "Short prefix target");
+
+      const result = getItemForLookup(db, "abc");
+      expect(result).toBeNull();
+    });
+
+    it("returns null when prefix is non-hex and has no matching row", () => {
+      // LIKE_SAFE_RE accepts any non-%/_ chars (not hex-only), so "ghij"
+      // passes the regex and runs a LIKE query — which finds nothing because
+      // all our ids are hex.
+      insertActiveWithId("11111111-1111-4111-8abc-def012345678", "Hex row");
+
+      const result = getItemForLookup(db, "ghij");
+      expect(result).toBeNull();
+    });
+
+    it("matches on full UUID in items_active → origin='active'", () => {
+      const id = "ffffffff-1234-4567-8abc-def012345678";
+      insertActiveWithId(id, "Full UUID active");
+
+      const result = getItemForLookup(db, id);
+      expect(result).toEqual({ id, title: "Full UUID active", origin: "active" });
+    });
+
+    it("matches on full UUID in items_vault → origin='vault'", () => {
+      const id = "eeeeeeee-1234-4567-8abc-def012345678";
+      insertVaultWithId(id, "Full UUID vault");
+
+      const result = getItemForLookup(db, id);
+      expect(result).toEqual({ id, title: "Full UUID vault", origin: "vault" });
+    });
+
+    it("skips private rows in active (is_private=1 treated as miss)", () => {
+      // A private active row and a public vault row with matching prefix —
+      // since private is filtered out, only the vault row survives → origin='vault'.
+      insertActiveWithId("77777777-1111-4111-8abc-def012345678", "Private active", 1);
+      const vaultId = "77777777-2222-4222-8bcd-ef1234567890";
+      insertVaultWithId(vaultId, "Public vault");
+
+      const result = getItemForLookup(db, "77777777");
+      expect(result).toEqual({ id: vaultId, title: "Public vault", origin: "vault" });
+    });
+
+    it("skips private rows in vault (is_private=1 treated as miss)", () => {
+      // Public active + private vault sharing prefix → only active matches.
+      const activeId = "88888888-1111-4111-8abc-def012345678";
+      insertActiveWithId(activeId, "Public active");
+      insertVaultWithId("88888888-2222-4222-8bcd-ef1234567890", "Private vault", 1);
+
+      const result = getItemForLookup(db, "88888888");
+      expect(result).toEqual({ id: activeId, title: "Public active", origin: "active" });
     });
   });
 });
