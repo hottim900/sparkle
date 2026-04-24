@@ -432,14 +432,16 @@ export function migrateV22toV23(sqlite: Database.Database) {
   const hasActive = have.has("items_active");
 
   if (!hasLegacy && hasActive) {
-    // State B or C: main schema already migrated, make sure FTS + version are in sync
+    // State B or C: schema already split. Always run Stage B (CREATE INDEX IF NOT
+    // EXISTS is idempotent) so that a crash between Stage A commit and Stage B
+    // reaching setSchemaVersion doesn't leave the DB without its indexes.
+    runStageBIndexes(sqlite);
+    // Always rebuild FTS: external-content FTS5 virtual tables report the content
+    // table's row count for `COUNT(*)`, so there's no cheap runtime probe that
+    // tells us whether the shadow index is populated. Rebuild is idempotent and
+    // cheap at the expected row volume (<500).
     try {
-      const ftsRow = sqlite.prepare("SELECT COUNT(*) AS n FROM items_active_fts").get() as
-        | { n: number }
-        | undefined;
-      if (ftsRow && ftsRow.n === 0) {
-        sqlite.exec("INSERT INTO items_active_fts(items_active_fts) VALUES ('rebuild')");
-      }
+      sqlite.exec("INSERT INTO items_active_fts(items_active_fts) VALUES ('rebuild')");
     } catch {
       // items_active_fts not created yet — setupFTS will build it after migrations
     }
@@ -448,26 +450,69 @@ export function migrateV22toV23(sqlite: Database.Database) {
   }
 
   if (!hasLegacy && !hasActive) {
-    // Fresh install path should not have reached here; safety net
-    setSchemaVersion(sqlite, 23);
-    return;
+    // Neither table exists. This is an inconsistent state — runMigrations was only
+    // called because schema_version < 23 yet the legacy `items` table is missing.
+    // Rather than silently stamping v23 on a broken DB, fail loudly so the operator
+    // can restore from backup.
+    throw new Error(
+      "Migration 23: inconsistent state — schema_version < 23 but neither `items` nor `items_active` exists. Restore from backup before continuing.",
+    );
+  }
+
+  // Pre-scan: items that would violate items_active CHECK constraint. Surface
+  // offending rows by id so the operator doesn't hit a cryptic "CHECK constraint
+  // failed" inside the transaction.
+  const constraintViolators = sqlite
+    .prepare(
+      `SELECT id, type, status FROM items
+       WHERE status != 'exported'
+         AND NOT (
+           (type = 'note' AND status IN ('fleeting','developing','permanent','archived')) OR
+           (type = 'todo' AND status IN ('active','done','archived')) OR
+           (type = 'scratch' AND status IN ('draft','archived'))
+         )`,
+    )
+    .all() as { id: string; type: string; status: string }[];
+  if (constraintViolators.length > 0) {
+    throw new Error(
+      `Migration 23: ${constraintViolators.length} rows violate items_active CHECK constraint. Fix them in the legacy items table before retrying. Violators: ${JSON.stringify(
+        constraintViolators.slice(0, 10),
+      )}`,
+    );
   }
 
   sqlite.pragma("foreign_keys = OFF");
 
-  const runStageA = sqlite.transaction(() => {
-    // A-0. Cross-table linked_note_id cleanup (D12): null out active→vault refs
-    //      before split so items_active FK does not violate.
-    sqlite.exec(`
-      UPDATE items SET linked_note_id = NULL
-      WHERE linked_note_id IS NOT NULL
-        AND linked_note_id IN (SELECT id FROM items WHERE status = 'exported')
-        AND status != 'exported';
-    `);
+  try {
+    const runStageA = sqlite.transaction(() => {
+      // A-0. Cross-table linked_note_id cleanup (D12): null out active→vault refs
+      //      before split so items_active FK does not violate.
+      const cleanupCount =
+        (
+          sqlite
+            .prepare(
+              `SELECT COUNT(*) AS n FROM items
+           WHERE linked_note_id IS NOT NULL
+             AND linked_note_id IN (SELECT id FROM items WHERE status = 'exported')
+             AND status != 'exported'`,
+            )
+            .get() as { n: number } | undefined
+        )?.n ?? 0;
+      if (cleanupCount > 0) {
+        logger.info(
+          `Migration 23: clearing ${cleanupCount} linked_note_id references pointing from active items to exported items`,
+        );
+      }
+      sqlite.exec(`
+        UPDATE items SET linked_note_id = NULL
+        WHERE linked_note_id IS NOT NULL
+          AND linked_note_id IN (SELECT id FROM items WHERE status = 'exported')
+          AND status != 'exported';
+      `);
 
-    // A-1. items_active: status-bearing table (D15 viewed_at, D16 category_id FK,
-    //      D17 content default, D1 linked_note_id FK).
-    sqlite.exec(`
+      // A-1. items_active: status-bearing table (D15 viewed_at, D16 category_id FK,
+      //      D17 content default, D1 linked_note_id FK).
+      sqlite.exec(`
       CREATE TABLE items_active (
         id TEXT PRIMARY KEY,
         type TEXT NOT NULL,
@@ -499,9 +544,9 @@ export function migrateV22toV23(sqlite: Database.Database) {
       );
     `);
 
-    // A-2. items_vault: metadata + immutable preview cache (D11 content_snippet,
-    //      D16 category_id FK, D18 export_path items_vault-only).
-    sqlite.exec(`
+      // A-2. items_vault: metadata + immutable preview cache (D11 content_snippet,
+      //      D16 category_id FK, D18 export_path items_vault-only).
+      sqlite.exec(`
       CREATE TABLE items_vault (
         id TEXT PRIMARY KEY,
         title TEXT NOT NULL,
@@ -519,8 +564,8 @@ export function migrateV22toV23(sqlite: Database.Database) {
       );
     `);
 
-    // A-3. Data migration → items_active
-    sqlite.exec(`
+      // A-3. Data migration → items_active
+      sqlite.exec(`
       INSERT INTO items_active (
         id, type, status, title, content, is_private, category_id, priority, due,
         tags, aliases, source, origin, linked_note_id, viewed_at,
@@ -532,8 +577,8 @@ export function migrateV22toV23(sqlite: Database.Database) {
       FROM items WHERE status != 'exported';
     `);
 
-    // A-4. Data migration → items_vault (content_snippet derived from content)
-    sqlite.exec(`
+      // A-4. Data migration → items_vault (content_snippet derived from content)
+      sqlite.exec(`
       INSERT INTO items_vault (
         id, title, category_id, tags, aliases, source, origin,
         export_path, exported_at, created, is_private, content_snippet
@@ -544,19 +589,19 @@ export function migrateV22toV23(sqlite: Database.Database) {
       FROM items WHERE status = 'exported';
     `);
 
-    // A-5. Rebuild share_tokens with FK → items_active (drops tokens for exported items).
-    const dropCount =
-      (
-        sqlite
-          .prepare(
-            `SELECT COUNT(*) AS n FROM share_tokens WHERE item_id IN (SELECT id FROM items WHERE status = 'exported')`,
-          )
-          .get() as { n: number } | undefined
-      )?.n ?? 0;
-    if (dropCount > 0) {
-      logger.info(`Migration 23: dropping ${dropCount} share_tokens referencing exported items`);
-    }
-    sqlite.exec(`
+      // A-5. Rebuild share_tokens with FK → items_active (drops tokens for exported items).
+      const dropCount =
+        (
+          sqlite
+            .prepare(
+              `SELECT COUNT(*) AS n FROM share_tokens WHERE item_id IN (SELECT id FROM items WHERE status = 'exported')`,
+            )
+            .get() as { n: number } | undefined
+        )?.n ?? 0;
+      if (dropCount > 0) {
+        logger.info(`Migration 23: dropping ${dropCount} share_tokens referencing exported items`);
+      }
+      sqlite.exec(`
       CREATE TABLE share_tokens_new (
         id TEXT PRIMARY KEY,
         item_id TEXT NOT NULL,
@@ -573,8 +618,8 @@ export function migrateV22toV23(sqlite: Database.Database) {
       ALTER TABLE share_tokens_new RENAME TO share_tokens;
     `);
 
-    // A-6. Drop legacy triggers + items + items_fts.
-    sqlite.exec(`
+      // A-6. Drop legacy triggers + items + items_fts.
+      sqlite.exec(`
       DROP TRIGGER IF EXISTS items_ai;
       DROP TRIGGER IF EXISTS items_ad;
       DROP TRIGGER IF EXISTS items_au;
@@ -582,34 +627,38 @@ export function migrateV22toV23(sqlite: Database.Database) {
       DROP TABLE IF EXISTS items_fts;
     `);
 
-    // A-7. FTS5 external-content (D13, R4-FINDING-6 — keep 2-column scope to match legacy fts.ts).
-    sqlite.exec(`
-      CREATE VIRTUAL TABLE items_active_fts USING fts5(
-        title, content,
-        content = items_active,
-        content_rowid = rowid,
-        tokenize = 'trigram'
-      );
-      CREATE TRIGGER items_active_ai AFTER INSERT ON items_active BEGIN
-        INSERT INTO items_active_fts(rowid, title, content)
-        VALUES (new.rowid, new.title, new.content);
-      END;
-      CREATE TRIGGER items_active_ad AFTER DELETE ON items_active BEGIN
-        INSERT INTO items_active_fts(items_active_fts, rowid, title, content)
-        VALUES ('delete', old.rowid, old.title, old.content);
-      END;
-      CREATE TRIGGER items_active_au AFTER UPDATE ON items_active BEGIN
-        INSERT INTO items_active_fts(items_active_fts, rowid, title, content)
-        VALUES ('delete', old.rowid, old.title, old.content);
-        INSERT INTO items_active_fts(rowid, title, content)
-        VALUES (new.rowid, new.title, new.content);
-      END;
-    `);
-  });
+      // A-7. FTS5 external-content (D13, R4-FINDING-6 — keep 2-column scope to match legacy fts.ts).
+      sqlite.exec(`
+        CREATE VIRTUAL TABLE items_active_fts USING fts5(
+          title, content,
+          content = items_active,
+          content_rowid = rowid,
+          tokenize = 'trigram'
+        );
+        CREATE TRIGGER items_active_ai AFTER INSERT ON items_active BEGIN
+          INSERT INTO items_active_fts(rowid, title, content)
+          VALUES (new.rowid, new.title, new.content);
+        END;
+        CREATE TRIGGER items_active_ad AFTER DELETE ON items_active BEGIN
+          INSERT INTO items_active_fts(items_active_fts, rowid, title, content)
+          VALUES ('delete', old.rowid, old.title, old.content);
+        END;
+        CREATE TRIGGER items_active_au AFTER UPDATE ON items_active BEGIN
+          INSERT INTO items_active_fts(items_active_fts, rowid, title, content)
+          VALUES ('delete', old.rowid, old.title, old.content);
+          INSERT INTO items_active_fts(rowid, title, content)
+          VALUES (new.rowid, new.title, new.content);
+        END;
+      `);
+    });
 
-  runStageA();
-
-  sqlite.pragma("foreign_keys = ON");
+    runStageA();
+  } finally {
+    // Always restore FK enforcement, even if Stage A throws. Leaving the pragma
+    // OFF on a long-lived connection silently disables FK checks for every
+    // subsequent query.
+    sqlite.pragma("foreign_keys = ON");
+  }
 
   // FK validation (D15 + D16 post-check)
   const activeViolations = sqlite.pragma("foreign_key_check(items_active)") as unknown[];
@@ -620,7 +669,14 @@ export function migrateV22toV23(sqlite: Database.Database) {
     );
   }
 
-  // Stage B: indexes + FTS backfill + version bump (outside transaction).
+  // Stage B: indexes + FTS rebuild (outside transaction).
+  runStageBIndexes(sqlite);
+  sqlite.exec(`INSERT INTO items_active_fts(items_active_fts) VALUES ('rebuild');`);
+
+  setSchemaVersion(sqlite, 23);
+}
+
+function runStageBIndexes(sqlite: Database.Database) {
   sqlite.exec(`
     CREATE INDEX IF NOT EXISTS idx_items_active_type_status ON items_active(type, status);
     CREATE INDEX IF NOT EXISTS idx_items_active_category_id ON items_active(category_id);
@@ -636,11 +692,7 @@ export function migrateV22toV23(sqlite: Database.Database) {
 
     CREATE INDEX IF NOT EXISTS idx_share_tokens_token ON share_tokens(token);
     CREATE INDEX IF NOT EXISTS idx_share_tokens_item_id ON share_tokens(item_id);
-
-    INSERT INTO items_active_fts(items_active_fts) VALUES ('rebuild');
   `);
-
-  setSchemaVersion(sqlite, 23);
 }
 
 export function initializeDatabase(sqlite: Database.Database) {
