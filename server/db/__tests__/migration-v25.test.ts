@@ -3,7 +3,21 @@ import Database from "better-sqlite3";
 import { mkdtempSync, rmSync, copyFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+
+// Factory mock pass-through: keep every real `node:fs` export, only stub
+// `statfsSync` so tests can drive the disk-space pre-flight branch.
+// vi.spyOn on ESM module namespaces is rejected by Vitest 4 ("module namespace
+// is not configurable"); the factory replacement at file load is the supported
+// path. createTestDb / mkdtemp / etc. continue to use the real fs.
+vi.mock("node:fs", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:fs")>();
+  return { ...actual, statfsSync: vi.fn(actual.statfsSync) };
+});
+
 import { migrateV24toV25, V25HaltError } from "../index";
+import * as fs from "node:fs";
+
+import { logger } from "../../lib/logger";
 
 /** Build a v24-shaped DB with `export_path` + representative rows. */
 function seedV24(sqlite: Database.Database) {
@@ -181,11 +195,83 @@ describe("Migration v25: file-backed DB backup branch", () => {
     expect(hasExportPathColumn(sqlite)).toBe(true);
   });
 
-  // Note: the migration_v25_halted_no_disk path runs `statfsSync` directly,
-  // which Vitest 4 cannot intercept under ESM (`Cannot spy on export — module
-  // namespace is not configurable`). The pre-flight is exercised manually via
-  // `ops/migration-25-dryrun.sh` against a tmpfs at the deploy target. If a
-  // future refactor wraps statfsSync in an injectable, add a mocked test here.
+  it("halts with migration_v25_halted_no_disk when free space < 1.2× DB size", () => {
+    const realStatfs = vi.mocked(fs.statfsSync);
+    realStatfs.mockReturnValueOnce({
+      type: 0,
+      bsize: 1,
+      blocks: 1,
+      bfree: 1,
+      bavail: 1, // bavail × bsize = 1 byte free → far below 1.2× DB size
+      files: 0,
+      ffree: 0,
+    } as unknown as ReturnType<typeof fs.statfsSync>);
+
+    let caught: V25HaltError | null = null;
+    try {
+      migrateV24toV25(sqlite);
+    } catch (e) {
+      if (e instanceof V25HaltError) caught = e;
+      else throw e;
+    }
+
+    expect(caught).toBeInstanceOf(V25HaltError);
+    expect(caught!.haltPayload.event).toBe("migration_v25_halted_no_disk");
+    expect(caught!.haltPayload).toMatchObject({
+      requiredBytes: expect.any(Number),
+      freeBytes: expect.any(Number),
+    });
+    // Schema untouched
+    expect(getSchemaVersion(sqlite)).toBe(24);
+    expect(hasExportPathColumn(sqlite)).toBe(true);
+  });
+});
+
+describe("Migration v25: haltAndExit log-before-flush ordering invariant", () => {
+  it("calls logger.error AND logger.flush before throwing/exiting on halt", () => {
+    const errorSpy = vi.spyOn(logger, "error").mockImplementation(() => undefined as never);
+    const flushSpy = vi.spyOn(logger, "flush").mockImplementation(() => undefined as never);
+    const order: string[] = [];
+    errorSpy.mockImplementation(() => {
+      order.push("error");
+      return undefined as never;
+    });
+    flushSpy.mockImplementation(() => {
+      order.push("flush");
+      return undefined as never;
+    });
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((() => {
+      order.push("exit");
+      throw new Error("__exit__"); // unwind so the test can assert
+    }) as never);
+
+    // We import haltAndExit lazily because it lives at module top-level and
+    // calling it triggers process.exit (mocked above to throw).
+    return import("../index").then(({ haltAndExit }) => {
+      expect(() =>
+        haltAndExit(
+          {
+            event: "migration_v25_halted_backup_failed",
+            backupPath: "/tmp/x",
+            error: "synthetic",
+            error_en: "synthetic",
+            docs: "n/a",
+          },
+          "migration_v25_halted_backup_failed",
+        ),
+      ).toThrow("__exit__");
+
+      // Ordering invariant: error logged → flush attempted → exit called.
+      // Without this ordering, journalctl would miss the halt payload under a
+      // future buffered pino transport.
+      expect(order).toEqual(["error", "flush", "exit"]);
+      expect(exitSpy).toHaveBeenCalledWith(78);
+
+      errorSpy.mockRestore();
+      flushSpy.mockRestore();
+      exitSpy.mockRestore();
+    });
+  });
 });
 
 describe("Migration v25: rollback-from-backup smoke", () => {
