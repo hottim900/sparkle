@@ -23,7 +23,7 @@
 
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { mkdirSync, writeFileSync, existsSync, readFileSync } from "node:fs";
+import { mkdirSync, writeFileSync, existsSync } from "node:fs";
 import readline from "node:readline";
 import Database from "better-sqlite3";
 import { extractSparkleId } from "../server/lib/vault-backfill.js";
@@ -272,6 +272,3 @@ if (isDirectInvocation) {
     process.exit(1);
   });
 }
-
-void existsSync;
-void readFileSync;

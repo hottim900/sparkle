@@ -114,11 +114,15 @@ const handleExport: CommandHandler = async ({ userId, command, db, sqlite }) => 
       priority: resolved.item.priority,
       due: resolved.item.due,
     };
-    const result = await exportToObsidian(exportItem, {
-      vaultPath: obsidian.obsidian_vault_path,
-      inboxFolder: obsidian.obsidian_inbox_folder,
-      exportMode: obsidian.obsidian_export_mode,
-    });
+    const result = await exportToObsidian(
+      exportItem,
+      {
+        vaultPath: obsidian.obsidian_vault_path,
+        inboxFolder: obsidian.obsidian_inbox_folder,
+        exportMode: obsidian.obsidian_export_mode,
+      },
+      sqlite,
+    );
     if (result.skipped) {
       return `⏭️ 已存在相同筆記，跳過匯出: ${result.path}`;
     }
@@ -138,6 +142,7 @@ const handleExport: CommandHandler = async ({ userId, command, db, sqlite }) => 
         content: resolved.item.content,
       },
       result.path,
+      result.diskBytes,
     );
     return `✅ 已匯出到 Obsidian: ${result.path}`;
   } catch (err) {

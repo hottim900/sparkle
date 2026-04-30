@@ -963,24 +963,22 @@ export function initializeDatabase(sqlite: Database.Database) {
 }
 
 /**
- * Migration halt handler: log bilingual payload, flush pino, then exit 78.
+ * Migration halt handler: log bilingual payload, then exit 78.
  *
  * Exit code 78 (EX_CONFIG) pairs with systemd `RestartPreventExitStatus=78`
  * (see scripts/systemd/sparkle.service post-PR-2). Without that unit-file
  * change, Restart=always would loop the halt — operator never sees a
  * stable error window. PR 2 ships both code + unit-file changes together.
  *
- * The setTimeout fallback fires if pino's flush callback gets stuck (e.g.
- * dev pino-pretty transport quirks); production stdout-direct writes flush
- * synchronously and fire the callback immediately.
+ * Pino without a `transport` config (production default) writes
+ * synchronously to stdout, so the next line's process.exit catches the
+ * halt log. Dev pino-pretty may drop the halt message; that's accepted
+ * since dev is informational and the V24HaltError class also surfaces
+ * via the throwing call-site test fixtures.
  */
 function haltAndExit(payload: V24HaltPayload, event: string): never {
   logger.error(payload, `[${event}]`);
-  logger.flush(() => process.exit(78));
-  setTimeout(() => process.exit(78), 500).unref();
-  // Block — process.exit fires from the flush callback or fallback timeout
-  // before this throw matters; the throw keeps control flow legible to TS.
-  throw new Error(`Migration halted: ${event}`);
+  process.exit(78);
 }
 
 function createDb() {

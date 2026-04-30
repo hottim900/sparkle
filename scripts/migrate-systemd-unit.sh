@@ -17,6 +17,13 @@ set -euo pipefail
 
 UNIT_PATH="/etc/systemd/system/sparkle.service"
 
+if [[ "$(uname)" != "Linux" ]]; then
+    echo "ERROR: this script targets Linux systemd. Detected $(uname)."
+    echo "       Sed replacement uses GNU-only syntax; running on macOS/BSD"
+    echo "       would corrupt the unit file."
+    exit 1
+fi
+
 if [[ $EUID -ne 0 ]]; then
     echo "ERROR: must run as root (use sudo)"
     exit 1
@@ -48,9 +55,17 @@ if ! grep -q "^Restart=always" "$UNIT_PATH"; then
     exit 1
 fi
 
-sed -i \
-    -e 's|^Restart=always$|Restart=on-failure\nRestartPreventExitStatus=78\nSuccessExitStatus=78|' \
-    "$UNIT_PATH"
+# awk-based replacement — portable across BSD/GNU; sed `\n` in replacement
+# is GNU-only and would corrupt the file on macOS.
+awk '
+    /^Restart=always$/ {
+        print "Restart=on-failure"
+        print "RestartPreventExitStatus=78"
+        print "SuccessExitStatus=78"
+        next
+    }
+    { print }
+' "$UNIT_PATH" > "${UNIT_PATH}.new" && mv "${UNIT_PATH}.new" "$UNIT_PATH"
 
 echo "📝 Patched $UNIT_PATH"
 

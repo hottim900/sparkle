@@ -30,7 +30,13 @@ type DuplicateAuditEntry = {
 /**
  * Append a duplicate-sparkle-id incident to the audit JSON file.
  * Surfaces in `vault:audit` CLI (PR 2). File is an array; created on first write.
+ *
+ * Capped at 1000 most recent entries — read-modify-write is O(N²) over many
+ * conflicts in one scan, so a misconfigured vault with thousands of duplicate
+ * sparkle_ids would otherwise stall the scanner. 1000 keeps worst-case bounded.
  */
+const AUDIT_CAP = 1000;
+
 export function appendDuplicateAuditEntry(
   entry: DuplicateAuditEntry,
   auditPath: string = DEFAULT_AUDIT_PATH,
@@ -46,6 +52,7 @@ export function appendDuplicateAuditEntry(
       }
     }
     arr.push(entry);
+    if (arr.length > AUDIT_CAP) arr = arr.slice(-AUDIT_CAP);
     writeFileSync(auditPath, JSON.stringify(arr, null, 2));
   } catch (e) {
     // Audit failure must never break the scan, but log the dropped entry so
