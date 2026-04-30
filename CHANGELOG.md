@@ -1,5 +1,36 @@
 # Changelog
 
+## [1.4.5.0] - 2026-04-30
+
+### Removed
+
+- **`items_vault.export_path` column dropped** (migration v25). `vault_files.sparkle_id` reverse-lookup is now the sole source of truth for an exported note's vault path. v24's dual-write window confirmed the lookup hits in every observed case; the snapshot column is gone and so is the watcher that used to self-heal it.
+- **`server/lib/vault-watcher.ts`** (140 LOC) and its test — the 60s self-heal scan loop has nothing left to heal once `export_path` is gone. Reverse-lookup is the primary path everywhere.
+- **`server/lib/vault-backfill.ts`** (100 LOC) and its test — v24 ran the one-shot backfill; the recurring loop has no purpose post-v25. `extractSparkleId` moved to the new `server/lib/frontmatter.ts`.
+- **`vault_path_source: "fallback"`** literal type narrowed away from `VAULT_READONLY` payloads. The union is now `"lookup" | null`.
+
+### Added
+
+- **Migration v25** — `ALTER TABLE items_vault DROP COLUMN export_path` plus a pre-flight `VACUUM INTO` snapshot to `~/sparkle-backups/`. Two halt categories: `migration_v25_halted_no_disk` (statfs free space < 1.2× DB size) and `migration_v25_halted_backup_failed` (mkdir / VACUUM threw). Backup is integrity-checked (`PRAGMA integrity_check` + schema_version + `export_path` column presence) BEFORE the destructive drop, so a corrupt VACUUM output never strands the operator with no rollback. Filename includes pid + uuid suffix to defeat collision under fast restart loops. Idempotent re-runs early-exit if the column is already gone.
+- **`server/lib/frontmatter.ts`** — new shared module. `extractFrontmatterBlock(content)` returns the raw block with CRLF-stripped lines (was duplicated in vault-scanner + export.ts); `extractSparkleId(content)` calls it.
+- **`vaultReadonlyResponse(c, sqlite, id, overrides?)`** — convenience helper in `server/lib/vault-errors.ts`. Five route callsites collapse from `getVaultPathBySparkleIdSync(...) → vaultReadonlyPayload(...) → c.json(..., 409)` to one line, coupling reverse-lookup with the payload shape.
+- **`docs/migration-v25.md`** — six-section playbook (schema diff, pre-flight, halt categories, rollback with mandatory WAL/SHM cleanup, backup retention, post-deploy verification).
+- **`ops/migration-25-dryrun.sh`** + **`ops/rollback-migration-25.sh`** — production-quality migration tooling matching the v23/v24 templates. Rollback derives the live DB owner via `stat` instead of hardcoding `tim:tim` so recovery hosts work too.
+
+### Changed
+
+- **`deleteVaultItem` return shape** — `{ id, vault_path: string | null }` (queried via LEFT JOIN inside the same transaction). `releaseVaultStub` API + MCP `sparkle_release_note` payload follow.
+- **`useResolvedVaultPath` hook** — wrapped in `useMemo` so consumer dependency arrays stay stable across re-renders. The `export_path` snapshot fallback is gone; `resolvedVaultPath` is purely from reverse-lookup.
+- **`item-detail` announce-on-change** — compares against the previously-rendered path (via `lastAnnouncedRef`) instead of the cached snapshot. No assistive-tech announcement on first load; only fires when reverse-lookup surfaces a different path post-rename.
+- **`haltAndExit`** — accepts both `V24HaltPayload` and `V25HaltPayload` (`MigrationHaltPayload` union). Calls `logger.flush()` defensively before `process.exit(78)` for any future pino transport that buffers.
+
+### Migration notes
+
+- **Single-process pre-flight required.** Before deploying v25: `sudo systemctl stop sparkle && sleep 3 && pgrep -fc 'tsx server/index.ts'` should print `0`. Concurrent processes entering `runMigrations` would each VACUUM INTO once; idempotency holds, but two backups in the same dir confuses the operator.
+- **Rollback requires WAL/SHM cleanup.** If you restore a v25 backup over the live DB without `rm -f data/todo.db-{wal,shm}` first, SQLite replays v25-era writes onto the v24 file and corrupts it. `ops/rollback-migration-25.sh` does this for you.
+- **Reconnect Claude.ai connector** if you use one — the `vault_path_source` union narrowed; the connector picks up the updated tool descriptions on re-auth.
+- See `docs/migration-v25.md` for the full halt-recovery runbook.
+
 ## [1.4.4.0] - 2026-04-30
 
 ### Added
