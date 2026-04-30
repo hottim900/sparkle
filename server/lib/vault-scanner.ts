@@ -1,5 +1,6 @@
 import { readFile, readdir, stat } from "node:fs/promises";
-import { join, relative, basename, extname } from "node:path";
+import { mkdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
+import { join, relative, basename, dirname, extname } from "node:path";
 import { createHash } from "node:crypto";
 import { eq } from "drizzle-orm";
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
@@ -13,6 +14,47 @@ import { logger } from "./logger.js";
 type DB = BetterSQLite3Database<typeof schema>;
 
 const SCAN_INTERVAL_MS = 5 * 60_000; // 5 minutes
+
+const DEFAULT_AUDIT_PATH = join(process.cwd(), "quality", "duplicate-sparkle-id.json");
+
+// Module-level concurrency guard — `setInterval` can fire while a previous scan
+// is still running on a large vault, producing two parallel transactions.
+let scanInProgress = false;
+
+type DuplicateAuditEntry = {
+  sparkle_id: string;
+  new_path: string;
+  detected: string;
+};
+
+/**
+ * Append a duplicate-sparkle-id incident to the audit JSON file.
+ * Surfaces in `vault:audit` CLI (PR 2). File is an array; created on first write.
+ */
+export function appendDuplicateAuditEntry(
+  entry: DuplicateAuditEntry,
+  auditPath: string = DEFAULT_AUDIT_PATH,
+): void {
+  try {
+    mkdirSync(dirname(auditPath), { recursive: true });
+    let arr: DuplicateAuditEntry[] = [];
+    if (existsSync(auditPath)) {
+      const raw = readFileSync(auditPath, "utf-8").trim();
+      if (raw) {
+        const parsed: unknown = JSON.parse(raw);
+        if (Array.isArray(parsed)) arr = parsed as DuplicateAuditEntry[];
+      }
+    }
+    arr.push(entry);
+    writeFileSync(auditPath, JSON.stringify(arr, null, 2));
+  } catch (e) {
+    // Audit failure must never break the scan, but log the dropped entry so
+    // operators can grep for incidents lost to disk-full / permission errors.
+    logger.warn(
+      `vault-scanner: failed to write duplicate audit entry ${JSON.stringify(entry)}: ${(e as Error).message}`,
+    );
+  }
+}
 
 /**
  * Extract title from a markdown file. Uses first H1 heading, or filename.
@@ -47,13 +89,15 @@ type VaultFileData = {
 
 /**
  * Insert or update a vault file entry, handling duplicate sparkle_id gracefully.
- * On UNIQUE constraint failure (two files share the same sparkle_id), retries with sparkle_id = null.
+ * On UNIQUE constraint failure (two files share the same sparkle_id), retries with sparkle_id = null
+ * AND appends a structured audit entry so `vault:audit` (PR 2) can surface the conflict.
  */
 function upsertWithDupGuard(
   db: DB,
   relPath: string,
   data: VaultFileData,
   mode: "insert" | "update",
+  auditPath: string,
 ): void {
   const run = (sparkleId: string | null) => {
     const payload = { ...data, sparkle_id: sparkleId };
@@ -73,6 +117,14 @@ function upsertWithDupGuard(
     if (msg.includes("UNIQUE constraint failed") && data.sparkle_id) {
       logger.warn(
         `vault-scanner: duplicate sparkle_id ${data.sparkle_id} in ${relPath}, setting to null`,
+      );
+      appendDuplicateAuditEntry(
+        {
+          sparkle_id: data.sparkle_id,
+          new_path: relPath,
+          detected: new Date().toISOString(),
+        },
+        auditPath,
       );
       run(null);
     } else {
@@ -113,123 +165,164 @@ async function collectMdFiles(dir: string, vaultRoot: string): Promise<string[]>
   return results;
 }
 
-/**
- * Full vault scan: index all .md files into vault_files table.
- * Uses content_hash to skip unchanged files. Removes deleted files from DB.
- */
-export async function scanVaultFiles(
-  db: DB,
-  sqlite: Database.Database,
-): Promise<{
+export type ScanOptions = {
+  /** Override the duplicate-sparkle-id audit JSON path (tests). */
+  auditPath?: string;
+};
+
+export type ScanResult = {
   scanned: number;
   inserted: number;
   updated: number;
   deleted: number;
   errors: number;
-}> {
+  /** True when the call short-circuited because another scan was already running. */
+  skipped: boolean;
+};
+
+const EMPTY_RESULT = (skipped: boolean): ScanResult => ({
+  scanned: 0,
+  inserted: 0,
+  updated: 0,
+  deleted: 0,
+  errors: 0,
+  skipped,
+});
+
+/**
+ * Full vault scan: index all .md files into vault_files table.
+ * Uses content_hash to skip unchanged files. Removes deleted files from DB.
+ *
+ * Concurrent calls are skipped: only one scan runs at a time per process.
+ */
+export async function scanVaultFiles(
+  db: DB,
+  sqlite: Database.Database,
+  options: ScanOptions = {},
+): Promise<ScanResult> {
+  if (scanInProgress) {
+    logger.info("vault-scanner: previous scan still in progress, skipping this tick");
+    return EMPTY_RESULT(true);
+  }
+
   const obsidian = getObsidianSettings(sqlite);
   if (!obsidian.obsidian_enabled || !obsidian.obsidian_vault_path) {
-    return { scanned: 0, inserted: 0, updated: 0, deleted: 0, errors: 0 };
+    return EMPTY_RESULT(false);
   }
 
-  const vaultPath = obsidian.obsidian_vault_path;
-  const startTime = Date.now();
+  scanInProgress = true;
+  try {
+    const auditPath = options.auditPath ?? DEFAULT_AUDIT_PATH;
+    const upsert = (relPath: string, data: VaultFileData, mode: "insert" | "update") =>
+      upsertWithDupGuard(db, relPath, data, mode, auditPath);
+    const vaultPath = obsidian.obsidian_vault_path;
+    const startTime = Date.now();
 
-  // Collect all .md files
-  const filePaths = await collectMdFiles(vaultPath, vaultPath);
+    // Collect all .md files
+    const filePaths = await collectMdFiles(vaultPath, vaultPath);
+    const seenPaths = new Set<string>(filePaths);
 
-  // Get existing entries from DB for comparison
-  const existing = new Map<string, { mtime: number; content_hash: string }>();
-  const rows = db
-    .select({
-      path: vaultFiles.path,
-      mtime: vaultFiles.mtime,
-      content_hash: vaultFiles.content_hash,
-    })
-    .from(vaultFiles)
-    .all();
-  for (const row of rows) {
-    existing.set(row.path, { mtime: row.mtime, content_hash: row.content_hash });
-  }
+    // Get existing entries from DB for comparison
+    const existing = new Map<string, { mtime: number; content_hash: string }>();
+    const rows = db
+      .select({
+        path: vaultFiles.path,
+        mtime: vaultFiles.mtime,
+        content_hash: vaultFiles.content_hash,
+      })
+      .from(vaultFiles)
+      .all();
+    for (const row of rows) {
+      existing.set(row.path, { mtime: row.mtime, content_hash: row.content_hash });
+    }
 
-  let inserted = 0;
-  let updated = 0;
-  let errors = 0;
-  const seenPaths = new Set<string>();
+    // Remove deleted files BEFORE upsert loop. Otherwise a moved file (oldPath →
+    // newPath, same sparkle_id) hits a transient UNIQUE conflict on insert while
+    // the old row is still present, falling back to sparkle_id=NULL permanently.
+    const toDelete: string[] = [];
+    for (const dbPath of existing.keys()) {
+      if (!seenPaths.has(dbPath)) toDelete.push(dbPath);
+    }
+    let deleted = 0;
+    if (toDelete.length > 0) {
+      sqlite.transaction(() => {
+        for (const dbPath of toDelete) {
+          db.delete(vaultFiles).where(eq(vaultFiles.path, dbPath)).run();
+          deleted++;
+        }
+      })();
+    }
 
-  for (const relPath of filePaths) {
-    seenPaths.add(relPath);
-    const fullPath = join(vaultPath, relPath);
+    let inserted = 0;
+    let updated = 0;
+    let errors = 0;
 
-    try {
-      const fileStat = await stat(fullPath);
-      const mtime = Math.floor(fileStat.mtimeMs);
+    for (const relPath of filePaths) {
+      const fullPath = join(vaultPath, relPath);
 
-      const dbEntry = existing.get(relPath);
+      try {
+        const fileStat = await stat(fullPath);
+        const mtime = Math.floor(fileStat.mtimeMs);
 
-      // Skip if mtime hasn't changed
-      if (dbEntry && dbEntry.mtime === mtime) continue;
+        const dbEntry = existing.get(relPath);
 
-      // Read and process file
-      const raw = await readFile(fullPath, "utf-8");
-      const hash = contentHash(raw);
+        // Skip if mtime hasn't changed
+        if (dbEntry && dbEntry.mtime === mtime) continue;
 
-      // Skip if content hash matches (mtime changed but content same)
-      if (dbEntry && dbEntry.content_hash === hash) {
-        // Update mtime only
-        db.update(vaultFiles).set({ mtime }).where(eq(vaultFiles.path, relPath)).run();
-        continue;
-      }
+        // Read and process file
+        const raw = await readFile(fullPath, "utf-8");
+        const hash = contentHash(raw);
 
-      const title = extractTitle(raw, relPath);
-      const frontmatter = extractFrontmatter(raw);
-      const sparkleId = extractSparkleId(raw);
+        // Skip if content hash matches (mtime changed but content same)
+        if (dbEntry && dbEntry.content_hash === hash) {
+          // Update mtime only
+          db.update(vaultFiles).set({ mtime }).where(eq(vaultFiles.path, relPath)).run();
+          continue;
+        }
 
-      const data = {
-        title,
-        frontmatter,
-        content: raw,
-        mtime,
-        content_hash: hash,
-        sparkle_id: sparkleId,
-      };
+        const title = extractTitle(raw, relPath);
+        const frontmatter = extractFrontmatter(raw);
+        const sparkleId = extractSparkleId(raw);
 
-      if (dbEntry) {
-        upsertWithDupGuard(db, relPath, data, "update");
-        updated++;
-      } else {
-        upsertWithDupGuard(db, relPath, data, "insert");
-        inserted++;
-      }
-    } catch (e) {
-      errors++;
-      if (errors <= 5) {
-        logger.warn(`vault-scanner: error reading ${relPath}: ${(e as Error).message}`);
+        const data = {
+          title,
+          frontmatter,
+          content: raw,
+          mtime,
+          content_hash: hash,
+          sparkle_id: sparkleId,
+        };
+
+        if (dbEntry) {
+          upsert(relPath, data, "update");
+          updated++;
+        } else {
+          upsert(relPath, data, "insert");
+          inserted++;
+        }
+      } catch (e) {
+        errors++;
+        if (errors <= 5) {
+          logger.warn(`vault-scanner: error reading ${relPath}: ${(e as Error).message}`);
+        }
       }
     }
-  }
 
-  // Remove deleted files from DB
-  let deleted = 0;
-  for (const dbPath of existing.keys()) {
-    if (!seenPaths.has(dbPath)) {
-      db.delete(vaultFiles).where(eq(vaultFiles.path, dbPath)).run();
-      deleted++;
+    const duration = Date.now() - startTime;
+    if (duration > 10_000) {
+      logger.warn(
+        `vault-scanner: scan took ${(duration / 1000).toFixed(1)}s (${filePaths.length} files)`,
+      );
+    } else if (inserted > 0 || updated > 0 || deleted > 0) {
+      logger.info(
+        `vault-scanner: ${filePaths.length} files, ${inserted} new, ${updated} updated, ${deleted} deleted (${(duration / 1000).toFixed(1)}s)`,
+      );
     }
-  }
 
-  const duration = Date.now() - startTime;
-  if (duration > 10_000) {
-    logger.warn(
-      `vault-scanner: scan took ${(duration / 1000).toFixed(1)}s (${filePaths.length} files)`,
-    );
-  } else if (inserted > 0 || updated > 0 || deleted > 0) {
-    logger.info(
-      `vault-scanner: ${filePaths.length} files, ${inserted} new, ${updated} updated, ${deleted} deleted (${(duration / 1000).toFixed(1)}s)`,
-    );
+    return { scanned: filePaths.length, inserted, updated, deleted, errors, skipped: false };
+  } finally {
+    scanInProgress = false;
   }
-
-  return { scanned: filePaths.length, inserted, updated, deleted, errors };
 }
 
 let vaultScanTimer: ReturnType<typeof setInterval> | null = null;
