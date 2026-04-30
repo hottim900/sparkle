@@ -44,17 +44,12 @@ Returns: The updated note.`,
 
         // v1.4.0: vault-origin items have no maturity journey in Sparkle
         if ((current as { origin?: string }).origin === "vault") {
-          // Reverse-lookup live path; fall back to stored snapshot during PR 2
-          // dual-write window. `vault_path_source` lets the agent reason about
-          // freshness before deciding to retry.
+          // Reverse-lookup is the sole source of truth post-v25
+          // (items_vault.export_path was dropped). null = not yet indexed
+          // (transient) or already released — agents can retry the lookup
+          // endpoint after the next 5-min scanner cycle.
           const lookup = await getVaultPathBySparkleId(current.id);
-          const fallback = (current as { export_path?: string | null }).export_path ?? null;
-          const vault_path = lookup?.path ?? fallback;
-          const vault_path_source = lookup?.path
-            ? "lookup"
-            : fallback
-              ? "fallback"
-              : null;
+          const vault_path = lookup?.path ?? null;
           return {
             isError: true,
             content: [
@@ -65,7 +60,7 @@ Returns: The updated note.`,
                   error: "此項目為 vault-origin，無法 advance（成熟度路線只適用於 items_active）",
                   error_en: "Vault items have no maturity status; advance_note does not apply.",
                   vault_path,
-                  vault_path_source,
+                  vault_path_source: vault_path ? "lookup" : null,
                   hint_tool_by_path: "sparkle_write_obsidian_by_path",
                   doc_url: "sparkle://docs/data-model#vault-items",
                 }),
@@ -244,7 +239,7 @@ Args:
   - note_id (string, required): Vault item UUID
   - confirm (boolean, required): Must be true to proceed.
 
-Returns: { ok: true, id, export_path } on success.`,
+Returns: { ok: true, id, vault_path } on success. \`vault_path\` is the live path from \`vault_files.sparkle_id\` reverse-lookup at delete-time (null if the file was no longer indexed).`,
       inputSchema: z
         .object({
           note_id: z.string().uuid().describe("Vault item UUID"),
@@ -289,7 +284,7 @@ Returns: { ok: true, id, export_path } on success.`,
           content: [
             {
               type: "text",
-              text: `已釋出 · vault 檔案保留。\nid: ${result.id}\nexport_path: ${result.export_path ?? "(unknown)"}`,
+              text: `已釋出 · vault 檔案保留。\nid: ${result.id}\nvault_path: ${result.vault_path ?? "(unknown)"}`,
             },
           ],
         };

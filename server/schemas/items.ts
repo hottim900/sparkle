@@ -162,7 +162,6 @@ export const importItemSchema = z
     paused: z.coerce.number().int().min(0).max(1).default(0),
     paused_at: z.string().nullable().default(null),
     paused_context: z.string().max(500).nullable().default(null),
-    export_path: z.string().nullable().default(null),
     created: z.string().min(1),
     modified: z.string().min(1),
   })

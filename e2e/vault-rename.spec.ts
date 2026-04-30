@@ -9,9 +9,10 @@ const PORT = process.env.PORT || 3456;
 const VAULT_PATH = "/tmp/e2e-vault-rename-vault";
 
 /**
- * PR 2 reverse-lookup contract:
+ * Reverse-lookup contract (post PR 3, items_vault.export_path dropped):
  *   GET /api/vault/by-sparkle-id/:id resolves the *current* path of an
- *   exported .md, sourced from vault_files (not items_vault.export_path).
+ *   exported .md, sourced from vault_files. This is the sole source of
+ *   truth for vault paths — there is no DB column fallback anymore.
  *
  * Full rename roundtrip (rename .md on disk → 5-min scanner picks it up →
  * UI reflects new path) requires either a 5-minute wait or a test-only scan

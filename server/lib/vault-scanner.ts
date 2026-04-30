@@ -8,7 +8,7 @@ import type Database from "better-sqlite3";
 import * as schema from "../db/schema.js";
 import { vaultFiles } from "../db/schema.js";
 import { getObsidianSettings } from "./settings.js";
-import { extractSparkleId } from "./vault-backfill.js";
+import { extractSparkleId } from "./frontmatter.js";
 import { logger } from "./logger.js";
 
 type DB = BetterSQLite3Database<typeof schema>;

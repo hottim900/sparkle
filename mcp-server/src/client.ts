@@ -148,8 +148,8 @@ export async function updateItem(
 
 export async function releaseVaultNote(
   id: string,
-): Promise<{ ok: boolean; id: string; export_path: string | null }> {
-  return sparkleApi<{ ok: boolean; id: string; export_path: string | null }>(
+): Promise<{ ok: boolean; id: string; vault_path: string | null }> {
+  return sparkleApi<{ ok: boolean; id: string; vault_path: string | null }>(
     `/items/${id}/vault-stub`,
     "DELETE",
   );

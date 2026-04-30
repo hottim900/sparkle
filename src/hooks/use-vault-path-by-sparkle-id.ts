@@ -21,16 +21,14 @@ export function useVaultPathBySparkleId(id: string | undefined | null) {
   });
 }
 
-type ItemLike =
-  | { id: string; origin: "active" | "vault"; export_path: string | null }
-  | null
-  | undefined;
+type ItemLike = { id: string; origin: "active" | "vault" } | null | undefined;
 
 /**
- * Derived state for the dual-write window: combines reverse-lookup with the
- * items_vault.export_path snapshot fallback. Returns the same three render
- * branches the slate bar + body link both consume, so the two callsites stay
- * in sync (no "header says deleted, body says loading" drift).
+ * Reverse-lookup is the sole source of truth post-v25 (items_vault.export_path
+ * was dropped). The three render branches below stay shared between the slate
+ * bar + body link so the two callsites can't drift ("header says deleted, body
+ * says loading"). `keepPreviousData` (set in `useVaultPathBySparkleId`) keeps
+ * the old path visible during refetch after a rename so UI doesn't flicker.
  */
 export function useResolvedVaultPath(item: ItemLike): {
   resolvedVaultPath: string | null;
@@ -39,11 +37,10 @@ export function useResolvedVaultPath(item: ItemLike): {
 } {
   const isVault = item?.origin === "vault";
   const query = useVaultPathBySparkleId(isVault ? item!.id : undefined);
-  const fallback = item?.export_path ?? null;
   const live = query.data?.path ?? null;
   return {
-    resolvedVaultPath: live ?? fallback,
-    isLoading: isVault && query.isLoading && !fallback,
-    isDeleted: isVault && !query.isLoading && query.data === null && !fallback,
+    resolvedVaultPath: live,
+    isLoading: isVault && query.isLoading,
+    isDeleted: isVault && !query.isLoading && query.data === null,
   };
 }

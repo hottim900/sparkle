@@ -12,7 +12,7 @@ import {
   updateItem,
   deleteItem,
   searchItems,
-  resolveVaultPath,
+  getVaultPathBySparkleIdSync,
 } from "../lib/items.js";
 import {
   createItemSchema,
@@ -186,8 +186,8 @@ privateRouter.patch("/items/:id", async (c) => {
     }
 
     if (existing.origin === "vault") {
-      const { path, source } = resolveVaultPath(sqlite, existing.id, existing.export_path);
-      return c.json(vaultReadonlyPayload(path, source), 409);
+      const path = getVaultPathBySparkleIdSync(sqlite, existing.id);
+      return c.json(vaultReadonlyPayload(path), 409);
     }
 
     const updated = updateItem(db, id, input, true);
@@ -212,8 +212,8 @@ privateRouter.delete("/items/:id", (c) => {
   }
 
   if (existing.origin === "vault") {
-    const { path, source } = resolveVaultPath(sqlite, existing.id, existing.export_path);
-    return c.json(vaultReadonlyPayload(path, source), 409);
+    const path = getVaultPathBySparkleIdSync(sqlite, existing.id);
+    return c.json(vaultReadonlyPayload(path), 409);
   }
 
   deleteItem(db, id);

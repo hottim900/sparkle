@@ -51,7 +51,6 @@ export const itemsVault = sqliteTable(
     aliases: text("aliases").notNull().default("[]"),
     source: text("source"),
     origin: text("origin"),
-    export_path: text("export_path"),
     exported_at: text("exported_at").notNull(),
     created: text("created").notNull(),
     is_private: integer("is_private").notNull().default(0),

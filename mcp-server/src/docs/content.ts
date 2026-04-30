@@ -393,8 +393,7 @@ v1.4.0 起 items 拆成兩張表：
 - \`vault_path\`：當前 vault 內檔案路徑（透過 vault_files reverse-lookup 解析）
 - \`vault_path_source\`：
   - \`"lookup"\` — 從 vault_files 即時反查取得（rename/move 後的最新值）
-  - \`"fallback"\` — 從 items_vault.export_path 快照取得（PR 2 dual-write 過渡期；PR 3 移除）
-  - \`null\` — 沒有可用 path（檔案剛被刪除或從未匯出）
+  - \`null\` — 沒有可用 path（檔案剛被刪除、剛 export 還沒被 scanner 索引到、或從未匯出）
 
 **修改 vault 內容的三條路徑**：
 
@@ -404,7 +403,7 @@ v1.4.0 起 items 拆成兩張表：
 | 用 path 改內容 | \`sparkle_write_obsidian_by_path\` |
 | 釋放 Sparkle 對 vault 檔案的記錄（保留 .md） | \`sparkle_release_note\` 或 \`DELETE /api/items/:id/vault-stub\` |
 
-**dual-write 過渡期注意事項**（PR 2 期間）：vault_path 由 reverse-lookup 主導，但 export_path 還在 schema 內當 fallback。callsite 的 \`?? export_path\` 只應落在「scanner 還沒掃到新 path」的短窗。PR 3 整段移除。`,
+**vault_path 解析（post-v25）**：reverse-lookup 是唯一來源——\`items_vault.export_path\` 已於 migration v25 移除。\`vault_path = null\` 時通常表示 scanner 還沒索引到（5 分鐘內會更新），AI agent 可重試 \`/api/vault/by-sparkle-id/:id\` 端點。`,
   },
 
   "obsidian-vault": {

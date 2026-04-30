@@ -45,8 +45,6 @@ import { dailyNoteRouter } from "./routes/daily-note.js";
 import { lineBriefRouter } from "./routes/line-brief.js";
 import { checkAndGenerateDailyNote } from "./lib/daily-note-scheduler.js";
 import { checkAndSendLineBrief } from "./lib/line-brief-scheduler.js";
-import { startVaultWatcher } from "./lib/vault-watcher.js";
-import { backfillExportPaths } from "./lib/vault-backfill.js";
 import { startVaultScanner } from "./lib/vault-scanner.js";
 
 // --- Startup validation ---
@@ -279,7 +277,6 @@ app.get("/api/export", (c) => {
     paused: 0,
     paused_at: null,
     paused_context: null,
-    export_path: r.export_path,
     created: r.created,
     modified: r.exported_at,
   }));
@@ -429,7 +426,6 @@ app.post("/api/import", async (c) => {
                 aliases: JSON.stringify(item.aliases),
                 source: item.source,
                 origin: item.origin,
-                export_path: item.export_path ?? existingVault.export_path,
                 exported_at: exportedAt,
                 created: item.created,
                 content_snippet: snippet,
@@ -447,7 +443,6 @@ app.post("/api/import", async (c) => {
                 aliases: JSON.stringify(item.aliases),
                 source: item.source,
                 origin: item.origin,
-                export_path: item.export_path,
                 exported_at: exportedAt,
                 created: item.created,
                 is_private: 0,
@@ -583,12 +578,9 @@ dailyNoteTimer.unref();
 const lineBriefTimer = setInterval(() => checkAndSendLineBrief(sqlite), 60_000);
 lineBriefTimer.unref();
 
-// Vault sync — backfill export_path for pre-v20 exports, then start watcher
-backfillExportPaths(db, sqlite)
-  .catch((e) => logger.warn(`vault-backfill: failed: ${(e as Error).message}`))
-  .finally(() => startVaultWatcher(db, sqlite));
-
-// Vault scanner — indexes entire vault into vault_files table every 5 minutes
+// Vault scanner — indexes entire vault into vault_files table every 5 minutes.
+// vault_files.sparkle_id is the source-of-truth for vault path resolution
+// (post-v25 — items_vault.export_path was dropped).
 startVaultScanner(db, sqlite);
 
 export default app;

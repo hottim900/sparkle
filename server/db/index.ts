@@ -1,15 +1,16 @@
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import Database from "better-sqlite3";
-import { mkdirSync, readFileSync } from "node:fs";
+import { mkdirSync, readFileSync, statSync, statfsSync } from "node:fs";
+import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import * as schema from "./schema.js";
 import { setupFTS, setupVaultFTS } from "./fts.js";
 import { logger } from "../lib/logger.js";
-import { extractSparkleId } from "../lib/vault-backfill.js";
+import { extractSparkleId } from "../lib/frontmatter.js";
 
 const DB_PATH = process.env.DATABASE_URL || "./data/todo.db";
 
-const TARGET_VERSION = 24;
+const TARGET_VERSION = 25;
 
 /**
  * Migration v24 halt payload — bilingual operator-facing error.
@@ -32,6 +33,29 @@ export class V24HaltError extends Error {
     this.name = "V24HaltError";
   }
 }
+
+/**
+ * Migration v25 halt payload — backup mechanism failed before DROP COLUMN.
+ * Pairs with systemd `RestartPreventExitStatus=78` to stop the restart-loop.
+ */
+export type V25HaltPayload = {
+  event: "migration_v25_halted_no_disk" | "migration_v25_halted_backup_failed";
+  error: string;
+  error_en: string;
+  docs: string;
+  backupPath?: string;
+  requiredBytes?: number;
+  freeBytes?: number;
+};
+
+export class V25HaltError extends Error {
+  constructor(public readonly haltPayload: V25HaltPayload) {
+    super(`[${haltPayload.event}] ${haltPayload.error_en}`);
+    this.name = "V25HaltError";
+  }
+}
+
+export type MigrationHaltPayload = V24HaltPayload | V25HaltPayload;
 
 function getSchemaVersion(sqlite: Database.Database): number {
   // Check if schema_version table exists
@@ -443,6 +467,126 @@ function runMigrations(sqlite: Database.Database) {
   if (version < 24) {
     migrateV23toV24(sqlite);
   }
+
+  // Step 24→25: Drop items_vault.export_path. vault_files.sparkle_id reverse-lookup
+  // is the sole source of truth post-v25. Pre-flight backup via VACUUM INTO.
+  // See docs/migration-v25.md.
+  if (version < 25) {
+    migrateV24toV25(sqlite);
+  }
+}
+
+/**
+ * Default backup directory — matches the existing restic repo location used by
+ * scripts/backup.sh. Operators with `~/sparkle-backups/` already populated get
+ * pre-migration snapshots alongside their daily backups.
+ *
+ * Override via SPARKLE_MIGRATION_BACKUP_DIR (test fixtures use the DB's parent
+ * directory to keep tmp-dir isolation).
+ */
+function getMigrationBackupDir(): string {
+  return process.env.SPARKLE_MIGRATION_BACKUP_DIR ?? join(homedir(), "sparkle-backups");
+}
+
+/**
+ * Migration 24→25: Drop items_vault.export_path. Pre-condition for the column
+ * drop is a hot-DB-safe backup: VACUUM INTO yields a WAL-consistent copy and
+ * is synchronous in better-sqlite3 7.x+ (verified 12.6.x). fs.copyFileSync
+ * would race the WAL — VACUUM INTO does not.
+ *
+ * Two halt categories:
+ *   - migration_v25_halted_no_disk     — statfs free space < required (1.2× DB size)
+ *   - migration_v25_halted_backup_failed — VACUUM INTO threw (permission, IO, etc.)
+ *
+ * On halt, V25HaltError is thrown; createDb catches and routes through
+ * haltAndExit → process.exit(78) to pair with systemd RestartPreventExitStatus.
+ *
+ * After backup succeeds, ALTER TABLE DROP COLUMN runs inside a transaction
+ * with setSchemaVersion(25). All-or-nothing — if DROP COLUMN throws (e.g. an
+ * unexpected CHECK constraint references export_path) the version stays at 24
+ * and the operator can restore from the backup.
+ */
+export function migrateV24toV25(sqlite: Database.Database): void {
+  const dbPath = sqlite.name;
+  const isInMemory = dbPath === ":memory:" || dbPath === "";
+
+  // Tests run against `:memory:`. Production paths always pass a real file,
+  // so the backup branch is the path that matters operationally; tests skip
+  // it because there's nothing on disk to copy.
+  if (!isInMemory) {
+    const backupDir = getMigrationBackupDir();
+    const backupPath = join(backupDir, `todo.db.bak-pre-v25-${Date.now()}`);
+
+    // ENOSPC pre-flight runs before VACUUM INTO so we can give a clearer
+    // bilingual error. mkdirSync / statfsSync failures fall through to the
+    // generic "backup_failed" halt below — both are operator-fixable
+    // (permissions, broken symlink, etc.).
+    try {
+      mkdirSync(backupDir, { recursive: true });
+      const dbStat = statSync(dbPath);
+      const fsStat = statfsSync(backupDir);
+      const freeBytes = Number(fsStat.bavail) * Number(fsStat.bsize);
+      const requiredBytes = Math.ceil(dbStat.size * 1.2);
+
+      if (freeBytes < requiredBytes) {
+        throw new V25HaltError({
+          event: "migration_v25_halted_no_disk",
+          requiredBytes,
+          freeBytes,
+          backupPath: backupDir,
+          error: `Migration v25 需要至少 ${Math.ceil(requiredBytes / 1e6)}MB 可用空間於 ${backupDir}（目前剩餘 ${Math.floor(freeBytes / 1e6)}MB）。請釋出磁碟空間後重啟 sparkle。詳見 docs/migration-v25.md#disk-space`,
+          error_en: `Migration v25 requires at least ${Math.ceil(requiredBytes / 1e6)}MB free at ${backupDir} (have ${Math.floor(freeBytes / 1e6)}MB). Free space then restart sparkle.`,
+          docs: "see docs/migration-v25.md#disk-space",
+        });
+      }
+
+      // VACUUM INTO is sync in better-sqlite3 7.x+, atomic, WAL-consistent.
+      sqlite.prepare("VACUUM INTO ?").run(backupPath);
+
+      const backupStat = statSync(backupPath);
+      logger.info(
+        {
+          event: "migration_v25_backup_created",
+          backupPath,
+          sizeBytes: backupStat.size,
+          freeBytesAfter: freeBytes - backupStat.size,
+        },
+        `migration v25: pre-migration backup created at ${backupPath}`,
+      );
+    } catch (e) {
+      if (e instanceof V25HaltError) throw e;
+      throw new V25HaltError({
+        event: "migration_v25_halted_backup_failed",
+        backupPath,
+        error: `Migration v25 backup 失敗：${(e as Error).message}。請檢查 ${backupDir} 權限與磁碟健康後重啟 sparkle。詳見 docs/migration-v25.md#backup-failed`,
+        error_en: `Migration v25 backup failed: ${(e as Error).message}. Check ${backupDir} permissions and disk health, then restart sparkle.`,
+        docs: "see docs/migration-v25.md#backup-failed",
+      });
+    }
+  }
+
+  // DROP COLUMN — wrap in a transaction so a mid-statement crash leaves the
+  // column intact (no partial drop). setSchemaVersion runs AFTER the tx commits;
+  // if the DROP throws, version stays at 24 and the operator can restore from
+  // the backup before retrying.
+  //
+  // Idempotency guard: if the column is already gone (re-run after partial
+  // success), skip the ALTER. SQLite 3.35+ supports DROP COLUMN; better-sqlite3
+  // 12.6.x bundles 3.46+, well above the threshold.
+  const tx = sqlite.transaction(() => {
+    const cols = sqlite.prepare("PRAGMA table_info(items_vault)").all() as { name: string }[];
+    const hasExportPath = cols.some((c) => c.name === "export_path");
+    if (hasExportPath) {
+      sqlite.exec("ALTER TABLE items_vault DROP COLUMN export_path");
+    }
+  });
+  tx();
+  setSchemaVersion(sqlite, 25);
+
+  logger.info(
+    { event: "migration_v25_complete" },
+    "migration v25: dropped items_vault.export_path",
+  );
 }
 
 /**
@@ -899,7 +1043,6 @@ export function initializeDatabase(sqlite: Database.Database) {
         aliases TEXT NOT NULL DEFAULT '[]',
         source TEXT,
         origin TEXT,
-        export_path TEXT,
         exported_at TEXT NOT NULL,
         created TEXT NOT NULL,
         is_private INTEGER NOT NULL DEFAULT 0,
@@ -963,24 +1106,30 @@ export function initializeDatabase(sqlite: Database.Database) {
 }
 
 /**
- * Migration halt handler: log bilingual payload, then exit 78.
+ * Migration halt handler: log bilingual payload, flush pino, then exit 78.
  *
  * Exit code 78 (EX_CONFIG) pairs with systemd `RestartPreventExitStatus=78`
- * (see scripts/systemd/sparkle.service post-PR-2). Without that unit-file
- * change, Restart=always would loop the halt — operator never sees a
- * stable error window. PR 2 ships both code + unit-file changes together.
+ * (scripts/systemd/sparkle.service). Without that unit-file change,
+ * Restart=always would loop the halt — operator never sees a stable error
+ * window. PR 2 shipped both code + unit-file changes together.
  *
- * Pino without a `transport` config (production default) writes
- * synchronously to stdout, so the next line's process.exit catches the
- * halt log. Dev pino-pretty may drop the halt message; that's accepted
- * since dev is informational and the V24HaltError class also surfaces
- * via the throwing call-site test fixtures.
+ * Production pino has no transport (see lib/logger.ts), so writes to stdout
+ * are synchronous and `flush()` is a no-op — the halt line lands in journalctl
+ * before exit. We still call `flush()` defensively for any future transport
+ * config; the no-callback form returns immediately.
  *
  * Exported for unit test verification (logger.error must fire before
  * process.exit). Production callers go through the createDb catch path.
  */
-export function haltAndExit(payload: V24HaltPayload, event: string): never {
+export function haltAndExit(payload: MigrationHaltPayload, event: string): never {
   logger.error(payload, `[${event}]`);
+  if (typeof logger.flush === "function") {
+    try {
+      logger.flush();
+    } catch {
+      // flush errors are non-fatal — we're exiting anyway
+    }
+  }
   process.exit(78);
 }
 
@@ -997,7 +1146,7 @@ function createDb() {
   try {
     initializeDatabase(sqlite);
   } catch (e) {
-    if (e instanceof V24HaltError) {
+    if (e instanceof V24HaltError || e instanceof V25HaltError) {
       haltAndExit(e.haltPayload, e.haltPayload.event);
     }
     throw e;

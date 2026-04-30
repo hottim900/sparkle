@@ -11,12 +11,11 @@ type VaultRow = typeof itemsVault.$inferSelect;
 /**
  * Unified item shape returned by getItem/listItems/searchItems.
  *
- * - `origin: 'active'` rows carry status/content/paused/viewed_at/etc. — vault-only fields (content_snippet, export_path, exported_at, vault_path) are null.
- * - `origin: 'vault'` rows carry content_snippet/export_path/exported_at + vault_path (live reverse-lookup result, source-of-truth path) — active-only fields (status, content, paused, viewed_at, priority, due, linked_note_id) are null.
+ * - `origin: 'active'` rows carry status/content/paused/viewed_at/etc. — vault-only fields (content_snippet, exported_at, vault_path) are null.
+ * - `origin: 'vault'` rows carry content_snippet/exported_at + vault_path — active-only fields (status, content, paused, viewed_at, priority, due, linked_note_id) are null.
  *
- * `vault_path` (PR 2 dual-write window): live path resolved via vault_files.sparkle_id reverse-lookup.
- *   When present, callers should prefer it over `export_path`. PR 3 drops `export_path` entirely.
- * `export_path` is the items_vault.export_path snapshot — kept as fallback while reverse-lookup catches up.
+ * `vault_path` is the live path resolved via `vault_files.sparkle_id` reverse-lookup
+ *   (post-v25 it is the sole source of truth — items_vault.export_path was dropped).
  *
  * `linked_note_origin` is set only on todos whose `linked_note_id` points somewhere;
  *   - 'active'  → linked note still in items_active
@@ -58,7 +57,6 @@ export type ItemWithLinkedInfo = {
 
   // Vault-only fields (null when origin === 'active')
   content_snippet: string | null;
-  export_path: string | null; // @deprecated PR 3 drops this — prefer vault_path
   /** Live vault path from vault_files reverse-lookup (null = no match yet). */
   vault_path: string | null;
   exported_at: string | null;
@@ -108,7 +106,6 @@ function activeBase(
     paused_at: row.paused_at,
     paused_context: row.paused_context,
     content_snippet: null,
-    export_path: null,
     vault_path: null,
     exported_at: null,
     origin: "active" as const,
@@ -150,7 +147,6 @@ function vaultBase(
     paused_at: null,
     paused_context: null,
     content_snippet: row.content_snippet,
-    export_path: row.export_path,
     vault_path,
     exported_at: row.exported_at,
     origin: "vault" as const,

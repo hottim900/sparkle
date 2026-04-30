@@ -75,12 +75,12 @@ describe("DELETE /api/items/:id/vault-stub", () => {
     insertVaultRow(testSqlite, {
       id: VAULT_ID,
       title: "Released Note",
-      export_path: VAULT_EXPORT_PATH,
       exported_at: NOW,
       created: NOW,
       content_snippet: "snippet",
     });
-    // Seed a vault_files row linked to this sparkle_id
+    // Seed a vault_files row linked to this sparkle_id (post-PR3 the vault path
+    // lives only here — items_vault.export_path was dropped).
     testSqlite
       .prepare(
         `INSERT INTO vault_files (path, title, frontmatter, content, mtime, content_hash, sparkle_id)
@@ -96,7 +96,7 @@ describe("DELETE /api/items/:id/vault-stub", () => {
     const body = await res.json();
     expect(body.ok).toBe(true);
     expect(body.id).toBe(VAULT_ID);
-    expect(body.export_path).toBe(VAULT_EXPORT_PATH);
+    expect(body.vault_path).toBe(VAULT_EXPORT_PATH);
 
     // items_vault row gone
     const vaultRow = testSqlite.prepare("SELECT id FROM items_vault WHERE id = ?").get(VAULT_ID);
@@ -144,7 +144,6 @@ describe("DELETE /api/items/:id/vault-stub", () => {
   it("leaves vault .md untouched when vault_files row is absent", async () => {
     insertVaultRow(testSqlite, {
       id: VAULT_ID,
-      export_path: VAULT_EXPORT_PATH,
       exported_at: NOW,
       created: NOW,
     });
@@ -169,7 +168,6 @@ describe("DELETE /api/items/:id/vault-stub", () => {
     // `linked_note_origin: 'missing'` state.
     insertVaultRow(testSqlite, {
       id: VAULT_ID,
-      export_path: VAULT_EXPORT_PATH,
       exported_at: NOW,
       created: NOW,
     });

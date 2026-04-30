@@ -30,7 +30,6 @@ function insertVaultNote(
     id: overrides.id,
     title,
     origin: "app",
-    export_path: `0_Inbox/${title}.md`,
     content_snippet: overrides.content_snippet ?? "snippet body",
   });
 }

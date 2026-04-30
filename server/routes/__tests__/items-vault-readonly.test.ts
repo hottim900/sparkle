@@ -115,16 +115,37 @@ async function unlockWithSeededPin(testApp: Hono): Promise<string> {
 
 // File-scoped defaults wrap the shared helpers so each test's call site stays
 // terse ({} for the happy-path vault/active item used by most tests).
-const insertVaultItem = (overrides: Parameters<typeof insertVaultRow>[1] = {}): string =>
-  insertVaultRow(testSqlite, {
+//
+// Post-PR3: items_vault.export_path was dropped. vault_path is resolved from
+// vault_files reverse-lookup, so seeding a matching vault_files row alongside
+// the items_vault row mirrors what commitExportToVault produces in production.
+// `vaultPath: null` skips the vault_files seed (used to assert the
+// reverse-lookup-misses → vault_path=null surface).
+const insertVaultItem = (
+  overrides: Parameters<typeof insertVaultRow>[1] & { vaultPath?: string | null } = {},
+): string => {
+  const { vaultPath, ...vaultOverrides } = overrides as Parameters<typeof insertVaultRow>[1] & {
+    vaultPath?: string | null;
+  };
+  const id = insertVaultRow(testSqlite, {
     id: VAULT_ID,
     title: "Exported Note",
-    export_path: VAULT_EXPORT_PATH,
     exported_at: NOW,
     created: NOW,
     content_snippet: VAULT_SNIPPET,
-    ...overrides,
+    ...vaultOverrides,
   });
+  const path = vaultPath === undefined ? VAULT_EXPORT_PATH : vaultPath;
+  if (path !== null) {
+    testSqlite
+      .prepare(
+        `INSERT INTO vault_files (path, title, frontmatter, content, mtime, content_hash, sparkle_id)
+         VALUES (?, ?, NULL, ?, ?, ?, ?)`,
+      )
+      .run(path, "Exported Note", VAULT_CONTENT_FULL, Date.now(), "hash-abc", id);
+  }
+  return id;
+};
 
 const insertActiveItem = (overrides: Parameters<typeof insertActiveRow>[1] = {}): string =>
   insertActiveRow(testSqlite, {
@@ -190,7 +211,7 @@ describe("GET /api/items/:id — vault-origin read-through", () => {
     const body = await res.json();
     expect(body.id).toBe(VAULT_ID);
     expect(body.origin).toBe("vault");
-    expect(body.export_path).toBe(VAULT_EXPORT_PATH);
+    expect(body.vault_path).toBe(VAULT_EXPORT_PATH);
     expect(body.content_snippet).toBe(VAULT_SNIPPET);
     // Synthesized / compat fields on vault rows (see item-enrichment.ts vaultBase)
     expect(body.status).toBe("exported");
@@ -217,11 +238,11 @@ describe("GET /api/items/:id — vault-origin read-through", () => {
     const body = await res.json();
     expect(body.origin).toBe("active");
     expect(body.content_snippet).toBeNull();
-    expect(body.export_path).toBeNull();
+    expect(body.vault_path).toBeNull();
   });
 
-  it("returns 200 when vault row has null export_path (vault_path=null in response)", async () => {
-    insertVaultItem({ export_path: null });
+  it("returns 200 with vault_path=null when no vault_files row exists yet", async () => {
+    insertVaultItem({ vaultPath: null });
     const res = await app.request(`/api/items/${VAULT_ID}`, {
       method: "GET",
       headers: authHeaders(),
@@ -229,7 +250,7 @@ describe("GET /api/items/:id — vault-origin read-through", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.origin).toBe("vault");
-    expect(body.export_path).toBeNull();
+    expect(body.vault_path).toBeNull();
   });
 });
 
@@ -255,8 +276,8 @@ describe("PATCH /api/items/:id — vault-origin 409 VAULT_READONLY", () => {
     expect(row.title).toBe("Exported Note");
   });
 
-  it("returns 409 with vault_path=null when export_path is null", async () => {
-    insertVaultItem({ export_path: null });
+  it("returns 409 with vault_path=null when no vault_files row exists yet", async () => {
+    insertVaultItem({ vaultPath: null });
     const res = await app.request(`/api/items/${VAULT_ID}`, {
       method: "PATCH",
       headers: jsonHeaders(),

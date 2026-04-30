@@ -23,7 +23,6 @@ const mockExportedItem: Item = {
   title: "Test Exported Note",
   content: "# Hello\n\nWorld",
   status: "exported",
-  export_path: "inbox/test-exported-note.md",
   priority: null,
   due: null,
   tags: '["test"]',
@@ -44,11 +43,6 @@ const mockExportedItem: Item = {
   paused_context: null,
   created: "2026-01-01T00:00:00.000Z",
   modified: "2026-01-01T00:00:00.000Z",
-};
-
-const mockExportedItemNoPath: Item = {
-  ...mockExportedItem,
-  export_path: null,
 };
 
 const mockExportedItemWithCategory: Item = {
@@ -136,7 +130,8 @@ describe("ItemDetail - exported read-only mode", () => {
       expect(screen.getByText("已匯出至 Obsidian")).toBeInTheDocument();
     });
 
-    // Vault-origin header bar: "位於 vault · {export_path}"
+    // Vault-origin header bar: "位於 vault · {vault_path}" (sourced from
+    // useVaultPathBySparkleId reverse-lookup mock).
     await waitFor(() => {
       expect(screen.getByText(/位於 vault/)).toBeInTheDocument();
       expect(screen.getByText(/inbox\/test-exported-note\.md/)).toBeInTheDocument();
@@ -158,8 +153,10 @@ describe("ItemDetail - exported read-only mode", () => {
   });
 
   it("shows fallback when vault path not found", async () => {
-    setupDefaultMocks(mockExportedItemNoPath);
     // PR 2: getVaultPathBySparkleId resolves null on 404 instead of throwing.
+    // Post-PR3 reverse-lookup is the only source of truth — null result
+    // means "deleted from vault" (no export_path fallback exists anymore).
+    setupDefaultMocks(mockExportedItem);
     vi.mocked(api.getVaultPathBySparkleId).mockResolvedValue(null);
     renderItemDetail();
 
@@ -167,9 +164,9 @@ describe("ItemDetail - exported read-only mode", () => {
       expect(screen.getByText("已匯出至 Obsidian")).toBeInTheDocument();
     });
 
-    // Reverse-lookup returned null AND fixture has no export_path fallback →
-    // canonical "deleted" string per R3-D3 (索引更新中… / 此檔案已從 Vault 刪除).
-    // The string appears in both the slate bar (header) and the body link area.
+    // Reverse-lookup returned null → canonical "deleted" string per R3-D3
+    // (索引更新中… / 此檔案已從 Vault 刪除). The string appears in both the
+    // slate bar (header) and the body link area.
     await waitFor(() => {
       expect(screen.getAllByText("此檔案已從 Vault 刪除").length).toBeGreaterThan(0);
     });

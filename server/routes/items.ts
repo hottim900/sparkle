@@ -10,7 +10,7 @@ import {
   updateItem,
   deleteItem,
   deleteVaultItem,
-  resolveVaultPath,
+  getVaultPathBySparkleIdSync,
 } from "../lib/items.js";
 import { resolveLinkedInfoActive } from "../lib/item-enrichment.js";
 import { isValidTypeStatus, getAutoMappedStatus } from "../lib/item-type-system.js";
@@ -309,11 +309,8 @@ itemsRouter.post("/:id/export", async (c) => {
     return c.json({ error: "Item not found" }, 404);
   }
   if (item.origin === "vault") {
-    const { path, source } = resolveVaultPath(sqlite, item.id, item.export_path);
-    return c.json(
-      { ...vaultReadonlyPayload(path, source), error: "已匯出的項目無法再次匯出" },
-      409,
-    );
+    const path = getVaultPathBySparkleIdSync(sqlite, item.id);
+    return c.json({ ...vaultReadonlyPayload(path), error: "已匯出的項目無法再次匯出" }, 409);
   }
   if (item.type !== "note") {
     return c.json({ error: "Only notes can be exported" }, 400);
@@ -410,8 +407,8 @@ itemsRouter.patch("/:id", async (c) => {
     }
 
     if (existing.origin === "vault") {
-      const { path, source } = resolveVaultPath(sqlite, existing.id, existing.export_path);
-      return c.json(vaultReadonlyPayload(path, source), 409);
+      const path = getVaultPathBySparkleIdSync(sqlite, existing.id);
+      return c.json(vaultReadonlyPayload(path), 409);
     }
 
     // Private items cannot be converted to scratch
@@ -505,7 +502,7 @@ itemsRouter.delete("/:id/vault-stub", (c) => {
       409,
     );
   }
-  return c.json({ ok: true, id: released.id, export_path: released.export_path });
+  return c.json({ ok: true, id: released.id, vault_path: released.vault_path });
 });
 
 // Delete item — vault-origin returns 409 (use /vault-stub endpoint to release)
@@ -516,8 +513,8 @@ itemsRouter.delete("/:id", (c) => {
     return c.json({ error: "Item not found" }, 404);
   }
   if (existing.origin === "vault") {
-    const { path, source } = resolveVaultPath(sqlite, existing.id, existing.export_path);
-    return c.json(vaultReadonlyPayload(path, source), 409);
+    const path = getVaultPathBySparkleIdSync(sqlite, existing.id);
+    return c.json(vaultReadonlyPayload(path), 409);
   }
   const deleted = deleteItem(db, id);
   if (!deleted) {

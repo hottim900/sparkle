@@ -58,7 +58,6 @@ function makeItem(type: Item["type"], status: Item["status"]): Item {
     category_name: null,
     viewed_at: null,
     is_private: 0,
-    export_path: null,
     paused: 0,
     paused_at: null,
     paused_context: null,

@@ -381,8 +381,8 @@ export function commitExportToVault(
     db.prepare(
       `INSERT INTO items_vault (
          id, title, category_id, tags, aliases, source, origin,
-         export_path, exported_at, created, is_private, content_snippet
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         exported_at, created, is_private, content_snippet
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       item.id,
       item.title,
@@ -391,7 +391,6 @@ export function commitExportToVault(
       item.aliases,
       item.source,
       item.origin,
-      exportPath,
       exportedAt,
       item.created,
       item.is_private,

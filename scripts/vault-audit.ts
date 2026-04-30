@@ -26,7 +26,7 @@ import { join } from "node:path";
 import { mkdirSync, writeFileSync, existsSync } from "node:fs";
 import readline from "node:readline";
 import Database from "better-sqlite3";
-import { extractSparkleId } from "../server/lib/vault-backfill.js";
+import { extractSparkleId } from "../server/lib/frontmatter.js";
 
 const HELP = `
 vault:audit — Vault sync inventory CLI (read-only DB scan + interactive resolution)
@@ -76,7 +76,7 @@ function parseArgs(argv: string[]): Args {
 }
 
 type Category1 = { path: string; sparkle_id: string };
-type Category2 = { id: string; title: string; export_path: string | null };
+type Category2 = { id: string; title: string; vault_path: string | null };
 
 type AuditReport = {
   generated_at: string;
@@ -134,13 +134,15 @@ async function main(): Promise<void> {
     }
   }
 
+  // Category B = items_vault rows with no vault_files reverse-lookup match.
+  // By construction `vf.path` is always NULL on this set; we LEFT JOIN it
+  // anyway so the report shape stays uniform with future debugging needs.
   const orphans = sqlite
     .prepare(
-      `SELECT iv.id, iv.title, iv.export_path
+      `SELECT iv.id, iv.title, vf.path AS vault_path
          FROM items_vault iv
-         WHERE NOT EXISTS (
-           SELECT 1 FROM vault_files vf WHERE vf.sparkle_id = iv.id
-         )`,
+         LEFT JOIN vault_files vf ON vf.sparkle_id = iv.id
+         WHERE vf.path IS NULL`,
     )
     .all() as Category2[];
 
@@ -205,7 +207,7 @@ async function main(): Promise<void> {
       for (let i = 0; i < orphans.length; i++) {
         const o = orphans[i]!;
         console.log(
-          `\n[${i + 1}/${orphans.length}] id=${o.id} title=${JSON.stringify(o.title)} last-known-path=${o.export_path ?? "(null)"}`,
+          `\n[${i + 1}/${orphans.length}] id=${o.id} title=${JSON.stringify(o.title)} vault-path=${o.vault_path ?? "(none — vault_files reverse-lookup empty)"}`,
         );
 
         const ans = await ask("  choose (a/b/c) > ");
