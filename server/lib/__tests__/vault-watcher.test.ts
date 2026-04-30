@@ -214,7 +214,15 @@ describe("vault-watcher.scanExportedItems", () => {
 
     expect(result).toEqual({ scanned: 1, patched: 0, errors: 0 });
     expect(mockLogger.warn).toHaveBeenCalledTimes(1);
-    expect(mockLogger.warn.mock.calls[0]?.[0]).toMatch(/no vault_files match/);
+    // PR 2 emits structured log: first arg is the {event, item_id, last_known_path}
+    // payload object; the message string is the second arg.
+    const [structuredArg, msgArg] = mockLogger.warn.mock.calls[0] ?? [];
+    expect(structuredArg).toMatchObject({
+      event: "vault_orphan_detected",
+      item_id: "vault-lost",
+      last_known_path: "Inbox/lost.md",
+    });
+    expect(msgArg).toMatch(/no vault_files match/);
 
     const row = sqlite
       .prepare("SELECT export_path FROM items_vault WHERE id = ?")

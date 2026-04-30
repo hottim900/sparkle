@@ -554,46 +554,94 @@ describe("exportToObsidian", () => {
 
   // --- Idempotent export guard (FG-005) ---
 
+  // PR 2 ENG-P2-2: vault_files reverse-lookup replaces the prior O(N) disk
+  // scan. Tests now seed sqlite with the matching vault_files + items_vault
+  // rows so the reverse-lookup path triggers.
+  function seedReexport(opts: {
+    id: string;
+    path: string;
+    existingContent: string;
+  }): Database.Database {
+    const { sqlite } = createTestDb();
+    sqlite
+      .prepare(
+        "INSERT INTO vault_files (path, title, frontmatter, content, mtime, content_hash, sparkle_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      )
+      .run(opts.path, "Old", null, opts.existingContent, 1, "h", opts.id);
+    sqlite
+      .prepare(
+        "INSERT INTO items_vault (id, title, exported_at, created, content_snippet) VALUES (?, ?, ?, ?, ?)",
+      )
+      .run(opts.id, "Old", "2026-04-30T00:00:00Z", "2026-04-30T00:00:00Z", "");
+    return sqlite;
+  }
+
   it("new mode + sparkle_id match → returns skipped and does not modify existing file", async () => {
     config.exportMode = "new";
-    const item = makeItem({ id: "unique-sparkle-id-1", title: "Original Title" });
+    const id = uuidv4();
+    const item = makeItem({ id, title: "Original Title" });
 
-    // Pre-create a file with matching sparkle_id but different filename
     const inboxDir = join(tempDir, "0_Inbox");
     mkdirSync(inboxDir, { recursive: true });
-    const existingContent =
-      '---\nsparkle_id: "unique-sparkle-id-1"\n---\n\n# Old Title\n\nOld body\n';
+    const existingContent = `---\nsparkle_id: "${id}"\n---\n\n# Old Title\n\nOld body\n`;
     writeFileSync(join(inboxDir, "Old Title.md"), existingContent, "utf-8");
 
-    const result = await exportToObsidian(item, config);
+    const sqlite = seedReexport({
+      id,
+      path: "0_Inbox/Old Title.md",
+      existingContent,
+    });
+
+    const result = await exportToObsidian(item, config, sqlite);
 
     expect(result.skipped).toBe(true);
     expect(result.path).toBe("0_Inbox/Old Title.md");
-    // File content should not be modified
     const content = readFileSync(join(inboxDir, "Old Title.md"), "utf-8");
     expect(content).toBe(existingContent);
   });
 
   it("overwrite mode + sparkle_id match → overwrites the existing file even if filename differs", async () => {
     config.exportMode = "overwrite";
-    const item = makeItem({ id: "unique-sparkle-id-2", title: "New Title" });
+    const id = uuidv4();
+    const item = makeItem({ id, title: "New Title" });
 
-    // Pre-create a file with matching sparkle_id but different filename
     const inboxDir = join(tempDir, "0_Inbox");
     mkdirSync(inboxDir, { recursive: true });
-    const existingContent =
-      '---\nsparkle_id: "unique-sparkle-id-2"\n---\n\n# Old Name\n\nOld body\n';
+    const existingContent = `---\nsparkle_id: "${id}"\n---\n\n# Old Name\n\nOld body\n`;
     writeFileSync(join(inboxDir, "Old Name.md"), existingContent, "utf-8");
 
-    const result = await exportToObsidian(item, config);
+    const sqlite = seedReexport({
+      id,
+      path: "0_Inbox/Old Name.md",
+      existingContent,
+    });
+
+    const result = await exportToObsidian(item, config, sqlite);
 
     expect(result.skipped).toBeUndefined();
     expect(result.path).toBe("0_Inbox/Old Name.md");
-    // File should be overwritten with new content
     const content = readFileSync(join(inboxDir, "Old Name.md"), "utf-8");
     expect(content).toContain("# New Title");
-    expect(content).toContain('sparkle_id: "unique-sparkle-id-2"');
+    expect(content).toContain(`sparkle_id: "${id}"`);
     expect(content).not.toContain("Old body");
+  });
+
+  it("vault_files row points at sparkle_id but items_vault is missing → throws ExportCrashRecoveryError", async () => {
+    config.exportMode = "overwrite";
+    const id = uuidv4();
+    const item = makeItem({ id, title: "Crashed Export" });
+
+    const { sqlite } = createTestDb();
+    sqlite
+      .prepare(
+        "INSERT INTO vault_files (path, title, frontmatter, content, mtime, content_hash, sparkle_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      )
+      .run("0_Inbox/Crashed.md", "Crashed", null, "x", 1, "h", id);
+    // items_vault deliberately empty — simulates the crash window
+
+    await expect(exportToObsidian(item, config, sqlite)).rejects.toThrow(
+      /EXPORT_CRASH_RECOVERY|未完成/,
+    );
   });
 
   it("different sparkle_id but same title → creates collision-suffixed file", async () => {

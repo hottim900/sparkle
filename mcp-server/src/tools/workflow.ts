@@ -1,6 +1,12 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { getItem, updateItem, exportToObsidian, releaseVaultNote } from "../client.js";
+import {
+  getItem,
+  updateItem,
+  exportToObsidian,
+  releaseVaultNote,
+  getVaultPathBySparkleId,
+} from "../client.js";
 import { formatItem } from "../format.js";
 import { formatToolError } from "../utils.js";
 
@@ -38,6 +44,17 @@ Returns: The updated note.`,
 
         // v1.4.0: vault-origin items have no maturity journey in Sparkle
         if ((current as { origin?: string }).origin === "vault") {
+          // Reverse-lookup live path; fall back to stored snapshot during PR 2
+          // dual-write window. `vault_path_source` lets the agent reason about
+          // freshness before deciding to retry.
+          const lookup = await getVaultPathBySparkleId(current.id);
+          const fallback = (current as { export_path?: string | null }).export_path ?? null;
+          const vault_path = lookup?.path ?? fallback;
+          const vault_path_source = lookup?.path
+            ? "lookup"
+            : fallback
+              ? "fallback"
+              : null;
           return {
             isError: true,
             content: [
@@ -47,7 +64,8 @@ Returns: The updated note.`,
                   code: "VAULT_READONLY",
                   error: "此項目為 vault-origin，無法 advance（成熟度路線只適用於 items_active）",
                   error_en: "Vault items have no maturity status; advance_note does not apply.",
-                  vault_path: (current as { export_path?: string | null }).export_path ?? null,
+                  vault_path,
+                  vault_path_source,
                   hint_tool_by_path: "sparkle_write_obsidian_by_path",
                   doc_url: "sparkle://docs/data-model#vault-items",
                 }),

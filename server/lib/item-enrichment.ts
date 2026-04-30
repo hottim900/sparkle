@@ -1,6 +1,6 @@
 import { sql, inArray, and } from "drizzle-orm";
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
-import { itemsActive, itemsVault, shareTokens, categories } from "../db/schema.js";
+import { itemsActive, itemsVault, shareTokens, categories, vaultFiles } from "../db/schema.js";
 import type * as schema from "../db/schema.js";
 
 type DB = BetterSQLite3Database<typeof schema>;
@@ -11,8 +11,12 @@ type VaultRow = typeof itemsVault.$inferSelect;
 /**
  * Unified item shape returned by getItem/listItems/searchItems.
  *
- * - `origin: 'active'` rows carry status/content/paused/viewed_at/etc. — vault-only fields (content_snippet, export_path, exported_at) are null.
- * - `origin: 'vault'` rows carry content_snippet/export_path/exported_at — active-only fields (status, content, paused, viewed_at, priority, due, linked_note_id) are null.
+ * - `origin: 'active'` rows carry status/content/paused/viewed_at/etc. — vault-only fields (content_snippet, export_path, exported_at, vault_path) are null.
+ * - `origin: 'vault'` rows carry content_snippet/export_path/exported_at + vault_path (live reverse-lookup result, source-of-truth path) — active-only fields (status, content, paused, viewed_at, priority, due, linked_note_id) are null.
+ *
+ * `vault_path` (PR 2 dual-write window): live path resolved via vault_files.sparkle_id reverse-lookup.
+ *   When present, callers should prefer it over `export_path`. PR 3 drops `export_path` entirely.
+ * `export_path` is the items_vault.export_path snapshot — kept as fallback while reverse-lookup catches up.
  *
  * `linked_note_origin` is set only on todos whose `linked_note_id` points somewhere;
  *   - 'active'  → linked note still in items_active
@@ -54,7 +58,9 @@ export type ItemWithLinkedInfo = {
 
   // Vault-only fields (null when origin === 'active')
   content_snippet: string | null;
-  export_path: string | null;
+  export_path: string | null; // @deprecated PR 3 drops this — prefer vault_path
+  /** Live vault path from vault_files reverse-lookup (null = no match yet). */
+  vault_path: string | null;
   exported_at: string | null;
 
   // Origin marker — caller branches on this
@@ -103,6 +109,7 @@ function activeBase(
     paused_context: row.paused_context,
     content_snippet: null,
     export_path: null,
+    vault_path: null,
     exported_at: null,
     origin: "active" as const,
   };
@@ -110,6 +117,7 @@ function activeBase(
 
 function vaultBase(
   row: VaultRow,
+  vault_path: string | null = null,
 ): Omit<
   ItemWithLinkedInfo,
   | "linked_note_title"
@@ -143,6 +151,7 @@ function vaultBase(
     paused_context: null,
     content_snippet: row.content_snippet,
     export_path: row.export_path,
+    vault_path,
     exported_at: row.exported_at,
     origin: "vault" as const,
   };
@@ -151,16 +160,47 @@ function vaultBase(
 /**
  * Enrich a mixed list of active + vault rows with cross-table linked info.
  * Pass all rows in one call to batch the JOINs.
+ *
+ * Vault rows accept an optional `vault_path` (already-resolved by the caller's
+ * LEFT JOIN, e.g. listVaultItems). Rows without it fall through to a single
+ * batched IN-clause reverse-lookup so single-row callers (getItem) and
+ * cross-table merges (listItemsAcross) still surface a live path.
  */
 export function resolveLinkedInfo(
   db: DB,
-  rows: Array<{ kind: "active"; row: ActiveRow } | { kind: "vault"; row: VaultRow }>,
+  rows: Array<
+    | { kind: "active"; row: ActiveRow }
+    | { kind: "vault"; row: VaultRow; vault_path?: string | null }
+  >,
   enrich = true,
   includePrivate = false,
 ): ItemWithLinkedInfo[] {
   if (rows.length === 0) return [];
 
-  const bases = rows.map((r) => (r.kind === "active" ? activeBase(r.row) : vaultBase(r.row)));
+  // Reverse-lookup vault_path for any vault row that didn't arrive pre-hydrated.
+  // Single batched query against idx_vault_files_sparkle_id partial index.
+  const missingVaultIds = rows
+    .filter((r) => r.kind === "vault" && r.vault_path === undefined)
+    .map((r) => r.row.id);
+  const reverseLookup = new Map<string, string>();
+  if (missingVaultIds.length > 0) {
+    const unique = [...new Set(missingVaultIds)];
+    const vfRows = db
+      .select({ sparkle_id: vaultFiles.sparkle_id, path: vaultFiles.path })
+      .from(vaultFiles)
+      .where(inArray(vaultFiles.sparkle_id, unique))
+      .all();
+    for (const vf of vfRows) {
+      if (vf.sparkle_id) reverseLookup.set(vf.sparkle_id, vf.path);
+    }
+  }
+
+  const bases = rows.map((r) => {
+    if (r.kind === "active") return activeBase(r.row);
+    const vault_path =
+      r.vault_path !== undefined ? r.vault_path : (reverseLookup.get(r.row.id) ?? null);
+    return vaultBase(r.row, vault_path);
+  });
 
   if (!enrich) {
     return bases.map((b) => ({
@@ -318,13 +358,17 @@ export function resolveLinkedInfoActive(
 /** Convenience wrapper for callers that only have vault rows. */
 export function resolveLinkedInfoVault(
   db: DB,
-  rows: VaultRow[],
+  rows: Array<VaultRow | { row: VaultRow; vault_path: string | null }>,
   enrich = true,
   includePrivate = false,
 ): ItemWithLinkedInfo[] {
   return resolveLinkedInfo(
     db,
-    rows.map((row) => ({ kind: "vault" as const, row })),
+    rows.map((entry) =>
+      "row" in entry
+        ? { kind: "vault" as const, row: entry.row, vault_path: entry.vault_path }
+        : { kind: "vault" as const, row: entry },
+    ),
     enrich,
     includePrivate,
   );

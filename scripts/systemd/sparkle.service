@@ -28,7 +28,14 @@ ExecStart=NODE_BIN_DIR/node --env-file=.env --import tsx server/index.ts
 ExecStopPost=+-SPARKLE_DIR/scripts/firewall-cleanup.sh
 TimeoutStopSec=30
 KillMode=mixed
-Restart=always
+# Restart=on-failure (not always) so a deliberate exit(78) — fired by
+# migration v24 halt — does NOT loop. Without RestartPreventExitStatus=78,
+# the halt log floods journalctl and the operator never sees a stable error
+# window. SuccessExitStatus=78 keeps systemctl status from reporting the
+# halt as a fault.
+Restart=on-failure
+RestartPreventExitStatus=78
+SuccessExitStatus=78
 RestartSec=5
 
 [Install]

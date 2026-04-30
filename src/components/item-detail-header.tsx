@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { toast } from "sonner";
+import { useVaultPathBySparkleId } from "@/hooks/use-vault-path-by-sparkle-id";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -70,9 +72,20 @@ export function ItemDetailHeader({
   const showExportButton = obsidianEnabled && item.type === "note" && item.status === "permanent";
   const isExported = item.origin === "vault";
 
+  // Live reverse-lookup; null = file no longer indexed; undefined while loading.
+  // PR 2 dual-write window: fall back to items_vault.export_path snapshot. PR 3
+  // drops the `?? item.export_path` tail when fallback usage hits zero.
+  const vaultPathQuery = useVaultPathBySparkleId(isExported ? item.id : undefined);
+  const liveVaultPath = vaultPathQuery.data?.path ?? null;
+  const fallbackVaultPath = item.export_path;
+  const resolvedVaultPath = liveVaultPath ?? fallbackVaultPath;
+  const vaultPathLoading = vaultPathQuery.isLoading && !fallbackVaultPath;
+  const vaultPathDeleted =
+    !vaultPathQuery.isLoading && vaultPathQuery.data === null && !fallbackVaultPath;
+
   const handleCopyPath = () => {
-    if (!item.export_path) return;
-    navigator.clipboard.writeText(item.export_path);
+    if (!resolvedVaultPath) return;
+    navigator.clipboard.writeText(resolvedVaultPath);
     toast.success("已複製 vault 路徑");
   };
 
@@ -81,25 +94,28 @@ export function ItemDetailHeader({
       {/* Header */}
       <div className="flex items-center justify-between p-3 border-b">
         <div className="flex items-center gap-0.5">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={onBack ?? onClose}
-            title={canGoBack ? "返回上一頁" : "關閉"}
-            aria-label={canGoBack ? "返回上一頁" : "關閉"}
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={onBack ?? onClose}
+                aria-label={canGoBack ? "返回上一頁" : "關閉"}
+              >
+                <ArrowLeft className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{canGoBack ? "返回上一頁" : "關閉"}</TooltipContent>
+          </Tooltip>
           {canGoBack && (
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={onClose}
-              title="關閉詳情"
-              aria-label="關閉詳情"
-            >
-              <X className="h-4 w-4" />
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" onClick={onClose} aria-label="關閉詳情">
+                  <X className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>關閉詳情</TooltipContent>
+            </Tooltip>
           )}
         </div>
         <div className="flex items-center gap-1">
@@ -170,49 +186,58 @@ export function ItemDetailHeader({
                 </Button>
               )}
               {item.type !== "scratch" && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="gap-1 text-xs"
-                  onClick={onMarkAsPrivate}
-                  disabled={markingAsPrivate || !isOnline}
-                  title="標記為私密"
-                >
-                  {markingAsPrivate ? (
-                    <Loader2 className="h-3 w-3 animate-spin" />
-                  ) : (
-                    <Lock className="h-3 w-3" />
-                  )}
-                  標記為私密
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-1 text-xs"
+                      onClick={onMarkAsPrivate}
+                      disabled={markingAsPrivate || !isOnline}
+                      aria-label="標記為私密"
+                    >
+                      {markingAsPrivate ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <Lock className="h-3 w-3" />
+                      )}
+                      標記為私密
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>標記為私密</TooltipContent>
+                </Tooltip>
               )}
             </>
           )}
           {isExported ? (
             <Dialog open={releaseOpen} onOpenChange={setReleaseOpen}>
-              <DialogTrigger asChild>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  className="gap-1 text-xs"
-                  disabled={!isOnline || releasing || !onRelease}
-                  aria-label="釋出"
-                  title="釋出 Sparkle 記錄；vault 檔案保留"
-                >
-                  {releasing ? (
-                    <Loader2 className="h-3 w-3 animate-spin" />
-                  ) : (
-                    <Trash2 className="h-3 w-3" />
-                  )}
-                  釋出
-                </Button>
-              </DialogTrigger>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <DialogTrigger asChild>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      className="gap-1 text-xs"
+                      disabled={!isOnline || releasing || !onRelease}
+                      aria-label="釋出"
+                    >
+                      {releasing ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-3 w-3" />
+                      )}
+                      釋出
+                    </Button>
+                  </DialogTrigger>
+                </TooltipTrigger>
+                <TooltipContent>釋出 Sparkle 記錄；vault 檔案保留</TooltipContent>
+              </Tooltip>
               <DialogContent>
                 <DialogHeader>
                   <DialogTitle>釋出 Sparkle 記錄</DialogTitle>
                   <DialogDescription>
                     Sparkle 將不再記錄這筆筆記。vault 檔案
-                    {item.export_path ? ` ${item.export_path} ` : " "}
+                    {resolvedVaultPath ? ` ${resolvedVaultPath} ` : " "}
                     保留不變動。
                   </DialogDescription>
                 </DialogHeader>
@@ -234,17 +259,16 @@ export function ItemDetailHeader({
             </Dialog>
           ) : (
             <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-              <DialogTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  disabled={!isOnline}
-                  aria-label="刪除"
-                  title="刪除"
-                >
-                  <Trash2 className="h-4 w-4 text-destructive" />
-                </Button>
-              </DialogTrigger>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <DialogTrigger asChild>
+                    <Button variant="ghost" size="icon" disabled={!isOnline} aria-label="刪除">
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  </DialogTrigger>
+                </TooltipTrigger>
+                <TooltipContent>刪除</TooltipContent>
+              </Tooltip>
               <DialogContent>
                 <DialogHeader>
                   <DialogTitle>確認刪除</DialogTitle>
@@ -294,22 +318,44 @@ export function ItemDetailHeader({
 
       {/* Vault-origin indicator bar (third bar, slate; amber is owned by paused) */}
       {isExported && (
-        <button
-          type="button"
-          onClick={handleCopyPath}
-          disabled={!item.export_path}
-          className="flex items-center gap-1.5 w-full px-4 py-1.5 text-xs font-medium bg-slate-50 text-slate-700 dark:bg-slate-800 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors disabled:cursor-default disabled:hover:bg-slate-50 dark:disabled:hover:bg-slate-800"
-          title={item.export_path ? "點擊複製 vault 路徑" : "vault 路徑未知"}
-          aria-label={
-            item.export_path ? `位於 vault · ${item.export_path}，點擊複製` : "位於 vault"
-          }
-        >
-          <FolderOpen className="h-3.5 w-3.5 shrink-0" />
-          <span className="truncate">
-            位於 vault
-            {item.export_path ? ` · ${item.export_path}` : ""}
-          </span>
-        </button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              onClick={handleCopyPath}
+              disabled={!resolvedVaultPath}
+              className="flex w-full items-center gap-1.5 bg-slate-50 px-4 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-100 disabled:cursor-default disabled:opacity-60 disabled:hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 dark:disabled:hover:bg-slate-800"
+              aria-label={
+                vaultPathLoading
+                  ? "vault 路徑解析中"
+                  : vaultPathDeleted
+                    ? "此檔案已從 Vault 刪除"
+                    : `位於 vault · ${resolvedVaultPath}，點擊複製`
+              }
+            >
+              <FolderOpen className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">
+                {vaultPathLoading ? (
+                  <>
+                    位於 vault
+                    <Loader2 className="ml-1 inline h-3 w-3 animate-spin" /> 索引更新中…
+                  </>
+                ) : vaultPathDeleted ? (
+                  "此檔案已從 Vault 刪除"
+                ) : (
+                  <>位於 vault{resolvedVaultPath ? ` · ${resolvedVaultPath}` : ""}</>
+                )}
+              </span>
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>
+            {vaultPathLoading
+              ? "索引更新中…"
+              : vaultPathDeleted
+                ? "此檔案已從 Vault 刪除"
+                : "點擊複製 vault 路徑"}
+          </TooltipContent>
+        </Tooltip>
       )}
     </>
   );

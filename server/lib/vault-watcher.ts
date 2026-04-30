@@ -78,7 +78,9 @@ export async function scanExportedItems(
         continue;
       }
 
-      // Second consecutive miss — attempt self-heal via sparkle_id
+      // Second consecutive miss — attempt self-heal via sparkle_id reverse-lookup.
+      // Self-heal stays in place during the PR 2 dual-write window. PR 3 deletes
+      // this entire watcher (vault_files reverse-lookup is the primary path).
       missCountMap.delete(item.id);
       const row = db
         .select({ path: vaultFiles.path })
@@ -95,7 +97,14 @@ export async function scanExportedItems(
           `vault-watcher: self-healed ${item.export_path} → ${row.path} for item ${item.id}`,
         );
       } else {
+        // PR 2: surface orphans as structured logs so journalctl-grep gates
+        // (PR 3 prerequisite) catch new orphans introduced post-deploy.
         logger.warn(
+          {
+            event: "vault_orphan_detected",
+            item_id: item.id,
+            last_known_path: item.export_path,
+          },
           `vault-watcher: export_path ${item.export_path} missing and no vault_files match for item ${item.id}`,
         );
       }

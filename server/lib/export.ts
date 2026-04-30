@@ -1,6 +1,26 @@
-import { mkdir, writeFile, readdir, readFile, access } from "node:fs/promises";
+import { mkdir, writeFile, access, stat } from "node:fs/promises";
 import { join } from "node:path";
+import { createHash } from "node:crypto";
 import type Database from "better-sqlite3";
+
+/**
+ * Thrown when export sees vault_files already carries this sparkle_id (= a
+ * prior export wrote the .md but the items_vault transition aborted). User
+ * resolves via `npm run vault:reconcile` (interactive: re-promote, delete .md,
+ * or skip). Surfaced as 500 with an actionable message.
+ */
+export class ExportCrashRecoveryError extends Error {
+  readonly code = "EXPORT_CRASH_RECOVERY" as const;
+  constructor(
+    public readonly sparkleId: string,
+    public readonly vaultPath: string,
+  ) {
+    super(
+      `上次 export 未完成 — vault_files 已記錄 ${sparkleId}，但 items_vault 缺對應 row。請執行 \`npm run vault:reconcile\` 解決後再試。`,
+    );
+    this.name = "ExportCrashRecoveryError";
+  }
+}
 
 /**
  * Replace forbidden filename characters with '-', collapse consecutive dashes,
@@ -201,12 +221,20 @@ export interface ExportConfig {
 export interface ExportResult {
   path: string; // relative path within vault, e.g. "0_Inbox/Title.md"
   skipped?: boolean;
+  /**
+   * Bytes/metadata of the freshly-written .md, supplied to commitExportToVault
+   * so vault_files is seeded inside the same transaction (eliminates the
+   * 5-minute reverse-lookup blackout right after export). Absent when
+   * `skipped: true`.
+   */
+  diskBytes?: {
+    content: string;
+    mtime: number;
+    contentHash: string;
+    frontmatter: string | null;
+  };
 }
 
-/**
- * Scan .md files in a directory for a matching sparkle_id in YAML frontmatter.
- * Returns the filename if found, null otherwise.
- */
 async function fileExists(path: string): Promise<boolean> {
   try {
     await access(path);
@@ -216,35 +244,57 @@ async function fileExists(path: string): Promise<boolean> {
   }
 }
 
-async function findExistingBySparkleId(dir: string, sparkleId: string): Promise<string | null> {
-  if (!(await fileExists(dir))) return null;
-  for (const file of await readdir(dir)) {
-    if (!file.endsWith(".md")) continue;
-    try {
-      const content = await readFile(join(dir, file), "utf-8");
-      // Quick check before parsing frontmatter
-      if (!content.includes(sparkleId)) continue;
-      // Check frontmatter for sparkle_id
-      const fmMatch = content.match(/^---\n([\s\S]*?)\n---/);
-      if (!fmMatch?.[1]) continue;
-      const sparkleIdMatch = fmMatch[1].match(/^sparkle_id:\s*"?([^"\n]+)"?/m);
-      if (sparkleIdMatch?.[1] === sparkleId) {
-        return file;
-      }
-    } catch {
-      continue;
-    }
-  }
-  return null;
+/**
+ * After writing to disk, gather the bytes/metadata that vault_files needs.
+ * Mirrors what vault-scanner.ts captures during its 5-min cycles so the seeded
+ * row is interchangeable with a scanner-discovered row (next scan: mtime
+ * matches → skip re-read).
+ */
+async function collectDiskBytes(
+  fullPath: string,
+  content: string,
+): Promise<{ content: string; mtime: number; contentHash: string; frontmatter: string | null }> {
+  const fileStat = await stat(fullPath);
+  const fmMatch = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+  return {
+    content,
+    mtime: Math.floor(fileStat.mtimeMs),
+    contentHash: createHash("sha256").update(content, "utf-8").digest("hex"),
+    frontmatter: fmMatch?.[1]?.replace(/\r$/gm, "") ?? null,
+  };
 }
 
 /**
- * Write a .md file to the Obsidian vault.
+ * SQL-backed reverse-lookup replacing the prior O(N) disk scan
+ * (`findExistingBySparkleId`). vault_files is the authoritative index — if
+ * the scanner hasn't picked up an externally-dropped .md yet, that file is
+ * invisible to export, which is the trade-off documented in the design
+ * (PR 2 architecture goal: vault_files = single source of truth).
+ *
+ * Returns the relative vault path (e.g. "0_Inbox/Title.md") or null.
+ */
+function reverseLookupVaultPath(sqlite: Database.Database, sparkleId: string): string | null {
+  const row = sqlite.prepare("SELECT path FROM vault_files WHERE sparkle_id = ?").get(sparkleId) as
+    | { path: string }
+    | undefined;
+  return row?.path ?? null;
+}
+
+/**
+ * Write a .md file to the Obsidian vault. Pre-flights against vault_files to
+ * detect the export-crash recovery window (disk-then-DB ordering means a DB
+ * failure can leave a .md on disk indexed by the scanner without an
+ * items_vault row).
+ *
+ * Caller is the export route in routes/items.ts (always passes sqlite). Tests
+ * may pass a fake sqlite that returns no match.
+ *
  * Returns the relative path of the written file.
  */
 export async function exportToObsidian(
   item: ExportableItem,
   config: ExportConfig,
+  sqlite?: Database.Database,
 ): Promise<ExportResult> {
   const { vaultPath, inboxFolder, exportMode } = config;
   if (!vaultPath) {
@@ -256,18 +306,28 @@ export async function exportToObsidian(
   // Ensure the target directory exists
   await mkdir(targetDir, { recursive: true });
 
-  // Look for existing file with same sparkle_id
-  const existingFile = await findExistingBySparkleId(targetDir, item.id);
-
-  if (existingFile) {
-    if (exportMode === "new") {
-      return { path: `${inboxFolder}/${existingFile}`, skipped: true };
+  // Crash-recovery pre-check. vault_files row exists but items_vault doesn't
+  // == prior export's items_vault INSERT failed mid-tx. Force operator through
+  // vault:reconcile rather than silently overwriting + retrying.
+  // sqlite is optional so unit tests of the file-writing logic don't have to
+  // build a full DB; production routes always pass it.
+  const indexedPath = sqlite ? reverseLookupVaultPath(sqlite, item.id) : null;
+  if (sqlite && indexedPath) {
+    const itemsVaultExists = sqlite.prepare("SELECT 1 FROM items_vault WHERE id = ?").get(item.id);
+    if (!itemsVaultExists) {
+      throw new ExportCrashRecoveryError(item.id, indexedPath);
     }
-    // overwrite mode: write to the existing file regardless of name
-    const existingPath = join(targetDir, existingFile);
+    // Both rows present → user is re-exporting an already-vault item, which
+    // the export route already 409s on (origin === 'vault'). Reaching here
+    // would be unexpected; treat as overwrite-of-existing for safety.
+    if (exportMode === "new") {
+      return { path: indexedPath, skipped: true };
+    }
+    const fullPath = join(vaultPath, indexedPath);
     const content = generateMarkdown(item);
-    await writeFile(existingPath, content, "utf-8");
-    return { path: `${inboxFolder}/${existingFile}` };
+    await writeFile(fullPath, content, "utf-8");
+    const diskBytes = await collectDiskBytes(fullPath, content);
+    return { path: indexedPath, diskBytes };
   }
 
   const baseName = sanitizeFilename(item.title);
@@ -288,20 +348,29 @@ export async function exportToObsidian(
   const finalPath = join(targetDir, filename);
   const content = generateMarkdown(item);
   await writeFile(finalPath, content, "utf-8");
+  const diskBytes = await collectDiskBytes(finalPath, content);
 
-  return { path: `${inboxFolder}/${filename}` };
+  return { path: `${inboxFolder}/${filename}`, diskBytes };
 }
 
 /**
- * Atomically move an items_active row to items_vault post-export.
+ * Atomically move an items_active row to items_vault post-export AND seed
+ * vault_files with the freshly-written .md so the next request can resolve
+ * via reverse-lookup without waiting on the 5-minute scanner cycle.
  *
  * MUST be called AFTER exportToObsidian has successfully written the .md file
- * (Round 3 item 10 — file-write-first, tx-after). If this transaction throws,
- * the .md file remains on disk (orphan) and the active row stays put; the user
- * re-runs export and the idempotent `findExistingBySparkleId` overwrites.
+ * (file-write-first, tx-after). If this transaction throws, the .md file
+ * remains on disk; on next deploy the export-side pre-check raises
+ * EXPORT_CRASH_RECOVERY and the operator runs `npm run vault:reconcile`.
+ *
+ * The vault_files INSERT writes the actual file content + hash + mtime so
+ * the next scanner cycle's mtime check matches and skips re-read. UNIQUE
+ * conflict on `path` would mean a stale row exists for the same path
+ * (rare — scanner already deletes paths that disappeared); we ON CONFLICT
+ * UPDATE to absorb it without aborting the tx.
  *
  * content_snippet is derived from the active row's content (SUBSTR first 500
- * chars). It is IMMUTABLE after this insert — vault-watcher never touches it.
+ * chars). It is IMMUTABLE after this insert.
  */
 export function commitExportToVault(
   db: Database.Database,
@@ -318,6 +387,7 @@ export function commitExportToVault(
     content: string | null;
   },
   exportPath: string,
+  diskBytes?: { content: string; mtime: number; contentHash: string; frontmatter: string | null },
 ): void {
   const snippet = (item.content ?? "").substring(0, 500);
   const exportedAt = new Date().toISOString();
@@ -343,6 +413,31 @@ export function commitExportToVault(
       snippet,
     );
     db.prepare("DELETE FROM items_active WHERE id = ?").run(item.id);
+
+    // Seed vault_files so reverse-lookup resolves immediately. Optional:
+    // older callers (test fixtures) skip this; production export route
+    // always passes diskBytes.
+    if (diskBytes) {
+      db.prepare(
+        `INSERT INTO vault_files (path, title, frontmatter, content, mtime, content_hash, sparkle_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(path) DO UPDATE SET
+           title = excluded.title,
+           frontmatter = excluded.frontmatter,
+           content = excluded.content,
+           mtime = excluded.mtime,
+           content_hash = excluded.content_hash,
+           sparkle_id = excluded.sparkle_id`,
+      ).run(
+        exportPath,
+        item.title,
+        diskBytes.frontmatter,
+        diskBytes.content,
+        diskBytes.mtime,
+        diskBytes.contentHash,
+        item.id,
+      );
+    }
   });
   tx();
 }

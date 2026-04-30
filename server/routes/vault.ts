@@ -128,7 +128,18 @@ vaultRouter.get("/file/*", (c) => {
 
 /**
  * GET /api/vault/by-sparkle-id/:id
- * Look up vault file path by sparkle_id. Used by item-detail to resolve "View in Vault" links.
+ *
+ * Look up the live vault file path by sparkle_id. Used by item-detail to
+ * resolve "View in Vault" links and obsidian:// URIs after rename/move.
+ *
+ * Response shape:
+ *   200 { path: "0_Inbox/Title.md" }     match found in vault_files
+ *   404 { error: "Not found" }            no vault_files row carries this sparkle_id
+ *   400 { error: "..." }                  sparkle_id failed UUID validation
+ *
+ * Cache: `private, max-age=60`. Path-mutation via Obsidian rename takes 5
+ * minutes (scanner interval) to land in vault_files anyway, so a 60s client
+ * cache is generous and bounded — well below the worst-case stale window.
  */
 vaultRouter.get("/by-sparkle-id/:id", (c) => {
   const id = c.req.param("id");
@@ -146,6 +157,7 @@ vaultRouter.get("/by-sparkle-id/:id", (c) => {
     return c.json({ error: "Not found" }, 404);
   }
 
+  c.header("Cache-Control", "private, max-age=60");
   return c.json({ path: row.path });
 });
 

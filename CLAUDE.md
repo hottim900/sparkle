@@ -32,7 +32,9 @@ See `/testing` for test architecture. See `/ops` for deployment.
 
 Notes (items_active): `fleeting` → `developing` → `permanent` → `archived`. Exported notes move to items_vault (metadata + 500-char snippet; vault .md is content authority). Todos: `active` → `done` → `archived`. Scratch: `draft` → `archived`.
 
-Full field reference in `conventions-detail` skill (invoke `/conventions-detail`). Two-table rationale + cross-table FK behaviour in `server/db/README.md`; v23 upgrade playbook in `docs/migration-v23.md`.
+Full field reference in `conventions-detail` skill (invoke `/conventions-detail`). Two-table rationale + cross-table FK behaviour in `server/db/README.md`; v23 upgrade playbook in `docs/migration-v23.md`; v24 reverse-lookup migration in `docs/migration-v24.md`.
+
+**Vault path resolution (post-v24):** vault_files reverse-lookup is the primary mechanism. Live path comes from `vault_files.sparkle_id = items_vault.id` LEFT JOIN at the listing layer and `getVaultPathBySparkleIdSync(sqlite, id)` at single-row sites. `items_vault.export_path` remains as a fallback during the dual-write window — a follow-up PR drops the column. UI consumes `useVaultPathBySparkleId(id)`; AI agents inspect `vault_path_source: "lookup" | "fallback" | null` in VAULT_READONLY payloads.
 
 Type conversion auto-maps status server-side. `category_id` preserved; `due`/`linked_note_id` cleared on todo→note; tags/priority/aliases cleared on →scratch.
 
@@ -40,7 +42,7 @@ Type conversion auto-maps status server-side. `category_id` preserved; `due`/`li
 
 Mutations on items_vault from MCP (`sparkle_update_note`, `sparkle_advance_note`, `sparkle_pause_note`, `sparkle_resume_note`) and REST (`PATCH /api/items/:id` on vault rows) return `VAULT_READONLY` (409). Use `sparkle_write_obsidian` for content edits or `sparkle_release_note` / `DELETE /api/items/:id/vault-stub` to drop Sparkle's record while preserving the vault `.md`.
 
-DB migration version 0→23, idempotent. Migration safety enforced by PostToolUse hook.
+DB migration version 0→24, idempotent. Migration safety enforced by PostToolUse hook. v24 halts on orphans / unparseable frontmatter via `process.exit(78)` paired with systemd `RestartPreventExitStatus=78` — apply via `scripts/migrate-systemd-unit.sh`.
 
 - Boolean settings: use `getBoolSetting(all, key, defaultValue)` — never raw `=== "true"`. New boolean settings MUST have a migration INSERT OR IGNORE + fresh install seed.
 
