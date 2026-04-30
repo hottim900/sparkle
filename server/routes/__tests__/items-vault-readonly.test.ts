@@ -169,6 +169,11 @@ function expectFullReadonlyPayload(
   const vaultPath = opts.vaultPath === undefined ? VAULT_EXPORT_PATH : opts.vaultPath;
   expect(body.code).toBe(VAULT_READONLY);
   expect(body.vault_path).toBe(vaultPath);
+  // vault_path_source narrowed to "lookup" | null post-v25; "fallback" must
+  // never leak through. Asserted here so any regression that re-introduces
+  // the old union surfaces immediately.
+  expect(body.vault_path_source).toBe(vaultPath === null ? null : "lookup");
+  expect([null, "lookup"]).toContain(body.vault_path_source);
   expect(body.hint_endpoint).toBe("DELETE /api/items/:id/vault-stub");
   expect(body.hint_tool_by_id).toBe("sparkle_write_obsidian");
   expect(body.hint_tool_by_path).toBe("sparkle_write_obsidian_by_path");

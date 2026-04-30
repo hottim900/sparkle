@@ -153,6 +153,12 @@ describe("DELETE /api/items/:id/vault-stub", () => {
       headers: authHeaders(),
     });
     expect(res.status).toBe(200);
+    // LEFT JOIN miss surfaces as vault_path: null in the response — the API
+    // contract's signal that the .md is no longer findable via reverse-lookup.
+    const body = (await res.json()) as { ok: boolean; id: string; vault_path: string | null };
+    expect(body.ok).toBe(true);
+    expect(body.id).toBe(VAULT_ID);
+    expect(body.vault_path).toBeNull();
     // items_vault deleted
     expect(
       testSqlite.prepare("SELECT id FROM items_vault WHERE id = ?").get(VAULT_ID),

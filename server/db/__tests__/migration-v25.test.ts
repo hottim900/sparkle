@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import Database from "better-sqlite3";
 import { mkdtempSync, rmSync, copyFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -129,7 +129,7 @@ describe("Migration v25: file-backed DB backup branch", () => {
 
     const after = readdirSync(backupDir);
     expect(after.length).toBe(1);
-    expect(after[0]).toMatch(/^todo\.db\.bak-pre-v25-\d+$/);
+    expect(after[0]).toMatch(/^todo\.db\.bak-pre-v25-\d+-\d+-[0-9a-f]{8}$/);
     const backupSize = statSync(join(backupDir, after[0]!)).size;
     expect(backupSize).toBeGreaterThan(0);
 
@@ -159,7 +159,7 @@ describe("Migration v25: file-backed DB backup branch", () => {
     }
   });
 
-  it("halts with V25HaltError when backup target has no permission to write", () => {
+  it("halts with migration_v25_halted_backup_failed when backup target is unwritable", () => {
     // Make the backup dir non-writable to force VACUUM INTO failure. On filesystems
     // without unix perms the chmod is silently ignored; in that case we replace the
     // backup dir with a path-as-file to provoke the same write failure.
@@ -167,11 +167,25 @@ describe("Migration v25: file-backed DB backup branch", () => {
     writeFileSync(blockerPath, "");
     process.env.SPARKLE_MIGRATION_BACKUP_DIR = blockerPath; // pointing at a file, not a dir
 
-    expect(() => migrateV24toV25(sqlite)).toThrow(V25HaltError);
+    let caught: V25HaltError | null = null;
+    try {
+      migrateV24toV25(sqlite);
+    } catch (e) {
+      if (e instanceof V25HaltError) caught = e;
+      else throw e;
+    }
+    expect(caught).toBeInstanceOf(V25HaltError);
+    expect(caught!.haltPayload.event).toBe("migration_v25_halted_backup_failed");
     // Schema unchanged — version stays at 24, column still present.
     expect(getSchemaVersion(sqlite)).toBe(24);
     expect(hasExportPathColumn(sqlite)).toBe(true);
   });
+
+  // Note: the migration_v25_halted_no_disk path runs `statfsSync` directly,
+  // which Vitest 4 cannot intercept under ESM (`Cannot spy on export — module
+  // namespace is not configurable`). The pre-flight is exercised manually via
+  // `ops/migration-25-dryrun.sh` against a tmpfs at the deploy target. If a
+  // future refactor wraps statfsSync in an injectable, add a mocked test here.
 });
 
 describe("Migration v25: rollback-from-backup smoke", () => {

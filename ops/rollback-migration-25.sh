@@ -95,6 +95,14 @@ echo ""
 
 # --- Execute rollback ---
 
+# Capture the live DB's current owner before we stop the service. cp will
+# inherit the running user's owner unless we restore it explicitly. Hardcoding
+# `tim:tim` would fail on a recovery host without that user, so derive it.
+ORIGINAL_OWNER=""
+if [[ -f "$DB_PATH" ]]; then
+  ORIGINAL_OWNER=$(stat -c '%U:%G' "$DB_PATH" 2>/dev/null || true)
+fi
+
 echo "→ stopping sparkle.service"
 systemctl stop sparkle.service
 
@@ -105,7 +113,9 @@ rm -f "${DB_PATH}-shm" "${DB_PATH}-wal"
 
 echo "→ restoring DB from $BACKUP → $DB_PATH"
 cp --preserve=timestamps "$BACKUP" "$DB_PATH"
-chown tim:tim "$DB_PATH"
+if [[ -n "$ORIGINAL_OWNER" ]]; then
+  chown "$ORIGINAL_OWNER" "$DB_PATH"
+fi
 
 echo "→ checking out rollback sha $ROLLBACK_SHA on branch $ROLLBACK_BRANCH"
 git -C "$REPO" fetch --all --tags --quiet

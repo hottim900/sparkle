@@ -97,8 +97,8 @@ export function ItemDetail({ itemId, onDeleted, onBack, onNavigate }: ItemDetail
   const [createTodoRequested, setCreateTodoRequested] = useState(false);
 
   // Reverse-lookup query (raw) — kept alongside the derived `resolvedVaultPath`
-  // because the announce-on-change effect needs the live `data?.path` separate
-  // from the snapshot fallback.
+  // because the announce-on-change effect needs the live `data?.path` to compare
+  // against the previously-announced path, not the memoised three-state struct.
   const vaultPathQuery = useVaultPathBySparkleId(item?.origin === "vault" ? item.id : undefined);
   const { resolvedVaultPath } = useResolvedVaultPath(item);
 

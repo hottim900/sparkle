@@ -1,7 +1,8 @@
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import Database from "better-sqlite3";
-import { mkdirSync, readFileSync, statSync, statfsSync } from "node:fs";
+import { mkdirSync, readFileSync, statSync, statfsSync, unlinkSync } from "node:fs";
 import { homedir } from "node:os";
+import { randomUUID } from "node:crypto";
 import { dirname, join } from "node:path";
 import * as schema from "./schema.js";
 import { setupFTS, setupVaultFTS } from "./fts.js";
@@ -489,6 +490,36 @@ function getMigrationBackupDir(): string {
 }
 
 /**
+ * Open the freshly-written v25 backup as a separate readonly handle and
+ * assert: integrity_check passes, schema_version is 24 (the pre-DROP state),
+ * and the export_path column is still present. Throws on any mismatch — the
+ * caller (migrateV24toV25) wraps that into V25HaltError(backup_failed).
+ */
+function verifyV25Backup(backupPath: string): void {
+  const backup = new Database(backupPath, { readonly: true, fileMustExist: true });
+  try {
+    const integrity = backup.prepare("PRAGMA integrity_check").get() as
+      | { integrity_check: string }
+      | undefined;
+    if (integrity?.integrity_check !== "ok") {
+      throw new Error(`backup integrity_check failed: ${integrity?.integrity_check ?? "unknown"}`);
+    }
+    const ver = backup.prepare("SELECT version FROM schema_version").get() as
+      | { version: number }
+      | undefined;
+    if (ver?.version !== 24) {
+      throw new Error(`backup schema_version is ${ver?.version ?? "?"}, expected 24`);
+    }
+    const cols = backup.prepare("PRAGMA table_info(items_vault)").all() as { name: string }[];
+    if (!cols.some((c) => c.name === "export_path")) {
+      throw new Error("backup is missing items_vault.export_path — not a valid v24 snapshot");
+    }
+  } finally {
+    backup.close();
+  }
+}
+
+/**
  * Migration 24→25: Drop items_vault.export_path. Pre-condition for the column
  * drop is a hot-DB-safe backup: VACUUM INTO yields a WAL-consistent copy and
  * is synchronous in better-sqlite3 7.x+ (verified 12.6.x). fs.copyFileSync
@@ -525,7 +556,14 @@ export function migrateV24toV25(sqlite: Database.Database): void {
   // the DROP. Production paths always pass a real file path here.
   if (!isInMemory) {
     const backupDir = getMigrationBackupDir();
-    const backupPath = join(backupDir, `todo.db.bak-pre-v25-${Date.now()}`);
+    // Per-attempt unique suffix: ms timestamp + pid + uuid prefix. Guards
+    // against millisecond-collision when systemd restarts in tight loop, and
+    // against parallel migration attempts (rare but possible during deploy
+    // races) producing identical filenames that VACUUM INTO would refuse.
+    const backupPath = join(
+      backupDir,
+      `todo.db.bak-pre-v25-${Date.now()}-${process.pid}-${randomUUID().slice(0, 8)}`,
+    );
 
     try {
       mkdirSync(backupDir, { recursive: true });
@@ -556,6 +594,12 @@ export function migrateV24toV25(sqlite: Database.Database): void {
       }
       sqlite.prepare("VACUUM INTO ?").run(backupPath);
 
+      // Verify the backup is readable and has the expected v24 shape BEFORE we
+      // run the destructive DROP COLUMN. A corrupt VACUUM INTO output (rare —
+      // mid-write FS error, page-checksum corruption) would otherwise leave
+      // the operator with no rollback artifact.
+      verifyV25Backup(backupPath);
+
       const backupStat = statSync(backupPath);
       logger.info(
         {
@@ -568,6 +612,14 @@ export function migrateV24toV25(sqlite: Database.Database): void {
       );
     } catch (e) {
       if (e instanceof V25HaltError) throw e;
+      // Best-effort cleanup: an aborted backup file would otherwise leak into
+      // ~/sparkle-backups/ with corrupt contents that look like a valid
+      // rollback target. unlinkSync swallows ENOENT.
+      try {
+        unlinkSync(backupPath);
+      } catch {
+        // ignored — file may not have been created yet
+      }
       throw new V25HaltError({
         event: "migration_v25_halted_backup_failed",
         backupPath,

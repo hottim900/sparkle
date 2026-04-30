@@ -25,7 +25,7 @@ const LIKE_SAFE_RE = /^[^%_]{4,36}$/;
  * given sparkle_id, or null if no match exists. Sync (better-sqlite3 is sync).
  *
  * Counterpart to GET /api/vault/by-sparkle-id/:id but callable from server-only
- * code paths (vaultReadonlyPayload, list enrichment) without HTTP round-trip.
+ * code paths (vaultReadonlyResponse, list enrichment) without HTTP round-trip.
  *
  * @param sqlite live better-sqlite3 connection
  * @param id     sparkle_id (UUID)
