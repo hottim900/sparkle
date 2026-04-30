@@ -1,14 +1,37 @@
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import Database from "better-sqlite3";
-import { mkdirSync } from "node:fs";
-import { dirname } from "node:path";
+import { mkdirSync, readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import * as schema from "./schema.js";
 import { setupFTS, setupVaultFTS } from "./fts.js";
 import { logger } from "../lib/logger.js";
+import { extractSparkleId } from "../lib/vault-backfill.js";
 
 const DB_PATH = process.env.DATABASE_URL || "./data/todo.db";
 
-const TARGET_VERSION = 23;
+const TARGET_VERSION = 24;
+
+/**
+ * Migration v24 halt payload — bilingual operator-facing error.
+ * Two halt categories surface separately so operators can decode `journalctl`
+ * by event name and follow the right runbook section.
+ */
+export type V24HaltPayload = {
+  event: "migration_v24_halted_orphans" | "migration_v24_halted_unparseable";
+  count: number;
+  ids?: string[];
+  files?: Array<{ path: string; reason: string }>;
+  error: string;
+  error_en: string;
+  docs: string;
+};
+
+export class V24HaltError extends Error {
+  constructor(public readonly haltPayload: V24HaltPayload) {
+    super(`[${haltPayload.event}] ${haltPayload.error_en}`);
+    this.name = "V24HaltError";
+  }
+}
 
 function getSchemaVersion(sqlite: Database.Database): number {
   // Check if schema_version table exists
@@ -413,6 +436,117 @@ function runMigrations(sqlite: Database.Database) {
   // Step 22→23: Split items → items_active + items_vault (see docs/migration-v23.md)
   if (version < 23) {
     migrateV22toV23(sqlite);
+  }
+
+  // Step 23→24: Backfill vault_files.sparkle_id from .md frontmatter, then
+  // verify every items_vault row reverse-looks-up. See docs/migration-v24.md.
+  if (version < 24) {
+    migrateV23toV24(sqlite);
+  }
+}
+
+/**
+ * Migration 23→24: Backfill vault_files.sparkle_id from on-disk frontmatter,
+ * then verify every items_vault row has a reverse-lookup match.
+ *
+ * Two-phase to keep async I/O outside the transaction:
+ *   PHASE 1 (sync I/O, outside tx): scan .md frontmatter, accumulate updates
+ *           Map and unparseable list. ENOENT/missing-frontmatter is NOT an
+ *           error — it is the legitimate non-Sparkle .md case.
+ *   PHASE 2 (sync tx): bulk UPDATE vault_files.sparkle_id, orphan check,
+ *           setSchemaVersion(24). All-or-nothing — orphan detection rolls
+ *           back the entire phase.
+ *
+ * On halt (either category) the function throws V24HaltError. The startup
+ * caller logs the bilingual payload, flushes pino, then process.exit(78)
+ * (EX_CONFIG — paired with systemd RestartPreventExitStatus=78 to stop the
+ * restart-loop bug pre-PR-2 systemd unit-file change).
+ */
+export function migrateV23toV24(sqlite: Database.Database): void {
+  const obsidianEnabled = sqlite
+    .prepare("SELECT value FROM settings WHERE key = ?")
+    .get("obsidian_enabled") as { value: string } | undefined;
+  const obsidianVaultPath = sqlite
+    .prepare("SELECT value FROM settings WHERE key = ?")
+    .get("obsidian_vault_path") as { value: string } | undefined;
+
+  // No vault configured: nothing to backfill or check, just bump version.
+  if (!obsidianEnabled || obsidianEnabled.value !== "true" || !obsidianVaultPath?.value) {
+    setSchemaVersion(sqlite, 24);
+    return;
+  }
+
+  const vaultPath = obsidianVaultPath.value;
+
+  // PHASE 1 — sync I/O, outside any transaction
+  const needsBackfill = sqlite
+    .prepare("SELECT path FROM vault_files WHERE sparkle_id IS NULL")
+    .all() as { path: string }[];
+
+  const updates = new Map<string, string>();
+  const unparseable: Array<{ path: string; reason: string }> = [];
+
+  for (const row of needsBackfill) {
+    try {
+      const content = readFileSync(join(vaultPath, row.path), "utf-8");
+      const sparkleId = extractSparkleId(content);
+      if (sparkleId) updates.set(row.path, sparkleId);
+      // null result = legitimate non-Sparkle .md (no frontmatter, or no sparkle_id key) — skip silently
+    } catch (e) {
+      const code = (e as NodeJS.ErrnoException).code;
+      // ENOENT = file deleted between scanner index and migration — not an error
+      if (code === "ENOENT") continue;
+      unparseable.push({ path: row.path, reason: (e as Error).message });
+    }
+  }
+
+  if (unparseable.length > 0) {
+    throw new V24HaltError({
+      event: "migration_v24_halted_unparseable",
+      count: unparseable.length,
+      files: unparseable.slice(0, 10),
+      error: `${unparseable.length} 個 .md 檔案無法讀取或 frontmatter 格式錯誤。請修正或移除上列 paths 後重啟 sparkle。詳見 docs/migration-v24.md#troubleshooting-unparseable-frontmatter`,
+      error_en: `${unparseable.length} .md files have unreadable frontmatter or filesystem errors. Inspect listed paths and fix or move them, then restart sparkle.`,
+      docs: "see docs/migration-v24.md#troubleshooting-unparseable-frontmatter",
+    });
+  }
+
+  // PHASE 2 — sync tx: backfill + orphan check + version bump (atomic)
+  const tx = sqlite.transaction(() => {
+    const upd = sqlite.prepare("UPDATE vault_files SET sparkle_id = ? WHERE path = ?");
+    for (const [path, sparkleId] of updates) {
+      upd.run(sparkleId, path);
+    }
+
+    const orphans = sqlite
+      .prepare(
+        `SELECT iv.id, iv.title FROM items_vault iv
+           WHERE NOT EXISTS (
+             SELECT 1 FROM vault_files vf WHERE vf.sparkle_id = iv.id
+           )`,
+      )
+      .all() as { id: string; title: string }[];
+
+    if (orphans.length > 0) {
+      throw new V24HaltError({
+        event: "migration_v24_halted_orphans",
+        count: orphans.length,
+        ids: orphans.slice(0, 5).map((o) => o.id),
+        error: `${orphans.length} 個 items_vault 找不到對應 vault_files。執行 npm run vault:audit 解 orphans 後重啟 sparkle。詳見 docs/migration-v24.md#when-v24-halts-on-orphans`,
+        error_en: `${orphans.length} items_vault rows have no vault_files match. Run \`npm run vault:audit\` to resolve, then restart sparkle.`,
+        docs: "see docs/migration-v24.md#when-v24-halts-on-orphans",
+      });
+    }
+
+    setSchemaVersion(sqlite, 24);
+  });
+  tx();
+
+  if (updates.size > 0) {
+    logger.info(
+      { event: "migration_v24_complete", backfilled: updates.size },
+      `migration v24: backfilled ${updates.size} vault_files.sparkle_id from frontmatter`,
+    );
   }
 }
 
@@ -828,6 +962,28 @@ export function initializeDatabase(sqlite: Database.Database) {
   setupVaultFTS(sqlite);
 }
 
+/**
+ * Migration halt handler: log bilingual payload, then exit 78.
+ *
+ * Exit code 78 (EX_CONFIG) pairs with systemd `RestartPreventExitStatus=78`
+ * (see scripts/systemd/sparkle.service post-PR-2). Without that unit-file
+ * change, Restart=always would loop the halt — operator never sees a
+ * stable error window. PR 2 ships both code + unit-file changes together.
+ *
+ * Pino without a `transport` config (production default) writes
+ * synchronously to stdout, so the next line's process.exit catches the
+ * halt log. Dev pino-pretty may drop the halt message; that's accepted
+ * since dev is informational and the V24HaltError class also surfaces
+ * via the throwing call-site test fixtures.
+ *
+ * Exported for unit test verification (logger.error must fire before
+ * process.exit). Production callers go through the createDb catch path.
+ */
+export function haltAndExit(payload: V24HaltPayload, event: string): never {
+  logger.error(payload, `[${event}]`);
+  process.exit(78);
+}
+
 function createDb() {
   mkdirSync(dirname(DB_PATH), { recursive: true });
   const sqlite = new Database(DB_PATH);
@@ -838,7 +994,14 @@ function createDb() {
 
   const db = drizzle(sqlite, { schema });
 
-  initializeDatabase(sqlite);
+  try {
+    initializeDatabase(sqlite);
+  } catch (e) {
+    if (e instanceof V24HaltError) {
+      haltAndExit(e.haltPayload, e.haltPayload.event);
+    }
+    throw e;
+  }
 
   // Checkpoint and truncate WAL to reclaim space from previous sessions
   try {

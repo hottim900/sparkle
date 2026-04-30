@@ -2,6 +2,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { createRouter, RouterProvider } from "@tanstack/react-router";
 import { routeTree } from "./routeTree.gen";
 import { AuthGate } from "@/components/auth-gate";
+import { AnnouncementProvider } from "@/components/announcement-provider";
 import { Toaster } from "@/components/ui/sonner";
 import { createQueryClient } from "@/lib/query-client";
 
@@ -19,9 +20,11 @@ export default function App() {
   return (
     <>
       <QueryClientProvider client={queryClient}>
-        <AuthGate>
-          <RouterProvider router={router} />
-        </AuthGate>
+        <AnnouncementProvider>
+          <AuthGate>
+            <RouterProvider router={router} />
+          </AuthGate>
+        </AnnouncementProvider>
       </QueryClientProvider>
       <Toaster position="top-center" richColors />
     </>

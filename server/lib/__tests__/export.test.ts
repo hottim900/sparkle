@@ -554,46 +554,94 @@ describe("exportToObsidian", () => {
 
   // --- Idempotent export guard (FG-005) ---
 
+  // PR 2 ENG-P2-2: vault_files reverse-lookup replaces the prior O(N) disk
+  // scan. Tests now seed sqlite with the matching vault_files + items_vault
+  // rows so the reverse-lookup path triggers.
+  function seedReexport(opts: {
+    id: string;
+    path: string;
+    existingContent: string;
+  }): Database.Database {
+    const { sqlite } = createTestDb();
+    sqlite
+      .prepare(
+        "INSERT INTO vault_files (path, title, frontmatter, content, mtime, content_hash, sparkle_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      )
+      .run(opts.path, "Old", null, opts.existingContent, 1, "h", opts.id);
+    sqlite
+      .prepare(
+        "INSERT INTO items_vault (id, title, exported_at, created, content_snippet) VALUES (?, ?, ?, ?, ?)",
+      )
+      .run(opts.id, "Old", "2026-04-30T00:00:00Z", "2026-04-30T00:00:00Z", "");
+    return sqlite;
+  }
+
   it("new mode + sparkle_id match → returns skipped and does not modify existing file", async () => {
     config.exportMode = "new";
-    const item = makeItem({ id: "unique-sparkle-id-1", title: "Original Title" });
+    const id = uuidv4();
+    const item = makeItem({ id, title: "Original Title" });
 
-    // Pre-create a file with matching sparkle_id but different filename
     const inboxDir = join(tempDir, "0_Inbox");
     mkdirSync(inboxDir, { recursive: true });
-    const existingContent =
-      '---\nsparkle_id: "unique-sparkle-id-1"\n---\n\n# Old Title\n\nOld body\n';
+    const existingContent = `---\nsparkle_id: "${id}"\n---\n\n# Old Title\n\nOld body\n`;
     writeFileSync(join(inboxDir, "Old Title.md"), existingContent, "utf-8");
 
-    const result = await exportToObsidian(item, config);
+    const sqlite = seedReexport({
+      id,
+      path: "0_Inbox/Old Title.md",
+      existingContent,
+    });
+
+    const result = await exportToObsidian(item, config, sqlite);
 
     expect(result.skipped).toBe(true);
     expect(result.path).toBe("0_Inbox/Old Title.md");
-    // File content should not be modified
     const content = readFileSync(join(inboxDir, "Old Title.md"), "utf-8");
     expect(content).toBe(existingContent);
   });
 
   it("overwrite mode + sparkle_id match → overwrites the existing file even if filename differs", async () => {
     config.exportMode = "overwrite";
-    const item = makeItem({ id: "unique-sparkle-id-2", title: "New Title" });
+    const id = uuidv4();
+    const item = makeItem({ id, title: "New Title" });
 
-    // Pre-create a file with matching sparkle_id but different filename
     const inboxDir = join(tempDir, "0_Inbox");
     mkdirSync(inboxDir, { recursive: true });
-    const existingContent =
-      '---\nsparkle_id: "unique-sparkle-id-2"\n---\n\n# Old Name\n\nOld body\n';
+    const existingContent = `---\nsparkle_id: "${id}"\n---\n\n# Old Name\n\nOld body\n`;
     writeFileSync(join(inboxDir, "Old Name.md"), existingContent, "utf-8");
 
-    const result = await exportToObsidian(item, config);
+    const sqlite = seedReexport({
+      id,
+      path: "0_Inbox/Old Name.md",
+      existingContent,
+    });
+
+    const result = await exportToObsidian(item, config, sqlite);
 
     expect(result.skipped).toBeUndefined();
     expect(result.path).toBe("0_Inbox/Old Name.md");
-    // File should be overwritten with new content
     const content = readFileSync(join(inboxDir, "Old Name.md"), "utf-8");
     expect(content).toContain("# New Title");
-    expect(content).toContain('sparkle_id: "unique-sparkle-id-2"');
+    expect(content).toContain(`sparkle_id: "${id}"`);
     expect(content).not.toContain("Old body");
+  });
+
+  it("vault_files row points at sparkle_id but items_vault is missing → throws ExportCrashRecoveryError", async () => {
+    config.exportMode = "overwrite";
+    const id = uuidv4();
+    const item = makeItem({ id, title: "Crashed Export" });
+
+    const { sqlite } = createTestDb();
+    sqlite
+      .prepare(
+        "INSERT INTO vault_files (path, title, frontmatter, content, mtime, content_hash, sparkle_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      )
+      .run("0_Inbox/Crashed.md", "Crashed", null, "x", 1, "h", id);
+    // items_vault deliberately empty — simulates the crash window
+
+    await expect(exportToObsidian(item, config, sqlite)).rejects.toThrow(
+      /EXPORT_CRASH_RECOVERY|未完成/,
+    );
   });
 
   it("different sparkle_id but same title → creates collision-suffixed file", async () => {
@@ -898,5 +946,96 @@ describe("commitExportToVault", () => {
       is_private: number;
     };
     expect(vaultRow.is_private).toBe(1);
+  });
+
+  it("seeds vault_files inside the tx when diskBytes is provided", () => {
+    const id = insertActive({ title: "Seed me" });
+    commitExportToVault(
+      sqlite,
+      makeExportItem(id, { title: "Seed me", content: "body" }),
+      "0_Inbox/Seed me.md",
+      {
+        content: '---\nsparkle_id: "' + id + '"\n---\n\n# Seed me\n\nbody\n',
+        mtime: 1700000000000,
+        contentHash: "abc123",
+        frontmatter: 'sparkle_id: "' + id + '"',
+      },
+    );
+    const vfRow = sqlite
+      .prepare("SELECT path, sparkle_id, mtime, content_hash FROM vault_files WHERE sparkle_id = ?")
+      .get(id) as
+      | { path: string; sparkle_id: string; mtime: number; content_hash: string }
+      | undefined;
+    expect(vfRow).toBeDefined();
+    expect(vfRow!.path).toBe("0_Inbox/Seed me.md");
+    expect(vfRow!.mtime).toBe(1700000000000);
+    expect(vfRow!.content_hash).toBe("abc123");
+  });
+
+  it("rolls back vault_files seed when items_vault INSERT fails (atomicity)", () => {
+    const id = insertActive({ title: "Atomic" });
+    // Force items_vault INSERT to fail by pre-inserting a row at the same id.
+    sqlite
+      .prepare(
+        `INSERT INTO items_vault (id, title, tags, aliases, origin, exported_at, created, is_private, content_snippet, export_path)
+         VALUES (?, 'pre', '[]', '[]', '', ?, ?, 0, '', '0_Inbox/pre.md')`,
+      )
+      .run(id, "2025-12-01T00:00:00Z", "2025-12-01T00:00:00Z");
+
+    expect(() =>
+      commitExportToVault(sqlite, makeExportItem(id, { title: "Atomic" }), "0_Inbox/Atomic.md", {
+        content: "x",
+        mtime: 1,
+        contentHash: "h",
+        frontmatter: null,
+      }),
+    ).toThrow();
+
+    // No vault_files row at the new path — the INSERT (which would have happened
+    // inside the same tx as the failed items_vault INSERT) was rolled back.
+    const stray = sqlite
+      .prepare("SELECT path FROM vault_files WHERE path = ?")
+      .get("0_Inbox/Atomic.md");
+    expect(stray).toBeUndefined();
+
+    // items_active row is still present (DELETE rolled back).
+    const active = sqlite.prepare("SELECT id FROM items_active WHERE id = ?").get(id);
+    expect(active).toBeDefined();
+  });
+
+  it("ON CONFLICT(path) updates existing vault_files row (path collision absorbs cleanly)", () => {
+    const id = insertActive({ title: "Collide" });
+    // Pre-existing vault_files row at the path the export will use, perhaps from
+    // a prior scanner pass that indexed it without sparkle_id.
+    sqlite
+      .prepare(
+        `INSERT INTO vault_files (path, title, frontmatter, content, mtime, content_hash, sparkle_id)
+         VALUES (?, 'Old', NULL, 'old', 1, 'oldhash', NULL)`,
+      )
+      .run("0_Inbox/Collide.md");
+
+    commitExportToVault(
+      sqlite,
+      makeExportItem(id, { title: "Collide", content: "new body" }),
+      "0_Inbox/Collide.md",
+      {
+        content: "new body",
+        mtime: 2,
+        contentHash: "newhash",
+        frontmatter: 'sparkle_id: "' + id + '"',
+      },
+    );
+
+    const row = sqlite
+      .prepare("SELECT title, sparkle_id, content_hash, mtime FROM vault_files WHERE path = ?")
+      .get("0_Inbox/Collide.md") as {
+      title: string;
+      sparkle_id: string | null;
+      content_hash: string;
+      mtime: number;
+    };
+    expect(row.sparkle_id).toBe(id);
+    expect(row.content_hash).toBe("newhash");
+    expect(row.mtime).toBe(2);
   });
 });

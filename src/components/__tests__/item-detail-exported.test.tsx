@@ -159,16 +159,19 @@ describe("ItemDetail - exported read-only mode", () => {
 
   it("shows fallback when vault path not found", async () => {
     setupDefaultMocks(mockExportedItemNoPath);
-    vi.mocked(api.getVaultPathBySparkleId).mockRejectedValue(new Error("Not found"));
+    // PR 2: getVaultPathBySparkleId resolves null on 404 instead of throwing.
+    vi.mocked(api.getVaultPathBySparkleId).mockResolvedValue(null);
     renderItemDetail();
 
     await waitFor(() => {
       expect(screen.getByText("已匯出至 Obsidian")).toBeInTheDocument();
     });
 
-    // Should show fallback message, not vault link
+    // Reverse-lookup returned null AND fixture has no export_path fallback →
+    // canonical "deleted" string per R3-D3 (索引更新中… / 此檔案已從 Vault 刪除).
+    // The string appears in both the slate bar (header) and the body link area.
     await waitFor(() => {
-      expect(screen.getByText("Vault 中未找到對應檔案")).toBeInTheDocument();
+      expect(screen.getAllByText("此檔案已從 Vault 刪除").length).toBeGreaterThan(0);
     });
     expect(screen.queryByText("在 Vault 中查看")).not.toBeInTheDocument();
   });

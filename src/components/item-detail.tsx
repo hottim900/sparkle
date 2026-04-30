@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useNavigate, type NavigateOptions } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
@@ -26,7 +26,12 @@ import { PauseToggle } from "@/components/pause-toggle";
 import { PausedBanner } from "@/components/paused-banner";
 import { useItemForm } from "@/hooks/use-item-form";
 import { usePauseResume } from "@/hooks/use-pause-resume";
-import { updateItem, getVaultPathBySparkleId, getSettings } from "@/lib/api";
+import { updateItem, getSettings } from "@/lib/api";
+import {
+  useResolvedVaultPath,
+  useVaultPathBySparkleId,
+} from "@/hooks/use-vault-path-by-sparkle-id";
+import { useAnnouncement } from "@/components/announcement-provider";
 import { queryKeys } from "@/lib/query-keys";
 
 interface ItemDetailProps {
@@ -91,17 +96,12 @@ export function ItemDetail({ itemId, onDeleted, onBack, onNavigate }: ItemDetail
   const [aliasInput, setAliasInput] = useState("");
   const [createTodoRequested, setCreateTodoRequested] = useState(false);
 
-  // Resolve vault path for exported items via sparkle_id
-  const { data: vaultPath } = useQuery({
-    queryKey: queryKeys.vault.bySparkleId(item?.id ?? ""),
-    queryFn: () => getVaultPathBySparkleId(item!.id),
-    enabled: !!item && item.origin === "vault",
-    retry: false,
-  });
+  // Reverse-lookup query (raw) — kept alongside the derived `resolvedVaultPath`
+  // because the announce-on-change effect needs the live `data?.path` separate
+  // from the snapshot fallback.
+  const vaultPathQuery = useVaultPathBySparkleId(item?.origin === "vault" ? item.id : undefined);
+  const { resolvedVaultPath } = useResolvedVaultPath(item);
 
-  // Vault name for the obsidian:// URI — derived from the configured vault path
-  // basename. Only fetched for vault-origin items to avoid an extra request
-  // on active-item views.
   const { data: settings } = useQuery({
     queryKey: queryKeys.settings,
     queryFn: getSettings,
@@ -111,10 +111,25 @@ export function ItemDetail({ itemId, onDeleted, onBack, onNavigate }: ItemDetail
   const vaultName = settings?.obsidian_vault_path
     ? settings.obsidian_vault_path.replace(/\/+$/, "").split("/").pop() || ""
     : "";
+
   const obsidianUri =
-    vaultName && item?.export_path
-      ? `obsidian://open?vault=${encodeURIComponent(vaultName)}&file=${encodeURIComponent(item.export_path.replace(/\.md$/, ""))}`
+    vaultName && resolvedVaultPath
+      ? `obsidian://open?vault=${encodeURIComponent(vaultName)}&file=${encodeURIComponent(resolvedVaultPath.replace(/\.md$/, ""))}`
       : null;
+
+  // Announce when reverse-lookup surfaces a path that differs from the cached
+  // export_path snapshot — silent jumps would otherwise be invisible to AT.
+  const announce = useAnnouncement();
+  const lastAnnouncedRef = useRef<string | null>(null);
+  useEffect(() => {
+    const fresh = vaultPathQuery.data?.path ?? null;
+    const fallback = item?.export_path ?? null;
+    if (fresh && fallback && fresh !== fallback && lastAnnouncedRef.current !== fresh) {
+      lastAnnouncedRef.current = fresh;
+      announce("vault 路徑已更新");
+    }
+  }, [vaultPathQuery.data?.path, item?.export_path, announce]);
+
   const [markingAsPrivate, setMarkingAsPrivate] = useState(false);
   const { handleResume, resuming } = usePauseResume(item, setItem);
 
@@ -208,16 +223,18 @@ export function ItemDetail({ itemId, onDeleted, onBack, onNavigate }: ItemDetail
           {/* Vault link (the header slate bar already shows "位於 vault · path") */}
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <span>已匯出至 Obsidian</span>
-            {vaultPath ? (
+            {vaultPathQuery.isLoading && !item.export_path ? (
+              <span aria-live="polite">索引更新中…</span>
+            ) : resolvedVaultPath ? (
               <a
-                href={`/vault?file=${encodeURIComponent(vaultPath.path)}`}
+                href={`/vault?file=${encodeURIComponent(resolvedVaultPath)}`}
                 className={`inline-flex items-center gap-1 ${isOnline ? "text-foreground hover:underline" : "pointer-events-none"}`}
                 onClick={(e) => {
                   e.preventDefault();
                   if (isOnline) {
                     navigate({
                       to: "/vault",
-                      search: { file: vaultPath.path, filter: undefined },
+                      search: { file: resolvedVaultPath, filter: undefined },
                     });
                   }
                 }}
@@ -225,7 +242,7 @@ export function ItemDetail({ itemId, onDeleted, onBack, onNavigate }: ItemDetail
                 <ExternalLink className="h-3 w-3" />在 Vault 中查看
               </a>
             ) : (
-              <span>Vault 中未找到對應檔案</span>
+              <span>此檔案已從 Vault 刪除</span>
             )}
           </div>
 
@@ -305,16 +322,34 @@ export function ItemDetail({ itemId, onDeleted, onBack, onNavigate }: ItemDetail
                 className="pointer-events-none bg-gradient-to-b from-transparent to-slate-50 dark:to-slate-800 h-8 absolute bottom-0 inset-x-0"
               />
             </pre>
-            <div className="flex items-center gap-3 mt-1 text-[11px] text-muted-foreground">
+            <div className="flex flex-wrap items-center gap-3 mt-1 text-[11px] text-muted-foreground">
               <span>節錄前 500 字；完整內容請至 vault 查看</span>
-              {obsidianUri && (
-                <a
-                  href={obsidianUri}
-                  className="inline-flex items-center gap-1 text-foreground hover:underline"
-                >
-                  <ExternalLink className="h-3 w-3" />在 Obsidian 中開啟
-                </a>
-              )}
+              {obsidianUri ? (
+                <>
+                  <a
+                    href={obsidianUri}
+                    className="inline-flex items-center gap-1 text-foreground hover:underline"
+                  >
+                    <ExternalLink className="h-3 w-3" />在 Obsidian 中開啟
+                  </a>
+                  {resolvedVaultPath ? (
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-1 text-foreground hover:underline"
+                      onClick={() => {
+                        navigator.clipboard.writeText(resolvedVaultPath);
+                        toast.success("已複製 vault 路徑");
+                      }}
+                    >
+                      複製路徑
+                    </button>
+                  ) : null}
+                  {/* Mobile microcopy — obsidian:// requires the app installed; copy-path is the always-works fallback. */}
+                  <span className="text-muted-foreground/70">
+                    若連結失效，複製路徑後在 Obsidian 開啟
+                  </span>
+                </>
+              ) : null}
             </div>
           </div>
         </div>

@@ -376,7 +376,35 @@ sparkle_update_note(id: "...", type: "note")
 
 - **todo → note**：清除 due 和 linked_note_id
 - **任何類型 → scratch**：清除 tags、priority、due、aliases、linked_note_id
-- **已匯出筆記修改標題或內容**：狀態自動回退為 permanent`,
+- **已匯出筆記修改標題或內容**：狀態自動回退為 permanent
+
+## vault-items
+
+v1.4.0 起 items 拆成兩張表：
+
+| 表 | 角色 | content authority |
+|---|---|---|
+| items_active | fleeting / developing / permanent / archived 的成熟度管線 | items_active.content |
+| items_vault | exported 筆記的 metadata + 500 字 snippet | vault 內 .md 檔案（disk） |
+
+**為什麼 vault-origin 寫入會回傳 \`VAULT_READONLY\`**：vault 是 content source of truth。Sparkle DB 只持 metadata snapshot；改 content 必須改 vault .md，否則下一輪 scanner 會以 disk 為準覆寫掉 DB 變動。
+
+**回應 payload 解讀**：
+- \`vault_path\`：當前 vault 內檔案路徑（透過 vault_files reverse-lookup 解析）
+- \`vault_path_source\`：
+  - \`"lookup"\` — 從 vault_files 即時反查取得（rename/move 後的最新值）
+  - \`"fallback"\` — 從 items_vault.export_path 快照取得（PR 2 dual-write 過渡期；PR 3 移除）
+  - \`null\` — 沒有可用 path（檔案剛被刪除或從未匯出）
+
+**修改 vault 內容的三條路徑**：
+
+| 場景 | 工具 / 端點 |
+|---|---|
+| 用 sparkle_id 改內容 | \`sparkle_write_obsidian\` (by id) |
+| 用 path 改內容 | \`sparkle_write_obsidian_by_path\` |
+| 釋放 Sparkle 對 vault 檔案的記錄（保留 .md） | \`sparkle_release_note\` 或 \`DELETE /api/items/:id/vault-stub\` |
+
+**dual-write 過渡期注意事項**（PR 2 期間）：vault_path 由 reverse-lookup 主導，但 export_path 還在 schema 內當 fallback。callsite 的 \`?? export_path\` 只應落在「scanner 還沒掃到新 path」的短窗。PR 3 整段移除。`,
   },
 
   "obsidian-vault": {

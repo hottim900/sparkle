@@ -1,5 +1,32 @@
 # Changelog
 
+## [1.4.4.0] - 2026-04-30
+
+### Added
+
+- **vault_files reverse-lookup is now the primary path resolution mechanism.** `getVaultPathBySparkleId(id)` (server: `getVaultPathBySparkleIdSync(sqlite, id)`; client: `useVaultPathBySparkleId(id)` React Query hook) replaces direct reads of `items_vault.export_path`. Listings hydrate `vault_path` via a `LEFT JOIN vault_files ON vault_files.sparkle_id = items_vault.id` (both branches in `listVaultItems`). Single-row callsites (`vaultReadonlyPayload`) carry `vault_path_source: "lookup" | "fallback" | null` so AI agents and the UI can reason about freshness.
+- **Migration v24** — backfills `vault_files.sparkle_id` from on-disk `.md` frontmatter for rows where it is currently NULL. Two-phase (sync I/O outside transaction, sync transaction for UPDATE + orphan check). Halts via `process.exit(78)` on either category: `migration_v24_halted_unparseable` (filesystem errors during PHASE 1) or `migration_v24_halted_orphans` (items_vault rows with no vault_files match after backfill). systemd unit gains `Restart=on-failure`, `RestartPreventExitStatus=78`, `SuccessExitStatus=78` so the halt is not looped — apply via `scripts/migrate-systemd-unit.sh`.
+- **Export atomicity** — `commitExportToVault` now seeds `vault_files` (path, content, hash, mtime, sparkle_id) inside the same transaction that promotes items_active → items_vault. Reverse-lookup hits immediately after export (no 5-min scanner delay). New crash-recovery pre-check: if vault_files already records the sparkle_id but items_vault is missing, export aborts with `EXPORT_CRASH_RECOVERY` and the operator runs `npm run vault:reconcile`.
+- **Vault sync CLIs** — `npm run vault:audit` (read-only inventory; flags backfill candidates + orphans; produces `scripts/vault-audit-report.json`), `npm run vault:probe` (PR 3 prerequisite verification), `npm run vault:reconcile` (interactive crash-window resolver + audit-report applier). All accept `--help` and `--batch=*` flags.
+- **Reverse-lookup HTTP endpoint** (`GET /api/vault/by-sparkle-id/:id`) now returns `Cache-Control: private, max-age=60`. Client hook caches with 60s staleTime + `keepPreviousData` so renames stay clickable until the refetch lands.
+- **AnnouncementProvider** (`src/components/announcement-provider.tsx`) — single sr-only `aria-live="polite"` region near the app root. `useAnnouncement()` consumers fire "vault 路徑已更新" when async reverse-lookup surfaces a path that differs from the cached snapshot. Outside the provider (test contexts), the hook returns a no-op.
+- **MCP `vault-items` documentation subsection** (`mcp-server/src/docs/content.ts:data-model`) — explains items_active vs items_vault, why VAULT_READONLY occurs, recovery paths, and `vault_path_source` semantics. Resolves the formerly dead `sparkle://docs/data-model#vault-items` anchor referenced by `vault-errors.ts`.
+- **Radix Tooltip primitive** (`src/components/ui/tooltip.tsx`, shadcn-style wrapper around `radix-ui`'s `Tooltip` package). Five item-detail-header callsites swapped from native `title=` to `<Tooltip>` for keyboard / screen-reader parity.
+
+### Changed
+
+- **`item-detail` slate bar** — three visual states (loading "索引更新中…" with `Loader2`, resolved with truncated path, deleted "此檔案已從 Vault 刪除") + `disabled:opacity-60` when no resolvable path. Aria-label tracks state. Mobile copy button has a 2-second post-export cooldown so the user doesn't tap before vault_files is queryable.
+- **vault-watcher** — emits structured `vault_orphan_detected` log when ENOENT + sparkle_id reverse-lookup both fail. Self-heal logic retained as fallback during the dual-write window.
+- **Item type** (`item-enrichment.ts:ItemWithLinkedInfo`) — adds `vault_path: string | null` field; `export_path` marked `@deprecated`.
+- **`exportToObsidian` signature** — accepts an optional `sqlite` parameter for the crash-recovery pre-check. Tests that don't care can omit it; production routes always pass it. The disk-scan `findExistingBySparkleId` (O(N)) is replaced by `SELECT path FROM vault_files WHERE sparkle_id = ?` (O(log N) via partial index).
+
+### Migration notes
+
+- Bump systemd unit BEFORE redeploying: `sudo bash scripts/migrate-systemd-unit.sh && sudo systemctl daemon-reload`.
+- Take a fresh restic backup; v23 backups are not v24-rollback-compatible.
+- After deploy: `npm run vault:probe` should exit 0; `journalctl -u sparkle | grep vault_fallback_hit` should remain empty.
+- See `docs/migration-v24.md` for full halt-recovery runbook.
+
 ## [1.4.3.0] - 2026-04-30
 
 ### Fixed

@@ -63,6 +63,13 @@ export interface StatsResponse {
 
 export interface ExportResult {
   path: string;
+  /**
+   * Echo of `path` returned by PR 2 export route as the canonical "where the
+   * .md landed" field. Both fields are kept until PR 3 to ease consumer
+   * migration; new callers should prefer `vault_path`.
+   */
+  vault_path?: string;
+  skipped?: boolean;
 }
 
 /** Parsed frontmatter from an Obsidian vault .md file */

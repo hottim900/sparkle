@@ -17,6 +17,15 @@ export interface VaultReadonlyPayload {
   error_en: string;
   code: VaultReadonlyCode;
   vault_path: string | null;
+  /**
+   * Provenance of `vault_path`:
+   *  - `"lookup"`    — fresh from vault_files reverse-lookup (live, post-rename safe)
+   *  - `"fallback"`  — stale items_vault.export_path snapshot (PR 2 dual-write window)
+   *  - `null`        — neither available
+   * AI agents and the UI can branch on this to decide whether to retry the
+   * reverse-lookup endpoint or trust the path. PR 3 drops "fallback".
+   */
+  vault_path_source: "lookup" | "fallback" | null;
   hint_endpoint: string;
   hint_tool_by_id: string;
   hint_tool_by_path: string;
@@ -25,6 +34,7 @@ export interface VaultReadonlyPayload {
 
 export function vaultReadonlyPayload(
   vault_path: string | null,
+  vault_path_source: "lookup" | "fallback" | null = null,
   overrides: Partial<VaultReadonlyPayload> = {},
 ): VaultReadonlyPayload {
   return {
@@ -33,6 +43,7 @@ export function vaultReadonlyPayload(
       "This item is vault-origin. Sparkle only stores metadata; vault file is the content source of truth.",
     code: VAULT_READONLY,
     vault_path,
+    vault_path_source: vault_path == null ? null : vault_path_source,
     hint_endpoint: "DELETE /api/items/:id/vault-stub",
     hint_tool_by_id: "sparkle_write_obsidian",
     hint_tool_by_path: "sparkle_write_obsidian_by_path",

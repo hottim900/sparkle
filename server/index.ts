@@ -163,10 +163,14 @@ app.use("*", async (c, next) => {
   );
 });
 
-// Prevent browser heuristic caching of API responses
+// Prevent browser heuristic caching of API responses. Routes that need
+// browser-side caching (e.g. /api/vault/by-sparkle-id which sets `private,
+// max-age=60`) opt in by setting Cache-Control before the response returns.
 app.use("/api/*", async (c, next) => {
   await next();
-  c.res.headers.set("Cache-Control", "no-store");
+  if (!c.res.headers.get("Cache-Control")) {
+    c.res.headers.set("Cache-Control", "no-store");
+  }
 });
 
 // Rate limiting — webhook has its own limiter, applied before auth (webhook skips auth)

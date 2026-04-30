@@ -10,6 +10,7 @@ import {
   updateItem,
   deleteItem,
   deleteVaultItem,
+  resolveVaultPath,
 } from "../lib/items.js";
 import { resolveLinkedInfoActive } from "../lib/item-enrichment.js";
 import { isValidTypeStatus, getAutoMappedStatus } from "../lib/item-type-system.js";
@@ -24,6 +25,7 @@ import {
   exportToObsidian,
   resolveSparkleReferences,
   commitExportToVault,
+  ExportCrashRecoveryError,
   type ItemLookup,
 } from "../lib/export.js";
 import { getObsidianSettings } from "../lib/settings.js";
@@ -175,6 +177,7 @@ itemsRouter.post("/batch", async (c) => {
       const exportedResults: {
         id: string;
         path: string;
+        diskBytes: NonNullable<Awaited<ReturnType<typeof exportToObsidian>>["diskBytes"]>;
         item: (typeof eligible)[number];
       }[] = [];
       const skippedIds: string[] = [];
@@ -186,19 +189,24 @@ itemsRouter.post("/batch", async (c) => {
             ...item,
             content: resolvedContent,
           } as ExportableItem;
-          const result = await exportToObsidian(exportItem, exportConfig);
+          const result = await exportToObsidian(exportItem, exportConfig, sqlite);
           if (result.skipped) {
             skippedIds.push(item.id);
-          } else {
-            exportedResults.push({ id: item.id, path: result.path, item });
+          } else if (result.diskBytes) {
+            exportedResults.push({
+              id: item.id,
+              path: result.path,
+              diskBytes: result.diskBytes,
+              item,
+            });
           }
         } catch (e) {
           errors.push({ id: item.id, error: (e as Error).message });
         }
       }
-      // 3. Atomic move per item: INSERT vault + DELETE active.
+      // 3. Atomic move per item: INSERT vault + DELETE active + seed vault_files.
       let committed = 0;
-      for (const { path, item } of exportedResults) {
+      for (const { path, diskBytes, item } of exportedResults) {
         try {
           commitExportToVault(
             sqlite,
@@ -215,6 +223,7 @@ itemsRouter.post("/batch", async (c) => {
               content: item.content,
             },
             path,
+            diskBytes,
           );
           committed++;
         } catch (e) {
@@ -300,8 +309,9 @@ itemsRouter.post("/:id/export", async (c) => {
     return c.json({ error: "Item not found" }, 404);
   }
   if (item.origin === "vault") {
+    const { path, source } = resolveVaultPath(sqlite, item.id, item.export_path);
     return c.json(
-      { ...vaultReadonlyPayload(item.export_path), error: "已匯出的項目無法再次匯出" },
+      { ...vaultReadonlyPayload(path, source), error: "已匯出的項目無法再次匯出" },
       409,
     );
   }
@@ -319,11 +329,15 @@ itemsRouter.post("/:id/export", async (c) => {
   try {
     const resolvedContent = resolveSparkleReferences(item.content || "", lookupItem);
     const exportItem = { ...item, content: resolvedContent } as ExportableItem;
-    const result = await exportToObsidian(exportItem, {
-      vaultPath: obsidian.obsidian_vault_path,
-      inboxFolder: obsidian.obsidian_inbox_folder,
-      exportMode: obsidian.obsidian_export_mode,
-    });
+    const result = await exportToObsidian(
+      exportItem,
+      {
+        vaultPath: obsidian.obsidian_vault_path,
+        inboxFolder: obsidian.obsidian_inbox_folder,
+        exportMode: obsidian.obsidian_export_mode,
+      },
+      sqlite,
+    );
     if (!result.skipped) {
       commitExportToVault(
         sqlite,
@@ -340,10 +354,23 @@ itemsRouter.post("/:id/export", async (c) => {
           content: item.content,
         },
         result.path,
+        result.diskBytes,
       );
     }
-    return c.json({ path: result.path, skipped: result.skipped });
+    return c.json({ path: result.path, skipped: result.skipped, vault_path: result.path });
   } catch (e) {
+    if (e instanceof ExportCrashRecoveryError) {
+      return c.json(
+        {
+          error: e.message,
+          error_en: `Export aborted — vault_files already records ${e.sparkleId} but items_vault is missing the row. Run \`npm run vault:reconcile\` then retry.`,
+          code: e.code,
+          sparkle_id: e.sparkleId,
+          vault_path: e.vaultPath,
+        },
+        500,
+      );
+    }
     return c.json({ error: (e as Error).message }, 500);
   }
 });
@@ -383,7 +410,8 @@ itemsRouter.patch("/:id", async (c) => {
     }
 
     if (existing.origin === "vault") {
-      return c.json(vaultReadonlyPayload(existing.export_path), 409);
+      const { path, source } = resolveVaultPath(sqlite, existing.id, existing.export_path);
+      return c.json(vaultReadonlyPayload(path, source), 409);
     }
 
     // Private items cannot be converted to scratch
@@ -488,7 +516,8 @@ itemsRouter.delete("/:id", (c) => {
     return c.json({ error: "Item not found" }, 404);
   }
   if (existing.origin === "vault") {
-    return c.json(vaultReadonlyPayload(existing.export_path), 409);
+    const { path, source } = resolveVaultPath(sqlite, existing.id, existing.export_path);
+    return c.json(vaultReadonlyPayload(path, source), 409);
   }
   const deleted = deleteItem(db, id);
   if (!deleted) {

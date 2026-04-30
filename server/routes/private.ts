@@ -12,6 +12,7 @@ import {
   updateItem,
   deleteItem,
   searchItems,
+  resolveVaultPath,
 } from "../lib/items.js";
 import {
   createItemSchema,
@@ -185,7 +186,8 @@ privateRouter.patch("/items/:id", async (c) => {
     }
 
     if (existing.origin === "vault") {
-      return c.json(vaultReadonlyPayload(existing.export_path), 409);
+      const { path, source } = resolveVaultPath(sqlite, existing.id, existing.export_path);
+      return c.json(vaultReadonlyPayload(path, source), 409);
     }
 
     const updated = updateItem(db, id, input, true);
@@ -210,7 +212,8 @@ privateRouter.delete("/items/:id", (c) => {
   }
 
   if (existing.origin === "vault") {
-    return c.json(vaultReadonlyPayload(existing.export_path), 409);
+    const { path, source } = resolveVaultPath(sqlite, existing.id, existing.export_path);
+    return c.json(vaultReadonlyPayload(path, source), 409);
   }
 
   deleteItem(db, id);

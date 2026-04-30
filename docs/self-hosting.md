@@ -457,3 +457,41 @@ sudo systemctl restart sparkle sparkle-mcp-http
 ```
 
 If a new database migration is included, it runs automatically on server startup.
+
+### Vault sync CLIs (v24+)
+
+After deploying v24 (sparkle 1.4.4.0+), three operator CLIs ship with the server:
+
+```bash
+npm run vault:audit       # read-only inventory; flags items_vault rows
+                          # missing vault_files reverse-lookup, lists .md
+                          # files whose frontmatter sparkle_id v24 will backfill
+
+npm run vault:probe       # PR 3 prerequisite: verify every items_vault.id
+                          # resolves via vault_files reverse-lookup; non-zero
+                          # exit if any miss
+
+npm run vault:reconcile   # interactive crash-window orphan resolver:
+                          # promote items_active → items_vault, delete .md,
+                          # or skip per row. Also applies vault:audit's
+                          # archive decisions via --apply-from=...
+```
+
+For migration v24-specific halt recovery (`migration_v24_halted_orphans` /
+`migration_v24_halted_unparseable`), see
+[Migration v24 runbook](migration-v24.md).
+
+### Migration v24 systemd unit change
+
+PR 2 introduces `process.exit(78)` on migration halt. Without the matching
+systemd directives, `Restart=always` would loop the halt log. Apply once:
+
+```bash
+sudo bash scripts/migrate-systemd-unit.sh
+sudo systemctl daemon-reload
+systemctl cat sparkle.service | grep -E 'Restart|ExitStatus'
+# Expect:
+#   Restart=on-failure
+#   RestartPreventExitStatus=78
+#   SuccessExitStatus=78
+```

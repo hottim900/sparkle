@@ -247,3 +247,16 @@ export async function getSettings(): Promise<Record<string, string>> {
 export async function exportToObsidian(id: string): Promise<ExportResult> {
   return sparkleApi<ExportResult>(`/items/${id}/export`, "POST");
 }
+
+/**
+ * Reverse-lookup the live vault path for a sparkle_id. Returns null when no
+ * vault_files row carries this id (file deleted or scanner still indexing).
+ */
+export async function getVaultPathBySparkleId(id: string): Promise<{ path: string } | null> {
+  try {
+    return await sparkleApi<{ path: string }>(`/vault/by-sparkle-id/${encodeURIComponent(id)}`);
+  } catch (e) {
+    if (e instanceof Error && /404/.test(e.message)) return null;
+    throw e;
+  }
+}

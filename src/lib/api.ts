@@ -537,8 +537,19 @@ export async function getVaultFile(path: string): Promise<VaultFileResponse> {
   return request<VaultFileResponse>(`/vault/file/${encodedPath}`);
 }
 
-export async function getVaultPathBySparkleId(id: string): Promise<{ path: string }> {
-  return request<{ path: string }>(`/vault/by-sparkle-id/${encodeURIComponent(id)}`);
+/**
+ * Reverse-lookup the live vault path for a sparkle_id. Returns null when no
+ * vault_files row carries this id (= file deleted / never synced / scanner
+ * still indexing). Other API errors propagate so React Query can render them
+ * normally; only the well-defined 404 collapses to null.
+ */
+export async function getVaultPathBySparkleId(id: string): Promise<{ path: string } | null> {
+  try {
+    return await request<{ path: string }>(`/vault/by-sparkle-id/${encodeURIComponent(id)}`);
+  } catch (e) {
+    if (e instanceof ApiClientError && e.status === 404) return null;
+    throw e;
+  }
 }
 
 export { ApiClientError };

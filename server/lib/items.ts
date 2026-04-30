@@ -20,6 +20,41 @@ type ActiveRow = typeof itemsActive.$inferSelect;
 export const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const LIKE_SAFE_RE = /^[^%_]{4,36}$/;
 
+/**
+ * Server-side reverse-lookup helper. Returns the live vault_files.path for the
+ * given sparkle_id, or null if no match exists. Sync (better-sqlite3 is sync).
+ *
+ * Counterpart to GET /api/vault/by-sparkle-id/:id but callable from server-only
+ * code paths (vaultReadonlyPayload, list enrichment) without HTTP round-trip.
+ *
+ * @param sqlite live better-sqlite3 connection
+ * @param id     sparkle_id (UUID)
+ * @returns      vault path (e.g. "0_Inbox/Title.md") or null when no row matches
+ */
+export function getVaultPathBySparkleIdSync(sqlite: Database.Database, id: string): string | null {
+  const row = sqlite.prepare("SELECT path FROM vault_files WHERE sparkle_id = ?").get(id) as
+    | { path: string }
+    | undefined;
+  return row?.path ?? null;
+}
+
+/**
+ * Resolve a vault item's current path: prefer reverse-lookup, fall back to the
+ * stored items_vault.export_path snapshot during the PR 2 dual-write window.
+ * `source` lets callers (and AI agents) reason about freshness.
+ *
+ * @returns `{ path: string | null, source: "lookup" | "fallback" }`
+ */
+export function resolveVaultPath(
+  sqlite: Database.Database,
+  id: string,
+  fallback: string | null,
+): { path: string | null; source: "lookup" | "fallback" } {
+  const path = getVaultPathBySparkleIdSync(sqlite, id);
+  if (path != null) return { path, source: "lookup" };
+  return { path: fallback, source: "fallback" };
+}
+
 export function createItem(
   db: DB,
   input: Partial<CreateItemInput> & { title: string } & { is_private?: boolean },
@@ -313,8 +348,10 @@ export function listVaultItems(
   const offset = filters?.offset ?? 0;
   const sortField = filters?.sort ?? "exported_at";
   const sortOrder = filters?.order ?? "desc";
-  const orderFn = sortOrder === "asc" ? asc : desc;
   const sortColumn = sortField === "created" ? itemsVault.created : itemsVault.exported_at;
+
+  type VaultRow = typeof itemsVault.$inferSelect;
+  type VaultRowWithPath = VaultRow & { vault_path: string | null };
 
   if (filters?.tag) {
     const whereClause = sql`WHERE ${and(...conditions)}`;
@@ -324,14 +361,23 @@ export function listVaultItems(
     const total = countResult[0]?.count ?? 0;
     const orderSql =
       sortOrder === "asc" ? sql`ORDER BY ${sortColumn} ASC` : sql`ORDER BY ${sortColumn} DESC`;
-    type VaultRow = typeof itemsVault.$inferSelect;
-    const rows = db.all<VaultRow>(
-      sql`SELECT DISTINCT items_vault.* FROM items_vault, json_each(items_vault.tags) ${whereClause} ${orderSql} LIMIT ${limit} OFFSET ${offset}`,
+    // LEFT JOIN vault_files via partial index idx_vault_files_sparkle_id —
+    // hydrates current path per row in one query, eliminating N+1 reverse-lookup
+    // for the listing endpoint. Verify EXPLAIN QUERY PLAN if perf regresses.
+    const rows = db.all<VaultRowWithPath>(
+      sql`SELECT DISTINCT items_vault.*, vf.path AS vault_path
+            FROM items_vault, json_each(items_vault.tags)
+            LEFT JOIN vault_files vf ON vf.sparkle_id = items_vault.id
+            ${whereClause} ${orderSql} LIMIT ${limit} OFFSET ${offset}`,
     );
     return {
       items: resolveLinkedInfo(
         db,
-        rows.map((row) => ({ kind: "vault" as const, row })),
+        rows.map(({ vault_path, ...row }) => ({
+          kind: "vault" as const,
+          row: row as VaultRow,
+          vault_path,
+        })),
         enrich,
         filters.is_private === 1,
       ),
@@ -348,19 +394,24 @@ export function listVaultItems(
     .get();
   const total = countResult?.count ?? 0;
 
-  const rows = db
-    .select()
-    .from(itemsVault)
-    .where(whereClause)
-    .orderBy(orderFn(sortColumn))
-    .limit(limit)
-    .offset(offset)
-    .all();
+  const orderSql =
+    sortOrder === "asc" ? sql`ORDER BY ${sortColumn} ASC` : sql`ORDER BY ${sortColumn} DESC`;
+  const whereSql = whereClause ? sql`WHERE ${whereClause}` : sql``;
+  const rows = db.all<VaultRowWithPath>(
+    sql`SELECT items_vault.*, vf.path AS vault_path
+          FROM items_vault
+          LEFT JOIN vault_files vf ON vf.sparkle_id = items_vault.id
+          ${whereSql} ${orderSql} LIMIT ${limit} OFFSET ${offset}`,
+  );
 
   return {
     items: resolveLinkedInfo(
       db,
-      rows.map((row) => ({ kind: "vault" as const, row })),
+      rows.map(({ vault_path, ...row }) => ({
+        kind: "vault" as const,
+        row: row as VaultRow,
+        vault_path,
+      })),
       enrich,
       filters?.is_private === 1,
     ),

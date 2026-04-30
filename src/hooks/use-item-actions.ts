@@ -1,5 +1,7 @@
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { deleteItem, exportItem, releaseVaultStub } from "@/lib/api";
+import { queryKeys } from "@/lib/query-keys";
 import type { ParsedItem } from "@/lib/types";
 import { toast } from "sonner";
 
@@ -13,6 +15,7 @@ export function useItemActions(
   },
 ) {
   const { isOnline, obsidianEnabled, invalidateAfterSave, onDeleted } = options;
+  const queryClient = useQueryClient();
   const [exporting, setExporting] = useState(false);
   const [releasing, setReleasing] = useState(false);
 
@@ -41,6 +44,16 @@ export function useItemActions(
     setExporting(true);
     try {
       const result = await exportItem(item.id);
+      // Pre-seed the reverse-lookup cache. commitExportToVault writes vault_files
+      // atomically with items_vault, so the path is queryable immediately — but
+      // skipping the round-trip avoids a tiny render-blank between toast and
+      // slate-bar resolution. invalidateQueries with refetchType:"none" makes
+      // sure the seeded data doesn't immediately get marked stale.
+      queryClient.setQueryData(queryKeys.vault.bySparkleId(item.id), { path: result.path });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.vault.bySparkleId(item.id),
+        refetchType: "none",
+      });
       toast.success(`已匯出到 Obsidian: ${result.path}`);
       invalidateAfterSave();
     } catch (err) {
@@ -59,6 +72,10 @@ export function useItemActions(
     setReleasing(true);
     try {
       await releaseVaultStub(item.id);
+      // Release nulls vault_files.sparkle_id server-side; reverse-lookup will
+      // 404 from now on. Drop the cached path so subscribed components refetch
+      // instead of showing the stale resolved path.
+      queryClient.removeQueries({ queryKey: queryKeys.vault.bySparkleId(item.id) });
       toast.success("已釋出 · vault 檔案保留");
       invalidateAfterSave();
       onDeleted?.();
