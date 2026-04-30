@@ -69,7 +69,7 @@ function VaultPage() {
   // Search / recent files
   const { data: searchData, isPending: isSearching } = useQuery({
     queryKey: queryKeys.vault.search(debouncedQuery, sparkleFilter),
-    queryFn: () => searchVault(debouncedQuery || undefined, 30, sparkleFilter),
+    queryFn: () => searchVault(debouncedQuery || undefined, 200, sparkleFilter),
   });
 
   // Selected file detail

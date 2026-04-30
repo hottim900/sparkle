@@ -11,7 +11,7 @@ import { logger } from "../lib/logger.js";
 
 const vaultSearchSchema = z.object({
   q: z.string().min(1).max(1000).optional(),
-  limit: z.coerce.number().int().min(1).max(100).default(20),
+  limit: z.coerce.number().int().min(1).max(500).default(20),
   filter: z.enum(["all", "sparkle"]).optional(),
 });
 

@@ -1,5 +1,14 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync, utimesSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+  mkdirSync,
+  utimesSync,
+} from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createTestDb } from "../../test-utils.js";
@@ -172,6 +181,7 @@ describe("scanVaultFiles", () => {
 
   it("handles duplicate sparkle_id gracefully (sets to null)", async () => {
     enableObsidian(sqlite, tmpDir);
+    const auditPath = join(tmpDir, "duplicate-sparkle-id.json");
     writeFileSync(join(tmpDir, "first.md"), '---\nsparkle_id: "dup-id"\n---\nFirst file');
     writeFileSync(
       join(tmpDir, "second.md"),
@@ -179,7 +189,7 @@ describe("scanVaultFiles", () => {
     );
 
     // Should not throw
-    const result = await scanVaultFiles(db, sqlite);
+    const result = await scanVaultFiles(db, sqlite, { auditPath });
     expect(result.errors).toBe(0);
 
     // One should have sparkle_id, the other null
@@ -207,5 +217,91 @@ describe("scanVaultFiles", () => {
     await scanVaultFiles(db, sqlite);
     row = db.select().from(vaultFiles).where(eq(vaultFiles.path, "evolving.md")).get();
     expect(row!.sparkle_id).toBe("new-id");
+  });
+
+  it("path-rename does not produce NULL sparkle_id (PR 1 ordering fix)", async () => {
+    enableObsidian(sqlite, tmpDir);
+    mkdirSync(join(tmpDir, "0_Inbox"), { recursive: true });
+    const oldPath = join(tmpDir, "0_Inbox", "moved.md");
+    writeFileSync(oldPath, '---\nsparkle_id: "rename-id"\n---\n# Original\nContent');
+
+    // First scan: file is at oldPath with sparkle_id
+    await scanVaultFiles(db, sqlite);
+    let row = db.select().from(vaultFiles).where(eq(vaultFiles.path, "0_Inbox/moved.md")).get();
+    expect(row!.sparkle_id).toBe("rename-id");
+
+    // User moves the file in Obsidian: 0_Inbox/moved.md → moved.md (root)
+    const newPath = join(tmpDir, "moved.md");
+    renameSync(oldPath, newPath);
+
+    // Second scan: should DELETE old row before INSERT new row, no UNIQUE collision
+    const result = await scanVaultFiles(db, sqlite);
+    expect(result.errors).toBe(0);
+    expect(result.deleted).toBe(1);
+    expect(result.inserted).toBe(1);
+
+    // The new row must keep the sparkle_id, NOT fall back to null
+    row = db.select().from(vaultFiles).where(eq(vaultFiles.path, "moved.md")).get();
+    expect(row).toBeDefined();
+    expect(row!.sparkle_id).toBe("rename-id");
+
+    // The old row must be gone
+    const oldRow = db
+      .select()
+      .from(vaultFiles)
+      .where(eq(vaultFiles.path, "0_Inbox/moved.md"))
+      .get();
+    expect(oldRow).toBeUndefined();
+  });
+
+  it("appends duplicate sparkle_id audit entry to JSON file", async () => {
+    enableObsidian(sqlite, tmpDir);
+    const auditDir = mkdtempSync(join(tmpdir(), "vault-scanner-audit-"));
+    const auditPath = join(auditDir, "duplicate-sparkle-id.json");
+
+    writeFileSync(join(tmpDir, "first.md"), '---\nsparkle_id: "dup-id"\n---\nFirst');
+    writeFileSync(
+      join(tmpDir, "second.md"),
+      '---\nsparkle_id: "dup-id"\n---\nSecond, copy-paste collision',
+    );
+
+    const result = await scanVaultFiles(db, sqlite, { auditPath });
+    expect(result.errors).toBe(0);
+
+    // Both files indexed: one with sparkle_id, one without
+    const rows = db.select().from(vaultFiles).all();
+    expect(rows.filter((r) => r.sparkle_id === "dup-id")).toHaveLength(1);
+    expect(rows.filter((r) => r.sparkle_id === null)).toHaveLength(1);
+
+    // Audit JSON must exist and contain the conflict
+    expect(existsSync(auditPath)).toBe(true);
+    const audit = JSON.parse(readFileSync(auditPath, "utf-8")) as Array<{
+      sparkle_id: string;
+      new_path: string;
+      detected: string;
+    }>;
+    expect(audit).toHaveLength(1);
+    expect(audit[0]!.sparkle_id).toBe("dup-id");
+    expect(["first.md", "second.md"]).toContain(audit[0]!.new_path);
+    expect(typeof audit[0]!.detected).toBe("string");
+
+    rmSync(auditDir, { recursive: true, force: true });
+  });
+
+  it("skips concurrent scan when one is already in progress", async () => {
+    enableObsidian(sqlite, tmpDir);
+    // Create enough files that a scan takes more than one event-loop tick
+    for (let i = 0; i < 20; i++) {
+      writeFileSync(join(tmpDir, `note-${i}.md`), `# Note ${i}\nBody ${i}`);
+    }
+
+    // Fire two scans without awaiting the first; the second must short-circuit
+    const first = scanVaultFiles(db, sqlite);
+    const second = scanVaultFiles(db, sqlite);
+    const [firstResult, secondResult] = await Promise.all([first, second]);
+
+    expect(secondResult.skipped).toBe(true);
+    expect(firstResult.skipped).toBe(false);
+    expect(firstResult.scanned).toBe(20);
   });
 });
