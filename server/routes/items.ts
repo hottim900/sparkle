@@ -10,7 +10,6 @@ import {
   updateItem,
   deleteItem,
   deleteVaultItem,
-  getVaultPathBySparkleIdSync,
 } from "../lib/items.js";
 import { resolveLinkedInfoActive } from "../lib/item-enrichment.js";
 import { isValidTypeStatus, getAutoMappedStatus } from "../lib/item-type-system.js";
@@ -32,7 +31,7 @@ import { getObsidianSettings } from "../lib/settings.js";
 import { ZodError } from "zod";
 import { revokeSharesByItemId } from "../lib/shares.js";
 import { deriveTitleFromContent } from "../lib/title-derivation.js";
-import { vaultReadonlyPayload } from "../lib/vault-errors.js";
+import { vaultReadonlyResponse } from "../lib/vault-errors.js";
 
 const lookupItem: ItemLookup = (shortId) => {
   const found = getItemForLookup(db, shortId);
@@ -309,8 +308,9 @@ itemsRouter.post("/:id/export", async (c) => {
     return c.json({ error: "Item not found" }, 404);
   }
   if (item.origin === "vault") {
-    const path = getVaultPathBySparkleIdSync(sqlite, item.id);
-    return c.json({ ...vaultReadonlyPayload(path), error: "已匯出的項目無法再次匯出" }, 409);
+    return vaultReadonlyResponse(c, sqlite, item.id, {
+      error: "已匯出的項目無法再次匯出",
+    });
   }
   if (item.type !== "note") {
     return c.json({ error: "Only notes can be exported" }, 400);
@@ -407,8 +407,7 @@ itemsRouter.patch("/:id", async (c) => {
     }
 
     if (existing.origin === "vault") {
-      const path = getVaultPathBySparkleIdSync(sqlite, existing.id);
-      return c.json(vaultReadonlyPayload(path), 409);
+      return vaultReadonlyResponse(c, sqlite, existing.id);
     }
 
     // Private items cannot be converted to scratch
@@ -513,8 +512,7 @@ itemsRouter.delete("/:id", (c) => {
     return c.json({ error: "Item not found" }, 404);
   }
   if (existing.origin === "vault") {
-    const path = getVaultPathBySparkleIdSync(sqlite, existing.id);
-    return c.json(vaultReadonlyPayload(path), 409);
+    return vaultReadonlyResponse(c, sqlite, existing.id);
   }
   const deleted = deleteItem(db, id);
   if (!deleted) {

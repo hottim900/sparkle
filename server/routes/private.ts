@@ -12,7 +12,6 @@ import {
   updateItem,
   deleteItem,
   searchItems,
-  getVaultPathBySparkleIdSync,
 } from "../lib/items.js";
 import {
   createItemSchema,
@@ -21,7 +20,7 @@ import {
   searchSchema,
 } from "../schemas/items.js";
 import { deriveTitleFromContent } from "../lib/title-derivation.js";
-import { vaultReadonlyPayload } from "../lib/vault-errors.js";
+import { vaultReadonlyResponse } from "../lib/vault-errors.js";
 
 const privateRouter = new Hono();
 
@@ -186,8 +185,7 @@ privateRouter.patch("/items/:id", async (c) => {
     }
 
     if (existing.origin === "vault") {
-      const path = getVaultPathBySparkleIdSync(sqlite, existing.id);
-      return c.json(vaultReadonlyPayload(path), 409);
+      return vaultReadonlyResponse(c, sqlite, existing.id);
     }
 
     const updated = updateItem(db, id, input, true);
@@ -212,8 +210,7 @@ privateRouter.delete("/items/:id", (c) => {
   }
 
   if (existing.origin === "vault") {
-    const path = getVaultPathBySparkleIdSync(sqlite, existing.id);
-    return c.json(vaultReadonlyPayload(path), 409);
+    return vaultReadonlyResponse(c, sqlite, existing.id);
   }
 
   deleteItem(db, id);

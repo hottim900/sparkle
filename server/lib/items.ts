@@ -591,16 +591,18 @@ export function deleteVaultItem(
   id: string,
 ): { id: string; vault_path: string | null } | null {
   return sqlite.transaction(() => {
-    const row = sqlite.prepare("SELECT id FROM items_vault WHERE id = ?").get(id) as
-      | { id: string }
-      | undefined;
+    const row = sqlite
+      .prepare(
+        `SELECT iv.id, vf.path AS vault_path
+           FROM items_vault iv
+           LEFT JOIN vault_files vf ON vf.sparkle_id = iv.id
+          WHERE iv.id = ?`,
+      )
+      .get(id) as { id: string; vault_path: string | null } | undefined;
     if (!row) return null;
-    const vaultRow = sqlite.prepare("SELECT path FROM vault_files WHERE sparkle_id = ?").get(id) as
-      | { path: string }
-      | undefined;
     sqlite.prepare("DELETE FROM items_vault WHERE id = ?").run(id);
     sqlite.prepare("UPDATE vault_files SET sparkle_id = NULL WHERE sparkle_id = ?").run(id);
-    return { id: row.id, vault_path: vaultRow?.path ?? null };
+    return { id: row.id, vault_path: row.vault_path };
   })();
 }
 

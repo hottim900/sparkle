@@ -99,7 +99,7 @@ echo "→ stopping sparkle.service"
 systemctl stop sparkle.service
 
 # WAL/SHM cleanup is MANDATORY: WAL replay against the .bak file would replay
-# v25-era writes onto a v24 schema, corrupting the restore. (R2-NEW-4)
+# v25-era writes onto a v24 schema, corrupting the restore.
 echo "→ removing WAL/SHM sidecars"
 rm -f "${DB_PATH}-shm" "${DB_PATH}-wal"
 

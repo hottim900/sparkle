@@ -5,10 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { migrateV24toV25, V25HaltError } from "../index";
 
-/**
- * Build a v24-shaped DB with items_vault carrying the doomed `export_path`
- * column + a representative row, so the v25 migration has something to drop.
- */
+/** Build a v24-shaped DB with `export_path` + representative rows. */
 function seedV24(sqlite: Database.Database) {
   sqlite.exec(`
     CREATE TABLE schema_version (version INTEGER NOT NULL);

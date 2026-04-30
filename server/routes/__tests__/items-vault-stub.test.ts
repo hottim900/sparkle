@@ -79,8 +79,8 @@ describe("DELETE /api/items/:id/vault-stub", () => {
       created: NOW,
       content_snippet: "snippet",
     });
-    // Seed a vault_files row linked to this sparkle_id (post-PR3 the vault path
-    // lives only here — items_vault.export_path was dropped).
+    // Seed a vault_files row linked to this sparkle_id — that's the sole
+    // source for vault_path now.
     testSqlite
       .prepare(
         `INSERT INTO vault_files (path, title, frontmatter, content, mtime, content_hash, sparkle_id)

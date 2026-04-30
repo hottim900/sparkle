@@ -9,16 +9,16 @@ const PORT = process.env.PORT || 3456;
 const VAULT_PATH = "/tmp/e2e-vault-rename-vault";
 
 /**
- * Reverse-lookup contract (post PR 3, items_vault.export_path dropped):
+ * Reverse-lookup contract:
  *   GET /api/vault/by-sparkle-id/:id resolves the *current* path of an
  *   exported .md, sourced from vault_files. This is the sole source of
- *   truth for vault paths — there is no DB column fallback anymore.
+ *   truth for vault paths — there is no DB column fallback.
  *
  * Full rename roundtrip (rename .md on disk → 5-min scanner picks it up →
  * UI reflects new path) requires either a 5-minute wait or a test-only scan
  * trigger; this spec instead asserts the API contract that the UI relies on.
  */
-test.describe("Vault reverse-lookup endpoint (PR 2)", () => {
+test.describe("Vault reverse-lookup endpoint", () => {
   test.beforeAll(() => {
     mkdirSync(VAULT_PATH, { recursive: true });
   });
@@ -125,7 +125,7 @@ test.describe("Vault reverse-lookup endpoint (PR 2)", () => {
     expect(looked.path).toBe(exported.path);
   });
 
-  test("released vault file: reverse-lookup returns 404 (R3-NEW-5)", async ({ request }) => {
+  test("released vault file: reverse-lookup returns 404", async ({ request }) => {
     await enableObsidian(request);
 
     // Setup: export a permanent note so it lands in items_vault + vault_files.

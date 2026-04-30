@@ -116,11 +116,10 @@ async function unlockWithSeededPin(testApp: Hono): Promise<string> {
 // File-scoped defaults wrap the shared helpers so each test's call site stays
 // terse ({} for the happy-path vault/active item used by most tests).
 //
-// Post-PR3: items_vault.export_path was dropped. vault_path is resolved from
-// vault_files reverse-lookup, so seeding a matching vault_files row alongside
-// the items_vault row mirrors what commitExportToVault produces in production.
-// `vaultPath: null` skips the vault_files seed (used to assert the
-// reverse-lookup-misses → vault_path=null surface).
+// vault_path is resolved from vault_files reverse-lookup, so the helper seeds
+// a matching vault_files row alongside the items_vault row to mirror what
+// commitExportToVault produces in production. `vaultPath: null` skips that
+// seed (asserts the reverse-lookup-misses → vault_path=null surface).
 const insertVaultItem = (
   overrides: Parameters<typeof insertVaultRow>[1] & { vaultPath?: string | null } = {},
 ): string => {

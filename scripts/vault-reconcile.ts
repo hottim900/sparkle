@@ -193,9 +193,8 @@ async function main(): Promise<void> {
       }
       const snippet = (active.content ?? "").substring(0, 500);
       const exportedAt = new Date().toISOString();
-      // Note: items_vault.export_path was dropped in PR 3. The on-disk
-      // .md path lives in vault_files (vf.sparkle_id = iv.id) — already
-      // populated in this code path because we found `o` via vault_files.
+      // The on-disk .md path lives in vault_files (vf.sparkle_id = iv.id)
+      // — already populated here because we found `o` via vault_files.
       const tx = sqlite.transaction(() => {
         sqlite
           .prepare(

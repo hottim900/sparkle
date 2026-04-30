@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { createHash } from "node:crypto";
 import type Database from "better-sqlite3";
 import { getVaultPathBySparkleIdSync } from "./items.js";
+import { extractFrontmatterBlock } from "./frontmatter.js";
 
 /**
  * Thrown when export sees vault_files already carries this sparkle_id (= a
@@ -256,12 +257,11 @@ async function collectDiskBytes(
   content: string,
 ): Promise<{ content: string; mtime: number; contentHash: string; frontmatter: string | null }> {
   const fileStat = await stat(fullPath);
-  const fmMatch = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
   return {
     content,
     mtime: Math.floor(fileStat.mtimeMs),
     contentHash: createHash("sha256").update(content, "utf-8").digest("hex"),
-    frontmatter: fmMatch?.[1]?.replace(/\r$/gm, "") ?? null,
+    frontmatter: extractFrontmatterBlock(content),
   };
 }
 

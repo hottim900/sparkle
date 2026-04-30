@@ -8,6 +8,10 @@
  * there is no /docs/data-model route on the web server.
  */
 
+import type Database from "better-sqlite3";
+import type { Context } from "hono";
+import { getVaultPathBySparkleIdSync } from "./items.js";
+
 export const VAULT_READONLY = "VAULT_READONLY" as const;
 
 export type VaultReadonlyCode = typeof VAULT_READONLY;
@@ -49,4 +53,19 @@ export function vaultReadonlyPayload(
     doc_url: "sparkle://docs/data-model#vault-items",
     ...overrides,
   };
+}
+
+/**
+ * Convenience for route handlers: resolve the live vault path via reverse-lookup
+ * and emit a 409 VAULT_READONLY response. Couples the path lookup to the
+ * payload shape so individual routes can't forget to pass `vault_path`.
+ */
+export function vaultReadonlyResponse(
+  c: Context,
+  sqlite: Database.Database,
+  id: string,
+  overrides: Partial<VaultReadonlyPayload> = {},
+) {
+  const path = getVaultPathBySparkleIdSync(sqlite, id);
+  return c.json(vaultReadonlyPayload(path, overrides), 409);
 }

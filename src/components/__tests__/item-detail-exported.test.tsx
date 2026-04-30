@@ -153,9 +153,7 @@ describe("ItemDetail - exported read-only mode", () => {
   });
 
   it("shows fallback when vault path not found", async () => {
-    // PR 2: getVaultPathBySparkleId resolves null on 404 instead of throwing.
-    // Post-PR3 reverse-lookup is the only source of truth — null result
-    // means "deleted from vault" (no export_path fallback exists anymore).
+    // Reverse-lookup is the only source of truth — null = deleted from vault.
     setupDefaultMocks(mockExportedItem);
     vi.mocked(api.getVaultPathBySparkleId).mockResolvedValue(null);
     renderItemDetail();

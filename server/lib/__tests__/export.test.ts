@@ -925,8 +925,8 @@ describe("commitExportToVault", () => {
     expect(activeRow!.title).toBe("Original active");
 
     // items_vault row is the pre-existing one — content_snippet was NOT
-    // overwritten. (export_path no longer exists post-PR3 — vault path lives
-    // in vault_files.path; absence of a vault_files row here proves no leak.)
+    // overwritten. Vault path lives in vault_files.path; absence of a
+    // vault_files row here proves the rolled-back tx leaked nothing.
     const vaultRow = sqlite
       .prepare("SELECT title, content_snippet FROM items_vault WHERE id = ?")
       .get(id) as { title: string; content_snippet: string };
