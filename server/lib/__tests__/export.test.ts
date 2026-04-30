@@ -947,4 +947,95 @@ describe("commitExportToVault", () => {
     };
     expect(vaultRow.is_private).toBe(1);
   });
+
+  it("seeds vault_files inside the tx when diskBytes is provided", () => {
+    const id = insertActive({ title: "Seed me" });
+    commitExportToVault(
+      sqlite,
+      makeExportItem(id, { title: "Seed me", content: "body" }),
+      "0_Inbox/Seed me.md",
+      {
+        content: '---\nsparkle_id: "' + id + '"\n---\n\n# Seed me\n\nbody\n',
+        mtime: 1700000000000,
+        contentHash: "abc123",
+        frontmatter: 'sparkle_id: "' + id + '"',
+      },
+    );
+    const vfRow = sqlite
+      .prepare("SELECT path, sparkle_id, mtime, content_hash FROM vault_files WHERE sparkle_id = ?")
+      .get(id) as
+      | { path: string; sparkle_id: string; mtime: number; content_hash: string }
+      | undefined;
+    expect(vfRow).toBeDefined();
+    expect(vfRow!.path).toBe("0_Inbox/Seed me.md");
+    expect(vfRow!.mtime).toBe(1700000000000);
+    expect(vfRow!.content_hash).toBe("abc123");
+  });
+
+  it("rolls back vault_files seed when items_vault INSERT fails (atomicity)", () => {
+    const id = insertActive({ title: "Atomic" });
+    // Force items_vault INSERT to fail by pre-inserting a row at the same id.
+    sqlite
+      .prepare(
+        `INSERT INTO items_vault (id, title, tags, aliases, origin, exported_at, created, is_private, content_snippet, export_path)
+         VALUES (?, 'pre', '[]', '[]', '', ?, ?, 0, '', '0_Inbox/pre.md')`,
+      )
+      .run(id, "2025-12-01T00:00:00Z", "2025-12-01T00:00:00Z");
+
+    expect(() =>
+      commitExportToVault(sqlite, makeExportItem(id, { title: "Atomic" }), "0_Inbox/Atomic.md", {
+        content: "x",
+        mtime: 1,
+        contentHash: "h",
+        frontmatter: null,
+      }),
+    ).toThrow();
+
+    // No vault_files row at the new path — the INSERT (which would have happened
+    // inside the same tx as the failed items_vault INSERT) was rolled back.
+    const stray = sqlite
+      .prepare("SELECT path FROM vault_files WHERE path = ?")
+      .get("0_Inbox/Atomic.md");
+    expect(stray).toBeUndefined();
+
+    // items_active row is still present (DELETE rolled back).
+    const active = sqlite.prepare("SELECT id FROM items_active WHERE id = ?").get(id);
+    expect(active).toBeDefined();
+  });
+
+  it("ON CONFLICT(path) updates existing vault_files row (path collision absorbs cleanly)", () => {
+    const id = insertActive({ title: "Collide" });
+    // Pre-existing vault_files row at the path the export will use, perhaps from
+    // a prior scanner pass that indexed it without sparkle_id.
+    sqlite
+      .prepare(
+        `INSERT INTO vault_files (path, title, frontmatter, content, mtime, content_hash, sparkle_id)
+         VALUES (?, 'Old', NULL, 'old', 1, 'oldhash', NULL)`,
+      )
+      .run("0_Inbox/Collide.md");
+
+    commitExportToVault(
+      sqlite,
+      makeExportItem(id, { title: "Collide", content: "new body" }),
+      "0_Inbox/Collide.md",
+      {
+        content: "new body",
+        mtime: 2,
+        contentHash: "newhash",
+        frontmatter: 'sparkle_id: "' + id + '"',
+      },
+    );
+
+    const row = sqlite
+      .prepare("SELECT title, sparkle_id, content_hash, mtime FROM vault_files WHERE path = ?")
+      .get("0_Inbox/Collide.md") as {
+      title: string;
+      sparkle_id: string | null;
+      content_hash: string;
+      mtime: number;
+    };
+    expect(row.sparkle_id).toBe(id);
+    expect(row.content_hash).toBe("newhash");
+    expect(row.mtime).toBe(2);
+  });
 });

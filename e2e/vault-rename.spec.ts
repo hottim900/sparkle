@@ -123,4 +123,46 @@ test.describe("Vault reverse-lookup endpoint (PR 2)", () => {
     // path lands. This is the contract documented in `useVaultPathBySparkleId`.
     expect(looked.path).toBe(exported.path);
   });
+
+  test("released vault file: reverse-lookup returns 404 (R3-NEW-5)", async ({ request }) => {
+    await enableObsidian(request);
+
+    // Setup: export a permanent note so it lands in items_vault + vault_files.
+    const title = `release-rescan-${Date.now()}`;
+    const item = await createItemViaApi(request, {
+      title,
+      type: "note",
+      status: "permanent",
+      content: "release rescan",
+    });
+    const exportRes = await request.post(`http://localhost:${PORT}/api/items/${item.id}/export`, {
+      headers: { Authorization: `Bearer ${AUTH_TOKEN}` },
+    });
+    expect(exportRes.ok()).toBeTruthy();
+
+    // Pre-condition: reverse-lookup hits.
+    const before = await request.get(
+      `http://localhost:${PORT}/api/vault/by-sparkle-id/${item.id}`,
+      { headers: { Authorization: `Bearer ${AUTH_TOKEN}` } },
+    );
+    expect(before.status()).toBe(200);
+
+    // Action: release the vault stub. deleteVaultItem deletes the items_vault
+    // row AND nulls vault_files.sparkle_id in the same transaction — exactly
+    // what the next scanner cycle would otherwise do (just earlier).
+    const release = await request.delete(
+      `http://localhost:${PORT}/api/items/${item.id}/vault-stub`,
+      { headers: { Authorization: `Bearer ${AUTH_TOKEN}` } },
+    );
+    expect(release.ok()).toBeTruthy();
+
+    // Post-condition: reverse-lookup is now 404 — the .md is still on disk
+    // but vault_files no longer carries the link. UI's hook receives null,
+    // surfaces "此檔案已從 Vault 刪除" (item-detail-exported.test.tsx covers
+    // the rendering branch).
+    const after = await request.get(`http://localhost:${PORT}/api/vault/by-sparkle-id/${item.id}`, {
+      headers: { Authorization: `Bearer ${AUTH_TOKEN}` },
+    });
+    expect(after.status()).toBe(404);
+  });
 });

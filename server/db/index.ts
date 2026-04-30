@@ -975,8 +975,11 @@ export function initializeDatabase(sqlite: Database.Database) {
  * halt log. Dev pino-pretty may drop the halt message; that's accepted
  * since dev is informational and the V24HaltError class also surfaces
  * via the throwing call-site test fixtures.
+ *
+ * Exported for unit test verification (logger.error must fire before
+ * process.exit). Production callers go through the createDb catch path.
  */
-function haltAndExit(payload: V24HaltPayload, event: string): never {
+export function haltAndExit(payload: V24HaltPayload, event: string): never {
   logger.error(payload, `[${event}]`);
   process.exit(78);
 }

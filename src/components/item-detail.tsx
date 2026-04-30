@@ -322,15 +322,33 @@ export function ItemDetail({ itemId, onDeleted, onBack, onNavigate }: ItemDetail
                 className="pointer-events-none bg-gradient-to-b from-transparent to-slate-50 dark:to-slate-800 h-8 absolute bottom-0 inset-x-0"
               />
             </pre>
-            <div className="flex items-center gap-3 mt-1 text-[11px] text-muted-foreground">
+            <div className="flex flex-wrap items-center gap-3 mt-1 text-[11px] text-muted-foreground">
               <span>節錄前 500 字；完整內容請至 vault 查看</span>
               {obsidianUri ? (
-                <a
-                  href={obsidianUri}
-                  className="inline-flex items-center gap-1 text-foreground hover:underline"
-                >
-                  <ExternalLink className="h-3 w-3" />在 Obsidian 中開啟
-                </a>
+                <>
+                  <a
+                    href={obsidianUri}
+                    className="inline-flex items-center gap-1 text-foreground hover:underline"
+                  >
+                    <ExternalLink className="h-3 w-3" />在 Obsidian 中開啟
+                  </a>
+                  {resolvedVaultPath ? (
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-1 text-foreground hover:underline"
+                      onClick={() => {
+                        navigator.clipboard.writeText(resolvedVaultPath);
+                        toast.success("已複製 vault 路徑");
+                      }}
+                    >
+                      複製路徑
+                    </button>
+                  ) : null}
+                  {/* Mobile microcopy — obsidian:// requires the app installed; copy-path is the always-works fallback. */}
+                  <span className="text-muted-foreground/70">
+                    若連結失效，複製路徑後在 Obsidian 開啟
+                  </span>
+                </>
               ) : null}
             </div>
           </div>

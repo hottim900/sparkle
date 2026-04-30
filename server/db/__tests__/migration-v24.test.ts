@@ -1,9 +1,10 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import Database from "better-sqlite3";
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { migrateV23toV24, V24HaltError } from "../index";
+import { migrateV23toV24, V24HaltError, haltAndExit } from "../index";
+import { logger } from "../../lib/logger";
 
 /**
  * Build a v23-shaped DB with the rows + settings v24 expects: items_active,
@@ -204,5 +205,36 @@ describe("Migration v23→v24: vault_files.sparkle_id backfill + orphan check", 
     sqlite.prepare("UPDATE settings SET value = 'false' WHERE key = 'obsidian_enabled'").run();
     migrateV23toV24(sqlite);
     expect(getSchemaVersion(sqlite)).toBe(24);
+  });
+});
+
+describe("haltAndExit: log-before-exit invariant", () => {
+  it("logger.error fires before process.exit(78)", () => {
+    const order: string[] = [];
+    const errorSpy = vi.spyOn(logger, "error").mockImplementation((() => {
+      order.push("logger.error");
+    }) as never);
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation(((code?: number) => {
+      order.push(`process.exit(${code})`);
+      // Don't actually exit — let the test continue to assert order.
+      return undefined as never;
+    }) as never);
+
+    const payload = {
+      event: "migration_v24_halted_orphans" as const,
+      count: 1,
+      ids: ["aaaa-bbbb"],
+      error: "test halt zh",
+      error_en: "test halt en",
+      docs: "see docs/migration-v24.md",
+    };
+
+    haltAndExit(payload, payload.event);
+
+    expect(order).toEqual(["logger.error", "process.exit(78)"]);
+    expect(errorSpy).toHaveBeenCalledWith(payload, "[migration_v24_halted_orphans]");
+
+    errorSpy.mockRestore();
+    exitSpy.mockRestore();
   });
 });
