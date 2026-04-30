@@ -1,5 +1,45 @@
 # Changelog
 
+## [1.3.0](https://github.com/hottim900/sparkle/compare/v1.2.0...v1.3.0) (2026-04-30)
+
+
+### Features
+
+* add paused flag columns (migration v18) ([#253](https://github.com/hottim900/sparkle/issues/253)) ([f7b1320](https://github.com/hottim900/sparkle/commit/f7b1320555c0cc52abc6ce095e95f1c0ad23fd86))
+* add paused flag frontend UI and paused items page ([#256](https://github.com/hottim900/sparkle/issues/256)) ([1eb626a](https://github.com/hottim900/sparkle/commit/1eb626a721bd7d5e532380dbe5fd3c2e78f647c1))
+* add paused flag server API and query audit ([#254](https://github.com/hottim900/sparkle/issues/254)) ([5b29050](https://github.com/hottim900/sparkle/commit/5b290505ec32d2f2e1792ddeacdbd0f3e0e27b13))
+* add paused MCP tools and schema updates ([#255](https://github.com/hottim900/sparkle/issues/255)) ([65164fe](https://github.com/hottim900/sparkle/commit/65164fed70223dc1e958fb317963fa2c5c12a320))
+* add sparkle_id to vault_files (migration v22) ([#283](https://github.com/hottim900/sparkle/issues/283)) ([4808b81](https://github.com/hottim900/sparkle/commit/4808b81dff255e30f2fbcf223393624e2b85ca6c))
+* align markdown preview with Obsidian text rendering (v1.3.3.0) ([#302](https://github.com/hottim900/sparkle/issues/302)) ([5a6db2c](https://github.com/hottim900/sparkle/commit/5a6db2ced79abc86c849057274f9b6e0ef29add2))
+* dashboard vault merge + migration v23 docs (v1.4.2.0) ([#316](https://github.com/hottim900/sparkle/issues/316)) ([e0f18b1](https://github.com/hottim900/sparkle/commit/e0f18b1034811b18d66cb332200e6ab9d4210842))
+* default to preview mode in note detail view ([#291](https://github.com/hottim900/sparkle/issues/291)) ([5555724](https://github.com/hottim900/sparkle/commit/555572424da8c8c75e72ede539169d5e02b6a428))
+* drop items_vault.export_path + delete vault-watcher (v1.4.5.0) ([#323](https://github.com/hottim900/sparkle/issues/323)) ([1a34669](https://github.com/hottim900/sparkle/commit/1a346694e3dc82bb634ff82f4985f170f34ac272))
+* multi-line quick capture with auto-title (v1.3.0.0) ([#286](https://github.com/hottim900/sparkle/issues/286)) ([1e12fb3](https://github.com/hottim900/sparkle/commit/1e12fb3ec9b1c6bfac7bc1aaf34564d538dfeea8))
+* split items table into items_active + items_vault (v1.4.0.0) ([#312](https://github.com/hottim900/sparkle/issues/312)) ([c0a7080](https://github.com/hottim900/sparkle/commit/c0a7080b012110e4038ae03474f0501078648f3e))
+* unified vault page — merge exported into vault browse ([#285](https://github.com/hottim900/sparkle/issues/285)) ([ceb8c9e](https://github.com/hottim900/sparkle/commit/ceb8c9eef717147c42ae1bda28a63489c3c7b6d6))
+* vault API filter + by-sparkle-id endpoint + watcher self-healing ([#284](https://github.com/hottim900/sparkle/issues/284)) ([59946ce](https://github.com/hottim900/sparkle/commit/59946ce03e4af346eac4cf9c12202f29eb07c116))
+* vault browse + exported items read-only lock ([#280](https://github.com/hottim900/sparkle/issues/280)) ([13c6cb4](https://github.com/hottim900/sparkle/commit/13c6cb4ab8b9ddac521b1e1fbd31cce676987f29))
+* vault browse Phase 2 — search and read entire vault ([#279](https://github.com/hottim900/sparkle/issues/279)) ([27b828f](https://github.com/hottim900/sparkle/commit/27b828ffc897ecd0c13451ff67e733975c58b134))
+* vault path reverse-lookup primary + migration v24 (v1.4.4.0) ([#321](https://github.com/hottim900/sparkle/issues/321)) ([7b3a8ae](https://github.com/hottim900/sparkle/commit/7b3a8aef7defcee0ca47162c84893f7166fa6501))
+* vault stub release + dangling linked-note UX (v1.4.1.0) ([#315](https://github.com/hottim900/sparkle/issues/315)) ([438d245](https://github.com/hottim900/sparkle/commit/438d2453581698f32a9e1bb191d16ffa12391466))
+* vault sync Phase 1 — exported notes content sync ([#278](https://github.com/hottim900/sparkle/issues/278)) ([c71f7d8](https://github.com/hottim900/sparkle/commit/c71f7d8c4e229286d5231cc76512f7420da6d34c))
+
+
+### Bug Fixes
+
+* add getBoolSetting helper and seed daily_note_enabled (v19) ([#260](https://github.com/hottim900/sparkle/issues/260)) ([5c029fb](https://github.com/hottim900/sparkle/commit/5c029fbcd036062e6e66432e8d3078e178f6eda8))
+* escape vault search FTS5 query and add Zod validation ([#281](https://github.com/hottim900/sparkle/issues/281)) ([#282](https://github.com/hottim900/sparkle/issues/282)) ([0367d25](https://github.com/hottim900/sparkle/commit/0367d255a9d75b927e5f7bbd56f0f7dacd24f20e))
+* improve Obsidian export quality ([#261](https://github.com/hottim900/sparkle/issues/261)) ([49e53af](https://github.com/hottim900/sparkle/commit/49e53af345f01d5ae6ef965e4e577cc46172bbaf))
+* prevent surrogate pair splitting in title truncation ([#290](https://github.com/hottim900/sparkle/issues/290)) ([f9c8fbe](https://github.com/hottim900/sparkle/commit/f9c8fbe28eeb6581c15d8d08238bcf1cdca97775))
+* reduce CF Access token refresh delay from ~4s to instant ([#275](https://github.com/hottim900/sparkle/issues/275)) ([a9a7a12](https://github.com/hottim900/sparkle/commit/a9a7a12a47bda5551eaa920ce1e3ef47930f6b61))
+* remove dead ExportableItem.category_name and batch export LEFT JOIN ([#264](https://github.com/hottim900/sparkle/issues/264)) ([#266](https://github.com/hottim900/sparkle/issues/266)) ([c7d9436](https://github.com/hottim900/sparkle/commit/c7d943627941c2f1537817e03c45fc7550d69b59))
+* resolve E2E and unit test flakiness ([#262](https://github.com/hottim900/sparkle/issues/262), [#263](https://github.com/hottim900/sparkle/issues/263)) ([#265](https://github.com/hottim900/sparkle/issues/265)) ([459a192](https://github.com/hottim900/sparkle/commit/459a192d45b6de346d8e497bc95b3b80948e6003))
+* **test:** E2E layout test checks nested overflow, not just body (v1.3.2.4) ([#300](https://github.com/hottim900/sparkle/issues/300)) ([3818555](https://github.com/hottim900/sparkle/commit/3818555e945da895c05e69b8915e8885d7058fe7))
+* vault detail panel nested flex min-w-0 (v1.3.2.3) ([#299](https://github.com/hottim900/sparkle/issues/299)) ([9964506](https://github.com/hottim900/sparkle/commit/99645061c5e35606c1cf0e2293c70979564c0957))
+* vault file selection persists on page refresh (v1.3.2.4) ([#301](https://github.com/hottim900/sparkle/issues/301)) ([37b48b4](https://github.com/hottim900/sparkle/commit/37b48b43037a70b81aca75e16e545ed903505541))
+* vault layout contract — flex-1 min-w-0 + E2E test (v1.3.2.2) ([#298](https://github.com/hottim900/sparkle/issues/298)) ([a4a32d7](https://github.com/hottim900/sparkle/commit/a4a32d71d37f0013aafe23494a485c0bc27669d3))
+* vault scanner ordering + duplicate sparkle_id audit (v1.4.3.0) ([#320](https://github.com/hottim900/sparkle/issues/320)) ([0490c39](https://github.com/hottim900/sparkle/commit/0490c39255672d9b70360b3378c68a81bf0c63a4))
+
 ## [1.4.5.0] - 2026-04-30
 
 ### Removed
