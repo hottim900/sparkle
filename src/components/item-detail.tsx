@@ -27,7 +27,10 @@ import { PausedBanner } from "@/components/paused-banner";
 import { useItemForm } from "@/hooks/use-item-form";
 import { usePauseResume } from "@/hooks/use-pause-resume";
 import { updateItem, getSettings } from "@/lib/api";
-import { useVaultPathBySparkleId } from "@/hooks/use-vault-path-by-sparkle-id";
+import {
+  useResolvedVaultPath,
+  useVaultPathBySparkleId,
+} from "@/hooks/use-vault-path-by-sparkle-id";
 import { useAnnouncement } from "@/components/announcement-provider";
 import { queryKeys } from "@/lib/query-keys";
 
@@ -93,15 +96,12 @@ export function ItemDetail({ itemId, onDeleted, onBack, onNavigate }: ItemDetail
   const [aliasInput, setAliasInput] = useState("");
   const [createTodoRequested, setCreateTodoRequested] = useState(false);
 
-  // Resolve vault path for exported items via sparkle_id reverse-lookup. Returns
-  // null when the file is no longer indexed (= deleted in Obsidian); UI branches
-  // on `vaultPath === null` to render "此檔案已從 Vault 刪除".
+  // Reverse-lookup query (raw) — kept alongside the derived `resolvedVaultPath`
+  // because the announce-on-change effect needs the live `data?.path` separate
+  // from the snapshot fallback.
   const vaultPathQuery = useVaultPathBySparkleId(item?.origin === "vault" ? item.id : undefined);
-  const vaultPath = vaultPathQuery.data;
+  const { resolvedVaultPath } = useResolvedVaultPath(item);
 
-  // Vault name for the obsidian:// URI — derived from the configured vault path
-  // basename. Only fetched for vault-origin items to avoid an extra request
-  // on active-item views.
   const { data: settings } = useQuery({
     queryKey: queryKeys.settings,
     queryFn: getSettings,
@@ -112,37 +112,24 @@ export function ItemDetail({ itemId, onDeleted, onBack, onNavigate }: ItemDetail
     ? settings.obsidian_vault_path.replace(/\/+$/, "").split("/").pop() || ""
     : "";
 
-  // Resolved path: prefer reverse-lookup result, fall back to items_vault.export_path
-  // snapshot during the PR 2 dual-write window. PR 3 drops the fallback tail.
-  const resolvedVaultPath = vaultPath?.path ?? item?.export_path ?? null;
   const obsidianUri =
     vaultName && resolvedVaultPath
       ? `obsidian://open?vault=${encodeURIComponent(vaultName)}&file=${encodeURIComponent(resolvedVaultPath.replace(/\.md$/, ""))}`
       : null;
 
-  // Aria-live announce when reverse-lookup surfaces a path that differs from
-  // the cached export_path snapshot — the user (or screen reader) should know
-  // the link silently jumped to a new location.
+  // Announce when reverse-lookup surfaces a path that differs from the cached
+  // export_path snapshot — silent jumps would otherwise be invisible to AT.
   const announce = useAnnouncement();
   const lastAnnouncedRef = useRef<string | null>(null);
   useEffect(() => {
-    const fresh = vaultPath?.path ?? null;
+    const fresh = vaultPathQuery.data?.path ?? null;
     const fallback = item?.export_path ?? null;
     if (fresh && fallback && fresh !== fallback && lastAnnouncedRef.current !== fresh) {
       lastAnnouncedRef.current = fresh;
       announce("vault 路徑已更新");
     }
-  }, [vaultPath?.path, item?.export_path, announce]);
+  }, [vaultPathQuery.data?.path, item?.export_path, announce]);
 
-  // Cooldown after export so user doesn't tap copy/open before vault_files is
-  // seeded (commitExportToVault now seeds atomically, but a 2s buffer also
-  // guards against the rare retry-overwrite case).
-  const [exportedAt, setExportedAt] = useState<number | null>(null);
-  const isRecentlyExported = exportedAt !== null && Date.now() - exportedAt < 2000;
-  const handleExportWithCooldown = useCallback(async () => {
-    await handleExport();
-    setExportedAt(Date.now());
-  }, [handleExport]);
   const [markingAsPrivate, setMarkingAsPrivate] = useState(false);
   const { handleResume, resuming } = usePauseResume(item, setItem);
 
@@ -221,7 +208,7 @@ export function ItemDetail({ itemId, onDeleted, onBack, onNavigate }: ItemDetail
         isOnline={isOnline}
         onBack={handleBack}
         onClose={handleBack}
-        onExport={handleExportWithCooldown}
+        onExport={handleExport}
         onDelete={handleDelete}
         onRelease={handleRelease}
         onOpenCreateTodo={() => setCreateTodoRequested(true)}
@@ -341,12 +328,6 @@ export function ItemDetail({ itemId, onDeleted, onBack, onNavigate }: ItemDetail
                 <a
                   href={obsidianUri}
                   className="inline-flex items-center gap-1 text-foreground hover:underline"
-                  onClick={(e) => {
-                    if (isRecentlyExported) {
-                      e.preventDefault();
-                      toast.info("Vault 索引更新中，請稍候…");
-                    }
-                  }}
                 >
                   <ExternalLink className="h-3 w-3" />在 Obsidian 中開啟
                 </a>

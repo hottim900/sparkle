@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { toast } from "sonner";
-import { useVaultPathBySparkleId } from "@/hooks/use-vault-path-by-sparkle-id";
+import { useResolvedVaultPath } from "@/hooks/use-vault-path-by-sparkle-id";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
 import {
@@ -72,16 +72,11 @@ export function ItemDetailHeader({
   const showExportButton = obsidianEnabled && item.type === "note" && item.status === "permanent";
   const isExported = item.origin === "vault";
 
-  // Live reverse-lookup; null = file no longer indexed; undefined while loading.
-  // PR 2 dual-write window: fall back to items_vault.export_path snapshot. PR 3
-  // drops the `?? item.export_path` tail when fallback usage hits zero.
-  const vaultPathQuery = useVaultPathBySparkleId(isExported ? item.id : undefined);
-  const liveVaultPath = vaultPathQuery.data?.path ?? null;
-  const fallbackVaultPath = item.export_path;
-  const resolvedVaultPath = liveVaultPath ?? fallbackVaultPath;
-  const vaultPathLoading = vaultPathQuery.isLoading && !fallbackVaultPath;
-  const vaultPathDeleted =
-    !vaultPathQuery.isLoading && vaultPathQuery.data === null && !fallbackVaultPath;
+  const {
+    resolvedVaultPath,
+    isLoading: vaultPathLoading,
+    isDeleted: vaultPathDeleted,
+  } = useResolvedVaultPath(item);
 
   const handleCopyPath = () => {
     if (!resolvedVaultPath) return;

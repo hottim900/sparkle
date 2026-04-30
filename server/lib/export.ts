@@ -2,6 +2,7 @@ import { mkdir, writeFile, access, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
 import type Database from "better-sqlite3";
+import { getVaultPathBySparkleIdSync } from "./items.js";
 
 /**
  * Thrown when export sees vault_files already carries this sparkle_id (= a
@@ -265,22 +266,6 @@ async function collectDiskBytes(
 }
 
 /**
- * SQL-backed reverse-lookup replacing the prior O(N) disk scan
- * (`findExistingBySparkleId`). vault_files is the authoritative index — if
- * the scanner hasn't picked up an externally-dropped .md yet, that file is
- * invisible to export, which is the trade-off documented in the design
- * (PR 2 architecture goal: vault_files = single source of truth).
- *
- * Returns the relative vault path (e.g. "0_Inbox/Title.md") or null.
- */
-function reverseLookupVaultPath(sqlite: Database.Database, sparkleId: string): string | null {
-  const row = sqlite.prepare("SELECT path FROM vault_files WHERE sparkle_id = ?").get(sparkleId) as
-    | { path: string }
-    | undefined;
-  return row?.path ?? null;
-}
-
-/**
  * Write a .md file to the Obsidian vault. Pre-flights against vault_files to
  * detect the export-crash recovery window (disk-then-DB ordering means a DB
  * failure can leave a .md on disk indexed by the scanner without an
@@ -311,7 +296,7 @@ export async function exportToObsidian(
   // vault:reconcile rather than silently overwriting + retrying.
   // sqlite is optional so unit tests of the file-writing logic don't have to
   // build a full DB; production routes always pass it.
-  const indexedPath = sqlite ? reverseLookupVaultPath(sqlite, item.id) : null;
+  const indexedPath = sqlite ? getVaultPathBySparkleIdSync(sqlite, item.id) : null;
   if (sqlite && indexedPath) {
     const itemsVaultExists = sqlite.prepare("SELECT 1 FROM items_vault WHERE id = ?").get(item.id);
     if (!itemsVaultExists) {
