@@ -33,7 +33,6 @@ function makeItem(overrides: Partial<ParsedItem> = {}): ParsedItem {
     category_name: null,
     viewed_at: "2026-01-01T00:00:00Z",
     is_private: 0,
-    export_path: null,
     origin: "active",
     paused: 0,
     paused_at: null,

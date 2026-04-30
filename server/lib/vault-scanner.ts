@@ -8,7 +8,7 @@ import type Database from "better-sqlite3";
 import * as schema from "../db/schema.js";
 import { vaultFiles } from "../db/schema.js";
 import { getObsidianSettings } from "./settings.js";
-import { extractSparkleId } from "./vault-backfill.js";
+import { extractFrontmatterBlock, extractSparkleId } from "./frontmatter.js";
 import { logger } from "./logger.js";
 
 type DB = BetterSQLite3Database<typeof schema>;
@@ -70,15 +70,6 @@ function extractTitle(content: string, filename: string): string {
   const h1Match = content.match(/^#\s+(.+)$/m);
   if (h1Match?.[1]) return h1Match[1].trim();
   return basename(filename, extname(filename));
-}
-
-/**
- * Extract YAML frontmatter as a raw string (to be stored as JSON later).
- * Returns null if no frontmatter found.
- */
-function extractFrontmatter(content: string): string | null {
-  const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
-  return match?.[1]?.replace(/\r$/gm, "") ?? null;
 }
 
 function contentHash(content: string): string {
@@ -288,7 +279,7 @@ export async function scanVaultFiles(
         }
 
         const title = extractTitle(raw, relPath);
-        const frontmatter = extractFrontmatter(raw);
+        const frontmatter = extractFrontmatterBlock(raw);
         const sparkleId = extractSparkleId(raw);
 
         const data = {

@@ -583,14 +583,13 @@ describe("sparkle_release_note", () => {
       id: VAULT_ID,
       type: "note",
       status: "exported",
-      export_path: "Notes/released.md",
     });
     // makeItem doesn't set origin; inject vault origin marker on the response
     getItem.mockResolvedValue({ ...vaultItem, origin: "vault" } as never);
     releaseVaultNote.mockResolvedValue({
       ok: true,
       id: VAULT_ID,
-      export_path: "Notes/released.md",
+      vault_path: "Notes/released.md",
     });
 
     const result = await handler({ note_id: VAULT_ID, confirm: true });

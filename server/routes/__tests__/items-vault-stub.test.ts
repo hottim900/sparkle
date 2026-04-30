@@ -75,12 +75,12 @@ describe("DELETE /api/items/:id/vault-stub", () => {
     insertVaultRow(testSqlite, {
       id: VAULT_ID,
       title: "Released Note",
-      export_path: VAULT_EXPORT_PATH,
       exported_at: NOW,
       created: NOW,
       content_snippet: "snippet",
     });
-    // Seed a vault_files row linked to this sparkle_id
+    // Seed a vault_files row linked to this sparkle_id — that's the sole
+    // source for vault_path now.
     testSqlite
       .prepare(
         `INSERT INTO vault_files (path, title, frontmatter, content, mtime, content_hash, sparkle_id)
@@ -96,7 +96,7 @@ describe("DELETE /api/items/:id/vault-stub", () => {
     const body = await res.json();
     expect(body.ok).toBe(true);
     expect(body.id).toBe(VAULT_ID);
-    expect(body.export_path).toBe(VAULT_EXPORT_PATH);
+    expect(body.vault_path).toBe(VAULT_EXPORT_PATH);
 
     // items_vault row gone
     const vaultRow = testSqlite.prepare("SELECT id FROM items_vault WHERE id = ?").get(VAULT_ID);
@@ -144,7 +144,6 @@ describe("DELETE /api/items/:id/vault-stub", () => {
   it("leaves vault .md untouched when vault_files row is absent", async () => {
     insertVaultRow(testSqlite, {
       id: VAULT_ID,
-      export_path: VAULT_EXPORT_PATH,
       exported_at: NOW,
       created: NOW,
     });
@@ -154,6 +153,12 @@ describe("DELETE /api/items/:id/vault-stub", () => {
       headers: authHeaders(),
     });
     expect(res.status).toBe(200);
+    // LEFT JOIN miss surfaces as vault_path: null in the response — the API
+    // contract's signal that the .md is no longer findable via reverse-lookup.
+    const body = (await res.json()) as { ok: boolean; id: string; vault_path: string | null };
+    expect(body.ok).toBe(true);
+    expect(body.id).toBe(VAULT_ID);
+    expect(body.vault_path).toBeNull();
     // items_vault deleted
     expect(
       testSqlite.prepare("SELECT id FROM items_vault WHERE id = ?").get(VAULT_ID),
@@ -169,7 +174,6 @@ describe("DELETE /api/items/:id/vault-stub", () => {
     // `linked_note_origin: 'missing'` state.
     insertVaultRow(testSqlite, {
       id: VAULT_ID,
-      export_path: VAULT_EXPORT_PATH,
       exported_at: NOW,
       created: NOW,
     });

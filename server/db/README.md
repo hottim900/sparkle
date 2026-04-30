@@ -16,15 +16,16 @@ pointer. Keeping both in one table created three recurring bugs:
    "overdue" / "stale" views. Every new query required the dev to remember yet
    another `AND status != 'exported'` filter (matching the `paused = 0` and
    `is_private = 0` filters already in place).
-2. **Schema mismatch**: exported rows needed fields (`export_path`) that
-   active rows did not, and active rows needed fields (`paused`, `viewed_at`,
+2. **Schema mismatch**: exported rows needed fields that active rows did not
+   (e.g. an export-path snapshot, retired in v25 in favour of vault_files
+   reverse-lookup), and active rows needed fields (`paused`, `viewed_at`,
    `linked_note_id`, `content`) that exported rows did not. NULL-on-one-side
    meant CHECK constraints and indexes were either overly permissive or had
    conditional clauses.
-3. **Content authority drift**: vault-watcher had to reconcile Sparkle's
-   `items.content` against the vault's `.md`, which required `contentHash`,
-   `stripFrontmatter`, and a content-mtime cache. Each layer produced its own
-   class of bugs (mtime races, frontmatter diff noise).
+3. **Content authority drift**: a content-sync watcher used to reconcile
+   Sparkle's `items.content` against the vault's `.md`, which required
+   `contentHash`, `stripFrontmatter`, and a content-mtime cache. Each layer
+   produced its own class of bugs (mtime races, frontmatter diff noise).
 
 The split (PR #312, migration 23) enforces the distinction structurally:
 
@@ -35,7 +36,9 @@ The split (PR #312, migration 23) enforces the distinction structurally:
   `linked_note_id`, `priority`, `due`, `modified`. Writes (from the app) go
   through `sparkle_export_to_obsidian` (to insert) and `sparkle_release_note`
   / `DELETE /api/items/:id/vault-stub` (to delete). Content changes go to the
-  vault `.md` directly — vault-watcher no longer round-trips content.
+  vault `.md` directly — there is no Sparkle-side process that round-trips
+  vault content; the 5-min vault scanner only indexes paths/frontmatter for
+  reverse-lookup.
 
 Tradeoff: two-table joins (UNION ALL + JS merge) appear in four dashboard
 queries. We accept the cost because the table name forces correct thinking:
@@ -66,12 +69,13 @@ they don't:
 - **`vault_files.sparkle_id`** — **no FK**. The vault scanner populates this
   lazily (filesystem-driven), and the column is nullable. Integrity is
   maintained by (a) `sparkle_release_note` nulls the column in the same
-  transaction as the `items_vault` delete, and (b) the vault scanner
-  self-heals missing links with a 2-scan debounce.
+  transaction as the `items_vault` delete, and (b) the 5-min vault scanner
+  re-asserts `vault_files.sparkle_id` from on-disk frontmatter, so renames
+  and moves resurface within one cycle.
 
 When writing migrations or routes, **use transactions** whenever an operation
 touches both `items_vault` and `vault_files` (see
-`server/routes/items.ts::deleteVaultStub` for the canonical pattern).
+`server/lib/items.ts::deleteVaultItem` for the canonical pattern).
 
 ## 3. FTS5 scope (active only)
 

@@ -782,7 +782,7 @@ describe("commitExportToVault", () => {
     const vaultRow = sqlite
       .prepare(
         `SELECT id, title, category_id, tags, aliases, source, origin,
-                export_path, exported_at, created, is_private, content_snippet
+                exported_at, created, is_private, content_snippet
          FROM items_vault WHERE id = ?`,
       )
       .get(id) as {
@@ -793,7 +793,6 @@ describe("commitExportToVault", () => {
       aliases: string;
       source: string | null;
       origin: string | null;
-      export_path: string;
       exported_at: string;
       created: string;
       is_private: number;
@@ -808,7 +807,6 @@ describe("commitExportToVault", () => {
     expect(vaultRow.aliases).toBe('["alt"]');
     expect(vaultRow.source).toBe("https://example.com");
     expect(vaultRow.origin).toBe("web");
-    expect(vaultRow.export_path).toBe("0_Inbox/Export me.md");
     expect(vaultRow.created).toBe("2026-02-14T09:00:00.000Z");
     expect(vaultRow.is_private).toBe(0);
     expect(vaultRow.content_snippet).toBe("Line 1\nLine 2\nLine 3");
@@ -896,8 +894,8 @@ describe("commitExportToVault", () => {
     sqlite
       .prepare(
         `INSERT INTO items_vault
-           (id, title, tags, aliases, origin, exported_at, created, is_private, content_snippet, export_path)
-         VALUES (?, ?, '[]', '[]', '', ?, ?, 0, ?, ?)`,
+           (id, title, tags, aliases, origin, exported_at, created, is_private, content_snippet)
+         VALUES (?, ?, '[]', '[]', '', ?, ?, 0, ?)`,
       )
       .run(
         id,
@@ -905,7 +903,6 @@ describe("commitExportToVault", () => {
         "2025-12-01T00:00:00.000Z",
         "2025-12-01T00:00:00.000Z",
         "pre-existing snippet",
-        "0_Inbox/pre-existing.md",
       );
 
     expect(() =>
@@ -927,14 +924,14 @@ describe("commitExportToVault", () => {
     expect(activeRow).toBeDefined();
     expect(activeRow!.title).toBe("Original active");
 
-    // items_vault row is the pre-existing one — content_snippet and export_path
-    // were NOT overwritten.
+    // items_vault row is the pre-existing one — content_snippet was NOT
+    // overwritten. Vault path lives in vault_files.path; absence of a
+    // vault_files row here proves the rolled-back tx leaked nothing.
     const vaultRow = sqlite
-      .prepare("SELECT title, content_snippet, export_path FROM items_vault WHERE id = ?")
-      .get(id) as { title: string; content_snippet: string; export_path: string };
+      .prepare("SELECT title, content_snippet FROM items_vault WHERE id = ?")
+      .get(id) as { title: string; content_snippet: string };
     expect(vaultRow.title).toBe("Pre-existing vault row");
     expect(vaultRow.content_snippet).toBe("pre-existing snippet");
-    expect(vaultRow.export_path).toBe("0_Inbox/pre-existing.md");
   });
 
   it("sets is_private=1 when caller passes is_private=1", () => {
@@ -977,8 +974,8 @@ describe("commitExportToVault", () => {
     // Force items_vault INSERT to fail by pre-inserting a row at the same id.
     sqlite
       .prepare(
-        `INSERT INTO items_vault (id, title, tags, aliases, origin, exported_at, created, is_private, content_snippet, export_path)
-         VALUES (?, 'pre', '[]', '[]', '', ?, ?, 0, '', '0_Inbox/pre.md')`,
+        `INSERT INTO items_vault (id, title, tags, aliases, origin, exported_at, created, is_private, content_snippet)
+         VALUES (?, 'pre', '[]', '[]', '', ?, ?, 0, '')`,
       )
       .run(id, "2025-12-01T00:00:00Z", "2025-12-01T00:00:00Z");
 

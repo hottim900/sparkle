@@ -25,7 +25,7 @@ const LIKE_SAFE_RE = /^[^%_]{4,36}$/;
  * given sparkle_id, or null if no match exists. Sync (better-sqlite3 is sync).
  *
  * Counterpart to GET /api/vault/by-sparkle-id/:id but callable from server-only
- * code paths (vaultReadonlyPayload, list enrichment) without HTTP round-trip.
+ * code paths (vaultReadonlyResponse, list enrichment) without HTTP round-trip.
  *
  * @param sqlite live better-sqlite3 connection
  * @param id     sparkle_id (UUID)
@@ -36,23 +36,6 @@ export function getVaultPathBySparkleIdSync(sqlite: Database.Database, id: strin
     | { path: string }
     | undefined;
   return row?.path ?? null;
-}
-
-/**
- * Resolve a vault item's current path: prefer reverse-lookup, fall back to the
- * stored items_vault.export_path snapshot during the PR 2 dual-write window.
- * `source` lets callers (and AI agents) reason about freshness.
- *
- * @returns `{ path: string | null, source: "lookup" | "fallback" }`
- */
-export function resolveVaultPath(
-  sqlite: Database.Database,
-  id: string,
-  fallback: string | null,
-): { path: string | null; source: "lookup" | "fallback" } {
-  const path = getVaultPathBySparkleIdSync(sqlite, id);
-  if (path != null) return { path, source: "lookup" };
-  return { path: fallback, source: "fallback" };
 }
 
 export function createItem(
@@ -592,11 +575,13 @@ export function deleteItem(db: DB, id: string): boolean {
 }
 
 /**
- * Hard-delete a vault stub row. Returns the deleted row's metadata (for logging)
- * or null if the id was not in items_vault.
+ * Hard-delete a vault stub row. Returns `{ id, vault_path }` (path is read via
+ * vault_files reverse-lookup INSIDE the same transaction, then captured before
+ * the row is gone — useful for caller logging / response payload). Returns null
+ * if the id was not in items_vault.
  *
- * Atomically nulls vault_files.sparkle_id for the same id so future vault-watcher
- * self-heal scans don't mis-patch a short_id prefix collision onto the released row.
+ * Atomically nulls vault_files.sparkle_id for the same id so subsequent scanner
+ * cycles don't relink the released row to a collided short_id prefix.
  *
  * Does NOT touch todos.linked_note_id — dangling refs are the surface that lets
  * the UI render `linked_note_origin: 'missing'`.
@@ -604,15 +589,20 @@ export function deleteItem(db: DB, id: string): boolean {
 export function deleteVaultItem(
   sqlite: Database.Database,
   id: string,
-): { id: string; export_path: string | null } | null {
+): { id: string; vault_path: string | null } | null {
   return sqlite.transaction(() => {
-    const row = sqlite.prepare("SELECT id, export_path FROM items_vault WHERE id = ?").get(id) as
-      | { id: string; export_path: string | null }
-      | undefined;
+    const row = sqlite
+      .prepare(
+        `SELECT iv.id, vf.path AS vault_path
+           FROM items_vault iv
+           LEFT JOIN vault_files vf ON vf.sparkle_id = iv.id
+          WHERE iv.id = ?`,
+      )
+      .get(id) as { id: string; vault_path: string | null } | undefined;
     if (!row) return null;
     sqlite.prepare("DELETE FROM items_vault WHERE id = ?").run(id);
     sqlite.prepare("UPDATE vault_files SET sparkle_id = NULL WHERE sparkle_id = ?").run(id);
-    return row;
+    return { id: row.id, vault_path: row.vault_path };
   })();
 }
 

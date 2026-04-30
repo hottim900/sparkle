@@ -193,13 +193,15 @@ async function main(): Promise<void> {
       }
       const snippet = (active.content ?? "").substring(0, 500);
       const exportedAt = new Date().toISOString();
+      // The on-disk .md path lives in vault_files (vf.sparkle_id = iv.id)
+      // — already populated here because we found `o` via vault_files.
       const tx = sqlite.transaction(() => {
         sqlite
           .prepare(
             `INSERT INTO items_vault (
                id, title, category_id, tags, aliases, source, origin,
-               export_path, exported_at, created, is_private, content_snippet
-             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+               exported_at, created, is_private, content_snippet
+             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           )
           .run(
             o.active_id,
@@ -209,7 +211,6 @@ async function main(): Promise<void> {
             active.aliases,
             active.source,
             active.origin,
-            o.vault_path,
             exportedAt,
             active.created,
             active.is_private,

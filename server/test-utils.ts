@@ -57,7 +57,6 @@ export function createTestDb() {
       aliases TEXT NOT NULL DEFAULT '[]',
       source TEXT,
       origin TEXT,
-      export_path TEXT,
       exported_at TEXT NOT NULL,
       created TEXT NOT NULL,
       is_private INTEGER NOT NULL DEFAULT 0,
@@ -197,7 +196,6 @@ export interface VaultRowOverrides {
   aliases?: string[];
   source?: string | null;
   origin?: string | null;
-  export_path?: string | null;
   exported_at?: string;
   created?: string;
   is_private?: 0 | 1;
@@ -214,8 +212,8 @@ export function insertVaultRow(
     .prepare(
       `INSERT INTO items_vault (
          id, title, category_id, tags, aliases, source, origin,
-         export_path, exported_at, created, is_private, content_snippet
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         exported_at, created, is_private, content_snippet
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       id,
@@ -225,7 +223,6 @@ export function insertVaultRow(
       JSON.stringify(overrides.aliases ?? []),
       overrides.source ?? null,
       overrides.origin ?? null,
-      overrides.export_path ?? null,
       overrides.exported_at ?? now,
       overrides.created ?? now,
       overrides.is_private ?? 0,

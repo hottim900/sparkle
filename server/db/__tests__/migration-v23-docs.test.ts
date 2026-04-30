@@ -38,8 +38,8 @@ describe("docs/migration-v23.md §2 — post-v23 SQL samples are executable", ()
       .run();
     sqlite
       .prepare(
-        `INSERT INTO items_vault (id, title, category_id, tags, aliases, source, origin, export_path, exported_at, created, is_private, content_snippet)
-         VALUES ('v1','Vault note','c1','[]','[]',NULL,'web','folder/v1.md',datetime('now'),datetime('now'),0,'snippet')`,
+        `INSERT INTO items_vault (id, title, category_id, tags, aliases, source, origin, exported_at, created, is_private, content_snippet)
+         VALUES ('v1','Vault note','c1','[]','[]',NULL,'web',datetime('now'),datetime('now'),0,'snippet')`,
       )
       .run();
     sqlite

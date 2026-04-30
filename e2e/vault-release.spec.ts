@@ -292,7 +292,6 @@ test.describe("Vault stub release (PR 2)", () => {
             category_name: null,
             viewed_at: new Date().toISOString(),
             is_private: 0,
-            export_path: null,
             exported_at: null,
             content_snippet: null,
             origin: "active",

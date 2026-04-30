@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { getVaultPathBySparkleId } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
@@ -21,16 +22,13 @@ export function useVaultPathBySparkleId(id: string | undefined | null) {
   });
 }
 
-type ItemLike =
-  | { id: string; origin: "active" | "vault"; export_path: string | null }
-  | null
-  | undefined;
+type ItemLike = { id: string; origin: "active" | "vault" } | null | undefined;
 
 /**
- * Derived state for the dual-write window: combines reverse-lookup with the
- * items_vault.export_path snapshot fallback. Returns the same three render
- * branches the slate bar + body link both consume, so the two callsites stay
- * in sync (no "header says deleted, body says loading" drift).
+ * Three mutually-exclusive UI branches (resolved/loading/deleted) shared
+ * between the slate bar + body link so the two callsites can't drift
+ * ("header says deleted, body says loading"). Memoised so consumers using
+ * the result in `useMemo` / `useEffect` deps don't re-run on every render.
  */
 export function useResolvedVaultPath(item: ItemLike): {
   resolvedVaultPath: string | null;
@@ -39,11 +37,11 @@ export function useResolvedVaultPath(item: ItemLike): {
 } {
   const isVault = item?.origin === "vault";
   const query = useVaultPathBySparkleId(isVault ? item!.id : undefined);
-  const fallback = item?.export_path ?? null;
   const live = query.data?.path ?? null;
-  return {
-    resolvedVaultPath: live ?? fallback,
-    isLoading: isVault && query.isLoading && !fallback,
-    isDeleted: isVault && !query.isLoading && query.data === null && !fallback,
-  };
+  const isLoading = isVault && query.isLoading;
+  const isDeleted = isVault && !query.isLoading && query.data === null;
+  return useMemo(
+    () => ({ resolvedVaultPath: live, isLoading, isDeleted }),
+    [live, isLoading, isDeleted],
+  );
 }

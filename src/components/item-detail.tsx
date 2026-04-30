@@ -97,8 +97,8 @@ export function ItemDetail({ itemId, onDeleted, onBack, onNavigate }: ItemDetail
   const [createTodoRequested, setCreateTodoRequested] = useState(false);
 
   // Reverse-lookup query (raw) — kept alongside the derived `resolvedVaultPath`
-  // because the announce-on-change effect needs the live `data?.path` separate
-  // from the snapshot fallback.
+  // because the announce-on-change effect needs the live `data?.path` to compare
+  // against the previously-announced path, not the memoised three-state struct.
   const vaultPathQuery = useVaultPathBySparkleId(item?.origin === "vault" ? item.id : undefined);
   const { resolvedVaultPath } = useResolvedVaultPath(item);
 
@@ -117,18 +117,18 @@ export function ItemDetail({ itemId, onDeleted, onBack, onNavigate }: ItemDetail
       ? `obsidian://open?vault=${encodeURIComponent(vaultName)}&file=${encodeURIComponent(resolvedVaultPath.replace(/\.md$/, ""))}`
       : null;
 
-  // Announce when reverse-lookup surfaces a path that differs from the cached
-  // export_path snapshot — silent jumps would otherwise be invisible to AT.
+  // Announce when reverse-lookup surfaces a path that differs from the
+  // previously-rendered one — silent jumps after a vault rename would
+  // otherwise be invisible to assistive tech.
   const announce = useAnnouncement();
   const lastAnnouncedRef = useRef<string | null>(null);
   useEffect(() => {
     const fresh = vaultPathQuery.data?.path ?? null;
-    const fallback = item?.export_path ?? null;
-    if (fresh && fallback && fresh !== fallback && lastAnnouncedRef.current !== fresh) {
-      lastAnnouncedRef.current = fresh;
-      announce("vault 路徑已更新");
-    }
-  }, [vaultPathQuery.data?.path, item?.export_path, announce]);
+    if (!fresh) return;
+    const prev = lastAnnouncedRef.current;
+    if (prev && prev !== fresh) announce("vault 路徑已更新");
+    lastAnnouncedRef.current = fresh;
+  }, [vaultPathQuery.data?.path, announce]);
 
   const [markingAsPrivate, setMarkingAsPrivate] = useState(false);
   const { handleResume, resuming } = usePauseResume(item, setItem);
@@ -223,7 +223,7 @@ export function ItemDetail({ itemId, onDeleted, onBack, onNavigate }: ItemDetail
           {/* Vault link (the header slate bar already shows "位於 vault · path") */}
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <span>已匯出至 Obsidian</span>
-            {vaultPathQuery.isLoading && !item.export_path ? (
+            {vaultPathQuery.isLoading ? (
               <span aria-live="polite">索引更新中…</span>
             ) : resolvedVaultPath ? (
               <a

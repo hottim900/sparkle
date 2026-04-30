@@ -31,7 +31,6 @@ export interface Item {
   category_name: string | null;
   viewed_at: string | null;
   is_private: number;
-  export_path: string | null;
   exported_at?: string | null;
   content_snippet?: string | null;
   // v1.4.0 origin marker: 'active' rows from items_active, 'vault' rows from items_vault

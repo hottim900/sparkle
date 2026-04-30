@@ -66,8 +66,8 @@ export interface Stats {
  *   created_this_week/month, unreviewed (viewed_at IS NULL — D15 R4-BLOCKER-1).
  *
  * Query 2 (items_vault): exported_this_week / exported_this_month keyed by
- *   items_vault.exported_at (NOT modified — vault-watcher does not mutate
- *   items_vault.exported_at, so it is the authoritative export timestamp).
+ *   items_vault.exported_at — set once at commitExportToVault time and never
+ *   touched again, so it is the authoritative export timestamp.
  */
 export function getStats(sqlite: Database.Database): Stats {
   const weekStart = getISOWeekStart();
