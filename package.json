@@ -1,6 +1,6 @@
 {
   "name": "sparkle",
-  "version": "1.4.1.0",
+  "version": "1.4.3.0",
   "description": "Self-hosted PKM frontend for Obsidian: quick capture (PWA / LINE Bot / MCP) → Zettelkasten maturity → vault export",
   "license": "MIT",
   "repository": {

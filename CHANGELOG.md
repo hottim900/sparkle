@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.4.3.0] - 2026-04-30
+
+### Fixed
+
+- **Vault scanner ordering bug** — files renamed or moved in Obsidian no longer lose their `sparkle_id` link. The scanner now DELETEs no-longer-on-disk rows BEFORE inserting new paths (wrapped in a sync transaction), avoiding the transient UNIQUE conflict on `sparkle_id` that previously caused new rows to fall back to `sparkle_id=NULL` permanently. Existing victim rows recover automatically on the next scan after PR 2 deploys; PR 1 alone stops new corruption.
+
+### Added
+
+- **Duplicate sparkle_id audit trail** — when two `.md` files share the same frontmatter `sparkle_id` (copy-paste collision), the scanner now appends a structured entry to `quality/duplicate-sparkle-id.json` (`{sparkle_id, new_path, detected}`) so PR 2's `vault:audit` CLI can surface the conflict to the operator. The existing `run(null)` fallback is preserved — both files remain indexed, one with the link, one without.
+- **Concurrent-scan guard** — module-level `scanInProgress` boolean prevents two parallel `scanVaultFiles` runs when the 5-minute `setInterval` fires while a previous scan on a large vault is still in flight. Wrapped in `try/finally` so the guard always resets on errors.
+
+### Changed
+
+- **Vault list capacity** — `/vault` page now shows up to 200 results (was 30). Server `/api/vault?limit=` cap raised to 500. Closes the symptom where 71+ vault files only displayed 30 entries.
+- **`scanVaultFiles` signature** — now accepts an optional `{ auditPath?: string }` options bag; `skipped: false` is always defined on the return shape (was `skipped?: boolean`) for callers' clarity.
+
+### Infrastructure
+
+- `quality/duplicate-sparkle-id.json` is gitignored as a runtime artifact.
+- New tests: `path-rename does not produce NULL sparkle_id`, `appends duplicate sparkle_id audit entry to JSON file`, `skips concurrent scan when one is already in progress` (3 cases, all in `server/lib/__tests__/vault-scanner.test.ts`).
+
 ## [1.4.2.0] - 2026-04-25
 
 ### Added
