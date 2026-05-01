@@ -74,6 +74,7 @@ Detailed module conventions (API retry, PWA, Logging, Sentry, CSP, Offline UI, S
 3. Review：`/autoplan` 或個別 review skills（在 feature branch 上跑，review log 才會對齊）
 4. 實作 + 測試
 5. `/ship` 出 PR → `gh pr merge --squash --auto`
+6. PR merge 後切回 main `git pull`，跑 `bash scripts/release.sh` 發 GitHub Release（不是 release-please — 這裡用 4 段式 `major.minor.patch.hotfix`，script 讀 `VERSION` + `CHANGELOG.md` 對應 section、建 tag、發 release）。`--yes` 跳過確認、`--dry-run` 只預覽、`--version=X --sha=<commit>` 補發歷史。
 
 ## Quality Management
 
