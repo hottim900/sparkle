@@ -14,7 +14,7 @@ export const SPARKLE_INSTRUCTIONS = `
 1. **探索** — 用 sparkle_search 和 sparkle_list_notes 找到相關筆記
 2. **深入** — 用 sparkle_get_note 讀取完整內容，理解脈絡
 3. **對話** — 與使用者討論、提問、發想、挑戰假設
-4. **寫回** — 用 sparkle_update_note 將豐富後的內容寫回筆記
+4. **編輯** — 用 sparkle_edit_note 對內容做精準的 atomic ops；用 sparkle_update_note 改 metadata
 5. **推進** — 用 sparkle_advance_note 在適當時機提升成熟度
 6. **匯出** — 用 sparkle_export_to_obsidian 將永久筆記送入 Obsidian vault
 
@@ -55,28 +55,122 @@ export const SPARKLE_INSTRUCTIONS = `
 
 **permanent → exported**：透過 sparkle_export_to_obsidian 匯出。筆記成為 Obsidian vault 長期知識庫的一部分。
 
-## 內容編輯策略
+## 內容編輯：sparkle_edit_note v2
 
-\`sparkle_update_note\` 支援兩種內容編輯模式：
+> **One sparkle_edit_note call performs multiple atomic edits — restructuring no longer takes 5 round-trips.**
 
-**全文替換**：只提供 \`content\`，整份內容被替換。
-- 適用：短筆記、大幅重寫、重新組織結構
+\`sparkle_update_note\` 已不再接受 \`content\` / \`old_content\`（v2 cutover）。內容編輯一律走 \`sparkle_edit_note\`。
 
-**局部編輯**：同時提供 \`old_content\` 和 \`content\`，精確替換指定片段。
-- 適用：長筆記只改一小段、修正錯字、插入或刪除特定段落
-- \`old_content\` 必須精確匹配筆記中的現有內容（包含換行和空白）
-- \`old_content\` 在筆記中必須唯一，若有多處匹配會回傳錯誤
+### 流程
 
-**重要**：使用局部編輯前，務必先用 \`sparkle_get_note\` 讀取筆記，從回傳的內容中精確複製要替換的片段作為 \`old_content\`。
+1. \`sparkle_get_note(id)\` 取得 \`revision\`（內容 sha256）+ \`lines\`（line array）+ \`blocks\`（每個 block 的 handle/range/type/preview）。這些都在回應的 \`edit-context\` fenced block 裡。
+2. \`sparkle_edit_note(id, revision, ops)\`，ops[] 是 1–50 個 atomic edit ops。
+3. 成功後回應內含新的 \`revision\` + 新的 \`lines\` + 新的 \`blocks\`。**舊 handle 立即作廢；用新 handle 做下一次編輯。**
+4. 若 \`REVISION_MISMATCH\`，回應內含當前最新的 \`revision\`/\`lines\`/\`blocks\`，可直接用來重新瞄準，不需再 \`get_note\`。
+
+### 六種 op 與適用情境
+
+| 編輯型態 | Op | 範例 |
+|---------|----|----|
+| 整段重寫（paragraph/heading/list/table/code-block）| \`replace_block\` | 改寫第三段：\`{ kind: "replace_block", handle: "b2", content: "新版第三段..." }\` |
+| 跨段落結構調整（合併兩段、改變層級）| \`replace_lines\` | 把第 8–15 行重寫成一個新章節 |
+| 段內小改（錯字、半形/全形標點漂移）| \`replace_text\` | \`{ kind: "replace_text", old: "我說: '你好'.", new: "我說：『你好』。" }\` |
+| 刪除整段 | \`delete_block\` | \`{ kind: "delete_block", handle: "b4" }\` |
+| 刪除行範圍 | \`delete_lines\` | \`{ kind: "delete_lines", start_line: 12, end_line: 14 }\` |
+| 新增內容 | \`insert_after_line\` | 在第 5 行後加段落；line=0 表 prepend |
+
+### 安全性排序（重要）
+
+\`replace_block\` > \`replace_lines\` > \`replace_text\`
+
+- 優先用 handle 或 line range，addressing 明確；只在 typo 等小範圍編輯用 \`replace_text\`。
+- \`replace_text\` Tier 1 是 byte-exact；Tier 1 失敗時自動退到 Tier 2，會把 9 對 CJK ↔ ASCII 標點視為等價（：→: ；→; （→( ）→) ，→, 。→. ！→! ？→? 、→,）。code block（fenced + inline）會被排除在 Tier 2 之外。
+- Tier 1 不排除 code block — 若你刻意給 byte-exact 字串，server 信任你的意圖（包含 code 內的 match）。
+
+### 範例
+
+**1. replace_block（整段改寫）**
+\`\`\`
+sparkle_edit_note({
+  id: "...", revision: "abcd1234...",
+  ops: [{ kind: "replace_block", handle: "b3", content: "## 新標題\\n\\n新內容..." }]
+})
+\`\`\`
+
+**2. replace_lines（跨段重組）**
+\`\`\`
+sparkle_edit_note({
+  id: "...", revision: "abcd1234...",
+  ops: [{ kind: "replace_lines", start_line: 8, end_line: 15, content: "重新組織後的段落..." }]
+})
+\`\`\`
+
+**3. replace_text（中文標點漂移）**
+\`\`\`
+sparkle_edit_note({
+  id: "...", revision: "abcd1234...",
+  ops: [{ kind: "replace_text", old: "我說: '你好'.", new: "我說：『你好』。" }]
+})
+// Tier 1 fail (byte mismatch on punctuation) → Tier 2 success
+// Response: match_tiers: ["punctuation_normalized"]
+\`\`\`
+
+**4. delete_block + insert_after_line（刪一段、新增一段）**
+\`\`\`
+sparkle_edit_note({
+  id: "...", revision: "abcd1234...",
+  ops: [
+    { kind: "delete_block", handle: "b5" },
+    { kind: "insert_after_line", line: 0, content: "## 新前言\\n..." }
+  ]
+})
+\`\`\`
+
+**5. 多 ops 重組（同一 call atomic）**
+\`\`\`
+sparkle_edit_note({
+  id: "...", revision: "...",
+  ops: [
+    { kind: "replace_block", handle: "b1", content: "..." },
+    { kind: "replace_block", handle: "b3", content: "..." },
+    { kind: "delete_block", handle: "b5" }
+  ]
+})
+\`\`\`
+
+**6. insert_after_line(0)（prepend）**
+\`\`\`
+sparkle_edit_note({
+  id: "...", revision: "...",
+  ops: [{ kind: "insert_after_line", line: 0, content: "（前言）" }]
+})
+\`\`\`
+
+### 錯誤恢復
+
+**REVISION_MISMATCH** — 內容已變動。回應內含新 \`revision\`/\`lines\`/\`blocks\`，直接用新值重做：
+\`\`\`
+// 第一次失敗：response.failure.current_revision = "<new>"
+sparkle_edit_note({ id, revision: "<new>", ops: [...] })  // 直接重試，不必再 get_note
+\`\`\`
+
+**AMBIGUOUS_MATCH** — \`replace_text\` 找到多個位置。改用 handle/line 或加 surrounding context：
+\`\`\`
+// 失敗：locations: [{start_line: 5}, {start_line: 12}]
+// 改用 replace_block(handle="b2") 或加上下文："我說：「\\n我說：「" → "..."
+\`\`\`
+
+**NO_MATCH** — Tier 1 + Tier 2 都失敗。比對 \`closest_match\` 與 \`old_preview\` 的 \`diff\`，修正後重試；或直接改用 \`replace_block\` / \`replace_lines\`。
 
 ## 工具使用模式
 
 | 情境 | 工具 |
 |------|------|
 | 搜尋相關筆記 | sparkle_search（Sparkle DB）、sparkle_search_obsidian（vault）、sparkle_search_all（同時搜兩邊）、sparkle_list_notes（篩選列表）|
-| 讀取完整內容 | sparkle_get_note |
-| 新建項目 | sparkle_create_note |
-| 更新內容 | sparkle_update_note（短筆記用全文替換；長筆記用 old_content 局部編輯）|
+| 讀取完整內容 | sparkle_get_note（回應含 edit-context: revision + lines + blocks）|
+| 新建項目 | sparkle_create_note（回應含 edit-context，可直接接 sparkle_edit_note）|
+| 編輯內容 | sparkle_edit_note（六種 atomic ops；handle 為首選）|
+| 改 metadata | sparkle_update_note（title/tags/status/...，不含 content）|
 | 提升成熟度 | sparkle_advance_note |
 | 匯出到 Obsidian | sparkle_export_to_obsidian |
 | 知識庫概覽 | sparkle_get_stats |

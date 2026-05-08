@@ -1,8 +1,66 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { createItem, getItem, updateItem } from "../client.js";
-import { formatItem } from "../format.js";
+import {
+  blockToPayload,
+  buildEditContext,
+  renderItemWithEditContext,
+  type EditContextPayload,
+} from "../format.js";
 import { formatToolError } from "../utils.js";
+import { applyEdits, MAX_OPS, MAX_CONTENT_LENGTH } from "../edit/ops.js";
+import { renderFailure } from "../edit/errors.js";
+import { REVISION_REGEX } from "../edit/revision.js";
+import { vaultReadonlyResponse } from "../lib/vault-readonly.js";
+import { logger } from "../logger.js";
+
+const HANDLE_REGEX = /^b\d+$/;
+
+const editOpSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("replace_block"),
+    handle: z
+      .string()
+      .regex(HANDLE_REGEX)
+      .describe("Block handle from sparkle_get_note (e.g. 'b3'). Revision-scoped."),
+    content: z.string().max(MAX_CONTENT_LENGTH).describe("Replacement markdown for the block"),
+  }),
+  z.object({
+    kind: z.literal("replace_lines"),
+    start_line: z.number().int().min(1).describe("First line to replace (1-indexed, inclusive)"),
+    end_line: z.number().int().min(1).describe("Last line to replace (1-indexed, inclusive)"),
+    content: z.string().max(MAX_CONTENT_LENGTH).describe("Replacement text for the line range"),
+  }),
+  z.object({
+    kind: z.literal("replace_text"),
+    old: z
+      .string()
+      .min(1)
+      .max(MAX_CONTENT_LENGTH)
+      .describe(
+        "Text to find (Tier 1: byte-exact; Tier 2: CJK ↔ ASCII punctuation fold if Tier 1 fails)",
+      ),
+    new: z.string().max(MAX_CONTENT_LENGTH).describe("Replacement text (empty string deletes the match)"),
+  }),
+  z.object({
+    kind: z.literal("delete_block"),
+    handle: z.string().regex(HANDLE_REGEX).describe("Block handle from sparkle_get_note"),
+  }),
+  z.object({
+    kind: z.literal("delete_lines"),
+    start_line: z.number().int().min(1).describe("First line to delete (1-indexed, inclusive)"),
+    end_line: z.number().int().min(1).describe("Last line to delete (1-indexed, inclusive)"),
+  }),
+  z.object({
+    kind: z.literal("insert_after_line"),
+    line: z
+      .number()
+      .int()
+      .min(0)
+      .describe("Line to insert after (1-indexed). Use line=0 to prepend at the top of the note."),
+    content: z.string().max(MAX_CONTENT_LENGTH).describe("Text to insert"),
+  }),
+]);
 
 export function registerWriteTools(server: McpServer): void {
   server.registerTool(
@@ -10,6 +68,8 @@ export function registerWriteTools(server: McpServer): void {
     {
       title: "Create Sparkle Note",
       description: `Create a new note, todo, or scratch item in Sparkle. Default type is "note" with status "fleeting". Use type "todo" for tasks (status defaults to "active"). Use type "scratch" for disposable temporary notes (status defaults to "draft").
+
+Response includes the created item plus an \`edit-context\` block (revision + lines + blocks) so you can chain a sparkle_edit_note call without an extra sparkle_get_note round-trip.
 
 Args:
   - title (string, required): Note title (1-500 chars)
@@ -29,7 +89,7 @@ Returns: The created item with all fields including generated ID and timestamps.
       inputSchema: z
         .object({
           title: z.string().min(1).max(500).describe("Note title"),
-          content: z.string().max(50000).optional().describe("Note content (markdown)"),
+          content: z.string().max(MAX_CONTENT_LENGTH).optional().describe("Note content (markdown)"),
           tags: z.array(z.string().min(1).max(50)).max(20).optional().describe("Tags"),
           status: z
             .enum(["fleeting", "developing", "permanent", "active", "draft"])
@@ -99,10 +159,9 @@ Returns: The created item with all fields including generated ID and timestamps.
           category_id: category_id ?? null,
           is_private,
         });
-        const text = `Note created successfully.\n\n${formatItem(item)}`;
-        return {
-          content: [{ type: "text", text }],
-        };
+        const ctx = buildEditContext(item.content, item.origin);
+        const text = `Note created successfully.\n\n${renderItemWithEditContext(item, ctx)}`;
+        return { content: [{ type: "text", text }] };
       } catch (error) {
         return formatToolError(error);
       }
@@ -112,14 +171,18 @@ Returns: The created item with all fields including generated ID and timestamps.
   server.registerTool(
     "sparkle_update_note",
     {
-      title: "Update Sparkle Note",
-      description: `Update an items_active note. Attempting to update a vault-origin item (origin='vault') returns \`VAULT_READONLY\` (409 Conflict) — use \`sparkle_write_obsidian_by_path\` to edit the vault .md directly, or \`sparkle_write_obsidian\` by sparkle_id. The vault file is the content source of truth post-export.
+      title: "Update Sparkle Note metadata",
+      description: `Update an items_active row's metadata (title, tags, status, type, priority, due, aliases, source, linked_note_id, category_id, is_private, paused). Vault-origin items return \`VAULT_READONLY\` (409 Conflict).
+
+**Content editing moved to sparkle_edit_note in v2.** This tool no longer accepts \`content\` or \`old_content\`. To edit a note's body:
+  1. Call \`sparkle_get_note(id)\` and read the \`revision\` from the edit-context block.
+  2. Call \`sparkle_edit_note(id, revision, ops)\` with one or more edit ops (replace_block / replace_lines / replace_text / delete_block / delete_lines / insert_after_line).
+
+Updating metadata via this tool does not bump the content revision.
 
 Args:
   - id (string, required): Item UUID
   - title (string, optional): New title
-  - content (string, optional): New content (markdown). Replaces entire content field.
-  - old_content (string, optional): When provided together with content, performs find-and-replace: old_content is matched against the existing note content and replaced with content. Exactly one match required — zero matches returns NO_MATCH error, multiple matches returns AMBIGUOUS_MATCH error. Omit old_content to replace the entire content field.
   - tags (string[], optional): New tags (replaces all existing tags)
   - status (string, optional): New status
   - type (string, optional): Change item type (note/todo/scratch). Status auto-maps on type change.
@@ -135,10 +198,6 @@ Args:
 
 Returns: The updated item with all fields.
 
-Content editing modes:
-  - Full replace: provide only content — replaces the entire content field.
-  - Partial edit: provide both old_content and content — finds old_content in the note and replaces it with content. Always use sparkle_get_note first to get the exact text for old_content. Set content to empty string to delete the matched section.
-
 Side effects:
   - Type change to note: clears linked_note_id and due (not supported on notes).
   - Type change to scratch: clears tags, priority, due, aliases, linked_note_id (scratch only keeps title + content). category_id is preserved.`,
@@ -146,13 +205,6 @@ Side effects:
         .object({
           id: z.string().uuid().describe("Item UUID"),
           title: z.string().min(1).max(500).optional().describe("New title"),
-          content: z.string().max(50000).optional().describe("New content (replaces existing)"),
-          old_content: z
-            .string()
-            .min(1)
-            .max(50000)
-            .optional()
-            .describe("Find-and-replace: text to find in existing content (use with content)"),
           tags: z.array(z.string().min(1).max(50)).max(20).optional().describe("New tags (replaces all)"),
           status: z
             .enum([
@@ -230,8 +282,6 @@ Side effects:
     async ({
       id,
       title,
-      content,
-      old_content,
       tags,
       status,
       type,
@@ -246,49 +296,8 @@ Side effects:
       paused_context,
     }) => {
       try {
-        // Find-and-replace mode: old_content + content
-        if (old_content !== undefined && content === undefined) {
-          return {
-            content: [
-              { type: "text", text: "Error: content is required when old_content is provided." },
-            ],
-            isError: true,
-          };
-        }
-
-        let resolvedContent = content;
-        if (old_content !== undefined && content !== undefined) {
-          const current = await getItem(id);
-          const matchCount = current.content.split(old_content).length - 1;
-          if (matchCount === 0) {
-            const preview = current.content.slice(0, 200);
-            return {
-              content: [
-                {
-                  type: "text",
-                  text: `NO_MATCH: The specified old_content was not found in the note.\nCurrent content (first 200 chars): ${preview}`,
-                },
-              ],
-              isError: true,
-            };
-          }
-          if (matchCount > 1) {
-            return {
-              content: [
-                {
-                  type: "text",
-                  text: `AMBIGUOUS_MATCH: old_content was found ${matchCount} times. Provide more surrounding context to uniquely identify the section to replace.`,
-                },
-              ],
-              isError: true,
-            };
-          }
-          resolvedContent = current.content.replace(old_content, content);
-        }
-
         const update: Record<string, unknown> = {};
         if (title !== undefined) update.title = title;
-        if (resolvedContent !== undefined) update.content = resolvedContent;
         if (tags !== undefined) update.tags = tags;
         if (status !== undefined) update.status = status;
         if (type !== undefined) update.type = type;
@@ -303,10 +312,114 @@ Side effects:
         if (paused_context !== undefined) update.paused_context = paused_context;
 
         const item = await updateItem(id, update);
-        const text = `Note updated successfully.\n\n${formatItem(item)}`;
-        return {
-          content: [{ type: "text", text }],
+        const text = `Note metadata updated successfully.\n\nID: ${item.id} | Title: ${item.title} | Status: ${item.status}`;
+        return { content: [{ type: "text", text }] };
+      } catch (error) {
+        return formatToolError(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "sparkle_edit_note",
+    {
+      title: "Edit Sparkle Note content (v2 atomic ops)",
+      description: `Apply atomic edit ops to an items_active row's content. Pin every call against a \`revision\` obtained from sparkle_get_note (or any prior sparkle_create_note / sparkle_edit_note success response). Vault-origin items return VAULT_READONLY — use sparkle_write_obsidian instead.
+
+**Magical moment**: one sparkle_edit_note call performs multiple atomic edits — restructuring no longer takes 5 round-trips.
+
+Six op kinds (atomic — all succeed or none apply):
+  - \`replace_block(handle, content)\` — swap a paragraph/heading/list/table/code-block by opaque handle (preferred — unambiguous addressing)
+  - \`replace_lines(start_line, end_line, content)\` — rewrite an inclusive line range (use for cross-block restructuring)
+  - \`replace_text(old, new)\` — Tier 1 byte-exact; if zero matches, Tier 2 retries with CJK ↔ ASCII punctuation fold (：→: ；→; （→( ）→) ，→, 。→. ！→! ？→? 、→,). Code blocks (fenced + inline) excluded from Tier 2.
+  - \`delete_block(handle)\` — remove a block
+  - \`delete_lines(start_line, end_line)\` — remove a line range
+  - \`insert_after_line(line, content)\` — \`line=0\` means prepend at top
+
+**Op-choice safety ranking**: \`replace_block\` > \`replace_lines\` > \`replace_text\`. Block and line ops have unambiguous addressing — use \`replace_text\` for typo-class edits or punctuation drift only.
+
+| Edit shape                                          | Use                  |
+|-----------------------------------------------------|----------------------|
+| Whole paragraph / heading / list / table            | \`replace_block\`      |
+| Cross-block restructuring                           | \`replace_lines\`      |
+| Intra-paragraph small edit / punctuation drift      | \`replace_text\`       |
+| Add new content                                     | \`insert_after_line\`  |
+
+**Handles are revision-scoped.** After every successful edit the response gives you a fresh \`revision\` + new \`blocks\` — discard the old ones. Reusing handles after an edit will REVISION_MISMATCH.
+
+Args:
+  - \`id\` (string, required): Item UUID
+  - \`revision\` (string, required): sha256 hex from edit-context (lowercase, 64 chars)
+  - \`ops\` (EditOp[], required): 1–${MAX_OPS} ops, discriminated by \`kind\`
+
+Errors:
+  - VAULT_READONLY: item is vault-origin; use sparkle_write_obsidian
+  - REVISION_MISMATCH: content changed since you fetched it; payload includes fresh revision/lines/blocks for retargeting
+  - NO_MATCH: replace_text exhausted Tier 1 + Tier 2; payload includes closest_match + diff
+  - AMBIGUOUS_MATCH: more than one location matches; payload includes line locations
+  - INVALID_HANDLE: block handle not in current revision; payload lists valid_handles
+  - INVALID_RANGE: line range out of bounds (line=0 only valid for insert_after_line)
+  - EMPTY_OPS / TOO_MANY_OPS / OVERLAPPING_OPS / DUPLICATE_OPS
+  - CONTENT_TOO_LARGE: post-edit content > ${MAX_CONTENT_LENGTH} chars; payload lists delta_per_op
+  - PARSE_ERROR: markdown parser failed; use replace_lines (no parse needed) or fix the note manually
+
+Returns: updated item + fresh revision + fresh lines + fresh blocks + match_tiers (per-op, null for non-replace_text ops).`,
+      inputSchema: z
+        .object({
+          id: z.string().uuid().describe("Item UUID"),
+          revision: z
+            .string()
+            .regex(REVISION_REGEX)
+            .describe("sha256 hex of the content snapshot you read (lowercase, 64 chars)"),
+          ops: z
+            .array(editOpSchema)
+            .min(1)
+            .max(MAX_OPS)
+            .describe(`1-${MAX_OPS} edit ops; discriminated by "kind"`),
+        })
+        .strict(),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: false,
+      },
+    },
+    async ({ id, revision, ops }) => {
+      try {
+        const current = await getItem(id);
+        if (current.origin === "vault") {
+          return vaultReadonlyResponse(
+            current.id,
+            "此項目為 vault-origin，無法以 sparkle_edit_note 編輯內容（vault .md 是 source of truth）",
+            "Vault-origin items are read-only via sparkle_edit_note; the vault .md is the content source of truth.",
+          );
+        }
+
+        const result = applyEdits({
+          content: current.content,
+          expectedRevision: revision,
+          ops,
+        });
+        if (!result.ok) {
+          return {
+            content: [{ type: "text", text: renderFailure(result.failure) }],
+            isError: true,
+          };
+        }
+
+        const updated = await updateItem(id, { content: result.newContent });
+        const ctx: EditContextPayload = {
+          revision: result.newRevision,
+          lines: result.newLines,
+          blocks: result.newBlocks.map(blockToPayload),
+          match_tiers: result.matchTiers.map(t => t ?? null),
         };
+        for (const tier of result.matchTiers) {
+          if (tier) logger.info({ id, match_tier: tier }, "sparkle_edit_note replace_text resolved");
+        }
+        const text = `Note edited successfully.\n\n${renderItemWithEditContext(updated, ctx)}`;
+        return { content: [{ type: "text", text }] };
       } catch (error) {
         return formatToolError(error);
       }

@@ -567,22 +567,27 @@ sparkle_read_obsidian(id)       → Vault 版本
 
 ### 高效編輯筆記
 
-\`sparkle_update_note\` 支援兩種內容編輯模式，根據情境選擇最合適的方式：
+內容編輯一律走 \`sparkle_edit_note\`（v2 atomic ops）。\`sparkle_update_note\` 只負責 metadata（title/tags/status/...），不再接受 \`content\` 或 \`old_content\`。
 
-**全文替換**（只提供 \`content\`）：
-- 短筆記（幾百字以內）直接全文替換最簡單
-- 大幅重寫或重新組織結構時使用
-- 需要先用 \`sparkle_get_note\` 讀取，在完整內容上修改後寫回
+**標準流程**：
+1. \`sparkle_get_note(id)\` → 從 \`edit-context\` 拿 \`revision\` + \`lines\` + \`blocks\`
+2. \`sparkle_edit_note(id, revision, ops[])\` → 一次最多 50 個 atomic ops
+3. 成功後拿到新的 \`revision\` + 新 handle，可直接接下一次編輯
 
-**局部編輯**（同時提供 \`old_content\` + \`content\`）：
-- 長筆記只改一小段時，避免傳送整份未修改的內容
-- 修正錯字、補充一個段落、刪除特定片段
-- \`old_content\` 設為要替換的原文，\`content\` 設為替換後的新文
-- 若要刪除某段，將 \`content\` 設為空字串
+**Op 選擇（依序優先）**：
+- \`replace_block(handle)\` — 改寫整個 block（paragraph/heading/list/code 等）；最不易出錯
+- \`replace_lines(start, end)\` — 跨段落結構調整；line number 可從 \`lines\` 直接讀
+- \`replace_text(old, new)\` — 段內小改、修錯字、處理半形/全形標點漂移
+- \`delete_block\` / \`delete_lines\` — 刪除
+- \`insert_after_line(line)\` — 新增；line=0 表 prepend
 
-**常見錯誤與預防**：
-- \`old_content\` 必須與筆記中的內容**完全一致**（包含換行、空白、標點），否則會收到 NO_MATCH 錯誤
-- 如果同一段文字在筆記中出現多次，會收到 AMBIGUOUS_MATCH 錯誤——此時加入更多前後文讓匹配唯一
-- 編輯前**一定要先讀取筆記**（\`sparkle_get_note\`），確保內容沒有被其他來源（如 LINE Bot、Web UI）修改過`,
+**\`replace_text\` 的兩階段匹配**：
+- Tier 1：byte-exact（含換行/空白/標點完全一致）
+- Tier 2：把 9 對 CJK ↔ ASCII 標點視為等價（自動處理 \`：\` vs \`:\` 等漂移）；fenced + inline code 區段被排除
+
+**錯誤恢復**：
+- \`REVISION_MISMATCH\`：回應內含最新 \`revision\`/\`lines\`/\`blocks\`，直接用新值重做
+- \`NO_MATCH\`：比對 \`closest_match\` 修正，或改用 \`replace_block\` / \`replace_lines\`
+- \`AMBIGUOUS_MATCH\`：\`replace_text\` 找到多個 match，改用 handle/line 或加更多 surrounding context`,
   },
 };
