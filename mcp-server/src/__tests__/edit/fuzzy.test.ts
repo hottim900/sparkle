@@ -233,7 +233,7 @@ describe("findMatch", () => {
       expect(r.failure.code).toBe("NO_MATCH");
       if (r.failure.code !== "NO_MATCH") return;
       expect(r.failure.op_index).toBe(3);
-      expect(r.failure.tier_attempted).toBe("punctuation_normalized");
+      expect(r.failure.match_tier).toBe("punctuation_normalized");
     });
 
     it("Tier 2 supports multi-line (\\n in needle)", () => {

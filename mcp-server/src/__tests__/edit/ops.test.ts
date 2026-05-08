@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { applyEdits, MAX_OPS, MAX_CONTENT_LENGTH, type EditOp } from "../../edit/ops.js";
 import { computeRevision } from "../../edit/revision.js";
 
@@ -501,5 +501,34 @@ describe("parseBlocks options", () => {
     if (!r.ok) return;
     expect(r.blocks.length).toBeGreaterThan(0);
     expect(r.codeRanges).toEqual([]);
+  });
+});
+
+describe("applyEdits — PARSE_ERROR surfacing", () => {
+  it("returns PARSE_ERROR when fromMarkdown throws (revision matches)", async () => {
+    // Inject a synthetic throw via a mocked module. Use vi.doMock so other
+    // tests in this file see the unmocked module.
+    const mockThrow = vi.fn(() => {
+      throw new Error("synthetic parser failure");
+    });
+    vi.doMock("mdast-util-from-markdown", () => ({ fromMarkdown: mockThrow }));
+    // Reset the registry so the fresh mock is picked up by ops.ts → block-parser.ts.
+    vi.resetModules();
+    const { applyEdits: applyWithMock } = await import("../../edit/ops.js");
+    const { computeRevision: revWithMock } = await import("../../edit/revision.js");
+    const content = "anything";
+    const r = applyWithMock({
+      content,
+      expectedRevision: revWithMock(content),
+      ops: [{ kind: "replace_lines", start_line: 1, end_line: 1, content: "x" }],
+    });
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.failure.code).toBe("PARSE_ERROR");
+    if (r.failure.code !== "PARSE_ERROR") return;
+    expect(r.failure.reason).toContain("synthetic parser failure");
+
+    vi.doUnmock("mdast-util-from-markdown");
+    vi.resetModules();
   });
 });

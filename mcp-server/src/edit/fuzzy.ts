@@ -154,7 +154,7 @@ function failNoMatch(
       old_preview: needle.slice(0, PREVIEW_LENGTH),
       closest_match: closest,
       diff,
-      tier_attempted: tier,
+      match_tier: tier,
     }),
   };
 }

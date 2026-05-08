@@ -270,6 +270,21 @@ Side effects:
             .max(500)
             .optional()
             .describe("恢復備忘——下次回來時想記住什麼（僅 paused=true 時有效）"),
+          // V2 cutover: catch legacy content fields explicitly so the LLM gets
+          // a pointer to sparkle_edit_note instead of a generic zod
+          // "unrecognized key" error. (Per design DX-D4.)
+          content: z
+            .never({
+              error:
+                "RETIRED in v2: content editing moved to sparkle_edit_note. Call sparkle_get_note to obtain `revision`, then use sparkle_edit_note with ops[].",
+            })
+            .optional(),
+          old_content: z
+            .never({
+              error:
+                "RETIRED in v2: old_content/content find-and-replace moved to sparkle_edit_note (kind: 'replace_text'). See sparkle_edit_note tool description for the v2 op shape.",
+            })
+            .optional(),
         })
         .strict(),
       annotations: {

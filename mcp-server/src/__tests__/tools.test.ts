@@ -336,7 +336,7 @@ describe("sparkle_update_note (metadata-only post v2 cutover)", () => {
     return server.getHandler("sparkle_update_note");
   }
 
-  it("updates title without touching content", async () => {
+  it("updates title without touching content (no content key in PATCH body — L3)", async () => {
     const handler = getUpdateHandler();
     updateItem.mockResolvedValue(makeItem({ title: "New title" }));
 
@@ -345,9 +345,9 @@ describe("sparkle_update_note (metadata-only post v2 cutover)", () => {
       title: "New title",
     });
     expect(result.isError).toBeUndefined();
-    expect(updateItem).toHaveBeenCalledWith("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", {
-      title: "New title",
-    });
+    const callArgs = updateItem.mock.calls[0]![1]!;
+    expect(callArgs).toEqual({ title: "New title" });
+    expect("content" in callArgs).toBe(false);
     // No content fetch — metadata edits skip the body.
     expect(getItem).not.toHaveBeenCalled();
   });
@@ -1062,6 +1062,23 @@ describe("strict schema validation", () => {
         `${file} has raw inputSchema — must use z.object({...}).strict()`,
       ).toBeNull();
     }
+  });
+
+  it("sparkle_update_note rejects legacy content/old_content with V2 cutover hint (DX-D4)", () => {
+    // We can't trigger MCP-level zod parsing through the makeMockServer helper
+    // (it stores raw handlers), but we can read the schema source to verify
+    // both fields are listed with `z.never()` + a migration hint pointing to
+    // sparkle_edit_note. Without this, .strict() would surface a generic
+    // "unrecognized key" error and the LLM would have no migration guidance.
+    const writeSrc = readToolSource("write.ts");
+    expect(writeSrc).toMatch(/content:\s*z\s*\.\s*never\(/);
+    expect(writeSrc).toMatch(/old_content:\s*z\s*\.\s*never\(/);
+    expect(writeSrc).toMatch(/RETIRED in v2.*sparkle_edit_note/i);
+  });
+
+  it("sparkle_edit_note ops schema is a zod discriminated union keyed on `kind` (M9)", () => {
+    const writeSrc = readToolSource("write.ts");
+    expect(writeSrc).toMatch(/z\.discriminatedUnion\(\s*"kind"/);
   });
 });
 

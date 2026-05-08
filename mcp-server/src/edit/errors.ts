@@ -49,7 +49,8 @@ export type EditFailure =
       old_preview: string;
       closest_match: string | null;
       diff: string | null;
-      tier_attempted: "exact" | "punctuation_normalized";
+      /** Same shape as AMBIGUOUS_MATCH.match_tier — names are symmetric. */
+      match_tier: "exact" | "punctuation_normalized";
       hint: string;
     }
   | {
@@ -146,7 +147,7 @@ export function noMatch(args: {
   old_preview: string;
   closest_match: string | null;
   diff: string | null;
-  tier_attempted: "exact" | "punctuation_normalized";
+  match_tier: "exact" | "punctuation_normalized";
 }): EditFailure {
   return { ...args, code: "NO_MATCH", hint: HINT_NO_MATCH };
 }

@@ -65,7 +65,7 @@ export const SPARKLE_INSTRUCTIONS = `
 
 1. \`sparkle_get_note(id)\` 取得 \`revision\`（內容 sha256）+ \`lines\`（line array）+ \`blocks\`（每個 block 的 handle/range/type/preview）。這些都在回應的 \`edit-context\` fenced block 裡。
 2. \`sparkle_edit_note(id, revision, ops)\`，ops[] 是 1–50 個 atomic edit ops。
-3. 成功後回應內含新的 \`revision\` + 新的 \`lines\` + 新的 \`blocks\`。**舊 handle 立即作廢；用新 handle 做下一次編輯。**
+3. 成功後回應內含新的 \`revision\` + 新的 \`lines\` + 新的 \`blocks\`。**After each successful edit, the response gives you fresh handles — discard the old ones.** 舊 handle 立即作廢；用新 handle 做下一次編輯。
 4. 若 \`REVISION_MISMATCH\`，回應內含當前最新的 \`revision\`/\`lines\`/\`blocks\`，可直接用來重新瞄準，不需再 \`get_note\`。
 
 ### 六種 op 與適用情境
@@ -161,6 +161,14 @@ sparkle_edit_note({ id, revision: "<new>", ops: [...] })  // 直接重試，不�
 \`\`\`
 
 **NO_MATCH** — Tier 1 + Tier 2 都失敗。比對 \`closest_match\` 與 \`old_preview\` 的 \`diff\`，修正後重試；或直接改用 \`replace_block\` / \`replace_lines\`。
+
+**INVALID_HANDLE** — handle 不在當前 revision 中（多半是用了上次成功編輯前的舊 handle）。回應的 \`valid_handles\` 是當前可用 handle 列表；改用其中一個，或先 \`sparkle_get_note\` 重新拉取 \`blocks\`。
+
+**PARSE_ERROR** — 筆記內容當前 markdown parser 無法分段（極少見，通常是內容嚴重損壞）。改用 \`replace_lines\`（不依賴 parse）寫回正確內容；或手動修筆記後重試。
+
+**OVERLAPPING_OPS / DUPLICATE_OPS** — 兩個 ops 的範圍重疊或完全相同。回應的 \`op_indices\` 指出衝突的兩個 ops；刪掉其中一個或調整位置。
+
+**CONTENT_TOO_LARGE** — 編輯後總長超過 50000 字。\`delta_per_op\` 列出每個 op 對長度的貢獻；裁掉貢獻最大的那個再試。
 
 ## 工具使用模式
 
