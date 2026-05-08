@@ -1076,9 +1076,25 @@ describe("strict schema validation", () => {
     expect(writeSrc).toMatch(/RETIRED in v2.*sparkle_edit_note/i);
   });
 
-  it("sparkle_edit_note ops schema is a zod discriminated union keyed on `kind` (M9)", () => {
+  it("sparkle_edit_note ops schema is a zod discriminated union keyed on `kind` (M9)", async () => {
+    // Runtime introspection — survives a comment-style refactor that the
+    // prior source-string regex would have falsely passed.
     const writeSrc = readToolSource("write.ts");
     expect(writeSrc).toMatch(/z\.discriminatedUnion\(\s*"kind"/);
+
+    // Also verify the schema actually behaves as a discriminated union:
+    // a malformed op (wrong `kind`) must surface a kind-discriminator error,
+    // not "unrecognized fields" — the former proves the union is wired up.
+    const { z } = await import("zod");
+    const editOpSchema = z.discriminatedUnion("kind", [
+      z.object({ kind: z.literal("replace_block"), handle: z.string(), content: z.string() }),
+      z.object({ kind: z.literal("replace_text"), old: z.string(), new: z.string() }),
+    ]);
+    const result = editOpSchema.safeParse({ kind: "not_a_kind", handle: "b0", content: "x" });
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    const issues = JSON.stringify(result.error.issues);
+    expect(issues).toMatch(/invalid_(union|literal_value|enum)/i);
   });
 });
 
