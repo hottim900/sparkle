@@ -361,7 +361,7 @@ Six op kinds (atomic — all succeed or none apply):
 | Intra-paragraph small edit / punctuation drift      | \`replace_text\`       |
 | Add new content                                     | \`insert_after_line\`  |
 
-**Handles are revision-scoped.** After every successful edit the response gives you a fresh \`revision\` + new \`blocks\` — discard the old ones. Reusing handles after an edit will REVISION_MISMATCH.
+**Handles are revision-scoped — discard the old ones after every successful edit.** The response gives you a fresh \`revision\` + new \`blocks\`; use those next time. Reusing the OLD revision after an edit returns REVISION_MISMATCH (recoverable). Reusing an OLD handle with the NEW revision is worse — the handle (e.g., \`b3\`) may resolve to a *different* block than you intended, silently editing the wrong content. Always pair each call's handles with the revision they came from.
 
 Args:
   - \`id\` (string, required): Item UUID

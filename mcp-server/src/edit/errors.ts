@@ -38,7 +38,9 @@ export interface BlockPayload {
 export type EditFailure =
   | {
       code: "REVISION_MISMATCH";
-      current_revision: string;
+      /** Same field name as success-path EditContextPayload.revision so
+       *  callers can do `response.revision` on either path. */
+      revision: string;
       lines: Array<{ line: number; text: string }>;
       blocks: BlockPayload[];
       hint: string;
@@ -135,7 +137,7 @@ const HINT_PARSE_ERROR =
   "Markdown parser could not segment the current content. The edit was rejected to avoid corrupting blocks. Inspect the note manually or rewrite the section via replace_lines (which does not depend on block parsing).";
 
 export function revisionMismatch(args: {
-  current_revision: string;
+  revision: string;
   lines: Array<{ line: number; text: string }>;
   blocks: BlockPayload[];
 }): EditFailure {

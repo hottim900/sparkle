@@ -202,7 +202,7 @@ describe("applyEdits — error paths", () => {
     );
     expect(r.failure.code).toBe("REVISION_MISMATCH");
     if (r.failure.code !== "REVISION_MISMATCH") return;
-    expect(r.failure.current_revision).toBe(rev(content));
+    expect(r.failure.revision).toBe(rev(content));
     expect(r.failure.lines).toEqual([{ line: 1, text: "Hello." }]);
     expect(r.failure.blocks).toHaveLength(1);
   });

@@ -82,7 +82,7 @@ export function applyEdits(args: ApplyEditsArgs): ApplyResult {
     return {
       ok: false,
       failure: errors.revisionMismatch({
-        current_revision: currentRevision,
+        revision: currentRevision,
         lines: makeLines(content),
         blocks: parsed.ok
           ? parsed.blocks.map(b => ({

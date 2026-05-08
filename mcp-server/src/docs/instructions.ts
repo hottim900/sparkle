@@ -150,7 +150,7 @@ sparkle_edit_note({
 
 **REVISION_MISMATCH** — 內容已變動。回應內含新 \`revision\`/\`lines\`/\`blocks\`，直接用新值重做：
 \`\`\`
-// 第一次失敗：response.failure.current_revision = "<new>"
+// 第一次失敗：response.failure.revision = "<new>"
 sparkle_edit_note({ id, revision: "<new>", ops: [...] })  // 直接重試，不必再 get_note
 \`\`\`
 

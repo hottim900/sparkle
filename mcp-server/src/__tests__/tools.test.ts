@@ -461,7 +461,7 @@ describe("sparkle_edit_note", () => {
     expect(result.isError).toBe(true);
     const text = result.content[0].text;
     expect(text).toContain("REVISION_MISMATCH");
-    expect(text).toMatch(/"current_revision":\s*"[a-f0-9]{64}"/);
+    expect(text).toMatch(/"revision":\s*"[a-f0-9]{64}"/);
     expect(text).toContain('"lines":');
     expect(text).toContain('"blocks":');
     expect(updateItem).not.toHaveBeenCalled();
