@@ -16,7 +16,8 @@ import { logger } from "../logger.js";
 
 const HANDLE_REGEX = /^b\d+$/;
 
-const editOpSchema = z.discriminatedUnion("kind", [
+/** Exported so the M9 regression test can probe the production schema directly. */
+export const editOpSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("replace_block"),
     handle: z
