@@ -15,6 +15,7 @@ vi.mock("../client.js", async (importOriginal) => {
     getTags: vi.fn(),
     exportToObsidian: vi.fn(),
     releaseVaultNote: vi.fn(),
+    getVaultPathBySparkleId: vi.fn(),
   };
 });
 
@@ -46,6 +47,7 @@ const getStats = vi.mocked(client.getStats);
 const getTags = vi.mocked(client.getTags);
 const exportToObsidian = vi.mocked(client.exportToObsidian);
 const releaseVaultNote = vi.mocked(client.releaseVaultNote);
+const getVaultPathBySparkleId = vi.mocked(client.getVaultPathBySparkleId);
 const readVaultFileBySparkleId = vi.mocked(vault.readVaultFileBySparkleId);
 const readVaultFileByPath = vi.mocked(vault.readVaultFileByPath);
 const writeVaultFileBySparkleId = vi.mocked(vault.writeVaultFileBySparkleId);
@@ -327,86 +329,246 @@ describe("sparkle_get_note", () => {
   });
 });
 
-describe("sparkle_update_note", () => {
+describe("sparkle_update_note (metadata-only post v2 cutover)", () => {
   function getUpdateHandler() {
     const server = makeMockServer();
     registerWriteTools(server as never);
     return server.getHandler("sparkle_update_note");
   }
 
-  it("returns error when old_content provided without content", async () => {
+  it("updates title without touching content (no content key in PATCH body — L3)", async () => {
     const handler = getUpdateHandler();
+    updateItem.mockResolvedValue(makeItem({ title: "New title" }));
 
     const result = await handler({
       id: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
-      old_content: "old text",
-    });
-    expect(result.isError).toBe(true);
-    expect(result.content[0].text).toContain("content is required");
-  });
-
-  it("performs find-and-replace on single match", async () => {
-    const handler = getUpdateHandler();
-    const current = makeItem({ content: "Hello world, this is a test." });
-    getItem.mockResolvedValue(current);
-    updateItem.mockResolvedValue(makeItem({ content: "Hello universe, this is a test." }));
-
-    const result = await handler({
-      id: current.id,
-      old_content: "world",
-      content: "universe",
+      title: "New title",
     });
     expect(result.isError).toBeUndefined();
-    expect(updateItem).toHaveBeenCalledWith(current.id, {
-      content: "Hello universe, this is a test.",
-    });
-  });
-
-  it("returns NO_MATCH when old_content not found", async () => {
-    const handler = getUpdateHandler();
-    const current = makeItem({ content: "Hello world." });
-    getItem.mockResolvedValue(current);
-
-    const result = await handler({
-      id: current.id,
-      old_content: "nonexistent text",
-      content: "replacement",
-    });
-    expect(result.isError).toBe(true);
-    expect(result.content[0].text).toContain("NO_MATCH");
-  });
-
-  it("returns AMBIGUOUS_MATCH when old_content found multiple times", async () => {
-    const handler = getUpdateHandler();
-    const current = makeItem({ content: "foo bar foo baz foo" });
-    getItem.mockResolvedValue(current);
-
-    const result = await handler({
-      id: current.id,
-      old_content: "foo",
-      content: "qux",
-    });
-    expect(result.isError).toBe(true);
-    expect(result.content[0].text).toContain("AMBIGUOUS_MATCH");
-    expect(result.content[0].text).toContain("3 times");
-  });
-
-  it("performs full content replace when only content provided", async () => {
-    const handler = getUpdateHandler();
-    updateItem.mockResolvedValue(makeItem({ content: "brand new content" }));
-
-    const result = await handler({
-      id: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
-      content: "brand new content",
-    });
-    expect(result.isError).toBeUndefined();
-    expect(updateItem).toHaveBeenCalledWith("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", {
-      content: "brand new content",
-    });
-    // Should NOT call getItem for full replace
+    const callArgs = updateItem.mock.calls[0]![1]!;
+    expect(callArgs).toEqual({ title: "New title" });
+    expect("content" in callArgs).toBe(false);
+    // No content fetch — metadata edits skip the body.
     expect(getItem).not.toHaveBeenCalled();
   });
 });
+
+describe("sparkle_get_note edit-context", () => {
+  function getReadHandler() {
+    const server = makeMockServer();
+    registerReadTools(server as never);
+    return server.getHandler("sparkle_get_note");
+  }
+
+  it("active item: response carries revision + lines + blocks JSON block", async () => {
+    const handler = getReadHandler();
+    getItem.mockResolvedValue(makeItem({ content: "Hello.", origin: "web" }));
+
+    const result = await handler({ id: "aaaaaaaa" });
+    expect(result.isError).toBeUndefined();
+    const text = result.content[0].text;
+    expect(text).toContain("```edit-context");
+    expect(text).toMatch(/"revision": "[a-f0-9]{64}"/);
+    expect(text).toContain('"lines"');
+    expect(text).toContain('"blocks"');
+  });
+
+  it("vault item: edit-context fields are null", async () => {
+    const handler = getReadHandler();
+    getItem.mockResolvedValue(makeItem({ content: "snippet only", origin: "vault" }));
+
+    const result = await handler({ id: "aaaaaaaa" });
+    expect(result.isError).toBeUndefined();
+    const text = result.content[0].text;
+    expect(text).toMatch(/"revision": null/);
+    expect(text).toMatch(/"lines": null/);
+    expect(text).toMatch(/"blocks": null/);
+  });
+});
+
+describe("sparkle_create_note edit-context", () => {
+  function getCreateHandler() {
+    const server = makeMockServer();
+    registerWriteTools(server as never);
+    return server.getHandler("sparkle_create_note");
+  }
+
+  it("response includes edit-context for the new active item", async () => {
+    const handler = getCreateHandler();
+    createItem.mockResolvedValue(makeItem({ content: "Body.", origin: "web" }));
+
+    const result = await handler({ title: "New", content: "Body." });
+    expect(result.isError).toBeUndefined();
+    const text = result.content[0].text;
+    expect(text).toContain("```edit-context");
+    expect(text).toMatch(/"revision": "[a-f0-9]{64}"/);
+  });
+});
+
+describe("sparkle_edit_note", () => {
+  function getEditHandler() {
+    const server = makeMockServer();
+    registerWriteTools(server as never);
+    return server.getHandler("sparkle_edit_note");
+  }
+
+  const VALID_REV = "a".repeat(64); // 64-char lowercase hex
+
+  it("vault-origin returns canonical VAULT_READONLY payload (with vault_path_source)", async () => {
+    const handler = getEditHandler();
+    getItem.mockResolvedValue(makeItem({ content: "snippet", origin: "vault" }));
+    getVaultPathBySparkleId.mockResolvedValue({ path: "Notes/foo.md" });
+
+    const result = await handler({
+      id: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+      revision: VALID_REV,
+      ops: [{ kind: "replace_text", old: "x", new: "y" }],
+    });
+    expect(result.isError).toBe(true);
+    const payload = JSON.parse(result.content[0].text);
+    expect(payload.code).toBe("VAULT_READONLY");
+    expect(payload.vault_path).toBe("Notes/foo.md");
+    expect(payload.vault_path_source).toBe("lookup");
+    expect(payload.hint_tool_by_id).toBe("sparkle_write_obsidian");
+    // applyEdits never reached
+    expect(updateItem).not.toHaveBeenCalled();
+  });
+
+  it("vault-origin with null vault_path: vault_path_source is null", async () => {
+    const handler = getEditHandler();
+    getItem.mockResolvedValue(makeItem({ content: "snippet", origin: "vault" }));
+    getVaultPathBySparkleId.mockResolvedValue(null);
+
+    const result = await handler({
+      id: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+      revision: VALID_REV,
+      ops: [{ kind: "replace_text", old: "x", new: "y" }],
+    });
+    const payload = JSON.parse(result.content[0].text);
+    expect(payload.vault_path).toBeNull();
+    expect(payload.vault_path_source).toBeNull();
+  });
+
+  it("REVISION_MISMATCH on stale revision returns fresh revision/lines/blocks", async () => {
+    const handler = getEditHandler();
+    getItem.mockResolvedValue(makeItem({ content: "Hello.", origin: "web" }));
+
+    const result = await handler({
+      id: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+      revision: "0".repeat(64),
+      ops: [{ kind: "replace_block", handle: "b0", content: "X" }],
+    });
+    expect(result.isError).toBe(true);
+    const text = result.content[0].text;
+    expect(text).toContain("REVISION_MISMATCH");
+    expect(text).toMatch(/"revision":\s*"[a-f0-9]{64}"/);
+    expect(text).toContain('"lines":');
+    expect(text).toContain('"blocks":');
+    expect(updateItem).not.toHaveBeenCalled();
+  });
+
+  it("happy path: replace_block applies and response carries match_tiers", async () => {
+    const handler = getEditHandler();
+    const current = makeItem({ content: "Old.", origin: "web" });
+    getItem.mockResolvedValue(current);
+    updateItem.mockResolvedValue(makeItem({ content: "New body.", origin: "web" }));
+
+    const result = await handler({
+      id: current.id,
+      revision: computeRevisionForTest("Old."),
+      ops: [{ kind: "replace_block", handle: "b0", content: "New body." }],
+    });
+    expect(result.isError).toBeUndefined();
+    expect(updateItem).toHaveBeenCalledWith(current.id, { content: "New body." });
+    const text = result.content[0].text;
+    expect(text).toContain("Note edited successfully.");
+    expect(text).toMatch(/"match_tiers":\s*\[\s*null\s*\]/);
+  });
+
+  it("replace_text Tier 2: match_tiers includes punctuation_normalized", async () => {
+    const handler = getEditHandler();
+    const current = makeItem({ content: "結束：完。", origin: "web" });
+    getItem.mockResolvedValue(current);
+    updateItem.mockResolvedValue(makeItem({ content: "結束完成。", origin: "web" }));
+
+    const result = await handler({
+      id: current.id,
+      revision: computeRevisionForTest("結束：完。"),
+      ops: [{ kind: "replace_text", old: "結束:完.", new: "結束完成。" }],
+    });
+    expect(result.isError).toBeUndefined();
+    const text = result.content[0].text;
+    expect(text).toContain('"punctuation_normalized"');
+  });
+
+  it("propagates SparkleApiError from getItem", async () => {
+    const handler = getEditHandler();
+    getItem.mockRejectedValue(new client.SparkleApiError("Not Found", 404));
+
+    const result = await handler({
+      id: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+      revision: VALID_REV,
+      ops: [{ kind: "replace_text", old: "x", new: "y" }],
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain("404");
+  });
+
+  it("NO_MATCH surfaces via tool layer with rendered failure (no updateItem call)", async () => {
+    const handler = getEditHandler();
+    const item = makeItem({ content: "Hello.", origin: "web" });
+    getItem.mockResolvedValue(item);
+
+    const result = await handler({
+      id: item.id,
+      revision: computeRevisionForTest("Hello."),
+      ops: [{ kind: "replace_text", old: "completely missing", new: "X" }],
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain("NO_MATCH");
+    expect(updateItem).not.toHaveBeenCalled();
+  });
+
+  it("AMBIGUOUS_MATCH surfaces via tool layer with locations payload", async () => {
+    const handler = getEditHandler();
+    const item = makeItem({ content: "foo bar foo baz", origin: "web" });
+    getItem.mockResolvedValue(item);
+
+    const result = await handler({
+      id: item.id,
+      revision: computeRevisionForTest("foo bar foo baz"),
+      ops: [{ kind: "replace_text", old: "foo", new: "X" }],
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain("AMBIGUOUS_MATCH");
+    expect(result.content[0].text).toContain("locations");
+    expect(updateItem).not.toHaveBeenCalled();
+  });
+
+  it("INVALID_HANDLE surfaces via tool layer with valid_handles list", async () => {
+    const handler = getEditHandler();
+    const item = makeItem({ content: "Para.", origin: "web" });
+    getItem.mockResolvedValue(item);
+
+    const result = await handler({
+      id: item.id,
+      revision: computeRevisionForTest("Para."),
+      ops: [{ kind: "replace_block", handle: "b99", content: "X" }],
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain("INVALID_HANDLE");
+    expect(result.content[0].text).toContain("valid_handles");
+    expect(updateItem).not.toHaveBeenCalled();
+  });
+});
+
+// Helper for tests that need to compute a revision matching getItem's
+// returned content. Mirrors edit/revision.ts but avoids importing client
+// internals here.
+import { createHash } from "node:crypto";
+function computeRevisionForTest(content: string): string {
+  return createHash("sha256").update(content, "utf8").digest("hex");
+}
 
 describe("sparkle_advance_note", () => {
   function getAdvanceHandler() {
@@ -900,6 +1062,33 @@ describe("strict schema validation", () => {
         `${file} has raw inputSchema — must use z.object({...}).strict()`,
       ).toBeNull();
     }
+  });
+
+  it("sparkle_update_note rejects legacy content/old_content with V2 cutover hint (DX-D4)", () => {
+    // We can't trigger MCP-level zod parsing through the makeMockServer helper
+    // (it stores raw handlers), but we can read the schema source to verify
+    // both fields are listed with `z.never()` + a migration hint pointing to
+    // sparkle_edit_note. Without this, .strict() would surface a generic
+    // "unrecognized key" error and the LLM would have no migration guidance.
+    const writeSrc = readToolSource("write.ts");
+    expect(writeSrc).toMatch(/content:\s*z\s*\.\s*never\(/);
+    expect(writeSrc).toMatch(/old_content:\s*z\s*\.\s*never\(/);
+    expect(writeSrc).toMatch(/RETIRED in v2.*sparkle_edit_note/i);
+  });
+
+  it("sparkle_edit_note ops schema is a zod discriminated union keyed on `kind` (M9)", async () => {
+    // Runtime introspection of the PRODUCTION schema (not a test-local clone).
+    // A swap from `z.discriminatedUnion` to a manual `z.union([z.object(...)])`
+    // would break the discriminator metadata + the bad-kind error shape.
+    const { editOpSchema } = await import("../tools/write.js");
+    expect(editOpSchema._zod.def.discriminator).toBe("kind");
+    expect(editOpSchema._zod.def.options).toHaveLength(6);
+
+    const result = editOpSchema.safeParse({ kind: "not_a_kind", handle: "b0", content: "x" });
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    const issues = JSON.stringify(result.error.issues);
+    expect(issues).toMatch(/invalid_(union|literal_value|enum|value)/i);
   });
 });
 

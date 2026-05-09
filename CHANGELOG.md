@@ -1,5 +1,48 @@
 # Changelog
 
+## [1.5.0.0] - 2026-05-08
+
+### MCP edit primitive v2 — `sparkle_edit_note`
+
+LLM-driven content editing on long Chinese passages used to fail unpredictably: `sparkle_update_note(old_content, content)` did byte-exact find-and-replace, but autoregressive token sampling routinely substituted half-width ASCII (`: ; ( ) ,`) for the full-width punctuation (`：；（），`) the LLM had just read seconds earlier. Each `NO_MATCH` cost a round-trip and pushed agents toward riskier full-content replaces.
+
+v2 redesigns the edit primitive around how LLMs actually behave: address blocks/lines symbolically, fall back to a deterministic punctuation fold for surgical text changes, and apply multi-op batches atomically against a snapshot pinned by `revision`.
+
+### Added
+
+- **`sparkle_edit_note(id, revision, ops[])`** — new MCP tool, six op kinds applied atomically:
+  - `replace_block(handle, content)` — swap a paragraph/heading/list/table/code block by opaque handle
+  - `replace_lines(start_line, end_line, content)` — rewrite an inclusive line range
+  - `replace_text(old, new)` — Tier 1 byte-exact; Tier 2 retries with a curated CJK ↔ ASCII punctuation fold (`： → :`, `； → ;`, `（ → (`, `） → )`, `， → ,`, `。 → .`, `！ → !`, `？ → ?`, `、 → ,`) and excludes fenced + inline code regions from candidates
+  - `delete_block(handle)` / `delete_lines(start_line, end_line)`
+  - `insert_after_line(line, content)` — `line=0` prepends
+- **`sparkle_get_note` / `sparkle_create_note` responses** now carry an `edit-context` fenced block containing `revision` (sha256 hex), `lines` (1-indexed line array), and `blocks` (handle + line range + type + 80-char preview for every top-level markdown block). For vault-origin items all three are `null` (vault `.md` is the source of truth — use `sparkle_write_obsidian`). The `sparkle_edit_note` success response carries the same payload plus per-op `match_tiers`, so chained edits never need a re-fetch.
+- **`mcp-server/src/edit/`** — six new modules (`revision.ts`, `normalize.ts`, `block-parser.ts`, `fuzzy.ts`, `errors.ts`, `ops.ts`) plus `mcp-server/src/lib/vault-readonly.ts` shared helper. 80 unit tests in `__tests__/edit/` (225 total mcp-server tests) cover surrogate pairs, CJK-punct invariant, code-block exclusion, multi-op atomicity, EOF newline rule, empty-content bootstrap, GFM tables, mocked-throw `PARSE_ERROR`, and `REVISION_MISMATCH` recovery.
+- **Structured `EditFailure` payloads** — `VAULT_READONLY` (canonical shape via shared helper), `REVISION_MISMATCH` (returns fresh `revision` + `lines` + `blocks`), `NO_MATCH` (closest_match + char-level diff), `AMBIGUOUS_MATCH` (line locations + match_tier), `INVALID_HANDLE` (lists valid_handles), `INVALID_RANGE`, `EMPTY_OPS` / `TOO_MANY_OPS` / `OVERLAPPING_OPS` / `DUPLICATE_OPS`, `CONTENT_TOO_LARGE` (delta_per_op), `PARSE_ERROR` — every variant carries the recovery context the LLM needs without an extra round-trip.
+
+### Changed
+
+- **`sparkle_update_note` is metadata-only.** The `content` and `old_content` parameters were removed (zod `.strict()` rejects them). All content edits route through `sparkle_edit_note`. Metadata fields (title, tags, status, type, priority, due, aliases, source, linked_note_id, category_id, is_private, paused, paused_context) are unchanged.
+- **`mcp-server/src/docs/instructions.ts`** — content editing section rewritten with the magical-moment headline, op-choice safety ranking (`replace_block` > `replace_lines` > `replace_text`), decision table, six worked examples (one per op kind), and three error-recovery worked examples (REVISION_MISMATCH, AMBIGUOUS_MATCH, NO_MATCH).
+- **MCP server version bumped to 2.0.0** (`mcp-server/package.json`). Three new direct dependencies: `mdast-util-from-markdown` (markdown AST parser; chosen over `remark-parse` to avoid a unified-runtime dep), plus `mdast-util-gfm-table` + `micromark-extension-gfm-table` so `| a | b |` table syntax actually emits `type: "table"` blocks rather than getting silently classified as paragraphs.
+
+### Migration notes
+
+- **Single user, clean cutover.** Sparkle's only MCP consumers are the user's own Claude.ai connector and Claude Code. After deploying:
+  1. Build the dist (`cd mcp-server && npm run build`) — already part of the standard release pipeline.
+  2. Restart Claude Code sessions to pick up the stdio MCP changes.
+  3. The Claude.ai connector re-handshakes automatically; no need to delete/recreate.
+- **In-flight `sparkle_update_note(content, …)` calls** return zod "Unrecognized key" errors. The tool description now points to `sparkle_edit_note`; LLMs reading the description self-correct.
+- **No DB migration**, no schema change. This is an MCP-layer-only change.
+
+### TOCTOU note (acknowledged)
+
+There is a small window between `applyEdits`'s revision check and the REST `PATCH /api/items/:id` persist call where a concurrent web UI write could land and be silently overwritten. Single-developer single-machine usage means this is rare; closing it properly requires server-side `If-Match` semantics (deferred). If real-world race incidents appear it becomes a follow-up issue.
+
+### Markdown parser DoS surface (known limitation)
+
+`mdast-util-from-markdown` exhibits quadratic backtracking on pathological alternating-emphasis input (e.g. `*_*_*_…` × 25k chars hangs the event loop ~12s). Single-user PKM threat model: the only realistic source is the user themselves, who would feel the slowness and stop. A worker-thread sandbox + timeout would close the gap; deferred since multi-tenant exposure does not exist for self-hosted Sparkle.
+
 ## [1.4.5.0] - 2026-04-30
 
 ### Removed

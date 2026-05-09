@@ -58,6 +58,22 @@ jobs:
       - name: Type-check (server)
         run: npx tsc --noEmit -p tsconfig.server.json
 
+      - name: Install MCP server deps
+        working-directory: mcp-server
+        run: npm ci
+
+      - name: Type-check (MCP server)
+        working-directory: mcp-server
+        run: npx tsc --noEmit
+
+      - name: Test (MCP server)
+        working-directory: mcp-server
+        run: npm test
+
+      - name: Build (MCP server)
+        working-directory: mcp-server
+        run: npm run build
+
       - name: Build
         run: npm run build
 
