@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.5.0.1] - 2026-05-13
+
+### Fixed
+
+- **`sparkle_edit_note` mid-content newline merge.** `insert_after_line` and `replace_lines` silently byte-merged the last line of `content` with the following line when the splice point wasn't at EOF and `content` didn't end with `\n` (e.g. `insert_after_line(1, "L1\nL2")` on `"a\nb\nc"` produced `"a\nL1\nL2b\nc"` instead of `"a\nL1\nL2\nb\nc"`). `applyResolved` now extends the existing EOF newline rule symmetrically: for each distinct mid-content splice range `(start, end)` where `end < content.length`, the LAST source-order eligible op gets `\n` appended. Stacked inserts at the same offset preserve caller-intended concatenation; mixed-kind ops at the same start with different right-edges each get their own auto-terminate via full-range keying. `replace_block` / `delete_block` / `delete_lines` / `replace_text` are excluded — `replace_text` retains its byte-exact contract. `CONTENT_TOO_LARGE` border can shift by ≤ 1 byte per distinct mid-content range; the hint now mentions the auto-append byte budget so chained LLM trimming reconciles. **CRLF caveat:** notes authored with `\r\n` line endings receive a bare `\n` auto-append on mid-content splices, producing mixed line endings — first-class CRLF support is deferred.
+
+### Upgrade Note
+
+**Action required:** Claude.ai connector users must disconnect and reconnect after this release to refresh the tool schema describes. Claude Code stdio sessions pick up the rebuilt `dist/` automatically on next launch. Stale connectors will operate on the old `instructions.ts` (no auto-append guidance) while the new `ops.ts` rule is active — producing silently extra-terminated content with no detection signal.
+
 ## [1.5.0.0] - 2026-05-08
 
 ### MCP edit primitive v2 — `sparkle_edit_note`
