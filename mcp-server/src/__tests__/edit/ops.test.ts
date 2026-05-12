@@ -30,13 +30,13 @@ describe("applyEdits — happy paths", () => {
     expect(r.matchTiers).toEqual([undefined]);
   });
 
-  it("replace_lines on a multi-line note (range includes trailing \\n; caller controls separator)", () => {
+  it("replace_lines on a multi-line note (range includes trailing \\n; trailing \\n on replacement is optional, tool auto-terminates)", () => {
     const content = "line 1\nline 2\nline 3";
     const r = expectSuccess(
       applyEdits({
         content,
         expectedRevision: rev(content),
-        ops: [{ kind: "replace_lines", start_line: 2, end_line: 2, content: "new line 2\n" }],
+        ops: [{ kind: "replace_lines", start_line: 2, end_line: 2, content: "new line 2" }],
       }),
     );
     expect(r.newContent).toBe("line 1\nnew line 2\nline 3");
@@ -225,14 +225,21 @@ describe("applyEdits — error paths", () => {
   it("INVALID_RANGE for out-of-bounds line numbers", () => {
     const content = "a\nb";
     const cases: Array<{ ops: EditOp[]; reasonHint: string }> = [
-      { ops: [{ kind: "replace_lines", start_line: 0, end_line: 1, content: "X" }], reasonHint: "≥ 1" },
-      { ops: [{ kind: "replace_lines", start_line: 3, end_line: 3, content: "X" }], reasonHint: "exceeds" },
-      { ops: [{ kind: "replace_lines", start_line: 2, end_line: 1, content: "X" }], reasonHint: "<" },
+      {
+        ops: [{ kind: "replace_lines", start_line: 0, end_line: 1, content: "X" }],
+        reasonHint: "≥ 1",
+      },
+      {
+        ops: [{ kind: "replace_lines", start_line: 3, end_line: 3, content: "X" }],
+        reasonHint: "exceeds",
+      },
+      {
+        ops: [{ kind: "replace_lines", start_line: 2, end_line: 1, content: "X" }],
+        reasonHint: "<",
+      },
     ];
     for (const c of cases) {
-      const r = expectFailure(
-        applyEdits({ content, expectedRevision: rev(content), ops: c.ops }),
-      );
+      const r = expectFailure(applyEdits({ content, expectedRevision: rev(content), ops: c.ops }));
       expect(r.failure.code).toBe("INVALID_RANGE");
       if (r.failure.code !== "INVALID_RANGE") return;
       expect(r.failure.reason).toContain(c.reasonHint);
@@ -402,11 +409,12 @@ describe("applyEdits — atomicity invariants", () => {
         ops: [{ kind: "replace_lines", start_line: 2, end_line: 2, content: "NEW" }],
       }),
     );
-    // Line 2 spans from offset 3 (after "a\r\n") to offset 6 (start of "c").
-    // Replacing it gives "a\r\nNEW" + "c" = "a\r\nNEWc" because line 2's
-    // range is [3, 6) — the \r is part of line 2's leading content.
-    // Actually [3, 6) in "a\r\nb\r\nc" = "b\r\n", so "a\r\n" + "NEW" + "c".
-    expect(r.newContent).toBe("a\r\nNEWc");
+    // Mid-content `replace_lines` auto-terminates with bare `\n` even on
+    // CRLF-source notes; produces mixed line endings (documented limitation —
+    // CRLF is not first-class in lineStarts, see design Risk #3). Line 2's
+    // range is [3, 6) — "b\r\n". Replacement "NEW" auto-appends \n →
+    // "a\r\n" + "NEW\n" + "c" = "a\r\nNEW\nc".
+    expect(r.newContent).toBe("a\r\nNEW\nc");
   });
 
   it("vault check is the caller's responsibility — applyEdits only fails on revision/range/etc", () => {
@@ -459,7 +467,7 @@ describe("applyEdits — atomicity invariants", () => {
     expect(r.newContent).toBe("abc\ndef");
   });
 
-  it("stacked inserts at non-EOF same offset preserve source-array order", () => {
+  it("stacked inserts at non-EOF same offset preserve source-array order AND auto-terminate the last source op", () => {
     const content = "abc\ndef";
     const r = expectSuccess(
       applyEdits({
@@ -472,8 +480,10 @@ describe("applyEdits — atomicity invariants", () => {
         ],
       }),
     );
-    // Inserts at start-of-line-2; source order X→Y→Z appears before "def".
-    expect(r.newContent).toBe("abc\nXYZdef");
+    // LAST-only-append mirrors the EOF rule's FIRST-only-prepend — stacked
+    // X/Y/Z stay concatenated, but the trailing edge gets a '\n' separator
+    // so the next line ('def') doesn't byte-merge with Z.
+    expect(r.newContent).toBe("abc\nXYZ\ndef");
   });
 
   it("Tier-1 overlapping matches all surface in AMBIGUOUS_MATCH locations", () => {
@@ -489,6 +499,261 @@ describe("applyEdits — atomicity invariants", () => {
     expect(r.failure.code).toBe("AMBIGUOUS_MATCH");
     if (r.failure.code !== "AMBIGUOUS_MATCH") return;
     expect(r.failure.locations.length).toBeGreaterThanOrEqual(3);
+  });
+});
+
+describe("applyEdits — mid-content newline rule", () => {
+  it("insert_after_line at mid-content, single line, no trailing \\n — auto-appends", () => {
+    const content = "a\nb\nc";
+    const r = expectSuccess(
+      applyEdits({
+        content,
+        expectedRevision: rev(content),
+        ops: [{ kind: "insert_after_line", line: 1, content: "X" }],
+      }),
+    );
+    expect(r.newContent).toBe("a\nX\nb\nc");
+  });
+
+  it("insert_after_line at mid-content, multi-line, no trailing \\n — auto-appends", () => {
+    const content = "a\nb\nc";
+    const r = expectSuccess(
+      applyEdits({
+        content,
+        expectedRevision: rev(content),
+        ops: [{ kind: "insert_after_line", line: 1, content: "L1\nL2" }],
+      }),
+    );
+    expect(r.newContent).toBe("a\nL1\nL2\nb\nc");
+  });
+
+  it("insert_after_line at mid-content with trailing \\n — no double-append", () => {
+    const content = "a\nb\nc";
+    const r = expectSuccess(
+      applyEdits({
+        content,
+        expectedRevision: rev(content),
+        ops: [{ kind: "insert_after_line", line: 1, content: "X\n" }],
+      }),
+    );
+    expect(r.newContent).toBe("a\nX\nb\nc");
+  });
+
+  it("insert_after_line(0) on non-empty content, no trailing \\n — auto-appends", () => {
+    const content = "a\nb\nc";
+    const r = expectSuccess(
+      applyEdits({
+        content,
+        expectedRevision: rev(content),
+        ops: [{ kind: "insert_after_line", line: 0, content: "X" }],
+      }),
+    );
+    expect(r.newContent).toBe("X\na\nb\nc");
+  });
+
+  it("replace_lines at mid-content, no trailing \\n — auto-appends", () => {
+    const content = "a\nb\nc";
+    const r = expectSuccess(
+      applyEdits({
+        content,
+        expectedRevision: rev(content),
+        ops: [{ kind: "replace_lines", start_line: 2, end_line: 2, content: "X" }],
+      }),
+    );
+    expect(r.newContent).toBe("a\nX\nc");
+  });
+
+  it("replace_lines covering to last line — no auto-append (range[1] === content.length)", () => {
+    const content = "a\nb\nc";
+    const r = expectSuccess(
+      applyEdits({
+        content,
+        expectedRevision: rev(content),
+        ops: [{ kind: "replace_lines", start_line: 2, end_line: 3, content: "X" }],
+      }),
+    );
+    expect(r.newContent).toBe("a\nX");
+  });
+
+  it("replace_lines with empty replacement — delete-like, no \\n added", () => {
+    const content = "a\nb\nc";
+    const r = expectSuccess(
+      applyEdits({
+        content,
+        expectedRevision: rev(content),
+        ops: [{ kind: "replace_lines", start_line: 2, end_line: 2, content: "" }],
+      }),
+    );
+    expect(r.newContent).toBe("a\nc");
+  });
+
+  it("replace_block is NOT affected by the mid-content rule (kind filter)", () => {
+    const content = "Para A.\n\nPara B.";
+    const r = expectSuccess(
+      applyEdits({
+        content,
+        expectedRevision: rev(content),
+        ops: [{ kind: "replace_block", handle: "b0", content: "X" }],
+      }),
+    );
+    // mdast block.offset_range excludes the trailing \n\n separator, so the
+    // replace_block range does NOT touch the next-line boundary. Auto-append
+    // would inject an extra blank line — kind filter prevents that.
+    expect(r.newContent).toBe("X\n\nPara B.");
+  });
+
+  it("mixed mid-content batch: replace_lines + insert_after_line at non-coincident offsets both auto-terminate", () => {
+    const content = "a\nb\nc\nd";
+    const r = expectSuccess(
+      applyEdits({
+        content,
+        expectedRevision: rev(content),
+        ops: [
+          { kind: "replace_lines", start_line: 2, end_line: 2, content: "X" },
+          { kind: "insert_after_line", line: 3, content: "Y" },
+        ],
+      }),
+    );
+    expect(r.newContent).toBe("a\nX\nc\nY\nd");
+  });
+
+  it("single-line note replace, range covers all — no auto-append (range[1] === content.length)", () => {
+    const content = "abc";
+    const r = expectSuccess(
+      applyEdits({
+        content,
+        expectedRevision: rev(content),
+        ops: [{ kind: "replace_lines", start_line: 1, end_line: 1, content: "X" }],
+      }),
+    );
+    expect(r.newContent).toBe("X");
+  });
+
+  it("mixed-kind ops at same range[0] — both auto-terminate via full-range keying", () => {
+    // insert_after_line(1) → range [2,2]; replace_lines(2,2) → range [2,4].
+    // Same start, different end. Keying by (start,end) puts each in its own
+    // bucket so both get their own auto-terminate.
+    const content = "a\nb\nc";
+    const r = expectSuccess(
+      applyEdits({
+        content,
+        expectedRevision: rev(content),
+        ops: [
+          { kind: "insert_after_line", line: 1, content: "Y" },
+          { kind: "replace_lines", start_line: 2, end_line: 2, content: "X" },
+        ],
+      }),
+    );
+    expect(r.newContent).toBe("a\nY\nX\nc");
+  });
+
+  it("stacked mixed-termination inserts at same offset — last source op's termination wins", () => {
+    // Regression for E1: the endsWith filter must run AFTER bucket selection,
+    // not inside the bucket loop. Otherwise the higher-index already-terminated
+    // op gets excluded, the lower-index unterminated op wins the bucket and
+    // gets a spurious \n — splitting the caller's intended XY concatenation.
+    const content = "abc\ndef";
+    const r = expectSuccess(
+      applyEdits({
+        content,
+        expectedRevision: rev(content),
+        ops: [
+          { kind: "insert_after_line", line: 1, content: "X" },
+          { kind: "insert_after_line", line: 1, content: "Y\n" },
+        ],
+      }),
+    );
+    expect(r.newContent).toBe("abc\nXY\ndef");
+  });
+
+  it("replace_text byte-exact contract — line-boundary merge IS the contract (rule does NOT extend)", () => {
+    // Pins Reviewer Concern #1 / Open Question #1: replace_text writes its
+    // `new` byte-exact in place of `old`. Caller controls the separator.
+    const content = "a\nb\nc";
+    const r = expectSuccess(
+      applyEdits({
+        content,
+        expectedRevision: rev(content),
+        ops: [{ kind: "replace_text", old: "b\n", new: "X" }],
+      }),
+    );
+    expect(r.newContent).toBe("a\nXc");
+  });
+
+  it("delete_lines at mid-content does NOT auto-append (kind filter)", () => {
+    const content = "a\nb\nc\nd";
+    const r = expectSuccess(
+      applyEdits({
+        content,
+        expectedRevision: rev(content),
+        ops: [{ kind: "delete_lines", start_line: 2, end_line: 2 }],
+      }),
+    );
+    expect(r.newContent).toBe("a\nc\nd");
+  });
+
+  it("delete_block at mid-content does NOT auto-append (kind filter)", () => {
+    // delete_block has empty replacement (guard 3) AND wrong kind (guard 1) —
+    // belt + suspenders. Either filter alone would exclude it. Pure splice
+    // semantics — no \n injected at the block right-edge.
+    const content = "Para A.\n\nPara B.\n\nPara C.";
+    const r = expectSuccess(
+      applyEdits({
+        content,
+        expectedRevision: rev(content),
+        ops: [{ kind: "delete_block", handle: "b1" }],
+      }),
+    );
+    expect(r.newContent).toBe("Para A.\n\n\n\nPara C.");
+  });
+
+  it("3-stack unterminated mid-content inserts — only LAST gets auto-append", () => {
+    // Regression: pins the bucket-selection invariant at depth > 2. A reversed
+    // `r.index > prev.index` comparison could still pass the 2-op test by
+    // chance; 3-stack makes the source-order-wins rule explicit.
+    const content = "abc\ndef";
+    const r = expectSuccess(
+      applyEdits({
+        content,
+        expectedRevision: rev(content),
+        ops: [
+          { kind: "insert_after_line", line: 1, content: "X" },
+          { kind: "insert_after_line", line: 1, content: "Y" },
+          { kind: "insert_after_line", line: 1, content: "Z" },
+        ],
+      }),
+    );
+    expect(r.newContent).toBe("abc\nXYZ\ndef");
+  });
+
+  it("CONTENT_TOO_LARGE auto-append boundary — extra byte from rule pushes over cap", () => {
+    // content + replacement size each tuned so post-edit length === MAX
+    // WITHOUT auto-append, MAX+1 WITH. Pins the contract:
+    //   - proposed_length is measured POST-mutation (reflects auto-append),
+    //   - delta_per_op reads from pre-mutation `resolved` (does NOT),
+    //   - hint must mention the auto-append byte budget so chained LLM
+    //     trimming reconciles `proposed_length - current_length` vs
+    //     `sum(delta_per_op)`.
+    // Layout: "a\n" + ("y" × k) + "\nz" with k = MAX - 4 → content.length == MAX.
+    // replace_lines(2,2) takes range [2, MAX-1] (size MAX-3); replacement
+    // "X"*(MAX-3) has same size → without rule: post length = MAX (passes).
+    // Auto-append adds 1 byte → post length = MAX+1 → fails.
+    const k = MAX_CONTENT_LENGTH - 4;
+    const content = "a\n" + "y".repeat(k) + "\nz";
+    const replacement = "X".repeat(MAX_CONTENT_LENGTH - 3);
+    const r = expectFailure(
+      applyEdits({
+        content,
+        expectedRevision: rev(content),
+        ops: [{ kind: "replace_lines", start_line: 2, end_line: 2, content: replacement }],
+      }),
+    );
+    expect(r.failure.code).toBe("CONTENT_TOO_LARGE");
+    if (r.failure.code !== "CONTENT_TOO_LARGE") return;
+    expect(r.failure.proposed_length).toBe(MAX_CONTENT_LENGTH + 1);
+    expect(r.failure.delta_per_op[0]!.delta).toBe(0);
+    // Hint must mention the auto-append byte budget so LLM trimming reconciles.
+    expect(r.failure.hint).toMatch(/mid-content|auto/);
   });
 });
 

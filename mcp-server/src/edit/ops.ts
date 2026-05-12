@@ -330,6 +330,27 @@ function applyResolved(content: string, resolved: ResolvedOp[]): string {
     }
   }
 
+  // Mid-content newline rule (symmetric to the EOF rule above): for each
+  // distinct mid-content splice (range[1] < content.length), append '\n' to
+  // the LAST source-order eligible op so its tail doesn't byte-merge with
+  // the next line. Keying by full (start,end) range collapses stacked
+  // inserts (shared right-edge) into one bucket while keeping mixed-kind
+  // ops at the same start as independent splices. endsWith() check runs
+  // AFTER bucket selection so an already-terminated higher-index op still
+  // wins, preventing over-termination of a lower-index op.
+  const midByRange = new Map<string, ResolvedOp>();
+  for (const r of ops) {
+    if (r.op.kind !== "insert_after_line" && r.op.kind !== "replace_lines") continue;
+    if (r.range[1] >= content.length) continue;
+    if (r.replacement.length === 0) continue;
+    const key = `${r.range[0]}:${r.range[1]}`;
+    const prev = midByRange.get(key);
+    if (!prev || r.index > prev.index) midByRange.set(key, r);
+  }
+  for (const r of midByRange.values()) {
+    if (!r.replacement.endsWith("\n")) r.replacement = r.replacement + "\n";
+  }
+
   // Apply in descending start-position order. Tie-break:
   //   non-zero range before zero-width insert at same start (E4 — replace
   //   applies first so insert lands BEFORE the replacement in output).
