@@ -207,7 +207,7 @@ export function contentTooLarge(args: {
   return {
     ...args,
     code: "CONTENT_TOO_LARGE",
-    hint: `The combined post-edit content exceeds the ${args.max}-character note cap. Trim the largest contributor in delta_per_op, then retry.`,
+    hint: `The combined post-edit content exceeds the ${args.max}-character note cap. Trim the largest contributor in delta_per_op, then retry. 工具可能在 replace_lines / insert_after_line 的中段 splice 自動補 \\n（每個 distinct mid-content range 1 byte，不計入 delta_per_op）— trimming 時請保留這 1 byte 餘裕。`,
   };
 }
 

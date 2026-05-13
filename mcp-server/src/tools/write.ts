@@ -30,7 +30,12 @@ export const editOpSchema = z.discriminatedUnion("kind", [
     kind: z.literal("replace_lines"),
     start_line: z.number().int().min(1).describe("First line to replace (1-indexed, inclusive)"),
     end_line: z.number().int().min(1).describe("Last line to replace (1-indexed, inclusive)"),
-    content: z.string().max(MAX_CONTENT_LENGTH).describe("Replacement text for the line range"),
+    content: z
+      .string()
+      .max(MAX_CONTENT_LENGTH)
+      .describe(
+        "Replacement text for the line range. 中段替換時工具會自動在 content 結尾補 \\n（empty / 已含 \\n / EOF 則略過）",
+      ),
   }),
   z.object({
     kind: z.literal("replace_text"),
@@ -41,7 +46,12 @@ export const editOpSchema = z.discriminatedUnion("kind", [
       .describe(
         "Text to find (Tier 1: byte-exact; Tier 2: CJK ↔ ASCII punctuation fold if Tier 1 fails)",
       ),
-    new: z.string().max(MAX_CONTENT_LENGTH).describe("Replacement text (empty string deletes the match)"),
+    new: z
+      .string()
+      .max(MAX_CONTENT_LENGTH)
+      .describe(
+        "Replacement text (empty string deletes the match). replace_text 不會自動補 \\n — byte-exact 契約，由 caller 控制 separator",
+      ),
   }),
   z.object({
     kind: z.literal("delete_block"),
@@ -59,7 +69,12 @@ export const editOpSchema = z.discriminatedUnion("kind", [
       .int()
       .min(0)
       .describe("Line to insert after (1-indexed). Use line=0 to prepend at the top of the note."),
-    content: z.string().max(MAX_CONTENT_LENGTH).describe("Text to insert"),
+    content: z
+      .string()
+      .max(MAX_CONTENT_LENGTH)
+      .describe(
+        "Text to insert. 中段插入時工具會自動在 content 結尾補 \\n（empty / 已含 \\n / EOF 則略過；EOF 由現有規則 prepend）",
+      ),
   }),
 ]);
 
@@ -90,7 +105,11 @@ Returns: The created item with all fields including generated ID and timestamps.
       inputSchema: z
         .object({
           title: z.string().min(1).max(500).describe("Note title"),
-          content: z.string().max(MAX_CONTENT_LENGTH).optional().describe("Note content (markdown)"),
+          content: z
+            .string()
+            .max(MAX_CONTENT_LENGTH)
+            .optional()
+            .describe("Note content (markdown)"),
           tags: z.array(z.string().min(1).max(50)).max(20).optional().describe("Tags"),
           status: z
             .enum(["fleeting", "developing", "permanent", "active", "draft"])
@@ -110,7 +129,11 @@ Returns: The created item with all fields including generated ID and timestamps.
             .optional()
             .describe("Due date YYYY-MM-DD (todo only)"),
           source: z.string().max(2000).optional().describe("Reference URL"),
-          aliases: z.array(z.string().min(1).max(200)).max(10).optional().describe("Alternative names"),
+          aliases: z
+            .array(z.string().min(1).max(200))
+            .max(10)
+            .optional()
+            .describe("Alternative names"),
           linked_note_id: z.string().uuid().optional().describe("UUID of linked note (todo only)"),
           category_id: z
             .string()
@@ -118,10 +141,7 @@ Returns: The created item with all fields including generated ID and timestamps.
             .nullable()
             .optional()
             .describe("Category UUID to assign (null to clear)"),
-          is_private: z
-            .boolean()
-            .optional()
-            .describe("標記為私密筆記 (default: false)"),
+          is_private: z.boolean().optional().describe("標記為私密筆記 (default: false)"),
         })
         .strict(),
       annotations: {
@@ -206,7 +226,11 @@ Side effects:
         .object({
           id: z.string().uuid().describe("Item UUID"),
           title: z.string().min(1).max(500).optional().describe("New title"),
-          tags: z.array(z.string().min(1).max(50)).max(20).optional().describe("New tags (replaces all)"),
+          tags: z
+            .array(z.string().min(1).max(50))
+            .max(20)
+            .optional()
+            .describe("New tags (replaces all)"),
           status: z
             .enum([
               "fleeting",
@@ -258,14 +282,8 @@ Side effects:
             .nullable()
             .optional()
             .describe("Category UUID (null to clear)"),
-          is_private: z
-            .boolean()
-            .optional()
-            .describe("標記為私密筆記 (true to mark as private)"),
-          paused: z
-            .boolean()
-            .optional()
-            .describe("暫停/恢復項目"),
+          is_private: z.boolean().optional().describe("標記為私密筆記 (true to mark as private)"),
+          paused: z.boolean().optional().describe("暫停/恢復項目"),
           paused_context: z
             .string()
             .max(500)
@@ -429,10 +447,11 @@ Returns: updated item + fresh revision + fresh lines + fresh blocks + match_tier
           revision: result.newRevision,
           lines: result.newLines,
           blocks: result.newBlocks.map(blockToPayload),
-          match_tiers: result.matchTiers.map(t => t ?? null),
+          match_tiers: result.matchTiers.map((t) => t ?? null),
         };
         for (const tier of result.matchTiers) {
-          if (tier) logger.info({ id, match_tier: tier }, "sparkle_edit_note replace_text resolved");
+          if (tier)
+            logger.info({ id, match_tier: tier }, "sparkle_edit_note replace_text resolved");
         }
         const text = `Note edited successfully.\n\n${renderItemWithEditContext(updated, ctx)}`;
         return { content: [{ type: "text", text }] };

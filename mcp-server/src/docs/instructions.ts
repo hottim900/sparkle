@@ -79,6 +79,9 @@ export const SPARKLE_INSTRUCTIONS = `
 | 刪除行範圍 | \`delete_lines\` | \`{ kind: "delete_lines", start_line: 12, end_line: 14 }\` |
 | 新增內容 | \`insert_after_line\` | 在第 5 行後加段落；line=0 表 prepend |
 
+\`replace_lines\` 與 \`insert_after_line\` 的 content 在中段插入時，工具會自動在結尾補 \`\\n\`（已以 \`\\n\` 結尾、或內容為空、或 splice 在 EOF 都會跳過）；EOF 插入則沿用既有規則自動 prepend \`\\n\`。\`replace_text\` / \`replace_block\` / \`delete_*\` 不受此規則影響。
+例：\`insert_after_line(1, "L1\\nL2")\` on \`"a\\nb\\nc"\` → \`"a\\nL1\\nL2\\nb\\nc"\`（L2 不會跟下一行 byte-merge）。
+
 ### 安全性排序（重要）
 
 \`replace_block\` > \`replace_lines\` > \`replace_text\`
@@ -102,6 +105,7 @@ sparkle_edit_note({
 sparkle_edit_note({
   id: "...", revision: "abcd1234...",
   ops: [{ kind: "replace_lines", start_line: 8, end_line: 15, content: "重新組織後的段落..." }]
+  // tool 會在中段替換時自動補 \\n，所以結尾不需要 \\n
 })
 \`\`\`
 
@@ -122,6 +126,7 @@ sparkle_edit_note({
   ops: [
     { kind: "delete_block", handle: "b5" },
     { kind: "insert_after_line", line: 0, content: "## 新前言\\n..." }
+    // 同上：中段 insert_after_line 結尾不需要 \\n
   ]
 })
 \`\`\`
