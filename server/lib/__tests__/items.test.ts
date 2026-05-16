@@ -532,11 +532,13 @@ describe("Data Access Layer", () => {
         expect(results).toHaveLength(0);
       });
 
-      it("does NOT fall back to FTS when id: prefix produces no match", () => {
-        // 'meeting' would normally FTS-match this row's title; with id: syntax
-        // we want strict ID semantics — no accidental keyword fallback.
-        createItem(db, { title: "Meeting notes containing the word meeting" });
-        const results = searchItems(sqlite, db, "id:meeting1");
+      it("does NOT fall back to FTS when id: prefix is valid hex but matches no ID", () => {
+        // The prefix must be valid hex (passes HEX_PREFIX_RE) and the title
+        // must contain it — only then can we observe FTS fallback. The earlier
+        // 'id:meeting1' phrasing was a tautology: 'meeting1' was rejected up-front
+        // by the hex guard, never reaching the FTS-skip code path.
+        createItem(db, { title: "cafedead is in my title" });
+        const results = searchItems(sqlite, db, "id:cafedead");
         expect(results).toHaveLength(0);
       });
 
@@ -597,19 +599,46 @@ describe("Data Access Layer", () => {
         expect(results[0]!.id).toBe(note.id);
       });
 
-      it("rejects hex+dash mixed short prefix (would never match UUID position)", () => {
-        // UUIDs have dashes at fixed positions (8-4-4-4-12); a 'abc-1234' prefix
-        // would always produce 0 LIKE matches, so reject it explicitly rather
-        // than silently returning empty after a wasted query.
-        insertActiveRow(sqlite, {
-          id: "abc12345-8888-4888-8888-888888888888",
-          title: "No dash prefix",
-        });
-        expect(searchItems(sqlite, db, "id:abc-1234")).toHaveLength(0);
+      it("accepts mid-prefix with dash and matches stored id (strip-then-validate)", () => {
+        // Highlight-and-copy from a UUID tooltip naturally captures dashes
+        // (e.g. 'abc12345-1111'). Strip them, validate hex, then rebuild
+        // canonical UUID-segment shape before GLOB so it still hits the PK.
+        const id = "abc12345-1111-4111-8111-111111111111";
+        insertActiveRow(sqlite, { id, title: "Mid prefix with dash" });
+        const results = searchItems(sqlite, db, "id:abc12345-1111");
+        expect(results).toHaveLength(1);
+        expect(results[0]!.id).toBe(id);
       });
 
-      it("rejects all-dash prefix", () => {
+      it("accepts short prefix with dash (e.g. id:abc-1234) by stripping the dash", () => {
+        const id = "abc12345-8888-4888-8888-888888888888";
+        insertActiveRow(sqlite, { id, title: "Short dashy prefix" });
+        const results = searchItems(sqlite, db, "id:abc-1234");
+        expect(results).toHaveLength(1);
+        expect(results[0]!.id).toBe(id);
+      });
+
+      it("treats 32 stripped hex chars (no dashes) as equivalent to full UUID", () => {
+        const id = "deadcafe-9999-4999-8999-999999999999";
+        insertActiveRow(sqlite, { id, title: "Stripped 32 hex" });
+        const stripped = id.replace(/-/g, "");
+        expect(stripped).toHaveLength(32);
+        const results = searchItems(sqlite, db, `id:${stripped}`);
+        expect(results).toHaveLength(1);
+        expect(results[0]!.id).toBe(id);
+      });
+
+      it("rejects all-dash prefix (nothing left after stripping)", () => {
         expect(searchItems(sqlite, db, "id:----")).toHaveLength(0);
+      });
+
+      it("rejects too-short prefix after stripping dashes", () => {
+        // 'ab-c' → 'abc' (3 chars) → < 4 char minimum
+        insertActiveRow(sqlite, {
+          id: "abc12345-1010-4010-8010-101010101010",
+          title: "Should not match",
+        });
+        expect(searchItems(sqlite, db, "id:ab-c")).toHaveLength(0);
       });
     });
   });

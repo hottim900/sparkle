@@ -180,7 +180,7 @@ export function SearchBar({ onSelect, autoFocus }: SearchBarProps) {
       {!query && (
         <p className="text-[11px] text-muted-foreground/70 px-1">
           提示：輸入 <code className="bg-muted rounded px-1 py-0.5">id:xxxx</code> 可以用筆記 ID
-          前綴定位（4+ 字元，跨 active + vault）
+          前綴定位（4+ 字元，dash 可省略，跨 active + vault）
         </p>
       )}
 
@@ -193,7 +193,7 @@ export function SearchBar({ onSelect, autoFocus }: SearchBarProps) {
       {!loading && searched && results.length === 0 && (
         <p className="text-sm text-muted-foreground text-center py-4">
           {/^id:/i.test(query.trim())
-            ? "找不到此 ID（前綴需 4+ 個十六進位字元、不含 dashes，例如 abc12345）"
+            ? "找不到此 ID（前綴需 4+ 個十六進位字元，例如 abc12345 或 abc12345-1111）"
             : "找不到結果"}
         </p>
       )}

@@ -621,6 +621,28 @@ export const ID_PREFIX_QUERY_RE = /^id:\s*(\S+)\s*$/i;
 const HEX_PREFIX_RE = /^[0-9a-f]{4,32}$/i;
 
 /**
+ * Rebuild canonical UUID dash positions (8-4-4-4-12) from a dash-stripped
+ * hex prefix so GLOB matches stored IDs (which always carry dashes).
+ *   'abc12345'         → 'abc12345'
+ *   'abc123451111'     → 'abc12345-1111'
+ *   '<32 hex chars>'   → canonical 36-char UUID
+ * Caller has already validated input is 4–32 lowercase hex chars.
+ */
+function reconstructUuidPrefix(stripped: string): string {
+  const segments = [8, 4, 4, 4, 12];
+  let result = "";
+  let consumed = 0;
+  for (const seg of segments) {
+    const take = Math.min(stripped.length - consumed, seg);
+    if (take <= 0) break;
+    if (consumed > 0) result += "-";
+    result += stripped.slice(consumed, consumed + take);
+    consumed += take;
+  }
+  return result;
+}
+
+/**
  * Cross-table ID lookup for the `id:<prefix>` search syntax. Returns full UUID
  * exact matches and short hex prefix matches across items_active + items_vault.
  * Invalid prefixes (non-hex chars, < 4 chars) return [] without an FTS fallback.
@@ -659,13 +681,18 @@ function searchItemsByIdPrefix(
     return resolveLinkedInfo(db, [{ kind: "vault", row: vault }], enrich, enrichIncludePrivate);
   }
 
-  if (!HEX_PREFIX_RE.test(id)) return [];
+  // Tolerate user-pasted prefixes that include UUID dashes (highlight-and-copy
+  // from the item-detail tooltip is a natural source). Strip dashes, validate
+  // the hex run, then rebuild canonical UUID-segment shape so the GLOB pattern
+  // matches stored IDs (dashes at positions 8/13/18/23).
+  const stripped = id.replace(/-/g, "");
+  if (!HEX_PREFIX_RE.test(stripped)) return [];
 
   // GLOB instead of LIKE: SQLite's `case_sensitive_like=OFF` default + BINARY-collated
   // text PRIMARY KEY means `id LIKE 'prefix%'` falls back to SCAN, while
   // `id GLOB 'prefix*'` is case-sensitive and uses the PK index (verified via
   // EXPLAIN QUERY PLAN). Prefix is hex-only and pre-lowercased, so no metachar risk.
-  const globPattern = `${id}*`;
+  const globPattern = `${reconstructUuidPrefix(stripped)}*`;
 
   const activeRows = db
     .select()
