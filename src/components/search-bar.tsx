@@ -177,6 +177,13 @@ export function SearchBar({ onSelect, autoFocus }: SearchBarProps) {
         </div>
       </div>
 
+      {!query && (
+        <p className="text-[11px] text-muted-foreground/70 px-1">
+          提示：輸入 <code className="bg-muted rounded px-1 py-0.5">id:xxxx</code> 可以用筆記 ID
+          前綴定位（4+ 字元，跨 active + vault）
+        </p>
+      )}
+
       {loading && (
         <div className="flex justify-center py-4">
           <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />

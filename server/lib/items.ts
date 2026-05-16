@@ -606,6 +606,89 @@ export function deleteVaultItem(
   })();
 }
 
+/**
+ * Match any `id:<token>` query. Token is captured permissively (`\S+`) so that
+ * invalid IDs still take the strict-ID path and return 0 results instead of
+ * silently falling through to FTS — that fallback would surprise users who
+ * meant "find this exact ID."
+ *
+ * Mirror this when changing it: `mcp-server/src/tools/search.ts` keeps a
+ * matching predicate to skip the vault filesystem search for ID queries.
+ */
+export const ID_PREFIX_QUERY_RE = /^id:\s*(\S+)\s*$/i;
+
+/** Strict hex prefix (no dashes). UUID hex run is 32 chars, so cap at 32. */
+const HEX_PREFIX_RE = /^[0-9a-f]{4,32}$/i;
+
+/**
+ * Cross-table ID lookup for the `id:<prefix>` search syntax. Returns full UUID
+ * exact matches and short hex prefix matches across items_active + items_vault.
+ * Invalid prefixes (non-hex chars, < 4 chars) return [] without an FTS fallback.
+ */
+function searchItemsByIdPrefix(
+  db: DB,
+  id: string,
+  enrich: boolean,
+  includePrivate: boolean | "only",
+  limit: number,
+): ItemWithLinkedInfo[] {
+  if (!id) return [];
+
+  const privacyConds = (table: typeof itemsActive | typeof itemsVault) => {
+    if (includePrivate === "only") return [eq(table.is_private, 1)];
+    if (includePrivate === true) return [];
+    return [eq(table.is_private, 0)];
+  };
+  const enrichIncludePrivate = includePrivate === true || includePrivate === "only";
+
+  if (UUID_RE.test(id)) {
+    const active = db
+      .select()
+      .from(itemsActive)
+      .where(and(eq(itemsActive.id, id), ...privacyConds(itemsActive)))
+      .get();
+    if (active) {
+      return resolveLinkedInfo(db, [{ kind: "active", row: active }], enrich, enrichIncludePrivate);
+    }
+    const vault = db
+      .select()
+      .from(itemsVault)
+      .where(and(eq(itemsVault.id, id), ...privacyConds(itemsVault)))
+      .get();
+    if (!vault) return [];
+    return resolveLinkedInfo(db, [{ kind: "vault", row: vault }], enrich, enrichIncludePrivate);
+  }
+
+  if (!HEX_PREFIX_RE.test(id)) return [];
+
+  const activeRows = db
+    .select()
+    .from(itemsActive)
+    .where(and(like(itemsActive.id, `${id}%`), ...privacyConds(itemsActive)))
+    .orderBy(asc(itemsActive.id))
+    .limit(limit)
+    .all();
+
+  const remaining = limit - activeRows.length;
+  const vaultRows =
+    remaining > 0
+      ? db
+          .select()
+          .from(itemsVault)
+          .where(and(like(itemsVault.id, `${id}%`), ...privacyConds(itemsVault)))
+          .orderBy(asc(itemsVault.id))
+          .limit(remaining)
+          .all()
+      : [];
+
+  const sources = [
+    ...activeRows.map((row) => ({ kind: "active" as const, row })),
+    ...vaultRows.map((row) => ({ kind: "vault" as const, row })),
+  ];
+  if (sources.length === 0) return [];
+  return resolveLinkedInfo(db, sources, enrich, enrichIncludePrivate);
+}
+
 export function searchItems(
   sqlite: Database.Database,
   db: DB,
@@ -614,6 +697,13 @@ export function searchItems(
   enrich = true,
   includePrivate: boolean | "only" = false,
 ): ItemWithLinkedInfo[] {
+  // No FTS fallback for `id:` queries — user explicitly asked for an ID match.
+  const idMatch = query.trim().match(ID_PREFIX_QUERY_RE);
+  if (idMatch) {
+    const idPart = idMatch[1]!.toLowerCase();
+    return searchItemsByIdPrefix(db, idPart, enrich, includePrivate, limit);
+  }
+
   const privateClause =
     includePrivate === "only"
       ? "AND items_active.is_private = 1"
