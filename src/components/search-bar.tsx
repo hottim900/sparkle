@@ -191,7 +191,11 @@ export function SearchBar({ onSelect, autoFocus }: SearchBarProps) {
       )}
 
       {!loading && searched && results.length === 0 && (
-        <p className="text-sm text-muted-foreground text-center py-4">找不到結果</p>
+        <p className="text-sm text-muted-foreground text-center py-4">
+          {/^id:/i.test(query.trim())
+            ? "找不到此 ID（前綴需 4+ 個十六進位字元、不含 dashes，例如 abc12345）"
+            : "找不到結果"}
+        </p>
       )}
 
       {!loading && results.length > 0 && (

@@ -17,10 +17,10 @@ Searches title and content fields. Supports Chinese characters (trigram tokenize
 Queries shorter than 3 characters fall back to LIKE matching.
 
 **ID lookup syntax**: prefix the query with \`id:\` to find a note by its Sparkle ID.
-  - \`id:<full-uuid>\` → exact match
-  - \`id:abc12345\` → 4–36 hex-char prefix lookup
+  - \`id:<full-uuid>\` → exact match (36-char canonical UUID with dashes)
+  - \`id:abc12345\` → 4–32 hex-char prefix lookup (hex only, no dashes; pass the leading hex run from a UUID)
   - Searches across BOTH items_active + items_vault (so you can locate exported notes too).
-  - Returns 0 results on non-hex chars or <4-char prefix — no silent FTS fallback.
+  - Returns 0 results on non-hex chars, dashes in short prefix, or <4-char prefix — no silent FTS fallback.
 
 Args:
   - query (string): Search keywords (e.g., "量子計算", "machine learning") OR \`id:<prefix>\`

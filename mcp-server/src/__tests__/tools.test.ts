@@ -160,6 +160,26 @@ describe("sparkle_search_all", () => {
     expect(result.isError).toBeUndefined();
     expect(result.content[0].text).toContain("No results found");
   });
+
+  it("skips vault filesystem search for id: queries (cross-package regex parity)", async () => {
+    const handler = getHandler();
+    searchItems.mockResolvedValue({
+      results: [makeItem({ id: "abc12345-1111-4111-8111-111111111111", title: "ID Match" })],
+    });
+    await handler({ query: "id:abc12345", limit: 20 });
+    expect(searchItems).toHaveBeenCalledWith("id:abc12345", 20);
+    // Critical: vault FS search is keyed by title/content, not Sparkle ID — skipping
+    // saves an obsidian-cli round-trip on a guaranteed empty result.
+    expect(mockSearchVault).not.toHaveBeenCalled();
+  });
+
+  it("does NOT skip vault search for non-id: queries (regression guard)", async () => {
+    const handler = getHandler();
+    searchItems.mockResolvedValue({ results: [] });
+    mockSearchVault.mockResolvedValue([]);
+    await handler({ query: "regular search", limit: 20 });
+    expect(mockSearchVault).toHaveBeenCalledWith("regular search", { limit: 20 });
+  });
 });
 
 describe("sparkle_list_notes", () => {

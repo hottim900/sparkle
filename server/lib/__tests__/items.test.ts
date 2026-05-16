@@ -570,6 +570,15 @@ describe("Data Access Layer", () => {
         expect(searchItems(sqlite, db, `id:${id}`, 20, true, true)).toHaveLength(1);
       });
 
+      it("includePrivate='only' returns only private rows", () => {
+        const pubId = "11110000-9999-4999-8999-999999999999";
+        const privId = "11119999-9999-4999-8999-999999999999";
+        insertActiveRow(sqlite, { id: pubId, title: "Public match" });
+        insertActiveRow(sqlite, { id: privId, title: "Private match", is_private: 1 });
+        const results = searchItems(sqlite, db, "id:1111", 20, true, "only");
+        expect(results.map((r) => r.id)).toEqual([privId]);
+      });
+
       it("respects limit when ambiguous prefix has many matches", () => {
         for (let i = 0; i < 5; i++) {
           insertActiveRow(sqlite, {

@@ -565,6 +565,13 @@ sparkle_read_obsidian(id)       → Vault 版本
 - 搜尋結果包含所有類型（筆記、待辦、暫存）
 - 善用搜尋找到相關的舊筆記，建立連結
 
+### 用 ID 精準定位筆記
+- 在 \`sparkle_search\` / \`sparkle_search_all\` 的 query 前綴 \`id:\`，可直接以 Sparkle ID 找到筆記
+- \`id:<完整 UUID>\` → 精準匹配；\`id:abc12345\` → 4–32 hex 字元前綴查找（不含 dashes）
+- **跨 items_active + items_vault 兩張表**——即使筆記已匯出到 vault 也找得到，這是一般 FTS 做不到的
+- 非 hex 字元或 <4 字元前綴會直接回空，不會降級到 FTS（避免誤觸發）
+- 使用情境：使用者貼上一段筆記 ID 或前綴時，直接用 \`id:\` 比 FTS 更精準
+
 ### 高效編輯筆記
 
 內容編輯一律走 \`sparkle_edit_note\`（v2 atomic ops）。\`sparkle_update_note\` 只負責 metadata（title/tags/status/...），不再接受 \`content\` 或 \`old_content\`。

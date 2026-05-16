@@ -661,10 +661,16 @@ function searchItemsByIdPrefix(
 
   if (!HEX_PREFIX_RE.test(id)) return [];
 
+  // GLOB instead of LIKE: SQLite's `case_sensitive_like=OFF` default + BINARY-collated
+  // text PRIMARY KEY means `id LIKE 'prefix%'` falls back to SCAN, while
+  // `id GLOB 'prefix*'` is case-sensitive and uses the PK index (verified via
+  // EXPLAIN QUERY PLAN). Prefix is hex-only and pre-lowercased, so no metachar risk.
+  const globPattern = `${id}*`;
+
   const activeRows = db
     .select()
     .from(itemsActive)
-    .where(and(like(itemsActive.id, `${id}%`), ...privacyConds(itemsActive)))
+    .where(and(sql`${itemsActive.id} GLOB ${globPattern}`, ...privacyConds(itemsActive)))
     .orderBy(asc(itemsActive.id))
     .limit(limit)
     .all();
@@ -675,7 +681,7 @@ function searchItemsByIdPrefix(
       ? db
           .select()
           .from(itemsVault)
-          .where(and(like(itemsVault.id, `${id}%`), ...privacyConds(itemsVault)))
+          .where(and(sql`${itemsVault.id} GLOB ${globPattern}`, ...privacyConds(itemsVault)))
           .orderBy(asc(itemsVault.id))
           .limit(remaining)
           .all()
