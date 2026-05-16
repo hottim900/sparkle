@@ -476,6 +476,171 @@ describe("Data Access Layer", () => {
       expect(results[0]!.linked_todo_count).toBe(1);
       expect(results[0]!.linked_note_title).toBeNull();
     });
+
+    describe("id: prefix syntax", () => {
+      it("finds an active item by full UUID", () => {
+        const note = createItem(db, { title: "Find me by full id" });
+        const results = searchItems(sqlite, db, `id:${note.id}`);
+        expect(results).toHaveLength(1);
+        expect(results[0]!.id).toBe(note.id);
+        expect(results[0]!.origin).toBe("active");
+      });
+
+      it("finds an active item by short hex prefix (>= 4 chars)", () => {
+        const id = "abc12345-1111-4111-8111-111111111111";
+        insertActiveRow(sqlite, { id, title: "Short prefix lookup" });
+        const results = searchItems(sqlite, db, "id:abc12345");
+        expect(results).toHaveLength(1);
+        expect(results[0]!.id).toBe(id);
+      });
+
+      it("finds a vault item by id (cross-table)", () => {
+        const id = "deadbeef-2222-4222-8222-222222222222";
+        insertVaultRow(sqlite, { id, title: "Vault exported note" });
+        const results = searchItems(sqlite, db, `id:${id}`);
+        expect(results).toHaveLength(1);
+        expect(results[0]!.id).toBe(id);
+        expect(results[0]!.origin).toBe("vault");
+        expect(results[0]!.status).toBe("exported");
+      });
+
+      it("returns multiple matches when prefix is ambiguous across both tables", () => {
+        insertActiveRow(sqlite, {
+          id: "cafe1111-3333-4333-8333-333333333333",
+          title: "Active ambiguous A",
+        });
+        insertActiveRow(sqlite, {
+          id: "cafe2222-3333-4333-8333-333333333333",
+          title: "Active ambiguous B",
+        });
+        insertVaultRow(sqlite, {
+          id: "cafe3333-3333-4333-8333-333333333333",
+          title: "Vault ambiguous C",
+        });
+        const results = searchItems(sqlite, db, "id:cafe");
+        expect(results).toHaveLength(3);
+        expect(results.map((r) => r.id).sort()).toEqual([
+          "cafe1111-3333-4333-8333-333333333333",
+          "cafe2222-3333-4333-8333-333333333333",
+          "cafe3333-3333-4333-8333-333333333333",
+        ]);
+      });
+
+      it("returns empty when no item matches the id prefix", () => {
+        createItem(db, { title: "Unrelated" });
+        const results = searchItems(sqlite, db, "id:00000000");
+        expect(results).toHaveLength(0);
+      });
+
+      it("does NOT fall back to FTS when id: prefix is valid hex but matches no ID", () => {
+        // The prefix must be valid hex (passes HEX_PREFIX_RE) and the title
+        // must contain it — only then can we observe FTS fallback. The earlier
+        // 'id:meeting1' phrasing was a tautology: 'meeting1' was rejected up-front
+        // by the hex guard, never reaching the FTS-skip code path.
+        createItem(db, { title: "cafedead is in my title" });
+        const results = searchItems(sqlite, db, "id:cafedead");
+        expect(results).toHaveLength(0);
+      });
+
+      it("returns empty for shorter-than-4-char prefix", () => {
+        insertActiveRow(sqlite, {
+          id: "ab123456-4444-4444-8444-444444444444",
+          title: "Has short prefix",
+        });
+        const results = searchItems(sqlite, db, "id:ab");
+        expect(results).toHaveLength(0);
+      });
+
+      it("returns empty for non-hex characters after id:", () => {
+        createItem(db, { title: "Has id:zzzz in title" });
+        const results = searchItems(sqlite, db, "id:zzzzzzzz");
+        expect(results).toHaveLength(0);
+      });
+
+      it("is case-insensitive on the id: prefix and hex chars", () => {
+        const id = "abcdef99-5555-4555-8555-555555555555";
+        insertActiveRow(sqlite, { id, title: "Case insensitive" });
+        const results = searchItems(sqlite, db, "ID:ABCDEF99");
+        expect(results).toHaveLength(1);
+        expect(results[0]!.id).toBe(id);
+      });
+
+      it("respects privacy filter (excludes private rows by default)", () => {
+        const id = "11112222-6666-4666-8666-666666666666";
+        insertActiveRow(sqlite, { id, title: "Private", is_private: 1 });
+        expect(searchItems(sqlite, db, `id:${id}`)).toHaveLength(0);
+        expect(searchItems(sqlite, db, `id:${id}`, 20, true, true)).toHaveLength(1);
+      });
+
+      it("includePrivate='only' returns only private rows", () => {
+        const pubId = "11110000-9999-4999-8999-999999999999";
+        const privId = "11119999-9999-4999-8999-999999999999";
+        insertActiveRow(sqlite, { id: pubId, title: "Public match" });
+        insertActiveRow(sqlite, { id: privId, title: "Private match", is_private: 1 });
+        const results = searchItems(sqlite, db, "id:1111", 20, true, "only");
+        expect(results.map((r) => r.id)).toEqual([privId]);
+      });
+
+      it("respects limit when ambiguous prefix has many matches", () => {
+        for (let i = 0; i < 5; i++) {
+          insertActiveRow(sqlite, {
+            id: `deadbe${i}f-7777-4777-8777-777777777777`,
+            title: `Limit test ${i}`,
+          });
+        }
+        const results = searchItems(sqlite, db, "id:deadbe", 2);
+        expect(results).toHaveLength(2);
+      });
+
+      it("tolerates whitespace around the id value", () => {
+        const note = createItem(db, { title: "Whitespace tolerant" });
+        const results = searchItems(sqlite, db, `id:  ${note.id}  `);
+        expect(results).toHaveLength(1);
+        expect(results[0]!.id).toBe(note.id);
+      });
+
+      it("accepts mid-prefix with dash and matches stored id (strip-then-validate)", () => {
+        // Highlight-and-copy from a UUID tooltip naturally captures dashes
+        // (e.g. 'abc12345-1111'). Strip them, validate hex, then rebuild
+        // canonical UUID-segment shape before GLOB so it still hits the PK.
+        const id = "abc12345-1111-4111-8111-111111111111";
+        insertActiveRow(sqlite, { id, title: "Mid prefix with dash" });
+        const results = searchItems(sqlite, db, "id:abc12345-1111");
+        expect(results).toHaveLength(1);
+        expect(results[0]!.id).toBe(id);
+      });
+
+      it("accepts short prefix with dash (e.g. id:abc-1234) by stripping the dash", () => {
+        const id = "abc12345-8888-4888-8888-888888888888";
+        insertActiveRow(sqlite, { id, title: "Short dashy prefix" });
+        const results = searchItems(sqlite, db, "id:abc-1234");
+        expect(results).toHaveLength(1);
+        expect(results[0]!.id).toBe(id);
+      });
+
+      it("treats 32 stripped hex chars (no dashes) as equivalent to full UUID", () => {
+        const id = "deadcafe-9999-4999-8999-999999999999";
+        insertActiveRow(sqlite, { id, title: "Stripped 32 hex" });
+        const stripped = id.replace(/-/g, "");
+        expect(stripped).toHaveLength(32);
+        const results = searchItems(sqlite, db, `id:${stripped}`);
+        expect(results).toHaveLength(1);
+        expect(results[0]!.id).toBe(id);
+      });
+
+      it("rejects all-dash prefix (nothing left after stripping)", () => {
+        expect(searchItems(sqlite, db, "id:----")).toHaveLength(0);
+      });
+
+      it("rejects too-short prefix after stripping dashes", () => {
+        // 'ab-c' → 'abc' (3 chars) → < 4 char minimum
+        insertActiveRow(sqlite, {
+          id: "abc12345-1010-4010-8010-101010101010",
+          title: "Should not match",
+        });
+        expect(searchItems(sqlite, db, "id:ab-c")).toHaveLength(0);
+      });
+    });
   });
 
   describe("getAllTags", () => {

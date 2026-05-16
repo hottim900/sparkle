@@ -254,7 +254,7 @@ export function ItemDetail({ itemId, onDeleted, onBack, onNavigate }: ItemDetail
             <button
               type="button"
               className="hover:text-foreground transition-colors cursor-pointer"
-              title="點擊複製完整 ID"
+              title="點擊複製完整 ID（搜尋時用 id:xxxxxxxx 即可定位）"
               onClick={() => {
                 navigator.clipboard.writeText(item.id);
                 toast.success("已複製 ID");
@@ -384,7 +384,7 @@ export function ItemDetail({ itemId, onDeleted, onBack, onNavigate }: ItemDetail
               <button
                 type="button"
                 className="hover:text-foreground transition-colors cursor-pointer"
-                title="點擊複製完整 ID"
+                title="點擊複製完整 ID（搜尋時用 id:xxxxxxxx 即可定位）"
                 onClick={() => {
                   navigator.clipboard.writeText(item.id);
                   toast.success("已複製 ID");

@@ -1116,6 +1116,42 @@ describe("Search", () => {
     expect(res.status).toBe(400);
   });
 
+  it("GET /api/search?q=id:<full-uuid> returns the matching item via id: syntax", async () => {
+    const createRes = await app.request("/api/items", {
+      method: "POST",
+      headers: jsonHeaders(),
+      body: JSON.stringify({ title: "Find me via id syntax" }),
+    });
+    const created = await createRes.json();
+    const itemId = created.item?.id ?? created.id;
+    expect(itemId).toBeTruthy();
+    // URL-encode the colon to confirm Hono decodes it correctly
+    const res = await app.request(`/api/search?q=${encodeURIComponent(`id:${itemId}`)}`, {
+      headers: authHeaders(),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.results).toHaveLength(1);
+    expect(body.results[0].id).toBe(itemId);
+  });
+
+  it("GET /api/search?q=id:<8-hex-prefix> returns prefix match (no FTS fallback)", async () => {
+    const createRes = await app.request("/api/items", {
+      method: "POST",
+      headers: jsonHeaders(),
+      body: JSON.stringify({ title: "Prefix me" }),
+    });
+    const created = await createRes.json();
+    const itemId = created.item?.id ?? created.id;
+    const prefix = itemId.slice(0, 8);
+    const res = await app.request(`/api/search?q=${encodeURIComponent(`id:${prefix}`)}`, {
+      headers: authHeaders(),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.results.map((r: { id: string }) => r.id)).toContain(itemId);
+  });
+
   it("logs error and returns 500 when search throws", async () => {
     const err = new Error("DB connection failed");
     const spy = vi
