@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { sqlite } from "../db/index.js";
 import { resolveWikilinkTitle } from "../lib/wikilink.js";
 import { normalizeTitleForUniqueness, isTitleInAllowlist } from "../../src/lib/wikilink.js";
-import { undoRename } from "../lib/rename-engine.js";
+import { undoRename, previewTitleRename } from "../lib/rename-engine.js";
 import { logger } from "../lib/logger.js";
 
 const wikilinksRouter = new Hono();
@@ -209,6 +209,45 @@ wikilinksRouter.get("/admin/title-collisions", (c) => {
   }
 
   return c.json({ collisions, total: collisions.length });
+});
+
+/**
+ * DX-2 dry-run preview for title rename. Stateless: returns what
+ * `applyTitleRename` would do without committing. Agents call this before
+ * `sparkle_update_note({ title })` to surface scope to the user.
+ *
+ * Query params:
+ *   - target_id (UUID, required): the item whose title is changing
+ *   - new_title (string, required): the proposed new title
+ *
+ * Response: `{ would_rewrite_count, would_rewrite_source_ids, would_skip_share_token_source_ids, preview: [{source_id, source_title, snippet}] }`
+ *
+ * Returns 404 when target_id doesn't exist in items_active.
+ */
+wikilinksRouter.get("/admin/preview-rename", (c) => {
+  const targetId = c.req.query("target_id");
+  const newTitle = c.req.query("new_title");
+  if (!targetId || !newTitle) {
+    return c.json({ error: "MISSING_PARAMS" }, 400);
+  }
+
+  const target = sqlite.prepare("SELECT title FROM items_active WHERE id = ?").get(targetId) as
+    | { title: string }
+    | undefined;
+  if (!target) {
+    return c.json({ error: "TARGET_NOT_FOUND", target_id: targetId }, 404);
+  }
+
+  const result = previewTitleRename(sqlite, targetId, target.title, newTitle);
+  return c.json({
+    target_id: targetId,
+    old_title: target.title,
+    new_title: newTitle,
+    would_rewrite_count: result.wouldRewriteCount,
+    would_rewrite_source_ids: result.wouldRewriteSourceIds,
+    would_skip_share_token_source_ids: result.wouldSkipShareTokenSourceIds,
+    preview: result.preview,
+  });
 });
 
 export { wikilinksRouter };

@@ -318,3 +318,56 @@ describe("GET /api/wikilinks/admin/title-collisions", () => {
     expect(body.collisions[0]!.rows.map((r) => r.id)).toEqual(["b", "a", "c"]);
   });
 });
+
+describe("GET /api/wikilinks/admin/preview-rename", () => {
+  it("returns 401 without auth", async () => {
+    const res = await app.request("/api/wikilinks/admin/preview-rename?target_id=x&new_title=y");
+    expect(res.status).toBe(401);
+  });
+
+  it("returns 400 when target_id is missing", async () => {
+    const res = await authedGet("/api/wikilinks/admin/preview-rename?new_title=foo");
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 404 when target_id doesn't exist", async () => {
+    const res = await authedGet(
+      "/api/wikilinks/admin/preview-rename?target_id=00000000-0000-0000-0000-000000000000&new_title=foo",
+    );
+    expect(res.status).toBe(404);
+  });
+
+  it("returns predicted rewrite count without modifying content", async () => {
+    const target = insertActiveRow(testSqlite, { title: "Hub" });
+    const source = insertActiveRow(testSqlite, { content: "see [[Hub]] here" });
+    testSqlite
+      .prepare(
+        `INSERT INTO reference_index (source_id, target_id, char_offset, raw_title, kind)
+         VALUES (?, ?, 4, 'Hub', 'wikilink')`,
+      )
+      .run(source, target);
+
+    const res = await authedGet(
+      `/api/wikilinks/admin/preview-rename?target_id=${target}&new_title=Renamed`,
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      old_title: string;
+      new_title: string;
+      would_rewrite_count: number;
+      would_rewrite_source_ids: string[];
+      preview: Array<{ source_id: string }>;
+    };
+    expect(body.old_title).toBe("Hub");
+    expect(body.new_title).toBe("Renamed");
+    expect(body.would_rewrite_count).toBe(1);
+    expect(body.would_rewrite_source_ids).toEqual([source]);
+    expect(body.preview).toHaveLength(1);
+
+    // Source content untouched
+    const src = testSqlite.prepare("SELECT content FROM items_active WHERE id = ?").get(source) as {
+      content: string;
+    };
+    expect(src.content).toBe("see [[Hub]] here");
+  });
+});

@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.5.6.0] - 2026-05-18
+
+### Added
+
+- **MCP wikilink admin tools (DX coverage).** Three new MCP tools wrap the admin REST surface so operators can manage rename audit + collision reconciliation from the agent surface:
+  - `sparkle_list_title_collisions` — `GET /api/wikilinks/admin/title-collisions`. Lists pre-Pre-PR0e duplicate titles grouped by normalized form; allowlist (`未命名`) and empty titles excluded; rows sorted `modified DESC`.
+  - `sparkle_list_recent_renames(limit?)` — `GET /api/wikilinks/admin/recent-renames`. Recent rename_history entries, default 50, max 200.
+  - `sparkle_undo_rename(history_id)` — `POST /api/wikilinks/admin/undo-rename/:id`. Replays inverse rewrite; the undo is itself audit-logged with `performed_by = "undo:<originalId>"`.
+- **`sparkle_preview_rename(target_id, new_title)` — DX-2 dry-run.** Wraps a new `GET /api/wikilinks/admin/preview-rename` endpoint. Stateless: returns `would_rewrite_count`, `would_rewrite_source_ids`, `would_skip_share_token_source_ids`, and a 5-item `preview` sample without committing. Agents call this before `sparkle_update_note({ title })` so the user can review impact ("this will rewrite 7 other notes — proceed?"). Especially valuable for hub notes with many backlinks.
+- **`swept_references` in PATCH response (DX-5).** `PATCH /api/items/:id` and `PATCH /api/private/items/:id` now include a `swept_references: { rewritten_count, rewritten_source_ids, skipped_share_token_source_ids, history_id }` field when the title change triggered the rename engine. `updateItem` exposes the `RenameResult` via a non-enumerable side-channel (`getRenameResultFromItem` helper) so existing destructure-by-known-fields callers are unaffected.
+- **Structured error codes in MCP responses (DX-4 / DX-7).** `SparkleApiError` now carries `code: string | null` and the full parsed error payload. `formatToolError` emits structured JSON (`{ error, status, code, message, ...payload }`) whenever the server returned a code — agents branch on `code === "TITLE_COLLISION"` rather than regex-matching prose. Falls back to the original prose format when there's no code (server returned plain text or schema error).
+- **`previewTitleRename(sqlite, target_id, old_title, new_title)` in `server/lib/rename-engine.ts`.** Read-only companion to `applyTitleRename` — same reference_index query, same ENG-3 share-token guard, but no UPDATEs. Returns `PreviewResult` with the predicted impact plus a snippet preview of up to 5 sources.
+
+### Tests
+
+Test coverage for these additions ships alongside the route + tool changes — `server/lib/__tests__/rename-engine-share-leak.test.ts` and `server/routes/__tests__/wikilinks.test.ts` already exercise the underlying engine + endpoint paths; this PR adds preview-rename to those suites. MCP tool wrappers are thin pass-throughs to the REST client (covered indirectly by the route tests).
+
+### Notes
+
+Follow-up to v1.5.5.0 (PR 6 rename engine extensions). Closes the deferred DX items the multi-agent audit flagged. `sparkle_update_note` cite_as field (DX-3) and confirm_token protocol (DX-2 stateful variant) are NOT shipped — preview is the stateless equivalent for dry-run, and cite_as semantics are still unresolved (the current `resolveWikilink` already returns canonical title).
+
 ## [1.5.5.0] - 2026-05-18
 
 ### Added

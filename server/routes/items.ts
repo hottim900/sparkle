@@ -10,6 +10,7 @@ import {
   updateItem,
   deleteItem,
   deleteVaultItem,
+  getRenameResultFromItem,
 } from "../lib/items.js";
 import { resolveLinkedInfoActive } from "../lib/item-enrichment.js";
 import { isValidTypeStatus, getAutoMappedStatus } from "../lib/item-type-system.js";
@@ -460,6 +461,21 @@ itemsRouter.patch("/:id", async (c) => {
       revokeSharesByItemId(sqlite, id);
     }
 
+    // DX-5: surface rename engine result so MCP clients can see how many
+    // sources were swept by a title change, plus any that were skipped by
+    // the share-token leak guard (ENG-3). Frontend ignores the field.
+    const renameResult = getRenameResultFromItem(updated);
+    if (renameResult) {
+      return c.json({
+        ...updated,
+        swept_references: {
+          rewritten_count: renameResult.rewrittenCount,
+          rewritten_source_ids: renameResult.rewrittenSourceIds,
+          skipped_share_token_source_ids: renameResult.skippedShareTokenSourceIds,
+          history_id: renameResult.historyId,
+        },
+      });
+    }
     return c.json(updated);
   } catch (e) {
     if (e instanceof ZodError) {

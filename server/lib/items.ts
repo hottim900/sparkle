@@ -14,7 +14,7 @@ import {
 import { logger } from "./logger.js";
 import { escapeFts5Query } from "./fts-utils.js";
 import { computeRevision, RevisionMismatchError } from "./revision.js";
-import { applyTitleRename } from "./rename-engine.js";
+import { applyTitleRename, type RenameResult } from "./rename-engine.js";
 import { isTitleAvailable, TitleCollisionError } from "./wikilink.js";
 
 // `drizzle()` returns BetterSQLite3Database & { $client: Database } — the
@@ -635,6 +635,7 @@ export function updateItem(
   const normalizedNewTitle = updates.title as string | undefined;
   const titleIsChanging = normalizedNewTitle !== undefined && normalizedNewTitle !== existing.title;
 
+  let renameResult: RenameResult | null = null;
   if (titleIsChanging) {
     const tx = db.$client.transaction(() => {
       if (!isTitleAvailable(db.$client, normalizedNewTitle!, id)) {
@@ -644,7 +645,13 @@ export function updateItem(
       // First-time title set (existing.title was empty) is not a rename —
       // there are no source references citing an empty title to sweep.
       if (existing.title.trim() !== "") {
-        applyTitleRename(db.$client, existing.id, existing.title, normalizedNewTitle!, "user");
+        renameResult = applyTitleRename(
+          db.$client,
+          existing.id,
+          existing.title,
+          normalizedNewTitle!,
+          "user",
+        );
       }
     });
     tx.immediate();
@@ -652,7 +659,26 @@ export function updateItem(
     db.update(itemsActive).set(updates).where(eq(itemsActive.id, id)).run();
   }
 
-  return getItem(db, id, true, includePrivate);
+  const item = getItem(db, id, true, includePrivate);
+  if (!item) return null;
+  // Attach the rename result as a non-enumerable side-channel so the route
+  // layer can surface `swept_references` to MCP without breaking other
+  // callers that destructure the item by known fields.
+  if (renameResult) {
+    Object.defineProperty(item, "_rename", {
+      value: renameResult,
+      enumerable: false,
+      writable: false,
+      configurable: false,
+    });
+  }
+  return item;
+}
+
+/** Helper for the route layer: extract the side-channel rename result if any. */
+export function getRenameResultFromItem(item: object | null): RenameResult | null {
+  if (!item) return null;
+  return (item as { _rename?: RenameResult })._rename ?? null;
 }
 
 export function deleteItem(db: DB, id: string): boolean {

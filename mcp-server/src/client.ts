@@ -15,6 +15,14 @@ export class SparkleApiError extends Error {
   constructor(
     message: string,
     public status: number,
+    /** Structured error code from server payload (e.g. `TITLE_COLLISION`,
+     *  `VAULT_READONLY`, `REVISION_MISMATCH`). `null` when server didn't
+     *  include one or response wasn't JSON. Agents inspect this rather than
+     *  string-matching the message. */
+    public code: string | null = null,
+    /** Full parsed error payload for callers that want fields beyond `code`
+     *  (e.g. `attempted_title`, `current_revision`, `current_content`). */
+    public payload: Record<string, unknown> | null = null,
   ) {
     super(message);
     this.name = "SparkleApiError";
@@ -46,13 +54,20 @@ async function sparkleApi<T>(
   if (!res.ok) {
     const text = await res.text().catch(() => "");
     let errorMsg: string;
+    let code: string | null = null;
+    let payload: Record<string, unknown> | null = null;
     try {
-      const parsed = JSON.parse(text) as { error?: string };
+      const parsed = JSON.parse(text) as { error?: string; code?: string } & Record<
+        string,
+        unknown
+      >;
       errorMsg = parsed.error || `HTTP ${res.status}`;
+      code = typeof parsed.code === "string" ? parsed.code : null;
+      payload = parsed as Record<string, unknown>;
     } catch {
       errorMsg = text || `HTTP ${res.status}`;
     }
-    throw new SparkleApiError(errorMsg, res.status);
+    throw new SparkleApiError(errorMsg, res.status, code, payload);
   }
 
   return res.json() as Promise<T>;
@@ -283,6 +298,67 @@ export async function resolveWikilink(title: string): Promise<WikilinkResolution
  */
 export async function rebuildReferenceIndex(): Promise<{ status: string; queued: number }> {
   return sparkleApi<{ status: string; queued: number }>("/wikilinks/admin/rebuild", "POST");
+}
+
+export interface TitleCollisionGroup {
+  normalized: string;
+  rows: Array<{ id: string; title: string; type: string; status: string; modified: string }>;
+}
+
+export async function listTitleCollisions(): Promise<{
+  collisions: TitleCollisionGroup[];
+  total: number;
+}> {
+  return sparkleApi<{ collisions: TitleCollisionGroup[]; total: number }>(
+    "/wikilinks/admin/title-collisions",
+  );
+}
+
+export interface RenameHistoryRow {
+  id: string;
+  target_id: string;
+  old_title: string;
+  new_title: string;
+  source_count: number;
+  performed_at: string;
+  performed_by: string;
+}
+
+export async function listRecentRenames(limit?: number): Promise<{ renames: RenameHistoryRow[] }> {
+  const qs = limit ? `?limit=${limit}` : "";
+  return sparkleApi<{ renames: RenameHistoryRow[] }>(
+    `/wikilinks/admin/recent-renames${qs}`,
+  );
+}
+
+export async function undoRenameApi(historyId: string): Promise<{
+  status: string;
+  historyId: string;
+  rewrittenCount: number;
+  rewrittenSourceIds: string[];
+}> {
+  return sparkleApi(
+    `/wikilinks/admin/undo-rename/${encodeURIComponent(historyId)}`,
+    "POST",
+  );
+}
+
+export interface PreviewRenameResponse {
+  target_id: string;
+  old_title: string;
+  new_title: string;
+  would_rewrite_count: number;
+  would_rewrite_source_ids: string[];
+  would_skip_share_token_source_ids: string[];
+  preview: Array<{ source_id: string; source_title: string; snippet: string }>;
+}
+
+export async function previewRename(
+  targetId: string,
+  newTitle: string,
+): Promise<PreviewRenameResponse> {
+  const qs = `?target_id=${encodeURIComponent(targetId)}&new_title=${encodeURIComponent(newTitle)}`;
+  return sparkleApi<PreviewRenameResponse>(`/wikilinks/admin/preview-rename${qs}`);
 }
 
 export async function getVaultPathBySparkleId(id: string): Promise<{ path: string } | null> {
