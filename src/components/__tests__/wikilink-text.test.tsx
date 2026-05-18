@@ -97,4 +97,54 @@ describe("WikilinkChip", () => {
     await waitFor(() => expect(screen.getByTestId("wikilink-resolved")).toBeInTheDocument());
     expect(screen.getByTestId("wikilink-resolved")).toHaveAttribute("data-origin", "vault");
   });
+
+  it("renders mobile peek button on non-hover devices (DES-2)", async () => {
+    // jsdom's matchMedia stub returns matches:false by default — the hook
+    // reads `(hover: hover)` and goes into mobile mode.
+    window.matchMedia = vi.fn().mockImplementation((q: string) => ({
+      matches: false,
+      media: q,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }));
+
+    mockResolve.mockResolvedValue({
+      id: "abc",
+      title: "MobileTest",
+      origin: "active",
+      snippet: "snippet",
+    });
+    renderWithRouter(<WikilinkChip title="MobileTest" />);
+    await waitFor(() => expect(screen.getByTestId("wikilink-resolved-mobile")).toBeInTheDocument());
+    expect(screen.getByTestId("wikilink-mobile-peek")).toBeInTheDocument();
+    // Link still navigates on tap (primary action)
+    expect(screen.getByTestId("wikilink-resolved")).toHaveAttribute("href", "/item/abc");
+  });
+
+  it("does NOT render mobile peek on hover-capable devices", async () => {
+    window.matchMedia = vi.fn().mockImplementation((q: string) => ({
+      matches: true,
+      media: q,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }));
+
+    mockResolve.mockResolvedValue({
+      id: "abc",
+      title: "Desktop",
+      origin: "active",
+      snippet: "",
+    });
+    renderWithRouter(<WikilinkChip title="Desktop" />);
+    await waitFor(() => expect(screen.getByTestId("wikilink-resolved")).toBeInTheDocument());
+    expect(screen.queryByTestId("wikilink-mobile-peek")).not.toBeInTheDocument();
+  });
 });

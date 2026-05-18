@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.5.7.0] - 2026-05-18
+
+### Added
+
+- **Mobile-friendly wikilink preview (DES-2).** Resolved `[[Title]]` references now ship a touch-device variant alongside the existing HoverCard. On hover-capable devices (desktop) the preview opens on pointer hover as before; on touch devices the link still navigates on tap (preserving the familiar mobile pattern: tap = go), and a small `ⓘ` button next to the link opens a tap-triggered Popover with the same preview content. Driven by a new `useIsHoverDevice()` hook that reads `(hover: hover)` via `matchMedia` and reacts to changes (external pointer plugged into a tablet, etc.).
+- **`src/hooks/use-is-hover-device.ts`.** SSR-safe — returns `true` (desktop default) on first render, re-evaluates on mount. Exported for future components that need the same desktop/touch split.
+
+### Tests
+
+- 2 new `WikilinkChip` tests cover the mobile path (peek button present, link still has navigation `href`) and the desktop path (no peek button on hover-capable devices). The `matchMedia` mock toggles `matches: false`/`true` to drive the hook.
+
+### Notes
+
+Follow-up to v1.5.6.0 (PR 7 MCP additions). Closes the last frontend item from the wikilink-first rollout's deferred list. With this PR, all of the multi-agent-audit "no real reason to defer" items have shipped.
+
 ## [1.5.6.0] - 2026-05-18
 
 ### Added
