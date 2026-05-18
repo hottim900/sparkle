@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.5.0.3] - 2026-05-18
+
+### Added
+
+- **`PATCH /api/items/:id` optional `revision` compare-and-swap guard.** Callers may include `revision: <64-char hex sha256 of current content>` in the PATCH body; the server rejects with `412 PRECONDITION_FAILED` if the stored content has drifted, returning `code: "REVISION_MISMATCH"` plus the actual `current_revision` and `current_content` so the client (or rename engine) can three-way-merge without a second round-trip. Backwards compatible — PATCH without `revision` keeps last-write-wins semantics. The CAS read happens immediately before the UPDATE inside the same connection so better-sqlite3's per-connection write serialization closes the same-process TOCTOU window; cross-process WAL writers (MCP stdio) still need a `BEGIN IMMEDIATE` wrap deferred to PR3. New module `server/lib/revision.ts` mirrors the wire format of `mcp-server/src/edit/revision.ts` so future MCP wrappers can share tokens with the REST PATCH path. Pre-PR0b prerequisite for the wikilink-first rename engine (PR3), which rewrites cited items' content and needs to detect concurrent edits instead of silently clobbering them.
+
 ## [1.5.0.2] - 2026-05-18
 
 ### Changed

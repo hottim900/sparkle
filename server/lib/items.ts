@@ -13,6 +13,7 @@ import {
 } from "./item-enrichment.js";
 import { logger } from "./logger.js";
 import { escapeFts5Query } from "./fts-utils.js";
+import { computeRevision, RevisionMismatchError } from "./revision.js";
 
 type DB = BetterSQLite3Database<typeof schema>;
 type ActiveRow = typeof itemsActive.$inferSelect;
@@ -472,6 +473,36 @@ export function updateItem(
   if (existing.origin === "vault") {
     logger.warn({ id: existing.id }, "Blocked update on vault-origin item");
     return existing;
+  }
+
+  // Compare-and-swap on content. Opt-in via `input.revision`; the rename
+  // engine (PR3) and MCP edit_note v2 both rely on this guard to detect
+  // concurrent edits. Without it, a rename rewriting a source item's
+  // content silently clobbers a parallel edit_note save.
+  //
+  // `existing` may be stale if another connection (e.g. MCP stdio process)
+  // committed between the prefetch and now — re-read inside the SQLite write
+  // lock. The UPDATE below runs through the same `db` immediately after, so
+  // better-sqlite3's per-connection serialization closes the TOCTOU window
+  // for same-process callers; cross-process callers (MCP) still race here
+  // because WAL allows concurrent writers — see PR3 follow-up for a true
+  // BEGIN IMMEDIATE wrap.
+  if (input.revision !== undefined) {
+    const fresh = db
+      .select({ content: itemsActive.content })
+      .from(itemsActive)
+      .where(eq(itemsActive.id, id))
+      .get();
+    if (!fresh) return null;
+    const currentRevision = computeRevision(fresh.content);
+    if (currentRevision !== input.revision) {
+      throw new RevisionMismatchError(
+        existing.id,
+        input.revision,
+        currentRevision,
+        fresh.content ?? "",
+      );
+    }
   }
 
   const now = new Date().toISOString();
