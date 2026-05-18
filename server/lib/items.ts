@@ -14,8 +14,14 @@ import {
 import { logger } from "./logger.js";
 import { escapeFts5Query } from "./fts-utils.js";
 import { computeRevision, RevisionMismatchError } from "./revision.js";
+import { applyTitleRename } from "./rename-engine.js";
+import { isTitleAvailable, TitleCollisionError } from "./wikilink.js";
 
-type DB = BetterSQLite3Database<typeof schema>;
+// `drizzle()` returns BetterSQLite3Database & { $client: Database } — the
+// $client property is added by the factory, not the class. Spell out the
+// intersection so callers (rename-engine) can read $client without an
+// inline cast every site. Verified against the v0.45 type definitions.
+type DB = BetterSQLite3Database<typeof schema> & { $client: Database.Database };
 type ActiveRow = typeof itemsActive.$inferSelect;
 
 export const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -47,13 +53,14 @@ export function createItem(
   const id = uuidv4();
   const type = input.type ?? "note";
   const status = input.status ?? defaultStatusForType(type);
+  const normalizedTitle = input.title.normalize("NFC");
 
   const values = {
     id,
     // NFC-normalize at write so resolver's LOWER(TRIM(title)) compare lands
     // on canonical form. Without this, a decomposed "Café" stored row never
     // resolves via composed "[[Café]]" input. See I3 in PR1 review.
-    title: input.title.normalize("NFC"),
+    title: normalizedTitle,
     type: type as "note" | "todo" | "scratch", // SAFETY: Drizzle enum; validated by caller
     content: input.content ?? "",
     status: status as "fleeting", // SAFETY: Drizzle enum; validated by caller or defaultStatusForType
@@ -71,9 +78,20 @@ export function createItem(
     modified: now,
   };
 
-  db.insert(itemsActive)
-    .values({ ...values, reindex_dirty: 1 })
-    .run();
+  // ENG-7 + Pre-PR0e: check title uniqueness and insert inside BEGIN IMMEDIATE
+  // so two concurrent writers can't both pass `isTitleAvailable` and both
+  // succeed. `未命名` and other allowlist titles bypass the check inside
+  // `isTitleAvailable` so duplicate fleeting captures stay legal.
+  const tx = db.$client.transaction(() => {
+    if (!isTitleAvailable(db.$client, normalizedTitle)) {
+      throw new TitleCollisionError(normalizedTitle);
+    }
+    db.insert(itemsActive)
+      .values({ ...values, reindex_dirty: 1 })
+      .run();
+  });
+  tx.immediate();
+
   return db.select().from(itemsActive).where(eq(itemsActive.id, id)).get()!;
 }
 
@@ -607,7 +625,32 @@ export function updateItem(
     updates.reindex_dirty = 1;
   }
 
-  db.update(itemsActive).set(updates).where(eq(itemsActive.id, id)).run();
+  // ENG-7 + Pre-PR0e: when the title is changing to a new value, check
+  // uniqueness and apply the UPDATE + rename sweep inside a single
+  // BEGIN IMMEDIATE so the check+write is atomic. Two concurrent writers
+  // can't both pass the check and both win.
+  //
+  // When the title isn't changing, fall through to a plain UPDATE — no
+  // transaction overhead for the common path.
+  const normalizedNewTitle = updates.title as string | undefined;
+  const titleIsChanging = normalizedNewTitle !== undefined && normalizedNewTitle !== existing.title;
+
+  if (titleIsChanging) {
+    const tx = db.$client.transaction(() => {
+      if (!isTitleAvailable(db.$client, normalizedNewTitle!, id)) {
+        throw new TitleCollisionError(normalizedNewTitle!);
+      }
+      db.update(itemsActive).set(updates).where(eq(itemsActive.id, id)).run();
+      // First-time title set (existing.title was empty) is not a rename —
+      // there are no source references citing an empty title to sweep.
+      if (existing.title.trim() !== "") {
+        applyTitleRename(db.$client, existing.id, existing.title, normalizedNewTitle!, "user");
+      }
+    });
+    tx.immediate();
+  } else {
+    db.update(itemsActive).set(updates).where(eq(itemsActive.id, id)).run();
+  }
 
   return getItem(db, id, true, includePrivate);
 }

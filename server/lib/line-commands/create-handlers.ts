@@ -4,6 +4,7 @@ import { resolveSessionItem } from "./shared.js";
 import { createItem } from "../items.js";
 import { parseDate } from "../line-date.js";
 import { logger } from "../logger.js";
+import { TitleCollisionError } from "../wikilink.js";
 
 const handleSave: CommandHandler = async ({ command, db }) => {
   const cmd = command as Extract<LineCommand, { type: "save" }>;
@@ -23,6 +24,9 @@ const handleSave: CommandHandler = async ({ command, db }) => {
     const priorityLabel = cmd.parsed.priority === "high" ? " [高優先]" : "";
     return `✅ 已存入（${typeLabel}${priorityLabel}）\n${item.title}`;
   } catch (err) {
+    if (err instanceof TitleCollisionError) {
+      return `❌ 標題「${err.attemptedTitle}」已存在，請改用其他標題`;
+    }
     logger.error({ err }, "Failed to create item from LINE");
     return "❌ 儲存失敗，請稍後再試";
   }
@@ -49,10 +53,17 @@ const handleTrack: CommandHandler = async ({ userId, command, db }) => {
       trackInput.due = dateParsed.date;
     }
   }
-  const trackTodo = createItem(db, trackInput as Parameters<typeof createItem>[1]);
-  let reply = `✅ 已建立追蹤待辦：${trackTodo.title}`;
-  if (trackTodo.due) reply += `\n📅 ${trackTodo.due}`;
-  return reply;
+  try {
+    const trackTodo = createItem(db, trackInput as Parameters<typeof createItem>[1]);
+    let reply = `✅ 已建立追蹤待辦：${trackTodo.title}`;
+    if (trackTodo.due) reply += `\n📅 ${trackTodo.due}`;
+    return reply;
+  } catch (err) {
+    if (err instanceof TitleCollisionError) {
+      return `❌ 追蹤待辦「${err.attemptedTitle}」已存在`;
+    }
+    throw err;
+  }
 };
 
 export const createHandlers: Record<string, CommandHandler> = {
