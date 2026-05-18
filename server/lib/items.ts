@@ -50,7 +50,10 @@ export function createItem(
 
   const values = {
     id,
-    title: input.title,
+    // NFC-normalize at write so resolver's LOWER(TRIM(title)) compare lands
+    // on canonical form. Without this, a decomposed "Café" stored row never
+    // resolves via composed "[[Café]]" input. See I3 in PR1 review.
+    title: input.title.normalize("NFC"),
     type: type as "note" | "todo" | "scratch", // SAFETY: Drizzle enum; validated by caller
     content: input.content ?? "",
     status: status as "fleeting", // SAFETY: Drizzle enum; validated by caller or defaultStatusForType
@@ -68,7 +71,9 @@ export function createItem(
     modified: now,
   };
 
-  db.insert(itemsActive).values(values).run();
+  db.insert(itemsActive)
+    .values({ ...values, reindex_dirty: 1 })
+    .run();
   return db.select().from(itemsActive).where(eq(itemsActive.id, id)).get()!;
 }
 
@@ -508,7 +513,7 @@ export function updateItem(
   const now = new Date().toISOString();
   const updates: Record<string, unknown> = { modified: now };
 
-  if (input.title !== undefined) updates.title = input.title;
+  if (input.title !== undefined) updates.title = input.title.normalize("NFC");
   if (input.type !== undefined) updates.type = input.type;
   if (input.content !== undefined) updates.content = input.content;
   if (input.status !== undefined) updates.status = input.status;
@@ -593,6 +598,13 @@ export function updateItem(
     updates.paused = 0;
     updates.paused_at = null;
     updates.paused_context = null;
+  }
+
+  // Mark dirty when content or title moves — those are the only fields
+  // that can change the set of resolved wikilink targets in this row.
+  // Status/priority/tag/category changes are not indexed.
+  if (input.content !== undefined || input.title !== undefined) {
+    updates.reindex_dirty = 1;
   }
 
   db.update(itemsActive).set(updates).where(eq(itemsActive.id, id)).run();

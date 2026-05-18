@@ -3,8 +3,9 @@ import remarkGfm from "remark-gfm";
 import remarkBreaks from "remark-breaks";
 import rehypeCallouts from "rehype-callouts";
 import { remarkHighlight } from "./remark-highlight";
+import { remarkWikilink } from "./remark-wikilink";
 
-export const remarkPlugins = [remarkGfm, remarkBreaks, remarkHighlight];
+export const remarkPlugins = [remarkGfm, remarkBreaks, remarkHighlight, remarkWikilink];
 export const rehypePlugins = [rehypeCallouts];
 
 export const sharedComponents = {

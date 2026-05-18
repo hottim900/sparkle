@@ -12,8 +12,8 @@
     "noUncheckedIndexedAccess": true,
     "esModuleInterop": true,
     "outDir": "./dist-server",
-    "rootDir": "./server"
+    "rootDir": "."
   },
-  "include": ["server"],
+  "include": ["server", "src/lib/wikilink.ts"],
   "exclude": ["server/**/__tests__", "server/test-utils.ts"]
 }

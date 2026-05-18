@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.5.1.0] - 2026-05-18
+
+### Added
+
+- **Wikilink-first cross-references — resolver + renderer foundation (PR 1).** Sparkle now resolves `[[Title]]` (and `[[Title|alias]]`) inline anywhere notes render via Markdown. The renderer is Obsidian-native: resolved links navigate to `/item/:id` with a HoverCard preview showing origin (Sparkle / Vault) and a 200-codepoint snippet; unresolved links render purple per Obsidian convention; mixed-state legacy `筆記（xxxxxxxx）` references render as a dashed-border chip so users see they're deprecated. Parser is conservative — rejects multi-line, empty, oversized (>256 chars per ENG-18), and nested `[[`. Code-block aware via the `remark-wikilink` plugin built on `mdast-util-find-and-replace`, so wikilinks inside fenced/inline code never become live references (ENG-26). Shared parser at `src/lib/wikilink.ts` is imported by both the frontend renderer and the server-side reindex worker (server tsconfig widened to include `src/lib/wikilink.ts` so the parser is the single source of truth).
+- **DB migration v26: `reference_index` + `rename_history` + `items_active.reindex_dirty`.** Additive migration adds the reverse-lookup table (`reference_index(source_id, target_id, char_offset, raw_title, kind)`) the rename engine (PR 3) needs, plus the rename audit log (`rename_history`, placeholder so PR 3 doesn't ship a separate migration just for one table), plus the `reindex_dirty` flag the background worker drains. All existing `items_active` rows are marked dirty at upgrade so the worker bootstraps the index over its first few 60s cycles (ceil(rows/50) minutes to drain). Fresh installs include the same shape from `initializeDatabase`. Idempotent on re-run (PRAGMA / IF NOT EXISTS).
+- **Background reindex worker.** `server/lib/wikilink-worker.ts` drains `reindex_dirty=1` rows in 50-row batches every 60s. Per-source transaction so a single malformed row doesn't block the queue. Skipped-tick counter resets on successful entry so transient backlog doesn't poison warning cadence for process lifetime.
+- **Write hooks.** `createItem`, `updateItem` (only when `title` or `content` changes), and the bulk import handler (`server/index.ts`) now set `reindex_dirty = 1` at the same UPDATE. Bulk status mutations (develop/mature/done/active/archive) do NOT mark dirty — status doesn't affect resolver output, so they'd be no-ops.
+- **REST API: `GET /api/wikilinks/resolve?title=X`.** Returns `{ id, title, origin, snippet }` (200) or `{ error: "NOT_FOUND" }` (404) for miss / collision. Snippet truncation pushed into SQLite (`SUBSTR(content, 1, 800)`) so multi-MB content isn't shipped to userland just to slice 200 chars. Frontend `WikilinkChip` calls this via React Query with a 5-minute staleTime per unique title. Resolver memoizes per unique normalized title inside `reindexItemReferences` — a hub note linking to the same title 50 times pays one DB round-trip per unique target.
+- **Admin disaster-recovery: `POST /api/wikilinks/admin/rebuild`.** `TRUNCATE reference_index` + mark every active row dirty. Returns 202 with queued count. Guarded by the global `/api/*` auth middleware. Use when the index drifts (manual SQL edits outside the chokepoint, parser bug fix that needs to re-derive).
+- **Application-layer title uniqueness primitive.** `isTitleAvailable(sqlite, normalizedTitle, exceptId?)` and `TitleCollisionError` ship in `server/lib/wikilink.ts` per Pre-PR0e spec (active-only scope, `未命名` allowlisted, NFC + ASCII case-insensitive normalization). PR 3 wires these into the rename UI; PR 1 doesn't enforce yet — the resolver tolerates the 2 existing prod duplicates by returning `null` (renderer falls back to unresolved/purple).
+- **NFC write normalization.** `createItem`/`updateItem` apply `.normalize("NFC")` to titles so a decomposed `Café` (U+0065 U+0301) written via one capture surface resolves via composed `[[Café]]` written via another. Without this, the resolver's `LOWER(TRIM(title))` SQL compare never lands on canonical form.
+
+### Changed
+
+- **`tsconfig.server.json` rootDir widened to `.`** and includes `src/lib/wikilink.ts` so the server can import the shared parser without duplicating it. Compile output is `noEmit` so no on-disk layout breaks.
+
+### Tests
+
+- **78 new tests** across 6 files: shared parser unit (`src/lib/__tests__/wikilink.test.ts`), server resolver + reindex + worker (`server/lib/__tests__/wikilink.test.ts`), write-hook integration (`server/lib/__tests__/wikilink-write-hooks.test.ts`), v26 migration (`server/db/__tests__/migration-v26.test.ts`), wikilinks router (`server/routes/__tests__/wikilinks.test.ts`), frontend renderer (`src/components/__tests__/wikilink-text.test.tsx`). Coverage: collision returns null, active priority over vault, allowlist (`未命名`), NFC round-trip via `createItem`, write-hook scope (title/content yes, status/priority no), CASCADE on source delete, batch limit, idempotent migration, fresh-install starts at 26, admin auth + truncate-and-prime semantics, resolved/unresolved/alias renderer states.
+
 ## [1.5.0.3] - 2026-05-18
 
 ### Added

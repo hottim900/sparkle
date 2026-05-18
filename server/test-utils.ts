@@ -39,6 +39,7 @@ export function createTestDb() {
       paused INTEGER NOT NULL DEFAULT 0,
       paused_at TEXT DEFAULT NULL,
       paused_context TEXT DEFAULT NULL,
+      reindex_dirty INTEGER NOT NULL DEFAULT 0,
       created TEXT NOT NULL,
       modified TEXT NOT NULL,
       FOREIGN KEY (linked_note_id) REFERENCES items_active(id) ON DELETE SET NULL,
@@ -48,6 +49,35 @@ export function createTestDb() {
     CREATE INDEX idx_items_active_category_id ON items_active(category_id);
     CREATE INDEX idx_items_active_modified ON items_active(modified);
     CREATE INDEX idx_items_active_viewed_at ON items_active(viewed_at);
+    CREATE INDEX idx_items_active_reindex_dirty
+      ON items_active(reindex_dirty) WHERE reindex_dirty = 1;
+
+    CREATE TABLE reference_index (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      source_id TEXT NOT NULL,
+      target_id TEXT NOT NULL,
+      char_offset INTEGER NOT NULL,
+      raw_title TEXT NOT NULL,
+      kind TEXT NOT NULL DEFAULT 'wikilink',
+      FOREIGN KEY (source_id) REFERENCES items_active(id) ON DELETE CASCADE
+    );
+    CREATE INDEX idx_reference_index_target_id ON reference_index(target_id);
+    CREATE INDEX idx_reference_index_source_id ON reference_index(source_id);
+    CREATE INDEX idx_reference_index_source_offset
+      ON reference_index(source_id, char_offset DESC);
+
+    CREATE TABLE rename_history (
+      id TEXT PRIMARY KEY,
+      target_id TEXT NOT NULL,
+      old_title TEXT NOT NULL,
+      new_title TEXT NOT NULL,
+      source_count INTEGER NOT NULL DEFAULT 0,
+      performed_at TEXT NOT NULL,
+      performed_by TEXT NOT NULL DEFAULT 'system',
+      undo_state TEXT
+    );
+    CREATE INDEX idx_rename_history_target_id ON rename_history(target_id);
+    CREATE INDEX idx_rename_history_performed_at ON rename_history(performed_at DESC);
 
     CREATE TABLE items_vault (
       id TEXT PRIMARY KEY,

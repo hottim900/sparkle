@@ -108,7 +108,7 @@ describe("Migration v15: is_private column (post-v23 split-aware)", () => {
     const ver = sqlite.prepare("SELECT version FROM schema_version").get() as {
       version: number;
     };
-    expect(ver.version).toBe(25);
+    expect(ver.version).toBe(26);
   });
 
   it("upgrade from v14: is idempotent", () => {
