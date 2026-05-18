@@ -47,9 +47,13 @@ describe("rename-history-cleanup", () => {
 
   it("pruneRenameHistory is a no-op when nothing is older than 30 days", () => {
     const { sqlite } = createTestDb();
-    insertHistoryRow(sqlite, new Date().toISOString());
+    // Use explicit fixed dates instead of `new Date().toISOString()` —
+    // running near a day boundary could otherwise flip rows in/out of the
+    // 30d window between insert and prune.
+    const now = new Date("2026-05-18T00:00:00Z");
+    insertHistoryRow(sqlite, "2026-05-17T23:00:00Z");
 
-    const deleted = pruneRenameHistory(sqlite);
+    const deleted = pruneRenameHistory(sqlite, now);
     expect(deleted).toBe(0);
   });
 

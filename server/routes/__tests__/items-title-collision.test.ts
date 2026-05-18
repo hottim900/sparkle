@@ -134,3 +134,71 @@ describe("PATCH /api/items/:id title collision", () => {
     expect(res.status).toBe(200);
   });
 });
+
+describe("PATCH /api/items/:id swept_references contract (DX-5)", () => {
+  it("includes swept_references in response when title change triggers rename engine", async () => {
+    const target = insertActiveRow(testSqlite, { title: "Hub" });
+    const source = insertActiveRow(testSqlite, { content: "see [[Hub]]" });
+    // Manual reference_index entry so the rename engine finds the source
+    // without waiting for the background worker (60s interval).
+    testSqlite
+      .prepare(
+        `INSERT INTO reference_index (source_id, target_id, char_offset, raw_title, kind)
+         VALUES (?, ?, 4, 'Hub', 'wikilink')`,
+      )
+      .run(source, target);
+
+    const res = await app.request(`/api/items/${target}`, {
+      method: "PATCH",
+      headers: jsonHeaders(),
+      body: JSON.stringify({ title: "Renamed" }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      title: string;
+      swept_references?: {
+        rewritten_count: number;
+        rewritten_source_ids: string[];
+        skipped_share_token_source_ids: string[];
+        history_id: string | null;
+      };
+    };
+    expect(body.title).toBe("Renamed");
+    expect(body.swept_references).toBeDefined();
+    expect(body.swept_references!.rewritten_count).toBe(1);
+    expect(body.swept_references!.rewritten_source_ids).toEqual([source]);
+    expect(body.swept_references!.skipped_share_token_source_ids).toEqual([]);
+    expect(body.swept_references!.history_id).toBeTruthy();
+  });
+
+  it("OMITS swept_references when title didn't change (no rename)", async () => {
+    const id = insertActiveRow(testSqlite, { title: "Static", content: "body" });
+
+    const res = await app.request(`/api/items/${id}`, {
+      method: "PATCH",
+      headers: jsonHeaders(),
+      body: JSON.stringify({ content: "new body" }), // no title change
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { swept_references?: unknown };
+    expect(body.swept_references).toBeUndefined();
+  });
+
+  it("OMITS swept_references when first-time title set (empty → non-empty is not a rename)", async () => {
+    testSqlite
+      .prepare(
+        `INSERT INTO items_active (id, type, status, title, content, created, modified)
+         VALUES ('empty-1', 'note', 'fleeting', '', '', '2026-01-01', '2026-01-01')`,
+      )
+      .run();
+
+    const res = await app.request(`/api/items/empty-1`, {
+      method: "PATCH",
+      headers: jsonHeaders(),
+      body: JSON.stringify({ title: "Now Named" }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { swept_references?: unknown };
+    expect(body.swept_references).toBeUndefined();
+  });
+});

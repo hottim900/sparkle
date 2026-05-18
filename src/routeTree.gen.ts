@@ -18,6 +18,8 @@ import { Route as AllRouteImport } from './routes/all'
 import { Route as ListRouteImport } from './routes/_list'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ItemIdRouteImport } from './routes/item.$id'
+import { Route as AdminTitleCollisionsRouteImport } from './routes/admin/title-collisions'
+import { Route as AdminRecentRenamesRouteImport } from './routes/admin/recent-renames'
 import { Route as ListUnreviewedRouteImport } from './routes/_list/unreviewed'
 import { Route as ListTodosRouteImport } from './routes/_list/todos'
 import { Route as ListStaleRouteImport } from './routes/_list/stale'
@@ -77,6 +79,16 @@ const IndexRoute = IndexRouteImport.update({
 const ItemIdRoute = ItemIdRouteImport.update({
   id: '/item/$id',
   path: '/item/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminTitleCollisionsRoute = AdminTitleCollisionsRouteImport.update({
+  id: '/admin/title-collisions',
+  path: '/admin/title-collisions',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminRecentRenamesRoute = AdminRecentRenamesRouteImport.update({
+  id: '/admin/recent-renames',
+  path: '/admin/recent-renames',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ListUnreviewedRoute = ListUnreviewedRouteImport.update({
@@ -176,6 +188,8 @@ export interface FileRoutesByFullPath {
   '/stale': typeof ListStaleRoute
   '/todos': typeof ListTodosRouteWithChildren
   '/unreviewed': typeof ListUnreviewedRoute
+  '/admin/recent-renames': typeof AdminRecentRenamesRoute
+  '/admin/title-collisions': typeof AdminTitleCollisionsRoute
   '/item/$id': typeof ItemIdRoute
   '/notes/developing': typeof ListNotesDevelopingRoute
   '/notes/exported': typeof ListNotesExportedRoute
@@ -200,6 +214,8 @@ export interface FileRoutesByTo {
   '/recent': typeof ListRecentRoute
   '/stale': typeof ListStaleRoute
   '/unreviewed': typeof ListUnreviewedRoute
+  '/admin/recent-renames': typeof AdminRecentRenamesRoute
+  '/admin/title-collisions': typeof AdminTitleCollisionsRoute
   '/item/$id': typeof ItemIdRoute
   '/notes/developing': typeof ListNotesDevelopingRoute
   '/notes/exported': typeof ListNotesExportedRoute
@@ -228,6 +244,8 @@ export interface FileRoutesById {
   '/_list/stale': typeof ListStaleRoute
   '/_list/todos': typeof ListTodosRouteWithChildren
   '/_list/unreviewed': typeof ListUnreviewedRoute
+  '/admin/recent-renames': typeof AdminRecentRenamesRoute
+  '/admin/title-collisions': typeof AdminTitleCollisionsRoute
   '/item/$id': typeof ItemIdRoute
   '/_list/notes/developing': typeof ListNotesDevelopingRoute
   '/_list/notes/exported': typeof ListNotesExportedRoute
@@ -256,6 +274,8 @@ export interface FileRouteTypes {
     | '/stale'
     | '/todos'
     | '/unreviewed'
+    | '/admin/recent-renames'
+    | '/admin/title-collisions'
     | '/item/$id'
     | '/notes/developing'
     | '/notes/exported'
@@ -280,6 +300,8 @@ export interface FileRouteTypes {
     | '/recent'
     | '/stale'
     | '/unreviewed'
+    | '/admin/recent-renames'
+    | '/admin/title-collisions'
     | '/item/$id'
     | '/notes/developing'
     | '/notes/exported'
@@ -307,6 +329,8 @@ export interface FileRouteTypes {
     | '/_list/stale'
     | '/_list/todos'
     | '/_list/unreviewed'
+    | '/admin/recent-renames'
+    | '/admin/title-collisions'
     | '/item/$id'
     | '/_list/notes/developing'
     | '/_list/notes/exported'
@@ -327,6 +351,8 @@ export interface RootRouteChildren {
   SettingsRoute: typeof SettingsRoute
   SharesRoute: typeof SharesRoute
   VaultRoute: typeof VaultRoute
+  AdminRecentRenamesRoute: typeof AdminRecentRenamesRoute
+  AdminTitleCollisionsRoute: typeof AdminTitleCollisionsRoute
   ItemIdRoute: typeof ItemIdRoute
 }
 
@@ -393,6 +419,20 @@ declare module '@tanstack/react-router' {
       path: '/item/$id'
       fullPath: '/item/$id'
       preLoaderRoute: typeof ItemIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/title-collisions': {
+      id: '/admin/title-collisions'
+      path: '/admin/title-collisions'
+      fullPath: '/admin/title-collisions'
+      preLoaderRoute: typeof AdminTitleCollisionsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/recent-renames': {
+      id: '/admin/recent-renames'
+      path: '/admin/recent-renames'
+      fullPath: '/admin/recent-renames'
+      preLoaderRoute: typeof AdminRecentRenamesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_list/unreviewed': {
@@ -579,6 +619,8 @@ const rootRouteChildren: RootRouteChildren = {
   SettingsRoute: SettingsRoute,
   SharesRoute: SharesRoute,
   VaultRoute: VaultRoute,
+  AdminRecentRenamesRoute: AdminRecentRenamesRoute,
+  AdminTitleCollisionsRoute: AdminTitleCollisionsRoute,
   ItemIdRoute: ItemIdRoute,
 }
 export const routeTree = rootRouteImport

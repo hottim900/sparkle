@@ -69,14 +69,23 @@ describe("updateItem auto-triggers rename engine", () => {
 
   it("NFC-equivalent titles do not trigger rename (after normalization)", () => {
     const { db, sqlite } = createTestDb();
-    const composed = "Café"; // NFC composed
-    const decomposed = "Café"; // NFD decomposed (U+0065 U+0301)
+    // Use explicit escape sequences so source-code editors / git hooks
+    // don't accidentally normalize the file. `composed` is the single
+    // precomposed codepoint U+00E9; `decomposed` is U+0065 + combining
+    // U+0301. Without escapes the strings would be byte-identical in
+    // any normalize-on-save editor and this test would trivially pass.
+    const composed = "Café"; // NFC: U+00E9
+    const decomposed = "Café"; // NFD: U+0065 U+0301
+    expect(composed).not.toBe(decomposed); // sanity — raw forms differ
+    expect(composed.normalize("NFC")).toBe(decomposed.normalize("NFC")); // and converge
+
     const targetId = insertActiveRow(sqlite, { title: composed });
     const sourceId = insertActiveRow(sqlite, { content: `[[${composed}]]` });
     reindexItemReferences(sqlite, sourceId);
 
     // updateItem with the decomposed form — NFC normalization should make
-    // it equal to existing.title, so no rename.
+    // it equal to existing.title (which createItem already normalized to
+    // NFC at write), so no rename.
     updateItem(db, targetId, { title: decomposed });
 
     const rows = sqlite.prepare("SELECT COUNT(*) AS n FROM rename_history").get() as { n: number };

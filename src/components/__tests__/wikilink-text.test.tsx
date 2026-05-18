@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
@@ -51,8 +51,24 @@ function renderWithRouter(ui: React.ReactElement) {
 }
 
 describe("WikilinkChip", () => {
+  // Capture the original matchMedia (jsdom may not define one) so tests
+  // that override it for mobile/desktop branching can restore the prior
+  // value — otherwise pollution leaks into later test files when the
+  // worker is shared.
+  let originalMatchMedia: typeof window.matchMedia | undefined;
+
   beforeEach(() => {
     mockResolve.mockReset();
+    originalMatchMedia = window.matchMedia;
+  });
+
+  afterEach(() => {
+    if (originalMatchMedia === undefined) {
+      // jsdom didn't have one; remove what the test installed.
+      delete (window as unknown as { matchMedia?: typeof window.matchMedia }).matchMedia;
+    } else {
+      window.matchMedia = originalMatchMedia;
+    }
   });
 
   it("renders unresolved (purple) when resolver returns null", async () => {

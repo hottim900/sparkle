@@ -159,4 +159,38 @@ describe("title uniqueness enforcement (Pre-PR0e + ENG-7)", () => {
       .get(id) as { n: number };
     expect(history.n).toBe(0);
   });
+
+  it("ENG-7 stress: 10 microtask-parallel createItem calls — only one wins", async () => {
+    // better-sqlite3 is synchronous so true OS-thread parallelism isn't
+    // possible in-process, but Promise.allSettled() schedules each call
+    // on a microtask boundary. The BEGIN IMMEDIATE on the 2nd–10th lands
+    // after the 1st has held the lock + inserted + committed; each
+    // subsequent attempt sees the row and throws TITLE_COLLISION.
+    //
+    // Without `.immediate()` (deferred mode + isTitleAvailable read),
+    // microtask ordering wouldn't matter — multiple readers could see
+    // "available" and all commit. The post-condition (exactly one row)
+    // proves the gate works.
+    const { db, sqlite } = createTestDb();
+
+    const attempts = await Promise.allSettled(
+      Array.from({ length: 10 }, () =>
+        Promise.resolve().then(() => createItem(db, { title: "Contended" })),
+      ),
+    );
+
+    const fulfilled = attempts.filter((r) => r.status === "fulfilled").length;
+    const rejected = attempts.filter((r) => r.status === "rejected");
+
+    expect(fulfilled).toBe(1);
+    expect(rejected.length).toBe(9);
+    for (const r of rejected) {
+      expect((r as PromiseRejectedResult).reason).toBeInstanceOf(TitleCollisionError);
+    }
+
+    const count = sqlite
+      .prepare("SELECT COUNT(*) as n FROM items_active WHERE LOWER(TRIM(title)) = 'contended'")
+      .get() as { n: number };
+    expect(count.n).toBe(1);
+  });
 });
