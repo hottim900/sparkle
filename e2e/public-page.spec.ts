@@ -9,8 +9,11 @@ const LONG_CONTENT = Array.from(
 ).join("\n\n");
 
 async function createSharedNote(request: Parameters<typeof createItemViaApi>[0]) {
+  // Suffix with a unique counter so each call gets a fresh title — title
+  // uniqueness enforcement (Pre-PR0e) rejects collisions, and this helper
+  // is called once per test in the same shared E2E DB.
   const note = await createItemViaApi(request, {
-    title: "Public Page E2E Note",
+    title: `Public Page E2E Note ${crypto.randomUUID().slice(0, 8)}`,
     type: "note",
     content: LONG_CONTENT,
   });
