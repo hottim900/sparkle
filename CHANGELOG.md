@@ -5,7 +5,7 @@
 ### Fixed
 
 - **Title-collisions admin endpoint now matches the writer's normalizer.** `GET /api/wikilinks/admin/title-collisions` was grouping rows via SQL `LOWER(TRIM(title))`, but the writer's uniqueness check at `isTitleAvailable` runs `normalizeTitleForUniqueness` (trim → NFC → lowercase). NFC-divergent rows (e.g. NFC-composed "café" vs NFD-decomposed "café") would slip past the SQL grouping while still being blocked at write time — exactly the legacy duplicates this admin page exists to surface. Grouping now runs in JS via the shared normalizer.
-- **Drain-now endpoint hardened.** Cap reduced from 500 rows/call to 50 (bounds writer-pin time per request) and a 200 ms in-process cooldown returns 429 + `Retry-After` on burst calls. Cap is exported as `max_per_call` in the success response so loop callers self-pace.
+- **Drain-now endpoint hardened.** Cap reduced from 500 rows/call to 50 (bounds writer-pin time per request); cap is exported as `max_per_call` in the success response so loop callers self-pace. Request-rate abuse stays in scope of Hono's existing global rate limiter — an earlier 200 ms in-process cooldown attempt cross-contaminated serial E2E tests for negligible marginal protection, so the per-request cap is the sole guard.
 - **Undo mutation now invalidates downstream caches.** `src/routes/admin/recent-renames.tsx` previously only invalidated `["admin", "recent-renames"]`, but `undoRename` flips the target's title and rewrites every source — leaving `items` lists, individual `item` details, search, dashboard buckets, tag counts, and the wikilink resolver stale. Now invalidates all of them via `queryKeys` so the operator UI matches the new on-disk state immediately.
 
 ### Added
@@ -18,7 +18,7 @@
 - **DX-2 state-hash round-trip + mismatch tests** in `rename-engine.test.ts`: preview returns a 64-char hex hash that `applyTitleRename` accepts; a stale hash throws `RenameStateChangedError`; hash changes when a source's content is edited or when a new source starts citing the target.
 - **DX-2 PATCH-layer 409 contract** in `items-title-collision.test.ts`: PATCH with a stale `expected_state_hash` returns 409 `RENAME_STATE_CHANGED` with both hashes, and no rewrite happens.
 - **NFC-divergent collision detection** in `wikilinks.test.ts`: composed vs decomposed "café" rows now appear as a single collision group (byte-divergence asserted up front).
-- **Drain-now drains + 429 cooldown** in `wikilinks.test.ts`: success path returns `max_per_call: 50`; second back-to-back call returns 429 with `Retry-After` + `retry_after_ms` payload. Test-only `_resetDrainNowCooldownForTest` keeps the module-level clock from bleeding between tests.
+- **Drain-now success + serial-call safety** in `wikilinks.test.ts`: success path returns `max_per_call: 50`; three back-to-back calls all return 200 (no cooldown gate).
 - **DX-3 cite_as rendering** in `format.test.ts` (MCP): titled note → `Cite as` line present with exact wikilink form; empty-title and `未命名` rows suppressed.
 
 ### Notes

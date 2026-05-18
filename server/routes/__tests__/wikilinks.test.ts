@@ -28,7 +28,7 @@ vi.mock("../../lib/logger.js", () => ({
 
 import { Hono } from "hono";
 import { authMiddleware } from "../../middleware/auth.js";
-import { wikilinksRouter, _resetDrainNowCooldownForTest } from "../wikilinks.js";
+import { wikilinksRouter } from "../wikilinks.js";
 
 const TEST_TOKEN = "test-secret-token-12345-with-some-entropy";
 
@@ -345,13 +345,6 @@ describe("GET /api/wikilinks/admin/title-collisions", () => {
 });
 
 describe("POST /api/wikilinks/admin/drain-now", () => {
-  beforeEach(() => {
-    // Module-level cooldown clock would otherwise bleed between sequential
-    // tests in this file (the auth-failure test, the success test, and the
-    // 429 test all touch the same `lastDrainAt`).
-    _resetDrainNowCooldownForTest();
-  });
-
   it("returns 401 without auth", async () => {
     const res = await app.request("/api/wikilinks/admin/drain-now", { method: "POST" });
     expect(res.status).toBe(401);
@@ -366,19 +359,13 @@ describe("POST /api/wikilinks/admin/drain-now", () => {
     expect(typeof body.count).toBe("number");
   });
 
-  it("rejects rapid back-to-back calls with 429 + Retry-After header", async () => {
-    // First call: succeeds.
-    const first = await authedPost("/api/wikilinks/admin/drain-now");
-    expect(first.status).toBe(200);
-
-    // Second call within the 200ms cooldown: 429.
-    const second = await authedPost("/api/wikilinks/admin/drain-now");
-    expect(second.status).toBe(429);
-    expect(second.headers.get("Retry-After")).toBeTruthy();
-    const body = (await second.json()) as { error: string; retry_after_ms: number };
-    expect(body.error).toBe("DRAIN_COOLDOWN");
-    expect(body.retry_after_ms).toBeGreaterThan(0);
-    expect(body.retry_after_ms).toBeLessThanOrEqual(200);
+  it("subsequent calls all succeed (no cooldown gate)", async () => {
+    // Per-call cap bounds writer-lock hold; request-rate abuse handled by
+    // Hono's global rate limiter. Three back-to-back calls all return 200.
+    for (let i = 0; i < 3; i++) {
+      const res = await authedPost("/api/wikilinks/admin/drain-now");
+      expect(res.status).toBe(200);
+    }
   });
 });
 

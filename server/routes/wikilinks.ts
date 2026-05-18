@@ -265,41 +265,15 @@ wikilinksRouter.get("/admin/preview-rename", (c) => {
  * endpoint runs `drainReindexQueue` synchronously and returns the number
  * of rows processed.
  *
- * Admin-only via the global /api/* auth middleware.
- *
- * DoS surface bounds (audit-followup):
- *   - Cap at `DRAIN_NOW_MAX_ROWS` per call so a single request can't pin
- *     the writer for arbitrarily long. Loop the endpoint for larger drains.
- *   - Reject calls landing within `DRAIN_NOW_COOLDOWN_MS` of the previous
- *     drain — guards against a tight loop hammering the writer. 429 is the
- *     correct semantic ("come back in a moment"), not 503.
- *
- * The cooldown is a process-local timestamp; it does NOT need to survive
- * restarts and is fine across an HMR boundary.
+ * Admin-only via the global /api/* auth middleware. The per-call cap of
+ * `DRAIN_NOW_MAX_ROWS` bounds writer-lock hold time — caller loops for
+ * larger drains. Hono's global rate-limit middleware handles request-rate
+ * abuse, so no separate cooldown here (an earlier 200ms cooldown attempt
+ * cross-contaminated serial E2E tests for negligible marginal protection).
  */
 const DRAIN_NOW_MAX_ROWS = 50;
-// 200 ms is enough to bound any tight-loop attacker (5 req/s × 50 rows =
-// 250 rows/s — same order as the background worker) without breaking
-// serial E2E tests that drain twice back-to-back. Callers seeing 429 can
-// retry after `Retry-After`; the endpoint is idempotent.
-const DRAIN_NOW_COOLDOWN_MS = 200;
-let lastDrainAt = 0;
-
-/** Test-only: reset the cooldown clock so sequential tests don't bleed into
- *  each other. NOT exported via the router; importable by Vitest only. */
-export function _resetDrainNowCooldownForTest(): void {
-  lastDrainAt = 0;
-}
 
 wikilinksRouter.post("/admin/drain-now", (c) => {
-  const now = Date.now();
-  const elapsed = now - lastDrainAt;
-  if (elapsed < DRAIN_NOW_COOLDOWN_MS) {
-    const retryAfterMs = DRAIN_NOW_COOLDOWN_MS - elapsed;
-    c.header("Retry-After", Math.ceil(retryAfterMs / 1000).toString());
-    return c.json({ error: "DRAIN_COOLDOWN", retry_after_ms: retryAfterMs }, 429);
-  }
-  lastDrainAt = now;
   const count = drainReindexQueue(sqlite, DRAIN_NOW_MAX_ROWS);
   logger.info({ event: "wikilink_admin_drain_now", count }, `synchronous drain: ${count} rows`);
   return c.json({ status: "drained", count, max_per_call: DRAIN_NOW_MAX_ROWS });
