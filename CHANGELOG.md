@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.5.0.2] - 2026-05-18
+
+### Changed
+
+- **FTS `items_active_au` trigger narrowed to `AFTER UPDATE OF title, content`.** The pre-v26 unqualified `AFTER UPDATE` trigger fired on every column change — flipping `viewed_at`, `paused`, `status`, or the upcoming `reindex_dirty` flag would all reindex FTS for no reason. The trigger now fires only when title or content actually changes. `setupFTS` performs a one-time drop-and-recreate inside a transaction on databases that still carry the legacy unqualified form; the migration v23 trigger (line 980) is narrowed inline so fresh installs skip the rewrite path. Bisectable prerequisite for the wikilink-first cross-references feature — its upcoming `reindex_dirty` write trigger would otherwise loop-fire FTS reindex on every flip.
+
 ## [1.5.0.1] - 2026-05-13
 
 ### Fixed

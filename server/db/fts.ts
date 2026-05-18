@@ -21,7 +21,12 @@ export function setupFTS(sqlite: Database.Database) {
     );
   `);
 
-  // Sync triggers: keep FTS5 in sync with items_active table
+  // items_active_au must be narrowed to `AFTER UPDATE OF title, content`. The
+  // unqualified `AFTER UPDATE` form (pre-v26) fires on any column change,
+  // including the upcoming reindex_dirty flag write — every flip becomes a
+  // redundant FTS reindex. Detect the old form via sqlite_master and
+  // drop-then-recreate inside a transaction so concurrent writers can't slip
+  // an UPDATE between DROP and CREATE (which would silently desync FTS).
   const triggers = [
     {
       name: "items_active_ai",
@@ -44,7 +49,7 @@ export function setupFTS(sqlite: Database.Database) {
     {
       name: "items_active_au",
       sql: `
-        CREATE TRIGGER IF NOT EXISTS items_active_au AFTER UPDATE ON items_active BEGIN
+        CREATE TRIGGER IF NOT EXISTS items_active_au AFTER UPDATE OF title, content ON items_active BEGIN
           INSERT INTO items_active_fts(items_active_fts, rowid, title, content)
           VALUES ('delete', old.rowid, old.title, old.content);
           INSERT INTO items_active_fts(rowid, title, content)
@@ -54,9 +59,17 @@ export function setupFTS(sqlite: Database.Database) {
     },
   ];
 
-  for (const trigger of triggers) {
-    sqlite.exec(trigger.sql);
-  }
+  sqlite.transaction(() => {
+    const auRow = sqlite
+      .prepare("SELECT sql FROM sqlite_master WHERE type='trigger' AND name='items_active_au'")
+      .get() as { sql: string | null } | undefined;
+    if (auRow?.sql && !auRow.sql.includes("AFTER UPDATE OF")) {
+      sqlite.exec("DROP TRIGGER IF EXISTS items_active_au");
+    }
+    for (const trigger of triggers) {
+      sqlite.exec(trigger.sql);
+    }
+  })();
 
   // Rebuild FTS index when empty (idempotent — rebuild is cheap at small scale).
   const ftsRow = sqlite.prepare("SELECT COUNT(*) AS n FROM items_active_fts").get() as {

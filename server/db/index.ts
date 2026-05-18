@@ -977,7 +977,7 @@ export function migrateV22toV23(sqlite: Database.Database) {
           INSERT INTO items_active_fts(items_active_fts, rowid, title, content)
           VALUES ('delete', old.rowid, old.title, old.content);
         END;
-        CREATE TRIGGER items_active_au AFTER UPDATE ON items_active BEGIN
+        CREATE TRIGGER items_active_au AFTER UPDATE OF title, content ON items_active BEGIN
           INSERT INTO items_active_fts(items_active_fts, rowid, title, content)
           VALUES ('delete', old.rowid, old.title, old.content);
           INSERT INTO items_active_fts(rowid, title, content)
