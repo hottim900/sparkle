@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { sqlite } from "../db/index.js";
 import { resolveWikilinkTitle } from "../lib/wikilink.js";
+import { normalizeTitleForUniqueness, isTitleInAllowlist } from "../../src/lib/wikilink.js";
 import { undoRename } from "../lib/rename-engine.js";
 import { logger } from "../lib/logger.js";
 
@@ -154,6 +155,60 @@ wikilinksRouter.post("/admin/undo-rename/:historyId", (c) => {
     rewrittenCount: result.rewrittenCount,
     rewrittenSourceIds: result.rewrittenSourceIds,
   });
+});
+
+/**
+ * Title-collision listing (admin). Returns groups of items_active rows that
+ * share a normalized title — these are pre-Pre-PR0e duplicates that slipped
+ * in before write-time uniqueness enforcement (PR 5). New writes are blocked
+ * by `isTitleAvailable`; this endpoint surfaces the legacy duplicates so the
+ * operator can rename or merge them.
+ *
+ * Allowlist titles (`未命名`) are excluded — duplicate placeholders are legal.
+ *
+ * Response: `{ collisions: [{ normalized, rows: [{ id, title, type, status, modified }] }], total }`
+ */
+wikilinksRouter.get("/admin/title-collisions", (c) => {
+  const groups = sqlite
+    .prepare(
+      `SELECT LOWER(TRIM(title)) AS normalized, COUNT(*) AS n
+       FROM items_active
+       WHERE title != ''
+       GROUP BY LOWER(TRIM(title))
+       HAVING n >= 2
+       ORDER BY n DESC, normalized ASC`,
+    )
+    .all() as { normalized: string; n: number }[];
+
+  const collisions: Array<{
+    normalized: string;
+    rows: Array<{ id: string; title: string; type: string; status: string; modified: string }>;
+  }> = [];
+
+  for (const group of groups) {
+    // Re-run the allowlist predicate per group rather than baking the list
+    // into SQL — keeps the allowlist source-of-truth in src/lib/wikilink.ts.
+    if (isTitleInAllowlist(group.normalized)) continue;
+    if (normalizeTitleForUniqueness(group.normalized) === "") continue;
+
+    const rows = sqlite
+      .prepare(
+        `SELECT id, title, type, status, modified
+         FROM items_active
+         WHERE LOWER(TRIM(title)) = ?
+         ORDER BY modified DESC`,
+      )
+      .all(group.normalized) as Array<{
+      id: string;
+      title: string;
+      type: string;
+      status: string;
+      modified: string;
+    }>;
+    collisions.push({ normalized: group.normalized, rows });
+  }
+
+  return c.json({ collisions, total: collisions.length });
 });
 
 export { wikilinksRouter };

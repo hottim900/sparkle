@@ -234,3 +234,87 @@ describe("POST /api/wikilinks/admin/undo-rename/:historyId", () => {
     expect(tgtTitle.title).toBe("Original");
   });
 });
+
+describe("GET /api/wikilinks/admin/title-collisions", () => {
+  it("returns 401 without auth", async () => {
+    const res = await app.request("/api/wikilinks/admin/title-collisions");
+    expect(res.status).toBe(401);
+  });
+
+  it("returns empty list when no titles collide", async () => {
+    insertActiveRow(testSqlite, { title: "Unique 1" });
+    insertActiveRow(testSqlite, { title: "Unique 2" });
+
+    const res = await authedGet("/api/wikilinks/admin/title-collisions");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { collisions: unknown[]; total: number };
+    expect(body.collisions).toEqual([]);
+    expect(body.total).toBe(0);
+  });
+
+  it("surfaces case-insensitive duplicates", async () => {
+    insertActiveRow(testSqlite, { title: "Foo" });
+    insertActiveRow(testSqlite, { title: "foo" });
+    insertActiveRow(testSqlite, { title: "Bar" });
+
+    const res = await authedGet("/api/wikilinks/admin/title-collisions");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      collisions: Array<{ normalized: string; rows: Array<{ title: string }> }>;
+      total: number;
+    };
+    expect(body.total).toBe(1);
+    expect(body.collisions[0]!.normalized).toBe("foo");
+    expect(body.collisions[0]!.rows.map((r) => r.title).sort()).toEqual(["Foo", "foo"]);
+  });
+
+  it("excludes 未命名 allowlist titles", async () => {
+    insertActiveRow(testSqlite, { title: "未命名" });
+    insertActiveRow(testSqlite, { title: "未命名" });
+    insertActiveRow(testSqlite, { title: "Other" });
+    insertActiveRow(testSqlite, { title: "other" });
+
+    const res = await authedGet("/api/wikilinks/admin/title-collisions");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      collisions: Array<{ normalized: string }>;
+      total: number;
+    };
+    expect(body.total).toBe(1);
+    expect(body.collisions[0]!.normalized).toBe("other");
+  });
+
+  it("excludes empty titles", async () => {
+    // Two rows with empty title — should not appear as a collision
+    testSqlite
+      .prepare(
+        `INSERT INTO items_active (id, type, status, title, content, created, modified)
+         VALUES ('e1', 'note', 'fleeting', '', '', '2026-01-01', '2026-01-01'),
+                ('e2', 'note', 'fleeting', '', '', '2026-01-01', '2026-01-01')`,
+      )
+      .run();
+
+    const res = await authedGet("/api/wikilinks/admin/title-collisions");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { collisions: unknown[]; total: number };
+    expect(body.total).toBe(0);
+  });
+
+  it("returns rows sorted by modified DESC within each collision group", async () => {
+    testSqlite
+      .prepare(
+        `INSERT INTO items_active (id, type, status, title, content, created, modified)
+         VALUES
+           ('a', 'note', 'fleeting', 'Dup', '', '2026-01-01', '2026-01-05'),
+           ('b', 'note', 'fleeting', 'dup', '', '2026-01-01', '2026-01-10'),
+           ('c', 'note', 'fleeting', 'DUP', '', '2026-01-01', '2026-01-03')`,
+      )
+      .run();
+
+    const res = await authedGet("/api/wikilinks/admin/title-collisions");
+    const body = (await res.json()) as {
+      collisions: Array<{ rows: Array<{ id: string }> }>;
+    };
+    expect(body.collisions[0]!.rows.map((r) => r.id)).toEqual(["b", "a", "c"]);
+  });
+});
