@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { isValidTypeStatus } from "../lib/item-type-system.js";
+import { REVISION_REGEX } from "../lib/revision.js";
 
 // v1.4.0: "exported" removed — exported notes live in items_vault, not items_active.
 // For imports that still contain status='exported' rows, use importStatusEnum below.
@@ -80,6 +81,10 @@ export const updateItemSchema = z.object({
   is_private: z.boolean().optional(),
   paused: z.boolean().optional(),
   paused_context: z.string().max(500).optional(),
+  // Optional compare-and-swap token. When present, the server rejects the
+  // update with 412 PRECONDITION_FAILED if the stored content's sha256 does
+  // not match. Same wire format as MCP edit_note v2's revision.
+  revision: z.string().regex(REVISION_REGEX, "Must be 64-char lowercase hex").optional(),
 });
 
 export const listItemsSchema = z.object({

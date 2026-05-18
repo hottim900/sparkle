@@ -32,6 +32,7 @@ import { ZodError } from "zod";
 import { revokeSharesByItemId } from "../lib/shares.js";
 import { deriveTitleFromContent } from "../lib/title-derivation.js";
 import { vaultReadonlyResponse } from "../lib/vault-errors.js";
+import { RevisionMismatchError } from "../lib/revision.js";
 
 const lookupItem: ItemLookup = (shortId) => {
   const found = getItemForLookup(db, shortId);
@@ -451,6 +452,19 @@ itemsRouter.patch("/:id", async (c) => {
   } catch (e) {
     if (e instanceof ZodError) {
       return c.json({ error: e.issues[0]?.message ?? "Validation error" }, 400);
+    }
+    if (e instanceof RevisionMismatchError) {
+      return c.json(
+        {
+          error: "內容已被其他人或視窗修改，請重新整理後再儲存",
+          error_en: "Content was modified concurrently — refetch and retry.",
+          code: e.code,
+          expected_revision: e.expected,
+          current_revision: e.actual,
+          current_content: e.currentContent,
+        },
+        412,
+      );
     }
     throw e;
   }
