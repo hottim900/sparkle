@@ -11,7 +11,7 @@ import { extractSparkleId } from "../lib/frontmatter.js";
 
 const DB_PATH = process.env.DATABASE_URL || "./data/todo.db";
 
-const TARGET_VERSION = 26;
+const TARGET_VERSION = 27;
 
 /**
  * Migration v24 halt payload — bilingual operator-facing error.
@@ -56,7 +56,30 @@ export class V25HaltError extends Error {
   }
 }
 
-export type MigrationHaltPayload = V24HaltPayload | V25HaltPayload;
+/**
+ * Migration v27 halt payload — same backup-failed pattern as v25 since the
+ * backfill mutates content non-trivially (one-shot rewrite of every legacy
+ * reference in items_active.content). Without a verified pre-migration
+ * snapshot, a parser bug could silently corrupt content.
+ */
+export type V27HaltPayload = {
+  event: "migration_v27_halted_no_disk" | "migration_v27_halted_backup_failed";
+  error: string;
+  error_en: string;
+  docs: string;
+  backupPath?: string;
+  requiredBytes?: number;
+  freeBytes?: number;
+};
+
+export class V27HaltError extends Error {
+  constructor(public readonly haltPayload: V27HaltPayload) {
+    super(`[${haltPayload.event}] ${haltPayload.error_en}`);
+    this.name = "V27HaltError";
+  }
+}
+
+export type MigrationHaltPayload = V24HaltPayload | V25HaltPayload | V27HaltPayload;
 
 function getSchemaVersion(sqlite: Database.Database): number {
   // Check if schema_version table exists
@@ -485,6 +508,13 @@ function runMigrations(sqlite: Database.Database) {
   if (version < 26) {
     migrateV25toV26(sqlite);
   }
+
+  // Step 26→27: One-shot backfill of legacy `筆記（xxxx）` references to
+  // `[[Title]]` wikilink syntax. v25-pattern backup safeguards. See PR 4 +
+  // docs/migration-v27.md.
+  if (version < 27) {
+    migrateV26toV27(sqlite);
+  }
 }
 
 /**
@@ -558,6 +588,358 @@ export function migrateV25toV26(sqlite: Database.Database): void {
   setSchemaVersion(sqlite, 26);
 
   logger.info({ event: "migration_v26_complete" }, "migration v26: wikilink index tables created");
+}
+
+/**
+ * Open the freshly-written v27 backup as a separate readonly handle and
+ * assert: integrity_check passes, schema_version is 26 (the pre-backfill
+ * state). v27 doesn't drop any columns so we don't check schema shape —
+ * the version stamp is sufficient.
+ */
+function verifyV27Backup(backupPath: string): void {
+  const backup = new Database(backupPath, { readonly: true, fileMustExist: true });
+  try {
+    const integrity = backup.prepare("PRAGMA integrity_check").get() as
+      | { integrity_check: string }
+      | undefined;
+    if (integrity?.integrity_check !== "ok") {
+      throw new Error(`backup integrity_check failed: ${integrity?.integrity_check ?? "unknown"}`);
+    }
+    const ver = backup.prepare("SELECT version FROM schema_version").get() as
+      | { version: number }
+      | undefined;
+    if (ver?.version !== 26) {
+      throw new Error(`backup schema_version is ${ver?.version ?? "?"}, expected 26`);
+    }
+  } finally {
+    backup.close();
+  }
+}
+
+const LEGACY_HEX_REGEX = /筆記（([0-9a-f]{4,8})）/g;
+
+/** Find regions to skip when rewriting: fenced code blocks (``` and ~~~) and
+ *  inline backtick spans. Same conservative shape as src/lib/wikilink.ts so
+ *  the backfill matches the live parser's code-block skipping (ENG-26). */
+interface CodeRange {
+  start: number;
+  end: number;
+}
+function findCodeRanges(content: string): CodeRange[] {
+  const ranges: CodeRange[] = [];
+  const n = content.length;
+  let i = 0;
+  while (i < n) {
+    if (i === 0 || content[i - 1] === "\n") {
+      const c = content[i];
+      if (c === "`" || c === "~") {
+        let runLen = 0;
+        while (i + runLen < n && content[i + runLen] === c) runLen++;
+        if (runLen >= 3) {
+          let lineEnd = i + runLen;
+          while (lineEnd < n && content[lineEnd] !== "\n") lineEnd++;
+          let close = n;
+          let j = lineEnd;
+          while (j < n) {
+            if (content[j] === "\n") {
+              const ls = j + 1;
+              if (ls < n && content[ls] === c) {
+                let cr = 0;
+                while (ls + cr < n && content[ls + cr] === c) cr++;
+                if (cr >= runLen) {
+                  let lineE = ls + cr;
+                  while (lineE < n && content[lineE] !== "\n") lineE++;
+                  close = lineE;
+                  break;
+                }
+              }
+            }
+            j++;
+          }
+          ranges.push({ start: i, end: close });
+          i = close;
+          continue;
+        }
+      }
+    }
+    if (content[i] === "`") {
+      let runLen = 0;
+      while (i + runLen < n && content[i + runLen] === "`") runLen++;
+      let j = i + runLen;
+      let close = -1;
+      while (j < n) {
+        if (content[j] === "\n") break;
+        if (content[j] === "`") {
+          let cr = 0;
+          while (j + cr < n && content[j + cr] === "`") cr++;
+          if (cr === runLen) {
+            close = j;
+            break;
+          }
+          j += cr;
+          continue;
+        }
+        j++;
+      }
+      if (close !== -1) {
+        ranges.push({ start: i, end: close + runLen });
+        i = close + runLen;
+        continue;
+      }
+    }
+    i++;
+  }
+  return ranges;
+}
+
+function insideRange(ranges: CodeRange[], pos: number): boolean {
+  for (const r of ranges) {
+    if (pos >= r.start && pos < r.end) return true;
+    if (r.start > pos) return false;
+  }
+  return false;
+}
+
+/** Sanitize a title for use inside `[[...]]`. Mirrors server/lib/export.ts
+ *  resolveSparkleReferences so the backfill output matches existing exports. */
+function sanitizeWikilinkTitle(title: string): string {
+  return title
+    .replace(/\|/g, "-")
+    .replace(/\]\]/g, "）")
+    .replace(/\[\[/g, "（")
+    .replace(/\n/g, " ");
+}
+
+/**
+ * Rewrite legacy `筆記（xxxxxxxx）` references in `content` to `[[Title]]`.
+ * Uses the provided `lookup` to resolve a short hex to a single title.
+ * Returns `{ newContent, rewrites, ambiguous }`:
+ *   - `rewrites`: number of references rewritten (resolved unambiguously)
+ *   - `ambiguous`: short ids that resolved to >1 row (left in place)
+ *
+ * Applies in descending offset order so earlier positions stay valid (ENG-20).
+ * Skips matches inside code blocks (ENG-26).
+ * Paused items are still rewritten (ENG-27 — paused is orthogonal to content
+ * format; the rewrite is bookkeeping, not user-visible churn).
+ */
+export function backfillLegacyHexInContent(
+  content: string,
+  lookup: (shortId: string) => { title: string; ambiguous: boolean } | null,
+): { newContent: string; rewrites: number; ambiguous: string[] } {
+  if (!content.includes("筆記（")) {
+    return { newContent: content, rewrites: 0, ambiguous: [] };
+  }
+  const codeRanges = findCodeRanges(content);
+  const matches: { start: number; length: number; shortId: string }[] = [];
+  LEGACY_HEX_REGEX.lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = LEGACY_HEX_REGEX.exec(content)) !== null) {
+    if (insideRange(codeRanges, m.index)) continue;
+    matches.push({ start: m.index, length: m[0].length, shortId: m[1]! });
+  }
+  if (matches.length === 0) {
+    return { newContent: content, rewrites: 0, ambiguous: [] };
+  }
+
+  const ambiguous: string[] = [];
+  let result = content;
+  let rewrites = 0;
+  for (let i = matches.length - 1; i >= 0; i--) {
+    const match = matches[i]!;
+    const resolved = lookup(match.shortId);
+    if (!resolved) continue;
+    if (resolved.ambiguous) {
+      ambiguous.push(match.shortId);
+      continue;
+    }
+    const replacement = `[[${sanitizeWikilinkTitle(resolved.title)}]]`;
+    result = result.slice(0, match.start) + replacement + result.slice(match.start + match.length);
+    rewrites++;
+  }
+  return { newContent: result, rewrites, ambiguous };
+}
+
+/**
+ * Migration 26→27: One-shot backfill of legacy `筆記（xxxxxxxx）` references
+ * to `[[Title]]` syntax. Conservative scope: only the `筆記（xxxx）` pattern
+ * is rewritten (not bare hex IDs, which have false-positive risk in technical
+ * content like commit hashes).
+ *
+ * Resolution rule per short hex:
+ *   - Look up across items_active + items_vault (active priority).
+ *   - 0 matches → leave the reference verbatim (target deleted; user can decide).
+ *   - 1 match  → rewrite to `[[Title]]` (sanitize alias chars in title).
+ *   - >1 matches → leave verbatim, record short id in `backfill_v27_ambiguous`
+ *     for operator review (ENG-4).
+ *
+ * Code-block skipping (ENG-26) mirrors the live parser so the migration
+ * doesn't rewrite references inside fenced/inline code. Paused items are
+ * rewritten (ENG-27) — paused is orthogonal to content format.
+ *
+ * Backup safeguards mirror v25:
+ *   - VACUUM INTO with unique per-run path (ms + pid + uuid prefix).
+ *   - Pre-flight disk check (1.2× DB size required free).
+ *   - Post-backup verify (integrity + schema_version=26).
+ *   - On failure: V27HaltError → process.exit(78) via haltAndExit.
+ *
+ * Backfill itself runs inside a single transaction. Sources marked
+ * reindex_dirty=1 so the worker re-derives reference_index entries.
+ */
+export function migrateV26toV27(sqlite: Database.Database): void {
+  const dbPath = sqlite.name;
+  const isInMemory = dbPath === ":memory:" || dbPath === "";
+
+  // Pre-flight: count items that contain the legacy pattern. Zero → no
+  // backup needed, just bump version. Saves disk on fresh installs that
+  // never had legacy references.
+  const candidateCount = (
+    sqlite
+      .prepare("SELECT COUNT(*) AS n FROM items_active WHERE content LIKE '%筆記（%'")
+      .get() as { n: number }
+  ).n;
+
+  if (candidateCount === 0) {
+    sqlite.exec(`
+      CREATE TABLE IF NOT EXISTS backfill_v27_ambiguous (
+        short_id TEXT NOT NULL,
+        source_id TEXT NOT NULL,
+        recorded_at TEXT NOT NULL,
+        PRIMARY KEY (short_id, source_id)
+      );
+    `);
+    setSchemaVersion(sqlite, 27);
+    logger.info(
+      { event: "migration_v27_complete", rewrites: 0, candidates: 0 },
+      "migration v27: no legacy 筆記（xxx） references found, skipping backfill",
+    );
+    return;
+  }
+
+  if (!isInMemory) {
+    const backupDir = getMigrationBackupDir();
+    const backupPath = join(
+      backupDir,
+      `todo.db.bak-pre-v27-${Date.now()}-${process.pid}-${randomUUID().slice(0, 8)}`,
+    );
+
+    try {
+      mkdirSync(backupDir, { recursive: true });
+      const dbStat = statSync(dbPath);
+      const fsStat = statfsSync(backupDir);
+      const freeBytes = Number(fsStat.bavail) * Number(fsStat.bsize);
+      const requiredBytes = Math.ceil(dbStat.size * 1.2);
+
+      if (freeBytes < requiredBytes) {
+        throw new V27HaltError({
+          event: "migration_v27_halted_no_disk",
+          requiredBytes,
+          freeBytes,
+          backupPath: backupDir,
+          error: `Migration v27 需要至少 ${Math.ceil(requiredBytes / 1e6)}MB 可用空間於 ${backupDir}（目前剩餘 ${Math.floor(freeBytes / 1e6)}MB）。請釋出磁碟空間後重啟 sparkle。詳見 docs/migration-v27.md#disk-space`,
+          error_en: `Migration v27 requires at least ${Math.ceil(requiredBytes / 1e6)}MB free at ${backupDir} (have ${Math.floor(freeBytes / 1e6)}MB). Free space then restart sparkle.`,
+          docs: "see docs/migration-v27.md#disk-space",
+        });
+      }
+
+      sqlite.prepare("VACUUM INTO ?").run(backupPath);
+      verifyV27Backup(backupPath);
+
+      const backupStat = statSync(backupPath);
+      logger.info(
+        {
+          event: "migration_v27_backup_created",
+          backupPath,
+          sizeBytes: backupStat.size,
+        },
+        `migration v27: pre-migration backup created at ${backupPath}`,
+      );
+    } catch (e) {
+      if (e instanceof V27HaltError) throw e;
+      try {
+        unlinkSync(backupPath);
+      } catch {
+        // ignore
+      }
+      throw new V27HaltError({
+        event: "migration_v27_halted_backup_failed",
+        backupPath,
+        error: `Migration v27 backup 失敗：${(e as Error).message}。請檢查 ${backupDir} 權限與磁碟健康後重啟 sparkle。詳見 docs/migration-v27.md#backup-failed`,
+        error_en: `Migration v27 backup failed: ${(e as Error).message}. Check ${backupDir} permissions and disk health, then restart sparkle.`,
+        docs: "see docs/migration-v27.md#backup-failed",
+      });
+    }
+  }
+
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS backfill_v27_ambiguous (
+      short_id TEXT NOT NULL,
+      source_id TEXT NOT NULL,
+      recorded_at TEXT NOT NULL,
+      PRIMARY KEY (short_id, source_id)
+    );
+  `);
+
+  // Lookup helper: returns { title, ambiguous } or null.
+  const lookupShortId = (shortId: string): { title: string; ambiguous: boolean } | null => {
+    const pattern = `${shortId}%`;
+    const activeRows = sqlite
+      .prepare("SELECT title FROM items_active WHERE id LIKE ? AND is_private = 0 LIMIT 2")
+      .all(pattern) as { title: string }[];
+    if (activeRows.length > 1) return { title: "", ambiguous: true };
+    if (activeRows.length === 1) return { title: activeRows[0]!.title, ambiguous: false };
+
+    const vaultRows = sqlite
+      .prepare("SELECT title FROM items_vault WHERE id LIKE ? AND is_private = 0 LIMIT 2")
+      .all(pattern) as { title: string }[];
+    if (vaultRows.length > 1) return { title: "", ambiguous: true };
+    if (vaultRows.length === 1) return { title: vaultRows[0]!.title, ambiguous: false };
+    return null;
+  };
+
+  let totalRewrites = 0;
+  let totalAmbiguous = 0;
+  let touchedSources = 0;
+  const now = new Date().toISOString();
+
+  const tx = sqlite.transaction(() => {
+    const rows = sqlite
+      .prepare("SELECT id, content FROM items_active WHERE content LIKE '%筆記（%'")
+      .all() as { id: string; content: string | null }[];
+
+    const upd = sqlite.prepare(
+      "UPDATE items_active SET content = ?, reindex_dirty = 1, modified = ? WHERE id = ?",
+    );
+    const ambIns = sqlite.prepare(
+      `INSERT OR IGNORE INTO backfill_v27_ambiguous (short_id, source_id, recorded_at)
+       VALUES (?, ?, ?)`,
+    );
+
+    for (const row of rows) {
+      const result = backfillLegacyHexInContent(row.content ?? "", lookupShortId);
+      if (result.rewrites > 0) {
+        upd.run(result.newContent, now, row.id);
+        totalRewrites += result.rewrites;
+        touchedSources++;
+      }
+      for (const shortId of result.ambiguous) {
+        ambIns.run(shortId, row.id, now);
+        totalAmbiguous++;
+      }
+    }
+  });
+  tx();
+  setSchemaVersion(sqlite, 27);
+
+  logger.info(
+    {
+      event: "migration_v27_complete",
+      candidates: candidateCount,
+      rewrites: totalRewrites,
+      ambiguous: totalAmbiguous,
+      touched_sources: touchedSources,
+    },
+    `migration v27: backfilled ${totalRewrites} legacy refs across ${touchedSources} sources (${totalAmbiguous} ambiguous)`,
+  );
 }
 
 /**
@@ -1204,6 +1586,13 @@ export function initializeDatabase(sqlite: Database.Database) {
       CREATE INDEX idx_rename_history_target_id ON rename_history(target_id);
       CREATE INDEX idx_rename_history_performed_at ON rename_history(performed_at DESC);
 
+      CREATE TABLE backfill_v27_ambiguous (
+        short_id TEXT NOT NULL,
+        source_id TEXT NOT NULL,
+        recorded_at TEXT NOT NULL,
+        PRIMARY KEY (short_id, source_id)
+      );
+
       CREATE TABLE items_vault (
         id TEXT PRIMARY KEY,
         title TEXT NOT NULL,
@@ -1312,7 +1701,7 @@ function createDb() {
   try {
     initializeDatabase(sqlite);
   } catch (e) {
-    if (e instanceof V24HaltError || e instanceof V25HaltError) {
+    if (e instanceof V24HaltError || e instanceof V25HaltError || e instanceof V27HaltError) {
       haltAndExit(e.haltPayload, e.haltPayload.event);
     }
     throw e;
