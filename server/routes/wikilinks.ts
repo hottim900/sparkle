@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { sqlite } from "../db/index.js";
-import { resolveWikilinkTitle } from "../lib/wikilink.js";
+import { resolveWikilinkTitle, drainReindexQueue } from "../lib/wikilink.js";
 import { normalizeTitleForUniqueness, isTitleInAllowlist } from "../../src/lib/wikilink.js";
 import { undoRename, previewTitleRename } from "../lib/rename-engine.js";
 import { logger } from "../lib/logger.js";
@@ -248,6 +248,22 @@ wikilinksRouter.get("/admin/preview-rename", (c) => {
     would_skip_share_token_source_ids: result.wouldSkipShareTokenSourceIds,
     preview: result.preview,
   });
+});
+
+/**
+ * Synchronous drain of the reindex_dirty queue. The background worker
+ * ticks every 60s, which is too slow for E2E tests + operator workflows
+ * that just rebuilt the index and want to use it immediately. This
+ * endpoint runs `drainReindexQueue` synchronously and returns the number
+ * of rows processed.
+ *
+ * Admin-only via the global /api/* auth middleware. Caps at 500 rows per
+ * call to bound the request latency; loop the endpoint for larger drains.
+ */
+wikilinksRouter.post("/admin/drain-now", (c) => {
+  const count = drainReindexQueue(sqlite, 500);
+  logger.info({ event: "wikilink_admin_drain_now", count }, `synchronous drain: ${count} rows`);
+  return c.json({ status: "drained", count });
 });
 
 export { wikilinksRouter };

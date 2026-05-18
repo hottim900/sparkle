@@ -33,22 +33,12 @@ test.describe("Wikilink rename engine end-to-end", () => {
       content: `see [[${oldTitle}]] for context`,
     });
 
-    // Force-rebuild the reference index so the rename engine finds the
-    // source. Routine writes mark reindex_dirty=1 but the background
-    // worker only drains every 60s — too slow for an E2E. Admin rebuild
-    // is synchronous-enough for one source.
-    await request.post(`${API_BASE}/wikilinks/admin/rebuild`, {
+    // Force a synchronous drain of the reindex queue so reference_index
+    // is populated before the rename. Routine writes set reindex_dirty=1
+    // but the background worker only drains every 60s — too slow for E2E.
+    // /admin/drain-now runs drainReindexQueue() in-request (PR 9).
+    await request.post(`${API_BASE}/wikilinks/admin/drain-now`, {
       headers: { Authorization: `Bearer ${AUTH_TOKEN}` },
-    });
-    // Wait briefly for the worker to drain (it's a setInterval 60s, so we
-    // call the internal reindex via PATCH on the source which re-runs the
-    // hook). Setting content to same value triggers the hook chain.
-    await request.patch(`${API_BASE}/items/${source.id}`, {
-      headers: {
-        Authorization: `Bearer ${AUTH_TOKEN}`,
-        "Content-Type": "application/json",
-      },
-      data: { content: `see [[${oldTitle}]] for context` },
     });
 
     // Now rename the target. PATCH response should carry swept_references.
@@ -102,16 +92,10 @@ test.describe("Wikilink rename engine end-to-end", () => {
       content: `link [[${oldTitle}]] here`,
     });
 
-    // Rebuild + reindex source so preview has reference_index data.
-    await request.post(`${API_BASE}/wikilinks/admin/rebuild`, {
+    // Force synchronous reindex drain (PR 9 endpoint) so preview has
+    // reference_index data — the background worker's 60s tick is too slow.
+    await request.post(`${API_BASE}/wikilinks/admin/drain-now`, {
       headers: { Authorization: `Bearer ${AUTH_TOKEN}` },
-    });
-    await request.patch(`${API_BASE}/items/${source.id}`, {
-      headers: {
-        Authorization: `Bearer ${AUTH_TOKEN}`,
-        "Content-Type": "application/json",
-      },
-      data: { content: `link [[${oldTitle}]] here` },
     });
 
     const previewRes = await request.get(
