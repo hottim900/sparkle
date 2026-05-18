@@ -79,6 +79,13 @@ export function createTestDb() {
     CREATE INDEX idx_rename_history_target_id ON rename_history(target_id);
     CREATE INDEX idx_rename_history_performed_at ON rename_history(performed_at DESC);
 
+    CREATE TABLE backfill_v27_ambiguous (
+      short_id TEXT NOT NULL,
+      source_id TEXT NOT NULL,
+      recorded_at TEXT NOT NULL,
+      PRIMARY KEY (short_id, source_id)
+    );
+
     CREATE TABLE items_vault (
       id TEXT PRIMARY KEY,
       title TEXT NOT NULL,

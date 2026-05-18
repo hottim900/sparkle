@@ -1,5 +1,40 @@
 # Changelog
 
+## [1.5.3.0] - 2026-05-18
+
+### Added
+
+- **Migration v27: legacy `筆記（xxxxxxxx）` → `[[Title]]` backfill (PR 4).** One-shot data migration that rewrites every legacy short-ID reference in `items_active.content` to the canonical wikilink syntax shipped in v1.5.1.0. After v27, Sparkle's writing surface is uniform — all cross-references render through the same Obsidian-native parser, the rename engine (PR 3) propagates title changes through them, and the legacy `筆記（` syntax is retired from active content.
+- **Conservative scope.** v27 only rewrites the `筆記（xxxxxxxx）` pattern (4-8 lowercase hex chars). Code-block skipping (` ``` `, `~~~`, inline backticks) mirrors the live parser so the migration matches running renderer behavior (ENG-26). Bare hex IDs are intentionally NOT rewritten — false-positive risk against commit hashes, build IDs, and other technical content was unacceptable. References to deleted or private items stay verbatim so search can find them.
+- **`backfill_v27_ambiguous` queue.** When a short-id prefix matches ≥2 items (cross-table, active-priority), the reference is left verbatim and recorded in this table with `(short_id, source_id, recorded_at)`. Operators query the table to surface manual-reconciliation work; a follow-up frontend PR ships the admin UI alongside `/admin/title-collisions`.
+- **`docs/migration-v27.md`** with rollback runbook, halt-category triage, ambiguous-queue workflow, and the rationale for the bare-hex carve-out.
+
+### Backup safeguards
+
+v27 follows the v25-pattern backup rules — added because this migration mutates content non-trivially and a parser bug could silently corrupt data without a verified pre-migration snapshot:
+
+- **Unique per-run backup path**: `~/sparkle-backups/todo.db.bak-pre-v27-<ms>-<pid>-<uuid8>` guards against millisecond-collision (systemd tight-restart loop) and parallel migration attempts.
+- **Pre-flight disk check**: requires 1.2× DB size free; throws `migration_v27_halted_no_disk` otherwise with bilingual operator-facing message.
+- **Post-backup verify**: opens backup as readonly, asserts `PRAGMA integrity_check = "ok"` AND `schema_version = 26`; throws `migration_v27_halted_backup_failed` otherwise.
+- **No-op skip**: when no `items_active.content` matches `LIKE '%筆記（%'`, skip the backup entirely and just stamp `schema_version = 27`. Fresh installs and vault-only deployments pay zero backup cost.
+- **systemd integration**: V27HaltError routes through `haltAndExit` → `process.exit(78)`. Pairs with `RestartPreventExitStatus=78` in `scripts/systemd/sparkle.service` so the operator sees a stable error window instead of a restart loop.
+
+### Behavior locked
+
+- **Paused items still rewrite (ENG-27).** Paused is orthogonal to content format; the rewrite is bookkeeping, not user-visible churn.
+- **Descending offset order (ENG-20).** Replacements applied right-to-left so earlier match positions stay valid as the string grows/shrinks.
+- **Sources marked `reindex_dirty=1`** after the rewrite so the worker re-derives `reference_index` rows on the next cycle.
+- **Title sanitization** matches `server/lib/export.ts:108` — `|` → `-`, `]]` → `）`, `[[` → `（`, `\n` → ` ` — so the backfill output mirrors what `resolveSparkleReferences` already produces on export.
+- **Vault is NOT touched.** Pre-PR0d carve-out: `items_vault` and vault `.md` files are out of scope. Vault is SSOT post-v25; Obsidian-side cleanup is the user's choice.
+
+### Tests
+
+- **12 new tests** in `server/db/__tests__/migration-v27.test.ts`: 8 unit tests for `backfillLegacyHexInContent` (single rewrite, multiple in descending order, fenced/inline code-block skip, ambiguous queue, sanitization, deleted target verbatim), 4 integration tests for `migrateV26toV27` (no-op when no legacy, full backfill round-trip, ambiguous recording, pre-migration backup creation).
+
+### Migration sequencing
+
+PR 4 is the final piece of the 4-PR wikilink-first rollout. **Ship order constraint** (from CLAUDE.md memory): DB migration PRs ship independently — wait for deploy + health check on PR 1 (v26) before PR 4 (v27) lands. Auto-merge order on this branch: PR 3 (v1.5.2.0, rename engine, code-only) lands first; PR 4 (v1.5.3.0, this PR, migration v27) follows after PR 3 is on main.
+
 ## [1.5.1.1] - 2026-05-18
 
 ### Added

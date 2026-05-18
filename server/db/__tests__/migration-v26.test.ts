@@ -131,11 +131,11 @@ describe("Migration v25→v26", () => {
     expect(v.version).toBe(26);
   });
 
-  it("fresh install starts at version 26 with all tables", () => {
+  it("fresh install starts at target version with all v26 tables", () => {
     const sqlite = new Database(":memory:");
     initializeDatabase(sqlite);
     const v = sqlite.prepare("SELECT version FROM schema_version").get() as { version: number };
-    expect(v.version).toBe(26);
+    expect(v.version).toBeGreaterThanOrEqual(26);
 
     const tables = sqlite
       .prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
