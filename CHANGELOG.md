@@ -1,5 +1,36 @@
 # Changelog
 
+## [1.5.9.0] - 2026-05-18
+
+### Fixed
+
+- **Title-collisions admin endpoint now matches the writer's normalizer.** `GET /api/wikilinks/admin/title-collisions` was grouping rows via SQL `LOWER(TRIM(title))`, but the writer's uniqueness check at `isTitleAvailable` runs `normalizeTitleForUniqueness` (trim → NFC → lowercase). NFC-divergent rows (e.g. NFC-composed "café" vs NFD-decomposed "café") would slip past the SQL grouping while still being blocked at write time — exactly the legacy duplicates this admin page exists to surface. Grouping now runs in JS via the shared normalizer.
+- **Drain-now endpoint hardened.** Cap reduced from 500 rows/call to 50 (bounds writer-pin time per request); cap is exported as `max_per_call` in the success response so loop callers self-pace. Request-rate abuse stays in scope of Hono's existing global rate limiter — an earlier 200 ms in-process cooldown attempt cross-contaminated serial E2E tests for negligible marginal protection, so the per-request cap is the sole guard.
+- **Undo mutation now invalidates downstream caches.** `src/routes/admin/recent-renames.tsx` previously only invalidated `["admin", "recent-renames"]`, but `undoRename` flips the target's title and rewrites every source — leaving `items` lists, individual `item` details, search, dashboard buckets, tag counts, and the wikilink resolver stale. Now invalidates all of them via `queryKeys` so the operator UI matches the new on-disk state immediately.
+
+### Added
+
+- **DX-2 expected-state-hash race guard for title renames.** `previewTitleRename` returns a `stateHash` fingerprinting target id + old title + each source's content sha256 (sorted by source id for determinism). Agents pass it back as `expected_state_hash` in `PATCH /api/items/:id` (title change). Inside the existing `BEGIN IMMEDIATE`, `applyTitleRename` recomputes the hash; mismatch → throws `RenameStateChangedError` → route returns 409 `RENAME_STATE_CHANGED` with both hashes for debugging. Closes the preview-to-commit race that the stateless preview alone couldn't catch.
+- **DX-3 `Cite as` line in MCP item responses.** `formatItem` now emits `**Cite as**: \`[[<title>]]\``so an LLM reading`sparkle_get_note`knows the exact wikilink form to paste when citing the note. Suppressed for empty titles (uncitable) and the`未命名`placeholder (resolves to`null`per spec, so a`[[未命名]]` citation would dead-link).
+
+### Tests
+
+- **DX-2 state-hash round-trip + mismatch tests** in `rename-engine.test.ts`: preview returns a 64-char hex hash that `applyTitleRename` accepts; a stale hash throws `RenameStateChangedError`; hash changes when a source's content is edited or when a new source starts citing the target.
+- **DX-2 PATCH-layer 409 contract** in `items-title-collision.test.ts`: PATCH with a stale `expected_state_hash` returns 409 `RENAME_STATE_CHANGED` with both hashes, and no rewrite happens.
+- **NFC-divergent collision detection** in `wikilinks.test.ts`: composed vs decomposed "café" rows now appear as a single collision group (byte-divergence asserted up front).
+- **Drain-now success + serial-call safety** in `wikilinks.test.ts`: success path returns `max_per_call: 50`; three back-to-back calls all return 200 (no cooldown gate).
+- **DX-3 cite_as rendering** in `format.test.ts` (MCP): titled note → `Cite as` line present with exact wikilink form; empty-title and `未命名` rows suppressed.
+
+### Notes
+
+Picks up the multi-agent audit's findings on PR #344 (v1.5.8.0):
+
+- **Code-reviewer warnings (real bugs in shipped code, all fixed here):** title-collisions normalizer mismatch, drain-now DoS surface, undo cache invalidation breadth.
+- **Test-honesty fix:** the ENG-7 microtask stress test was renamed + recommented to reflect what it actually verifies (post-condition: 10 sequential calls → 1 row). better-sqlite3 is synchronous so the test never exercised true `BEGIN IMMEDIATE` contention; the runbook for that lives in `docs/wikilink-spec.md`.
+- **Weak-defer re-audit:** DX-3 cite_as shipped (one field, low risk), DX-2 confirm-token shipped as `expected_state_hash` (stateless variant — server recomputes + compares, no in-process token store). ENG-22 promotion sweep stays a no-op by design (the wikilink parser rejects `[[]]`, so empty→non-empty has no source references to sweep — the existing comment at `server/lib/items.ts:646` is correct).
+
+Full suite: **1837 passing** (up from 1827 last release, +10 net new tests across rename-engine / wikilinks / items-title-collision). MCP suite: **252 passing** (up from 249, +3 cite_as cases). Lint + tsc clean across both root and `mcp-server/`.
+
 ## [1.5.8.0] - 2026-05-18
 
 ### Added

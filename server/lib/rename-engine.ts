@@ -17,9 +17,73 @@
 // vault `.md` rewrites (Pre-PR0d active-only carve-out).
 
 import type Database from "better-sqlite3";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { parseWikilinks } from "../../src/lib/wikilink.js";
 import { logger } from "./logger.js";
+
+/**
+ * Thrown by `applyTitleRename` when the caller passed an `expectedStateHash`
+ * that no longer matches the live state — i.e. between preview and commit,
+ * the target was renamed by someone else, sources were added/removed, or a
+ * source's content was edited in a way that would change what we'd rewrite.
+ *
+ * Route layer maps this to 409 STATE_CHANGED so the agent can re-preview.
+ */
+export class RenameStateChangedError extends Error {
+  readonly code = "RENAME_STATE_CHANGED" as const;
+  constructor(
+    readonly expected: string,
+    readonly actual: string,
+  ) {
+    super(
+      `Rename state changed since preview — expected ${expected.slice(0, 12)}…, got ${actual.slice(0, 12)}…`,
+    );
+    this.name = "RenameStateChangedError";
+  }
+}
+
+/**
+ * Fingerprint the inputs `applyTitleRename` will read from the database, so a
+ * preview/commit pair can detect any racing write that would change the
+ * rewrite scope.
+ *
+ * Includes: target id, the title we expect to rename FROM (catches a racing
+ * title flip), and for each source — its id + sha256 of its content (catches
+ * a racing edit that adds or removes a `[[Title]]` reference).
+ *
+ * Source-id ordering is stable (SQL ORDER BY) so the hash is deterministic.
+ *
+ * Stateless: no row inserted server-side; caller passes the hash back in the
+ * subsequent commit and the server recomputes + compares. This is the
+ * "good-enough" race guard from docs/wikilink-spec.md DX-2 — it doesn't pin
+ * the underlying rows, just rejects commits that would operate on a different
+ * snapshot than the user reviewed.
+ */
+export function computeRenameStateHash(
+  sqlite: Database.Database,
+  targetId: string,
+  oldTitle: string,
+): string {
+  const sourceIds = sqlite
+    .prepare(
+      `SELECT DISTINCT source_id FROM reference_index
+       WHERE target_id = ? AND kind = 'wikilink'
+       ORDER BY source_id`,
+    )
+    .all(targetId) as { source_id: string }[];
+
+  const hash = createHash("sha256");
+  hash.update(`t:${targetId}\no:${oldTitle}\n`);
+  for (const { source_id } of sourceIds) {
+    const row = sqlite.prepare("SELECT content FROM items_active WHERE id = ?").get(source_id) as
+      | { content: string | null }
+      | undefined;
+    const content = row?.content ?? "";
+    const contentHash = createHash("sha256").update(content).digest("hex").slice(0, 16);
+    hash.update(`s:${source_id}:${contentHash}\n`);
+  }
+  return hash.digest("hex");
+}
 
 export interface RenameResult {
   /** Number of source items whose content was rewritten. */
@@ -78,6 +142,7 @@ export function applyTitleRename(
   oldTitle: string,
   newTitle: string,
   performedBy: string = "system",
+  expectedStateHash?: string,
 ): RenameResult {
   if (oldTitle === newTitle || oldTitle.trim() === "") {
     return {
@@ -86,6 +151,16 @@ export function applyTitleRename(
       historyId: null,
       skippedShareTokenSourceIds: [],
     };
+  }
+
+  // DX-2 race guard: when the caller supplied a hash from `previewTitleRename`,
+  // recompute it now (inside the BEGIN IMMEDIATE owned by the route layer) and
+  // bail if it changed. This catches a racing edit between preview and commit.
+  if (expectedStateHash !== undefined) {
+    const actual = computeRenameStateHash(sqlite, targetId, oldTitle);
+    if (actual !== expectedStateHash) {
+      throw new RenameStateChangedError(expectedStateHash, actual);
+    }
   }
 
   // Pull every source that the index says cites this target via a wikilink
@@ -261,6 +336,12 @@ export interface PreviewResult {
    * + `sparkle_get_note` per id.
    */
   preview: Array<{ source_id: string; source_title: string; snippet: string }>;
+  /**
+   * Fingerprint of the state this preview was computed against (DX-2). Pass
+   * to `applyTitleRename` (via PATCH body `expected_state_hash`) to reject
+   * commits that landed after a racing edit.
+   */
+  stateHash: string;
 }
 
 /**
@@ -284,6 +365,7 @@ export function previewTitleRename(
       wouldRewriteSourceIds: [],
       wouldSkipShareTokenSourceIds: [],
       preview: [],
+      stateHash: computeRenameStateHash(sqlite, targetId, oldTitle),
     };
   }
 
@@ -300,6 +382,7 @@ export function previewTitleRename(
       wouldRewriteSourceIds: [],
       wouldSkipShareTokenSourceIds: [],
       preview: [],
+      stateHash: computeRenameStateHash(sqlite, targetId, oldTitle),
     };
   }
 
@@ -354,6 +437,7 @@ export function previewTitleRename(
     wouldRewriteSourceIds,
     wouldSkipShareTokenSourceIds,
     preview,
+    stateHash: computeRenameStateHash(sqlite, targetId, oldTitle),
   };
 }
 

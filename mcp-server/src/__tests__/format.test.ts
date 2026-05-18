@@ -94,6 +94,24 @@ describe("formatItem", () => {
     expect(result).toContain("# Test Note");
     expect(result).not.toContain("**Tags**:");
   });
+
+  it("DX-3: emits Cite as line with the exact wikilink form for titled notes", () => {
+    const item = makeItem({ title: "Knowledge Graph" });
+    const result = formatItem(item);
+    expect(result).toContain("**Cite as**: `[[Knowledge Graph]]`");
+  });
+
+  it("DX-3: suppresses Cite as for empty title rows (can't be cited)", () => {
+    const item = makeItem({ title: "" });
+    const result = formatItem(item);
+    expect(result).not.toContain("**Cite as**");
+  });
+
+  it("DX-3: suppresses Cite as for `未命名` placeholder (resolves to null)", () => {
+    const item = makeItem({ title: "未命名" });
+    const result = formatItem(item);
+    expect(result).not.toContain("**Cite as**");
+  });
 });
 
 describe("formatItemList", () => {

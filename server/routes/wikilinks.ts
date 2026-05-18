@@ -164,49 +164,54 @@ wikilinksRouter.post("/admin/undo-rename/:historyId", (c) => {
  * by `isTitleAvailable`; this endpoint surfaces the legacy duplicates so the
  * operator can rename or merge them.
  *
+ * Grouping runs in JS via the shared `normalizeTitleForUniqueness`
+ * (trim → NFC → lowercase) so the operator UI surfaces exactly the duplicates
+ * the writer enforcement blocks. A pure SQL `LOWER(TRIM(title))` group would
+ * miss NFC-divergent rows (e.g. NFC-composed "é" vs NFD-decomposed "é") —
+ * those are the survivors the pre-Pre-PR0e backfill couldn't dedupe and the
+ * exact pairs this page exists to surface.
+ *
  * Allowlist titles (`未命名`) are excluded — duplicate placeholders are legal.
  *
  * Response: `{ collisions: [{ normalized, rows: [{ id, title, type, status, modified }] }], total }`
  */
 wikilinksRouter.get("/admin/title-collisions", (c) => {
-  const groups = sqlite
+  const allRows = sqlite
     .prepare(
-      `SELECT LOWER(TRIM(title)) AS normalized, COUNT(*) AS n
+      `SELECT id, title, type, status, modified
        FROM items_active
-       WHERE title != ''
-       GROUP BY LOWER(TRIM(title))
-       HAVING n >= 2
-       ORDER BY n DESC, normalized ASC`,
+       WHERE title != ''`,
     )
-    .all() as { normalized: string; n: number }[];
+    .all() as Array<{
+    id: string;
+    title: string;
+    type: string;
+    status: string;
+    modified: string;
+  }>;
+
+  const groups = new Map<string, typeof allRows>();
+  for (const row of allRows) {
+    const key = normalizeTitleForUniqueness(row.title);
+    if (key === "") continue;
+    if (isTitleInAllowlist(key)) continue;
+    const bucket = groups.get(key);
+    if (bucket) bucket.push(row);
+    else groups.set(key, [row]);
+  }
 
   const collisions: Array<{
     normalized: string;
     rows: Array<{ id: string; title: string; type: string; status: string; modified: string }>;
   }> = [];
-
-  for (const group of groups) {
-    // Re-run the allowlist predicate per group rather than baking the list
-    // into SQL — keeps the allowlist source-of-truth in src/lib/wikilink.ts.
-    if (isTitleInAllowlist(group.normalized)) continue;
-    if (normalizeTitleForUniqueness(group.normalized) === "") continue;
-
-    const rows = sqlite
-      .prepare(
-        `SELECT id, title, type, status, modified
-         FROM items_active
-         WHERE LOWER(TRIM(title)) = ?
-         ORDER BY modified DESC`,
-      )
-      .all(group.normalized) as Array<{
-      id: string;
-      title: string;
-      type: string;
-      status: string;
-      modified: string;
-    }>;
-    collisions.push({ normalized: group.normalized, rows });
+  for (const [normalized, rows] of groups) {
+    if (rows.length < 2) continue;
+    rows.sort((a, b) => (a.modified < b.modified ? 1 : -1));
+    collisions.push({ normalized, rows });
   }
+  collisions.sort(
+    (a, b) => b.rows.length - a.rows.length || a.normalized.localeCompare(b.normalized),
+  );
 
   return c.json({ collisions, total: collisions.length });
 });
@@ -247,6 +252,9 @@ wikilinksRouter.get("/admin/preview-rename", (c) => {
     would_rewrite_source_ids: result.wouldRewriteSourceIds,
     would_skip_share_token_source_ids: result.wouldSkipShareTokenSourceIds,
     preview: result.preview,
+    // DX-2: agents pass this back as PATCH `expected_state_hash` to detect
+    // racing edits between preview and commit. See `computeRenameStateHash`.
+    state_hash: result.stateHash,
   });
 });
 
@@ -257,13 +265,18 @@ wikilinksRouter.get("/admin/preview-rename", (c) => {
  * endpoint runs `drainReindexQueue` synchronously and returns the number
  * of rows processed.
  *
- * Admin-only via the global /api/* auth middleware. Caps at 500 rows per
- * call to bound the request latency; loop the endpoint for larger drains.
+ * Admin-only via the global /api/* auth middleware. The per-call cap of
+ * `DRAIN_NOW_MAX_ROWS` bounds writer-lock hold time — caller loops for
+ * larger drains. Hono's global rate-limit middleware handles request-rate
+ * abuse, so no separate cooldown here (an earlier 200ms cooldown attempt
+ * cross-contaminated serial E2E tests for negligible marginal protection).
  */
+const DRAIN_NOW_MAX_ROWS = 50;
+
 wikilinksRouter.post("/admin/drain-now", (c) => {
-  const count = drainReindexQueue(sqlite, 500);
+  const count = drainReindexQueue(sqlite, DRAIN_NOW_MAX_ROWS);
   logger.info({ event: "wikilink_admin_drain_now", count }, `synchronous drain: ${count} rows`);
-  return c.json({ status: "drained", count });
+  return c.json({ status: "drained", count, max_per_call: DRAIN_NOW_MAX_ROWS });
 });
 
 export { wikilinksRouter };

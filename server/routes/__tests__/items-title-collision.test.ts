@@ -201,4 +201,37 @@ describe("PATCH /api/items/:id swept_references contract (DX-5)", () => {
     const body = (await res.json()) as { swept_references?: unknown };
     expect(body.swept_references).toBeUndefined();
   });
+
+  it("DX-2: rejects rename PATCH with 409 RENAME_STATE_CHANGED when expected_state_hash is stale", async () => {
+    const target = insertActiveRow(testSqlite, { title: "Hub", content: "" });
+    const source = insertActiveRow(testSqlite, { content: "see [[Hub]] here" });
+    testSqlite
+      .prepare(
+        `INSERT INTO reference_index (source_id, target_id, char_offset, raw_title, kind)
+         VALUES (?, ?, 4, 'Hub', 'wikilink')`,
+      )
+      .run(source, target);
+
+    // Caller pretends to have a hash from a prior preview, but it's bogus.
+    const staleHash = "0".repeat(64);
+    const res = await app.request(`/api/items/${target}`, {
+      method: "PATCH",
+      headers: jsonHeaders(),
+      body: JSON.stringify({ title: "Renamed", expected_state_hash: staleHash }),
+    });
+    expect(res.status).toBe(409);
+    const body = (await res.json()) as {
+      code: string;
+      expected_state_hash: string;
+      actual_state_hash: string;
+    };
+    expect(body.code).toBe("RENAME_STATE_CHANGED");
+    expect(body.expected_state_hash).toBe(staleHash);
+    expect(body.actual_state_hash).toMatch(/^[a-f0-9]{64}$/);
+    // No rewrite happened.
+    const src = testSqlite.prepare("SELECT content FROM items_active WHERE id = ?").get(source) as {
+      content: string;
+    };
+    expect(src.content).toBe("see [[Hub]] here");
+  });
 });

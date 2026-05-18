@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { listRecentRenames, undoRename } from "@/lib/api";
+import { queryKeys } from "@/lib/query-keys";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Undo2 } from "lucide-react";
@@ -21,7 +22,19 @@ function RecentRenamesPage() {
     mutationFn: (historyId: string) => undoRename(historyId),
     onSuccess: (result) => {
       toast.success(`已還原 — 重寫 ${result.rewrittenCount} 個來源`);
+      // Undo flips the target's title back AND rewrites every source row that
+      // was citing the new title. That invalidates every cache slice that
+      // reads from items_active: lists/details, search, dashboard buckets,
+      // tag counts, and the wikilink resolver (the title key it cached now
+      // points to a different row).
       queryClient.invalidateQueries({ queryKey: ["admin", "recent-renames"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.items.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.private.list() });
+      queryClient.invalidateQueries({ queryKey: ["private", "search"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.recent });
+      queryClient.invalidateQueries({ queryKey: queryKeys.stats });
+      queryClient.invalidateQueries({ queryKey: queryKeys.tags });
+      queryClient.invalidateQueries({ queryKey: ["wikilinks", "resolve"] });
     },
     onError: (err) => {
       toast.error(`還原失敗：${err instanceof Error ? err.message : String(err)}`);
