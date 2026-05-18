@@ -1,9 +1,11 @@
 import { Link } from "@tanstack/react-router";
 import { useResolveWikilink } from "@/hooks/use-resolve-wikilink";
+import { useIsHoverDevice } from "@/hooks/use-is-hover-device";
 import { useQuery } from "@tanstack/react-query";
 import { resolveLegacyShortId } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 
 interface WikilinkChipProps {
@@ -47,31 +49,77 @@ export function WikilinkChip({ title, alias }: WikilinkChipProps) {
     );
   }
 
+  return <ResolvedWikilink data={data} display={display} />;
+}
+
+interface ResolvedWikilinkProps {
+  data: { id: string; title: string; origin: string; snippet?: string };
+  display: string;
+}
+
+/**
+ * Renders the resolved link with a preview affordance. On hover-capable
+ * devices (desktop) the preview is in a HoverCard that opens on pointer
+ * hover. On touch devices the preview is in a Popover triggered by tap on
+ * a peek button next to the link — taps on the link itself navigate (the
+ * familiar mobile pattern: link = go, separate affordance = peek).
+ */
+function ResolvedWikilink({ data, display }: ResolvedWikilinkProps) {
+  const isHover = useIsHoverDevice();
+
+  const previewBody = (
+    <div className="space-y-1">
+      <div className="font-semibold text-sm">{data.title}</div>
+      <div className="text-xs text-muted-foreground">
+        {data.origin === "vault" ? "Vault" : "Sparkle"}
+      </div>
+      {data.snippet && <p className="text-sm text-muted-foreground line-clamp-4">{data.snippet}</p>}
+    </div>
+  );
+
+  if (isHover) {
+    return (
+      <HoverCard openDelay={200} closeDelay={100}>
+        <HoverCardTrigger asChild>
+          <Link
+            to="/item/$id"
+            params={{ id: data.id }}
+            className="text-primary underline decoration-dotted underline-offset-2 hover:no-underline"
+            data-testid="wikilink-resolved"
+            data-origin={data.origin}
+          >
+            {display}
+          </Link>
+        </HoverCardTrigger>
+        <HoverCardContent className="w-80">{previewBody}</HoverCardContent>
+      </HoverCard>
+    );
+  }
+
+  // Touch device: link navigates on tap; small chevron button opens a
+  // Popover preview. Keeps the primary action (navigate) on the link.
   return (
-    <HoverCard openDelay={200} closeDelay={100}>
-      <HoverCardTrigger asChild>
-        <Link
-          to="/item/$id"
-          params={{ id: data.id }}
-          className="text-primary underline decoration-dotted underline-offset-2 hover:no-underline"
-          data-testid="wikilink-resolved"
-          data-origin={data.origin}
+    <span className="inline-flex items-baseline gap-0.5" data-testid="wikilink-resolved-mobile">
+      <Link
+        to="/item/$id"
+        params={{ id: data.id }}
+        className="text-primary underline decoration-dotted underline-offset-2"
+        data-testid="wikilink-resolved"
+        data-origin={data.origin}
+      >
+        {display}
+      </Link>
+      <Popover>
+        <PopoverTrigger
+          aria-label={`預覽「${data.title}」`}
+          className="text-xs text-muted-foreground px-1 py-0.5 rounded hover:bg-muted/50"
+          data-testid="wikilink-mobile-peek"
         >
-          {display}
-        </Link>
-      </HoverCardTrigger>
-      <HoverCardContent className="w-80">
-        <div className="space-y-1">
-          <div className="font-semibold text-sm">{data.title}</div>
-          <div className="text-xs text-muted-foreground">
-            {data.origin === "vault" ? "Vault" : "Sparkle"}
-          </div>
-          {data.snippet && (
-            <p className="text-sm text-muted-foreground line-clamp-4">{data.snippet}</p>
-          )}
-        </div>
-      </HoverCardContent>
-    </HoverCard>
+          ⓘ
+        </PopoverTrigger>
+        <PopoverContent className="w-80">{previewBody}</PopoverContent>
+      </Popover>
+    </span>
   );
 }
 
