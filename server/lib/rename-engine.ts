@@ -28,6 +28,15 @@ export interface RenameResult {
   rewrittenSourceIds: string[];
   /** Audit row id (rename_history.id) — empty when noop. */
   historyId: string | null;
+  /**
+   * Source ids that were SKIPPED to avoid the ENG-3 share-token leak: the
+   * target is private AND the source has an active share_token row. Skipping
+   * preserves the source's old `[[Title]]` text so a public viewer doesn't
+   * see the renamed (still-private) title. Worker re-derives reference_index
+   * on the next cycle; the source's reference becomes unresolved (purple
+   * renderer state) until the user removes or updates the reference.
+   */
+  skippedShareTokenSourceIds: string[];
 }
 
 interface RewritePlan {
@@ -71,12 +80,17 @@ export function applyTitleRename(
   performedBy: string = "system",
 ): RenameResult {
   if (oldTitle === newTitle || oldTitle.trim() === "") {
-    return { rewrittenCount: 0, rewrittenSourceIds: [], historyId: null };
+    return {
+      rewrittenCount: 0,
+      rewrittenSourceIds: [],
+      historyId: null,
+      skippedShareTokenSourceIds: [],
+    };
   }
 
   // Pull every source that the index says cites this target via a wikilink
   // (not legacy_hex — legacy targets by id, not title, so a rename is moot).
-  const sourceIds = sqlite
+  let sourceIds = sqlite
     .prepare(
       `SELECT DISTINCT source_id FROM reference_index
        WHERE target_id = ? AND kind = 'wikilink'`,
@@ -84,7 +98,45 @@ export function applyTitleRename(
     .all(targetId) as { source_id: string }[];
 
   if (sourceIds.length === 0) {
-    return { rewrittenCount: 0, rewrittenSourceIds: [], historyId: null };
+    return {
+      rewrittenCount: 0,
+      rewrittenSourceIds: [],
+      historyId: null,
+      skippedShareTokenSourceIds: [],
+    };
+  }
+
+  // ENG-3: share_token leak guard. If the target is private, the rename
+  // would expose the new (still-private) title in any source that has an
+  // active share_token — the public viewer of the share page would see
+  // `[[New Private Title]]` rendered as literal text. Skip those sources.
+  // We still rewrite sources without share_tokens — those are not publicly
+  // visible, so the rewrite is safe.
+  const target = sqlite
+    .prepare("SELECT is_private FROM items_active WHERE id = ?")
+    .get(targetId) as { is_private: number } | undefined;
+  const skippedShareTokenSourceIds: string[] = [];
+  if (target?.is_private === 1) {
+    const ids = sourceIds.map((s) => s.source_id);
+    const placeholders = ids.map(() => "?").join(",");
+    const sharedRows = sqlite
+      .prepare(`SELECT DISTINCT item_id FROM share_tokens WHERE item_id IN (${placeholders})`)
+      .all(...ids) as { item_id: string }[];
+    if (sharedRows.length > 0) {
+      const sharedSet = new Set(sharedRows.map((r) => r.item_id));
+      for (const id of ids) {
+        if (sharedSet.has(id)) skippedShareTokenSourceIds.push(id);
+      }
+      sourceIds = sourceIds.filter((s) => !sharedSet.has(s.source_id));
+      logger.warn(
+        {
+          event: "rename_share_token_skip",
+          target_id: targetId,
+          skipped_source_count: skippedShareTokenSourceIds.length,
+        },
+        `rename of private item skipped ${skippedShareTokenSourceIds.length} shared source(s) to avoid title leak`,
+      );
+    }
   }
 
   const plans: RewritePlan[] = [];
@@ -105,7 +157,12 @@ export function applyTitleRename(
     // find any matching wikilink. This happens when the index is stale (worker
     // hasn't drained a recent edit that removed the ref). Skip silently —
     // worker will re-derive shortly.
-    return { rewrittenCount: 0, rewrittenSourceIds: [], historyId: null };
+    return {
+      rewrittenCount: 0,
+      rewrittenSourceIds: [],
+      historyId: null,
+      skippedShareTokenSourceIds,
+    };
   }
 
   const historyId = randomUUID();
@@ -151,7 +208,12 @@ export function applyTitleRename(
     `rename ${oldTitle} → ${newTitle} rewrote ${plans.length} sources`,
   );
 
-  return { rewrittenCount: plans.length, rewrittenSourceIds: sourceIdList, historyId };
+  return {
+    rewrittenCount: plans.length,
+    rewrittenSourceIds: sourceIdList,
+    historyId,
+    skippedShareTokenSourceIds,
+  };
 }
 
 /**

@@ -146,4 +146,21 @@ describe("stripWikilinkMarkup", () => {
   it("strips multiple refs in correct order", () => {
     expect(stripWikilinkMarkup("[[A]] and [[B|b-alias]]")).toBe("A and b-alias");
   });
+
+  it("by default strips wikilinks inside code blocks (legacy behavior)", () => {
+    expect(stripWikilinkMarkup("`[[Foo]]`")).toBe("`Foo`");
+  });
+
+  it("with skipCode=true preserves wikilinks inside fenced blocks", () => {
+    const content = "before\n\n```\n[[Foo]]\n```\n\nafter [[Bar]] tail";
+    expect(stripWikilinkMarkup(content, { skipCode: true })).toBe(
+      "before\n\n```\n[[Foo]]\n```\n\nafter Bar tail",
+    );
+  });
+
+  it("with skipCode=true preserves wikilinks inside inline backticks", () => {
+    expect(stripWikilinkMarkup("use `[[code]]` for refs", { skipCode: true })).toBe(
+      "use `[[code]]` for refs",
+    );
+  });
 });

@@ -1,4 +1,5 @@
 import { marked, type Token, type Tokens } from "marked";
+import { stripWikilinkMarkup } from "../../src/lib/wikilink.js";
 
 const MIN_TOC_HEADINGS = 4;
 
@@ -157,11 +158,18 @@ interface RenderOptions {
 }
 
 export function renderPublicPage(data: PublicPageData, options?: RenderOptions): string {
+  // ENG-19: strip `[[…]]` syntax before render so public viewers don't see
+  // raw Sparkle markup. Combined with ENG-3 (rename engine skip on shared
+  // sources), this closes the title-leak path. We respect code-block
+  // boundaries — a user who wrote `[[example]]` inside a fenced block
+  // expected the literal text to render.
+  const renderableContent = stripWikilinkMarkup(data.content, { skipCode: true });
+
   const titleEscaped = escapeHtml(data.title);
-  const description = escapeHtml(stripMarkdown(data.content, 200));
+  const description = escapeHtml(stripMarkdown(renderableContent, 200));
 
   // Single tokenization pass: extract headings, then render from pre-lexed tokens
-  const tokens = marked.lexer(data.content);
+  const tokens = marked.lexer(renderableContent);
   const headings = extractHeadings(tokens);
   const hasToc = headings.length >= MIN_TOC_HEADINGS;
   const tocHtml = buildTocHtml(headings);

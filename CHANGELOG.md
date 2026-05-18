@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.5.5.0] - 2026-05-18
+
+### Added
+
+- **ENG-3 share-token leak guard in rename engine.** `applyTitleRename` now skips sources that have an active `share_tokens` row when the target item is private. Without the skip, renaming a private item would rewrite the source's `[[Old Title]]` content to `[[New Private Title]]` — and the public share viewer (who can see the source's rendered content) would see the new private title in plain text. Currently the resolver privacy filter (`is_private = 0` on `resolveWikilinkTitle`) prevents private targets from accumulating `reference_index` entries through the normal worker path, so this is defense-in-depth — but the safety net catches admin-debug INSERTs and any future change that makes private wikilinks resolvable for authenticated surfaces. `RenameResult.skippedShareTokenSourceIds` carries the IDs so the operator UI can surface the skipped count.
+- **ENG-19 strip `[[…]]` from public share render.** `renderPublicPage` now runs content through `stripWikilinkMarkup(..., { skipCode: true })` before marked tokenization. `[[Foo]]` becomes plain text `Foo`; `[[Foo|alias]]` becomes `alias` (alias wins for display). Code-block contents are preserved verbatim — a user who wrote `[[example]]` inside a fenced block expected the literal text to render. This closes the visual leak path: even when a source contains a `[[Private Title]]` reference the user wrote manually (which the renderer would otherwise pass through as `[[Private Title]]` literal text in HTML), the public viewer sees only the title with no Sparkle markup.
+- **`GET /api/wikilinks/admin/title-collisions`.** Returns groups of `items_active` rows that share a normalized title — pre-Pre-PR0e duplicates that slipped in before PR 5's write-time enforcement. Allowlist titles (`未命名`) and empty titles are excluded. Response shape: `{ collisions: [{ normalized, rows: [{ id, title, type, status, modified }] }], total }`. Rows within each group sorted by `modified DESC` so the operator sees the newest first. Guarded by the global `/api/*` Bearer auth middleware.
+- **30-day `rename_history` retention.** `server/lib/rename-history-cleanup.ts` exposes `pruneRenameHistory` (deletes rows where `performed_at < now - 30d`) and `checkAndPruneRenameHistory` (a 60s-tick scheduler with a 24h internal throttle). Wired into `server/index.ts` next to the other periodic timers. Without this the audit table grows unbounded — operator-facing undo only matters for recent renames, anything older is git/backup territory.
+- **`stripWikilinkMarkup` gained `{ skipCode?: boolean }`.** Default `false` preserves existing callers (LINE daily brief, share-page description) where stripping inside code is acceptable. `true` is used by the public-page renderer so code samples render the literal `[[…]]` text the user wrote.
+
+### Tests
+
+- 5 new ENG-3 tests in `server/lib/__tests__/rename-engine-share-leak.test.ts`: skip private+shared, rewrite non-shared private siblings, public-target case (no skip), unlisted-visibility coverage, all-private-no-shared case. Tests use manual `INSERT INTO reference_index` to exercise the engine's skip logic regardless of how the index got populated.
+- 4 new cleanup tests in `server/lib/__tests__/rename-history-cleanup.test.ts`: prune older-than-30d, no-op when nothing stale, 24h throttle short-circuits subsequent ticks, throttle reset after `resetRenameHistoryCleanupForTest`.
+- 6 new ENG-19 tests in `server/lib/__tests__/render-public-page-wikilinks.test.ts`: strip `[[Foo]]`, strip alias, preserve fenced code, preserve inline backticks, OG description also stripped, no-op when no refs.
+- 5 new admin-collisions tests in `server/routes/__tests__/wikilinks.test.ts`: 401 unauth, empty list, case-insensitive grouping, 未命名 allowlist exclusion, empty-title exclusion, modified-desc ordering.
+- 3 new `stripWikilinkMarkup` tests in `src/lib/__tests__/wikilink.test.ts` covering the new `skipCode` option.
+
+### Notes
+
+Follow-up to v1.5.4.0 (PR 5 rename engine + title uniqueness). Closes the defense-in-depth items the multi-agent audit flagged: ENG-3 leak guard, ENG-19 public-render strip, admin title-collisions surface for legacy duplicates, retention policy for the unbounded audit table.
+
 ## [1.5.4.0] - 2026-05-18
 
 ### Added

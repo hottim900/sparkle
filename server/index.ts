@@ -46,6 +46,7 @@ import { lineBriefRouter } from "./routes/line-brief.js";
 import { checkAndGenerateDailyNote } from "./lib/daily-note-scheduler.js";
 import { checkAndSendLineBrief } from "./lib/line-brief-scheduler.js";
 import { checkAndDrainReindexQueue } from "./lib/wikilink-worker.js";
+import { checkAndPruneRenameHistory } from "./lib/rename-history-cleanup.js";
 import { wikilinksRouter } from "./routes/wikilinks.js";
 import { startVaultScanner } from "./lib/vault-scanner.js";
 
@@ -589,6 +590,11 @@ lineBriefTimer.unref();
 // batches every 60s. Populates reference_index for the rename engine (PR 3).
 const wikilinkWorkerTimer = setInterval(() => checkAndDrainReindexQueue(sqlite), 60_000);
 wikilinkWorkerTimer.unref();
+
+// rename_history retention — prunes rows older than 30 days. Cheap tick
+// every 60s with a 24h internal throttle, so we only DELETE once a day.
+const renameHistoryCleanupTimer = setInterval(() => checkAndPruneRenameHistory(sqlite), 60_000);
+renameHistoryCleanupTimer.unref();
 
 // Vault scanner — indexes entire vault into vault_files table every 5 minutes.
 // vault_files.sparkle_id is the source-of-truth for vault path resolution

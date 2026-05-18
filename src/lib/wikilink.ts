@@ -280,9 +280,14 @@ export function isTitleInAllowlist(title: string): boolean {
  * `[[Foo]]` → `Foo`
  * `[[Foo|bar]]` → `bar` (alias wins for display)
  * Unbalanced or malformed leftovers pass through verbatim.
+ *
+ * `skipCode` defaults to `false` — strip everything. Pass `true` when
+ * the surface preserves code blocks verbatim (the share page renders
+ * code via marked, and a user who wrote `[[example]]` inside a fenced
+ * block expected the literal text to render).
  */
-export function stripWikilinkMarkup(content: string): string {
-  const refs = parseWikilinks(content, { skipCode: false });
+export function stripWikilinkMarkup(content: string, opts: { skipCode?: boolean } = {}): string {
+  const refs = parseWikilinks(content, { skipCode: opts.skipCode === true });
   if (refs.length === 0) return content;
   // Replace in descending start order so earlier indices stay valid.
   let result = content;
