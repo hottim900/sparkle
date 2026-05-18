@@ -155,3 +155,82 @@ describe("POST /api/wikilinks/admin/rebuild", () => {
     expect(dirty.n).toBe(2);
   });
 });
+
+describe("GET /api/wikilinks/admin/recent-renames", () => {
+  it("returns 401 without auth", async () => {
+    const res = await app.request("/api/wikilinks/admin/recent-renames");
+    expect(res.status).toBe(401);
+  });
+
+  it("returns recent rename rows in descending performed_at order", async () => {
+    testSqlite
+      .prepare(
+        `INSERT INTO rename_history (id, target_id, old_title, new_title, source_count, performed_at, performed_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run("h1", "t1", "Old1", "New1", 3, "2026-05-18T01:00:00Z", "user");
+    testSqlite
+      .prepare(
+        `INSERT INTO rename_history (id, target_id, old_title, new_title, source_count, performed_at, performed_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run("h2", "t2", "Old2", "New2", 5, "2026-05-18T02:00:00Z", "user");
+
+    const res = await authedGet("/api/wikilinks/admin/recent-renames");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      renames: { id: string; old_title: string; new_title: string }[];
+    };
+    expect(body.renames).toHaveLength(2);
+    expect(body.renames[0]!.id).toBe("h2"); // most recent first
+    expect(body.renames[1]!.id).toBe("h1");
+  });
+});
+
+describe("POST /api/wikilinks/admin/undo-rename/:historyId", () => {
+  it("returns 401 without auth", async () => {
+    const res = await app.request("/api/wikilinks/admin/undo-rename/foo", { method: "POST" });
+    expect(res.status).toBe(401);
+  });
+
+  it("returns 404 when historyId is unknown", async () => {
+    const res = await authedPost("/api/wikilinks/admin/undo-rename/nonexistent");
+    expect(res.status).toBe(404);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toBe("RENAME_NOT_FOUND");
+  });
+
+  it("undoes a recorded rename and returns rewritten count", async () => {
+    // Seed: target was renamed Original → Renamed, source still cites Renamed.
+    const tgt = insertActiveRow(testSqlite, { title: "Renamed" });
+    const src = insertActiveRow(testSqlite, { content: "see [[Renamed]] now" });
+    testSqlite
+      .prepare(
+        `INSERT INTO reference_index (source_id, target_id, char_offset, raw_title)
+         VALUES (?, ?, 4, 'Renamed')`,
+      )
+      .run(src, tgt);
+    testSqlite
+      .prepare(
+        `INSERT INTO rename_history (id, target_id, old_title, new_title, source_count, performed_at, performed_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run("hist1", tgt, "Original", "Renamed", 1, "2026-05-18T01:00:00Z", "user");
+
+    const res = await authedPost("/api/wikilinks/admin/undo-rename/hist1");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { status: string; rewrittenCount: number };
+    expect(body.status).toBe("undone");
+    expect(body.rewrittenCount).toBe(1);
+
+    const newContent = testSqlite
+      .prepare("SELECT content FROM items_active WHERE id = ?")
+      .get(src) as { content: string };
+    expect(newContent.content).toBe("see [[Original]] now");
+
+    const tgtTitle = testSqlite.prepare("SELECT title FROM items_active WHERE id = ?").get(tgt) as {
+      title: string;
+    };
+    expect(tgtTitle.title).toBe("Original");
+  });
+});

@@ -33,6 +33,7 @@ import { revokeSharesByItemId } from "../lib/shares.js";
 import { deriveTitleFromContent } from "../lib/title-derivation.js";
 import { vaultReadonlyResponse } from "../lib/vault-errors.js";
 import { RevisionMismatchError } from "../lib/revision.js";
+import { TitleCollisionError } from "../lib/wikilink.js";
 
 const lookupItem: ItemLookup = (shortId) => {
   const found = getItemForLookup(db, shortId);
@@ -80,6 +81,17 @@ itemsRouter.post("/", async (c) => {
   } catch (e) {
     if (e instanceof ZodError) {
       return c.json({ error: e.issues[0]?.message ?? "Validation error" }, 400);
+    }
+    if (e instanceof TitleCollisionError) {
+      return c.json(
+        {
+          error: `標題「${e.attemptedTitle}」已存在`,
+          error_en: e.message,
+          code: e.code,
+          attempted_title: e.attemptedTitle,
+        },
+        409,
+      );
     }
     throw e;
   }
@@ -464,6 +476,17 @@ itemsRouter.patch("/:id", async (c) => {
           current_content: e.currentContent,
         },
         412,
+      );
+    }
+    if (e instanceof TitleCollisionError) {
+      return c.json(
+        {
+          error: `標題「${e.attemptedTitle}」已存在`,
+          error_en: e.message,
+          code: e.code,
+          attempted_title: e.attemptedTitle,
+        },
+        409,
       );
     }
     throw e;

@@ -1,5 +1,35 @@
 # Changelog
 
+## [1.5.4.0] - 2026-05-18
+
+### Added
+
+- **Title rename propagation engine + title uniqueness enforcement (PR 5).** Combines the rename engine (originally PR 3, replaces the PR #339 scope that conflicted with the v27 backfill ship-order) with the application-layer title uniqueness check that Pre-PR0e §114-129 specified but PR 1 left unwired.
+  - `server/lib/rename-engine.ts` reads `reference_index` by `target_id`, computes rewrites via the shared parser (preserves alias, applies in descending offset order so earlier indices stay valid per ENG-20), and applies all source UPDATEs in a single transaction. `PATCH /api/items/:id` (and any other `updateItem` caller) auto-triggers the engine whenever `title` changes.
+  - `createItem` / `updateItem` now call `isTitleAvailable()` before writing and throw `TitleCollisionError` on conflict. The check + insert/update are wrapped in `BEGIN IMMEDIATE` (ENG-7) so two concurrent writers can't both see "available" and both succeed.
+  - `POST /api/items` and `PATCH /api/items/:id` catch `TitleCollisionError` → `409 { code: "TITLE_COLLISION", attemptedTitle, conflictingId? }`. MCP `sparkle_create_note` / `sparkle_update_note` surface the same code.
+- **rename_history audit log + undo.** Every rename writes an append-only row capturing `target_id`, `old_title`, `new_title`, `source_count`, `performed_at`, `performed_by`. `GET /api/wikilinks/admin/recent-renames` lists the most recent N (default 50, max 200) for the operator UI. `POST /api/wikilinks/admin/undo-rename/:historyId` replays the inverse rewrite — flips the target title back to `old_title` AND sweeps every source still citing `new_title` to `old_title`. The undo is itself recorded with `performed_by = "undo:<originalId>"` so the audit log stays append-only.
+
+### Behavior locked
+
+- **Active-only scope (Pre-PR0d carve-out).** The engine touches `items_active.content` only. Vault `.md` files (including daily-notes that link with `[[Title|sparkle-<shortId>]]` alias syntax) are never rewritten — vault is SSOT post-v25. Obsidian's own rename feature handles vault-side cleanup for users who rename a permanent note.
+- **First-time title set is not a rename.** When a row goes from `title = ""` → `title = "Something"`, no rename engine runs.
+- **NFC normalization at write closes the round-trip gap.** Setting `title = "Café"` (decomposed) when the existing title is `"Café"` (composed) is a no-op rename because both normalize identically.
+- **Legacy `筆記（xxxx）` references are NOT swept by title rename.** They target by short id; a title change leaves their resolution unaffected.
+- **Title uniqueness scope: items_active only.** Vault titles aren't checked; the resolver tolerates vault collisions by returning null. The `未命名` allowlist always passes (multiple fleeting captures with the default placeholder are legitimate).
+- **CASCADE deletion stays correct.** Deleting a target row leaves rename_history rows pointing at the deleted id (audit log is durable). Source-side reference_index rows still CASCADE-delete when the source itself is deleted.
+
+### Tests
+
+- **Rename engine**: 16 unit tests in `server/lib/__tests__/rename-engine.test.ts` (`rewriteWikilinks`, `applyTitleRename`, `undoRename`), 5 integration tests in `server/lib/__tests__/rename-engine-integration.test.ts` (the `updateItem` auto-trigger including NFC-equivalence no-op + first-title-set no-op), 7 router tests in `server/routes/__tests__/wikilinks.test.ts` (`/admin/recent-renames` + `/admin/undo-rename/:historyId` covering auth, 404, round-trip).
+- **Title uniqueness**: integration tests in `server/lib/__tests__/wikilink-write-hooks.test.ts` cover `createItem` collision, `updateItem` collision, `exceptId` self-rename, `未命名` allowlist bypass, NFC duplicate detection, BEGIN IMMEDIATE concurrent-writer race (two `db.transaction` calls in parallel — only one wins).
+- **Route layer**: `server/routes/__tests__/items.test.ts` extended with `POST /api/items` 409 and `PATCH /api/items/:id` 409 cases.
+- Drizzle `DB` type widened to `BetterSQLite3Database<typeof schema> & { $client: Database.Database }` so the rename engine can reach the raw sqlite handle without inline casts. Mirrored in `server/lib/line-commands/types.ts`.
+
+### Why this PR exists
+
+PR #339 (the original rename engine PR) sat with merge conflicts after PR #340 (migration v27 backfill) shipped ahead of it. Rather than rebase #339 mechanically, this PR rebuilds the scope cleanly and adds the title uniqueness wiring that Pre-PR0e §114-129 specified but PR 1 left as unused exports. Together they close the correctness gap where users could create duplicate titles and the rename engine would have nothing to do.
+
 ## [1.5.3.0] - 2026-05-18
 
 ### Added
@@ -33,7 +63,7 @@ v27 follows the v25-pattern backup rules — added because this migration mutate
 
 ### Migration sequencing
 
-PR 4 is the final piece of the 4-PR wikilink-first rollout. **Ship order constraint** (from CLAUDE.md memory): DB migration PRs ship independently — wait for deploy + health check on PR 1 (v26) before PR 4 (v27) lands. Auto-merge order on this branch: PR 3 (v1.5.2.0, rename engine, code-only) lands first; PR 4 (v1.5.3.0, this PR, migration v27) follows after PR 3 is on main.
+PR 4 is the final piece of the 4-PR wikilink-first rollout. **Ship order constraint** (from CLAUDE.md memory): DB migration PRs ship independently — wait for deploy + health check on PR 1 (v26) before PR 4 (v27) lands.
 
 ## [1.5.1.1] - 2026-05-18
 

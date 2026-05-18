@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { sqlite } from "../db/index.js";
 import { resolveWikilinkTitle } from "../lib/wikilink.js";
+import { undoRename } from "../lib/rename-engine.js";
 import { logger } from "../lib/logger.js";
 
 const wikilinksRouter = new Hono();
@@ -98,5 +99,61 @@ function sliceSnippet(content: string): string {
   const chars = [...content.replace(/\s+/g, " ").trim()];
   return chars.length > 200 ? chars.slice(0, 200).join("") + "…" : chars.join("");
 }
+
+/**
+ * Recent renames listing (admin). Lists the most recent N entries from
+ * rename_history for the operator UI. Read-only; auth via /api/* middleware.
+ */
+wikilinksRouter.get("/admin/recent-renames", (c) => {
+  const limit = Math.min(Number(c.req.query("limit") ?? 50), 200);
+  const rows = sqlite
+    .prepare(
+      `SELECT id, target_id, old_title, new_title, source_count, performed_at, performed_by
+       FROM rename_history
+       ORDER BY performed_at DESC
+       LIMIT ?`,
+    )
+    .all(limit) as Array<{
+    id: string;
+    target_id: string;
+    old_title: string;
+    new_title: string;
+    source_count: number;
+    performed_at: string;
+    performed_by: string;
+  }>;
+  return c.json({ renames: rows });
+});
+
+/**
+ * Undo a rename by audit row id. Replays the inverse rewrite: target title
+ * goes back to old_title, every source still citing new_title gets rewritten
+ * to old_title. A NEW rename_history row is appended for the undo itself
+ * (performed_by = "undo:<originalId>") so the audit log is append-only.
+ *
+ * 404 when historyId doesn't exist. Returns counts so the operator UI can
+ * confirm what flipped.
+ */
+wikilinksRouter.post("/admin/undo-rename/:historyId", (c) => {
+  const historyId = c.req.param("historyId");
+  const result = undoRename(sqlite, historyId);
+  if (!result) {
+    return c.json({ error: "RENAME_NOT_FOUND", historyId }, 404);
+  }
+  logger.info(
+    {
+      event: "rename_undone",
+      historyId,
+      rewrittenCount: result.rewrittenCount,
+    },
+    `undo of rename ${historyId} rewrote ${result.rewrittenCount} sources`,
+  );
+  return c.json({
+    status: "undone",
+    historyId,
+    rewrittenCount: result.rewrittenCount,
+    rewrittenSourceIds: result.rewrittenSourceIds,
+  });
+});
 
 export { wikilinksRouter };
