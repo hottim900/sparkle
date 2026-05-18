@@ -252,6 +252,39 @@ export async function exportToObsidian(id: string): Promise<ExportResult> {
  * Reverse-lookup the live vault path for a sparkle_id. Returns null when no
  * vault_files row carries this id (file deleted or scanner still indexing).
  */
+export interface WikilinkResolution {
+  id: string;
+  title: string;
+  origin: "active" | "vault";
+  snippet: string;
+}
+
+/**
+ * Resolve `[[Title]]` to a concrete Sparkle item. Returns null when no match
+ * exists OR when the title collides with multiple rows — agents treat both
+ * as "the link does not resolve right now; pick a different title or
+ * disambiguate". Errors other than 404 propagate.
+ */
+export async function resolveWikilink(title: string): Promise<WikilinkResolution | null> {
+  try {
+    return await sparkleApi<WikilinkResolution>(
+      `/wikilinks/resolve?title=${encodeURIComponent(title)}`,
+    );
+  } catch (e) {
+    if (e instanceof SparkleApiError && e.status === 404) return null;
+    throw e;
+  }
+}
+
+/**
+ * Admin disaster-recovery: truncate `reference_index` and re-prime every
+ * active row for reindex. Returns `{ status: "queued", queued }` — the actual
+ * rebuild happens asynchronously over the next worker cycles.
+ */
+export async function rebuildReferenceIndex(): Promise<{ status: string; queued: number }> {
+  return sparkleApi<{ status: string; queued: number }>("/wikilinks/admin/rebuild", "POST");
+}
+
 export async function getVaultPathBySparkleId(id: string): Promise<{ path: string } | null> {
   try {
     return await sparkleApi<{ path: string }>(`/vault/by-sparkle-id/${encodeURIComponent(id)}`);

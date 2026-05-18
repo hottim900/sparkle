@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.5.1.1] - 2026-05-18
+
+### Added
+
+- **MCP wikilink contract — resolver + admin wrapper tools (PR 2).** Two new MCP tools expose the v1.5.1.0 wikilink REST surface to agents:
+  - `sparkle_resolve_wikilink(title)` — wraps `GET /api/wikilinks/resolve`. Returns `{ resolved: true, id, title, origin, snippet }` on match, `{ resolved: false, title }` on miss/collision. Agents call this before writing `[[Title]]` into content to verify the target is unique-and-present (avoiding writing references that would render as purple-unresolved). Locked resolution rules surfaced in the tool description so agents can't be talked into wrong assumptions: NFC + ASCII case-insensitive, active-priority over vault, collision returns null, `未命名` allowlisted.
+  - `sparkle_rebuild_reference_index` — wraps `POST /api/wikilinks/admin/rebuild`. Disaster-recovery only; routine writes already keep the index live. Returns `{ status: "queued", queued: <count> }`.
+- **`SPARKLE_INSTRUCTIONS` updated with `[[Title]]` guidance section.** The MCP system prompt now tells agents: prefer `[[Title]]` over legacy `筆記（xxxxxxxx）` for new content; alias syntax is `[[Real|Display]]`; parser is conservative (rejects multi-line, oversized, nested); code-block fences (` ``` `) and inline backticks skip parsing so `[[refs]]` in code samples never become live; active-priority resolution; `未命名` collision allowlist; verify with `sparkle_resolve_wikilink` before writing; don't manually rewrite legacy refs (wait for PR 4 backfill v27).
+
+### Notes
+
+- PR 2 of 4 in the wikilink-first cross-references rollout. **Deferred to PR 3** (rename engine): `swept_references` in `sparkle_advance_note` response, `confirm_token` dry-run protocol, `sparkle_list_title_collisions` admin tool — these are properly defined alongside the rename behavior that fills them in. **Deferred to PR 4**: `docs/migration-v27.md`. Defining schemas before the implementation lands risks shipping shapes that don't match what PR 3 actually needs to send.
+
 ## [1.5.1.0] - 2026-05-18
 
 ### Added
