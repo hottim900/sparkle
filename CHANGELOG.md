@@ -1,5 +1,35 @@
 # Changelog
 
+## [1.5.10.0] - 2026-05-18
+
+### Added
+
+- **DES-5 rename references dialog (`src/components/rename-references-dialog.tsx`).** When a title rename PATCH returns `swept_references.rewritten_count > 0`, the item-detail page now opens a dialog showing what just changed. Two visual modes per spec:
+  - **Inline** (N ≤ 20): every rewritten source title listed as a `/item/:id` link.
+  - **Summary** (N > 20): first 5 sources + "still X more" pointer to the admin recent-renames page.
+  - Spec scope copy: "X 個 Sparkle 引用已更新。Vault daily-notes 不會變動 — Obsidian 的 rename 功能才是處理 vault 的方式".
+  - Two-step **undo** (還原此 rename → 確認還原) wired to `POST /api/wikilinks/admin/undo-rename/:id`. On success: broad cache invalidation matching the admin recent-renames page (items/private/search/recent/stats/tags/resolver) so the UI returns to the pre-rename state immediately.
+  - **Skipped-share-token warning** rendered when present — explains why the engine deliberately didn't rewrite shared-source rows (ENG-3 leak guard).
+
+### Changed
+
+- **`swept_references` payload extended with `rewritten_sources`** (id + title pairs). The rename engine already had source titles in its rewrite plan; previously the route layer only surfaced ids. The dialog reads titles inline so it doesn't have to issue N follow-up `GET /api/items/:id` requests.
+- **`useItemForm` hook exposes `lastRename` + `clearLastRename`.** Captures `{ oldTitle, newTitle, swept }` after a successful title save when the server actually swept references; `item-detail` consumes this to open the dialog. Non-title field saves and rename no-ops leave it `null`.
+- **`updateItem` API client return type widened to `UpdatedItem`** (was `Item`), with `swept_references?: SweptReferences`. Existing call sites that destructure standard `Item` fields are unaffected.
+
+### Tests
+
+- **9 new component tests** for `RenameReferencesDialog` covering inline mode, summary mode at N=30, skipped-share-token warning, two-step undo confirm flow (calls `undoRename`), undo cancel returns to initial state, hides undo when `history_id` null, renders `(未命名)` placeholder for empty source titles.
+- **1 new server test** for the `rewritten_sources` payload contract (`items-title-collision.test.ts`): two sources with distinct titles produce a payload that maps id → title correctly.
+
+### Notes
+
+Closes the DES-5 gap the multi-agent re-audit caught on PR #345: the spec mandates a rename references dialog with inline/summary modes and Sparkle/Obsidian scope copy, but PR 9 shipped the backend `swept_references` payload without any frontend consumer — users renaming a title in the web UI got zero feedback. The dialog is the missing receiver.
+
+No backend API surface added. The only schema-level change is one field added to an already-optional response object (`swept_references.rewritten_sources`), backward-compatible.
+
+Full suite: **1847 passing** (up from 1837, +10 net new — 9 dialog tests + 1 server payload test). Lint + tsc clean.
+
 ## [1.5.9.0] - 2026-05-18
 
 ### Fixed

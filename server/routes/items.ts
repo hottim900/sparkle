@@ -462,9 +462,11 @@ itemsRouter.patch("/:id", async (c) => {
       revokeSharesByItemId(sqlite, id);
     }
 
-    // DX-5: surface rename engine result so MCP clients can see how many
-    // sources were swept by a title change, plus any that were skipped by
-    // the share-token leak guard (ENG-3). Frontend ignores the field.
+    // DX-5: surface rename engine result so MCP clients see how many sources
+    // were swept by a title change, plus any skipped by the share-token leak
+    // guard (ENG-3). DES-5: the frontend rename dialog reads
+    // `rewritten_sources` (id + title pairs) to render an inline list
+    // without N extra fetches.
     const renameResult = getRenameResultFromItem(updated);
     if (renameResult) {
       return c.json({
@@ -472,6 +474,7 @@ itemsRouter.patch("/:id", async (c) => {
         swept_references: {
           rewritten_count: renameResult.rewrittenCount,
           rewritten_source_ids: renameResult.rewrittenSourceIds,
+          rewritten_sources: renameResult.rewrittenSources,
           skipped_share_token_source_ids: renameResult.skippedShareTokenSourceIds,
           history_id: renameResult.historyId,
         },

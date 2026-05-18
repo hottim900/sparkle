@@ -247,6 +247,21 @@ export async function getItem(id: string): Promise<Item> {
   return request<Item>(`/items/${id}`);
 }
 
+/**
+ * `swept_references` is attached by the server only when a title change
+ * actually rewrote sources (DX-5). DES-5 dialog reads `rewritten_sources`
+ * for the inline list and `history_id` for undo.
+ */
+export interface SweptReferences {
+  rewritten_count: number;
+  rewritten_source_ids: string[];
+  rewritten_sources: Array<{ id: string; title: string }>;
+  skipped_share_token_source_ids: string[];
+  history_id: string | null;
+}
+
+export type UpdatedItem = Item & { swept_references?: SweptReferences };
+
 export async function updateItem(
   id: string,
   input: {
@@ -265,9 +280,10 @@ export async function updateItem(
     is_private?: boolean;
     paused?: boolean;
     paused_context?: string;
+    expected_state_hash?: string;
   },
-): Promise<Item> {
-  return request<Item>(`/items/${id}`, {
+): Promise<UpdatedItem> {
+  return request<UpdatedItem>(`/items/${id}`, {
     method: "PATCH",
     body: JSON.stringify(input),
   });

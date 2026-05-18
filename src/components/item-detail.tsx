@@ -18,6 +18,7 @@ import { useAppContext } from "@/lib/app-context";
 import { toast } from "sonner";
 import { X, ExternalLink } from "lucide-react";
 import { ShareDialog } from "@/components/share-dialog";
+import { RenameReferencesDialog } from "@/components/rename-references-dialog";
 import { ItemDetailHeader } from "@/components/item-detail-header";
 import { LinkedItemsSection } from "@/components/linked-items-section";
 import { ItemContentEditor } from "@/components/item-content-editor";
@@ -81,6 +82,8 @@ export function ItemDetail({ itemId, onDeleted, onBack, onNavigate }: ItemDetail
     addAlias,
     removeAlias,
     invalidateAfterSave,
+    lastRename,
+    clearLastRename,
   } = useItemForm(itemId);
 
   const navigate = useNavigate();
@@ -611,6 +614,20 @@ export function ItemDetail({ itemId, onDeleted, onBack, onNavigate }: ItemDetail
               open={shareOpen}
               onOpenChange={setShareOpen}
               isOnline={isOnline}
+            />
+          )}
+
+          {/* DES-5 rename references dialog — opens after a title rename
+              when swept_references.rewritten_count > 0 */}
+          {lastRename && (
+            <RenameReferencesDialog
+              open={true}
+              onOpenChange={(open) => {
+                if (!open) clearLastRename();
+              }}
+              oldTitle={lastRename.oldTitle}
+              newTitle={lastRename.newTitle}
+              swept={lastRename.swept}
             />
           )}
         </>

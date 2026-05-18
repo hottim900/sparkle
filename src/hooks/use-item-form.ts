@@ -1,11 +1,22 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { updateItem, getItem, getTags } from "@/lib/api";
+import { updateItem, getItem, getTags, type SweptReferences } from "@/lib/api";
 import { parseItem, type ParsedItem } from "@/lib/types";
 import { useAppContext } from "@/lib/app-context";
 import { toast } from "sonner";
 import { queryKeys } from "@/lib/query-keys";
 import { useInvalidateAfterItemMutation } from "@/hooks/use-invalidate";
+
+/**
+ * Captured by the form hook after a successful title rename PATCH whose
+ * response carried `swept_references`. Consumers (item-detail) read this
+ * to render the DES-5 rename dialog and clear it on dialog close.
+ */
+export interface LastRename {
+  oldTitle: string;
+  newTitle: string;
+  swept: SweptReferences;
+}
 
 export interface UseItemFormOptions {
   /**
@@ -23,6 +34,7 @@ export function useItemForm(itemId: string, options: UseItemFormOptions = {}) {
   const [item, setItem] = useState<ParsedItem | null>(null);
   const [isDirty, setIsDirty] = useState(false);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
+  const [lastRename, setLastRename] = useState<LastRename | null>(null);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const savedTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
@@ -85,6 +97,10 @@ export function useItemForm(itemId: string, options: UseItemFormOptions = {}) {
       }
       setSaveStatus("saving");
       if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+      // Capture the pre-save title — needed for the DES-5 dialog which shows
+      // "<old> → <new>". Local `item.title` is still the pre-save value
+      // here (the new value is in `value`).
+      const titleBeforeSave = item.title;
       try {
         const updated = await updateItem(item.id, { [field]: value });
         const serverModified = updated.modified;
@@ -106,6 +122,19 @@ export function useItemForm(itemId: string, options: UseItemFormOptions = {}) {
           queryClient.invalidateQueries({ queryKey: queryKeys.items.all });
           queryClient.invalidateQueries({ queryKey: queryKeys.tags });
           queryClient.invalidateQueries({ queryKey: queryKeys.stats });
+        }
+        // DES-5: surface the rename dialog only when the server actually
+        // swept references. `swept_references` is omitted when the field
+        // wasn't `title`, when the new title equalled the old (no-op), or
+        // when the row had no incoming wikilink refs.
+        if (field === "title" && updated.swept_references && typeof value === "string") {
+          if (updated.swept_references.rewritten_count > 0) {
+            setLastRename({
+              oldTitle: titleBeforeSave,
+              newTitle: value,
+              swept: updated.swept_references,
+            });
+          }
         }
         setSaveStatus("saved");
         savedTimerRef.current = setTimeout(() => setSaveStatus("idle"), 2000);
@@ -203,5 +232,7 @@ export function useItemForm(itemId: string, options: UseItemFormOptions = {}) {
     addAlias,
     removeAlias,
     invalidateAfterSave,
+    lastRename,
+    clearLastRename: () => setLastRename(null),
   };
 }

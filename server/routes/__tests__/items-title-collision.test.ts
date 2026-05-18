@@ -159,6 +159,7 @@ describe("PATCH /api/items/:id swept_references contract (DX-5)", () => {
       swept_references?: {
         rewritten_count: number;
         rewritten_source_ids: string[];
+        rewritten_sources: Array<{ id: string; title: string }>;
         skipped_share_token_source_ids: string[];
         history_id: string | null;
       };
@@ -169,6 +170,46 @@ describe("PATCH /api/items/:id swept_references contract (DX-5)", () => {
     expect(body.swept_references!.rewritten_source_ids).toEqual([source]);
     expect(body.swept_references!.skipped_share_token_source_ids).toEqual([]);
     expect(body.swept_references!.history_id).toBeTruthy();
+  });
+
+  it("DES-5: includes id+title pairs in rewritten_sources for the rename dialog", async () => {
+    const target = insertActiveRow(testSqlite, { title: "Hub" });
+    const sourceA = insertActiveRow(testSqlite, {
+      title: "First Source",
+      content: "see [[Hub]]",
+    });
+    const sourceB = insertActiveRow(testSqlite, {
+      title: "Second Source",
+      content: "[[Hub]] also",
+    });
+    testSqlite
+      .prepare(
+        `INSERT INTO reference_index (source_id, target_id, char_offset, raw_title, kind)
+         VALUES (?, ?, 4, 'Hub', 'wikilink'),
+                (?, ?, 0, 'Hub', 'wikilink')`,
+      )
+      .run(sourceA, target, sourceB, target);
+
+    const res = await app.request(`/api/items/${target}`, {
+      method: "PATCH",
+      headers: jsonHeaders(),
+      body: JSON.stringify({ title: "Centre" }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      swept_references?: {
+        rewritten_count: number;
+        rewritten_sources: Array<{ id: string; title: string }>;
+      };
+    };
+    expect(body.swept_references!.rewritten_count).toBe(2);
+    expect(body.swept_references!.rewritten_sources).toHaveLength(2);
+    // Titles are captured pre-rename per source row, frontend renders inline.
+    const byId = Object.fromEntries(
+      body.swept_references!.rewritten_sources.map((s) => [s.id, s.title]),
+    );
+    expect(byId[sourceA]).toBe("First Source");
+    expect(byId[sourceB]).toBe("Second Source");
   });
 
   it("OMITS swept_references when title didn't change (no rename)", async () => {

@@ -90,6 +90,14 @@ export interface RenameResult {
   rewrittenCount: number;
   /** Source ids that were rewritten (UUID). */
   rewrittenSourceIds: string[];
+  /**
+   * Source id + title for each rewritten row — the frontend rename dialog
+   * (DES-5) needs the titles inline to render a "what just changed" list
+   * without N extra fetches. Title is captured at rewrite time, so the
+   * dialog shows what the row WAS called, not whatever it might be renamed
+   * to a moment later.
+   */
+  rewrittenSources: Array<{ id: string; title: string }>;
   /** Audit row id (rename_history.id) — empty when noop. */
   historyId: string | null;
   /**
@@ -105,6 +113,7 @@ export interface RenameResult {
 
 interface RewritePlan {
   sourceId: string;
+  sourceTitle: string;
   oldContent: string;
   newContent: string;
 }
@@ -148,6 +157,7 @@ export function applyTitleRename(
     return {
       rewrittenCount: 0,
       rewrittenSourceIds: [],
+      rewrittenSources: [],
       historyId: null,
       skippedShareTokenSourceIds: [],
     };
@@ -176,6 +186,7 @@ export function applyTitleRename(
     return {
       rewrittenCount: 0,
       rewrittenSourceIds: [],
+      rewrittenSources: [],
       historyId: null,
       skippedShareTokenSourceIds: [],
     };
@@ -216,14 +227,14 @@ export function applyTitleRename(
 
   const plans: RewritePlan[] = [];
   for (const { source_id } of sourceIds) {
-    const row = sqlite.prepare("SELECT content FROM items_active WHERE id = ?").get(source_id) as
-      | { content: string | null }
-      | undefined;
+    const row = sqlite
+      .prepare("SELECT title, content FROM items_active WHERE id = ?")
+      .get(source_id) as { title: string; content: string | null } | undefined;
     if (!row) continue;
     const oldContent = row.content ?? "";
     const newContent = rewriteWikilinks(oldContent, oldTitle, newTitle);
     if (newContent !== oldContent) {
-      plans.push({ sourceId: source_id, oldContent, newContent });
+      plans.push({ sourceId: source_id, sourceTitle: row.title, oldContent, newContent });
     }
   }
 
@@ -235,6 +246,7 @@ export function applyTitleRename(
     return {
       rewrittenCount: 0,
       rewrittenSourceIds: [],
+      rewrittenSources: [],
       historyId: null,
       skippedShareTokenSourceIds,
     };
@@ -286,6 +298,7 @@ export function applyTitleRename(
   return {
     rewrittenCount: plans.length,
     rewrittenSourceIds: sourceIdList,
+    rewrittenSources: plans.map((p) => ({ id: p.sourceId, title: p.sourceTitle })),
     historyId,
     skippedShareTokenSourceIds,
   };
