@@ -82,6 +82,16 @@ export function formatItem(item: SparkleItem): string {
   if (item.due) meta.push(`**Due**: ${item.due}`);
   lines.push(meta.join(" | "));
 
+  // DX-3: give the LLM the exact wikilink to paste when citing this note in
+  // other content. Skip when the title is empty (those rows can't be cited)
+  // or matches the `未命名` placeholder allowlist (those titles resolve to
+  // `null` per the wikilink spec, so a `[[未命名]]` citation would be a dead
+  // link).
+  const titleTrimmed = item.title?.trim() ?? "";
+  if (titleTrimmed !== "" && titleTrimmed !== "未命名") {
+    lines.push(`**Cite as**: \`[[${item.title}]]\``);
+  }
+
   if (aliases.length > 0) {
     lines.push(`**Aliases**: ${aliases.join(", ")}`);
   }

@@ -35,6 +35,7 @@ import { deriveTitleFromContent } from "../lib/title-derivation.js";
 import { vaultReadonlyResponse } from "../lib/vault-errors.js";
 import { RevisionMismatchError } from "../lib/revision.js";
 import { TitleCollisionError } from "../lib/wikilink.js";
+import { RenameStateChangedError } from "../lib/rename-engine.js";
 
 const lookupItem: ItemLookup = (shortId) => {
   const found = getItemForLookup(db, shortId);
@@ -501,6 +502,17 @@ itemsRouter.patch("/:id", async (c) => {
           error_en: e.message,
           code: e.code,
           attempted_title: e.attemptedTitle,
+        },
+        409,
+      );
+    }
+    if (e instanceof RenameStateChangedError) {
+      return c.json(
+        {
+          error: "Rename target's state changed since preview — re-preview and retry.",
+          code: e.code,
+          expected_state_hash: e.expected,
+          actual_state_hash: e.actual,
         },
         409,
       );

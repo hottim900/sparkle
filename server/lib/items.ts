@@ -651,6 +651,7 @@ export function updateItem(
           existing.title,
           normalizedNewTitle!,
           "user",
+          input.expected_state_hash,
         );
       }
     });

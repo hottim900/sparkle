@@ -160,17 +160,21 @@ describe("title uniqueness enforcement (Pre-PR0e + ENG-7)", () => {
     expect(history.n).toBe(0);
   });
 
-  it("ENG-7 stress: 10 microtask-parallel createItem calls — only one wins", async () => {
-    // better-sqlite3 is synchronous so true OS-thread parallelism isn't
-    // possible in-process, but Promise.allSettled() schedules each call
-    // on a microtask boundary. The BEGIN IMMEDIATE on the 2nd–10th lands
-    // after the 1st has held the lock + inserted + committed; each
-    // subsequent attempt sees the row and throws TITLE_COLLISION.
+  it("ENG-7 post-condition: 10 sequential createItem calls converge on 1 row", async () => {
+    // Honest scope: better-sqlite3 is synchronous in-process, so each
+    // `createItem` blocks the event loop start-to-finish — the microtask
+    // boundary from `Promise.resolve().then(...)` only schedules them, it
+    // doesn't make them race. This test verifies the POST-CONDITION callers
+    // depend on (after N attempts, exactly one row), not the BEGIN IMMEDIATE
+    // mechanism that protects against true OS-thread contention.
     //
-    // Without `.immediate()` (deferred mode + isTitleAvailable read),
-    // microtask ordering wouldn't matter — multiple readers could see
-    // "available" and all commit. The post-condition (exactly one row)
-    // proves the gate works.
+    // For true concurrent-writer behavior, see the "title uniqueness
+    // enforcement via BEGIN IMMEDIATE" assertion at L132 (single-call atomicity)
+    // plus the manual sqlite3 CLI runbook in docs/wikilink-spec.md ENG-7
+    // section: open two connections, BEGIN IMMEDIATE in both, observe the
+    // SQLITE_BUSY on the second. We don't replicate that in-process because
+    // better-sqlite3 doesn't expose enough concurrency primitives to make
+    // the harness less flaky than the runbook.
     const { db, sqlite } = createTestDb();
 
     const attempts = await Promise.allSettled(

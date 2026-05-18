@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { applyTitleRename, rewriteWikilinks, undoRename } from "../rename-engine.js";
+import {
+  applyTitleRename,
+  computeRenameStateHash,
+  previewTitleRename,
+  RenameStateChangedError,
+  rewriteWikilinks,
+  undoRename,
+} from "../rename-engine.js";
 import { reindexItemReferences } from "../wikilink.js";
 import { createTestDb, insertActiveRow } from "../../test-utils.js";
 
@@ -166,6 +173,74 @@ describe("applyTitleRename", () => {
     const r = applyTitleRename(sqlite, targetId, "Hub", "Centre");
     expect(r.rewrittenCount).toBe(2);
     expect(r.rewrittenSourceIds).toEqual(expect.arrayContaining([sourceA, sourceB]));
+  });
+});
+
+describe("DX-2 state-hash race guard", () => {
+  it("preview returns a state_hash that applyTitleRename accepts", () => {
+    const { sqlite } = createTestDb();
+    const targetId = insertActiveRow(sqlite, { title: "Stable" });
+    const sourceId = insertActiveRow(sqlite, { content: "see [[Stable]] here" });
+    reindexItemReferences(sqlite, sourceId);
+
+    const preview = previewTitleRename(sqlite, targetId, "Stable", "Renamed");
+    expect(preview.stateHash).toMatch(/^[a-f0-9]{64}$/);
+
+    // Hash from preview lets the commit through.
+    const result = applyTitleRename(
+      sqlite,
+      targetId,
+      "Stable",
+      "Renamed",
+      "user",
+      preview.stateHash,
+    );
+    expect(result.rewrittenCount).toBe(1);
+  });
+
+  it("applyTitleRename throws when expected_state_hash doesn't match", () => {
+    const { sqlite } = createTestDb();
+    const targetId = insertActiveRow(sqlite, { title: "Stable" });
+    const sourceId = insertActiveRow(sqlite, { content: "see [[Stable]] here" });
+    reindexItemReferences(sqlite, sourceId);
+
+    const stale = "0".repeat(64);
+    expect(() => applyTitleRename(sqlite, targetId, "Stable", "Renamed", "user", stale)).toThrow(
+      RenameStateChangedError,
+    );
+  });
+
+  it("hash changes when a source edits its content between preview and commit", () => {
+    const { sqlite } = createTestDb();
+    const targetId = insertActiveRow(sqlite, { title: "Stable" });
+    const sourceId = insertActiveRow(sqlite, { content: "see [[Stable]] here" });
+    reindexItemReferences(sqlite, sourceId);
+
+    const before = previewTitleRename(sqlite, targetId, "Stable", "Renamed");
+
+    // Racing edit: source body changes (adds a second wikilink to the target).
+    sqlite
+      .prepare("UPDATE items_active SET content = ? WHERE id = ?")
+      .run("see [[Stable]] and [[Stable]] here", sourceId);
+
+    const after = computeRenameStateHash(sqlite, targetId, "Stable");
+    expect(after).not.toBe(before.stateHash);
+    expect(() =>
+      applyTitleRename(sqlite, targetId, "Stable", "Renamed", "user", before.stateHash),
+    ).toThrow(RenameStateChangedError);
+  });
+
+  it("hash changes when a new source starts citing the target", () => {
+    const { sqlite } = createTestDb();
+    const targetId = insertActiveRow(sqlite, { title: "Stable" });
+    const sourceA = insertActiveRow(sqlite, { content: "see [[Stable]]" });
+    reindexItemReferences(sqlite, sourceA);
+
+    const before = computeRenameStateHash(sqlite, targetId, "Stable");
+    const sourceB = insertActiveRow(sqlite, { content: "also [[Stable]]" });
+    reindexItemReferences(sqlite, sourceB);
+    const after = computeRenameStateHash(sqlite, targetId, "Stable");
+    expect(after).not.toBe(before);
   });
 });
 

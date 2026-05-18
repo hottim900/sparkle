@@ -28,7 +28,7 @@ vi.mock("../../lib/logger.js", () => ({
 
 import { Hono } from "hono";
 import { authMiddleware } from "../../middleware/auth.js";
-import { wikilinksRouter } from "../wikilinks.js";
+import { wikilinksRouter, _resetDrainNowCooldownForTest } from "../wikilinks.js";
 
 const TEST_TOKEN = "test-secret-token-12345-with-some-entropy";
 
@@ -317,6 +317,69 @@ describe("GET /api/wikilinks/admin/title-collisions", () => {
     };
     expect(body.collisions[0]!.rows.map((r) => r.id)).toEqual(["b", "a", "c"]);
   });
+
+  it("surfaces NFC-divergent duplicates the writer's normalizer would reject", async () => {
+    // Two titles that look identical but are byte-divergent under NFC:
+    // NFC-composed "café" (4 codepoints) vs NFD-decomposed "café" (5 codepoints).
+    // The writer enforcement uses normalizeTitleForUniqueness which runs
+    // .normalize("NFC") — so these collide. A pure SQL LOWER(TRIM(title))
+    // grouping would NOT match them, leaving exactly the pairs this admin
+    // surface exists to find off the operator's radar.
+    const nfcComposed = "café"; // é = U+00E9
+    const nfdDecomposed = "café"; // e + U+0301 combining acute
+    expect(nfcComposed).not.toBe(nfdDecomposed);
+    expect(nfcComposed.normalize("NFC")).toBe(nfdDecomposed.normalize("NFC"));
+
+    insertActiveRow(testSqlite, { title: nfcComposed });
+    insertActiveRow(testSqlite, { title: nfdDecomposed });
+
+    const res = await authedGet("/api/wikilinks/admin/title-collisions");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      collisions: Array<{ normalized: string; rows: Array<{ title: string }> }>;
+      total: number;
+    };
+    expect(body.total).toBe(1);
+    expect(body.collisions[0]!.rows).toHaveLength(2);
+  });
+});
+
+describe("POST /api/wikilinks/admin/drain-now", () => {
+  beforeEach(() => {
+    // Module-level cooldown clock would otherwise bleed between sequential
+    // tests in this file (the auth-failure test, the success test, and the
+    // 429 test all touch the same `lastDrainAt`).
+    _resetDrainNowCooldownForTest();
+  });
+
+  it("returns 401 without auth", async () => {
+    const res = await app.request("/api/wikilinks/admin/drain-now", { method: "POST" });
+    expect(res.status).toBe(401);
+  });
+
+  it("drains and returns count + max_per_call", async () => {
+    const res = await authedPost("/api/wikilinks/admin/drain-now");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { status: string; count: number; max_per_call: number };
+    expect(body.status).toBe("drained");
+    expect(body.max_per_call).toBe(50);
+    expect(typeof body.count).toBe("number");
+  });
+
+  it("rejects rapid back-to-back calls with 429 + Retry-After header", async () => {
+    // First call: succeeds.
+    const first = await authedPost("/api/wikilinks/admin/drain-now");
+    expect(first.status).toBe(200);
+
+    // Second call within the 200ms cooldown: 429.
+    const second = await authedPost("/api/wikilinks/admin/drain-now");
+    expect(second.status).toBe(429);
+    expect(second.headers.get("Retry-After")).toBeTruthy();
+    const body = (await second.json()) as { error: string; retry_after_ms: number };
+    expect(body.error).toBe("DRAIN_COOLDOWN");
+    expect(body.retry_after_ms).toBeGreaterThan(0);
+    expect(body.retry_after_ms).toBeLessThanOrEqual(200);
+  });
 });
 
 describe("GET /api/wikilinks/admin/preview-rename", () => {
@@ -393,5 +456,22 @@ describe("GET /api/wikilinks/admin/preview-rename", () => {
     const body = (await res.json()) as { would_rewrite_count: number };
     // Both normalize to U+00E9 — engine treats as no-op rename.
     expect(body.would_rewrite_count).toBe(0);
+  });
+
+  it("returns a state_hash that round-trips via PATCH expected_state_hash (DX-2)", async () => {
+    const target = insertActiveRow(testSqlite, { title: "Hub" });
+    const source = insertActiveRow(testSqlite, { content: "see [[Hub]] here" });
+    testSqlite
+      .prepare(
+        `INSERT INTO reference_index (source_id, target_id, char_offset, raw_title, kind)
+         VALUES (?, ?, 4, 'Hub', 'wikilink')`,
+      )
+      .run(source, target);
+
+    const res = await authedGet(
+      `/api/wikilinks/admin/preview-rename?target_id=${target}&new_title=Renamed`,
+    );
+    const body = (await res.json()) as { state_hash: string };
+    expect(body.state_hash).toMatch(/^[a-f0-9]{64}$/);
   });
 });

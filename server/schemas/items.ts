@@ -85,6 +85,13 @@ export const updateItemSchema = z.object({
   // update with 412 PRECONDITION_FAILED if the stored content's sha256 does
   // not match. Same wire format as MCP edit_note v2's revision.
   revision: z.string().regex(REVISION_REGEX, "Must be 64-char lowercase hex").optional(),
+  // DX-2 race guard for title renames. When the agent previews a rename via
+  // GET /api/wikilinks/admin/preview-rename, the response includes a
+  // `state_hash` fingerprint. Pass it back here when committing the rename so
+  // the server rejects with 409 RENAME_STATE_CHANGED if anything that would
+  // change the rewrite scope has shifted (target re-renamed, source content
+  // edited, sources added/removed). Ignored when `title` is not changing.
+  expected_state_hash: z.string().regex(REVISION_REGEX, "Must be 64-char lowercase hex").optional(),
 });
 
 export const listItemsSchema = z.object({
