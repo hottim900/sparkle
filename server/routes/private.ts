@@ -12,6 +12,7 @@ import {
   updateItem,
   deleteItem,
   searchItems,
+  getRenameResultFromItem,
 } from "../lib/items.js";
 import {
   createItemSchema,
@@ -204,6 +205,18 @@ privateRouter.patch("/items/:id", async (c) => {
     const updated = updateItem(db, id, input, true);
     if (!updated) {
       return c.json({ error: "Item not found" }, 404);
+    }
+    const renameResult = getRenameResultFromItem(updated);
+    if (renameResult) {
+      return c.json({
+        ...updated,
+        swept_references: {
+          rewritten_count: renameResult.rewrittenCount,
+          rewritten_source_ids: renameResult.rewrittenSourceIds,
+          skipped_share_token_source_ids: renameResult.skippedShareTokenSourceIds,
+          history_id: renameResult.historyId,
+        },
+      });
     }
     return c.json(updated);
   } catch (e) {

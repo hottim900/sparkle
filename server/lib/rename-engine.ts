@@ -248,6 +248,115 @@ export interface UndoResult {
   rewrittenSourceIds: string[];
 }
 
+export interface PreviewResult {
+  /** Number of sources that WOULD be rewritten if applyTitleRename ran. */
+  wouldRewriteCount: number;
+  /** Source ids that would be rewritten. */
+  wouldRewriteSourceIds: string[];
+  /** Source ids that would be skipped by the ENG-3 share-token guard. */
+  wouldSkipShareTokenSourceIds: string[];
+  /**
+   * Sample of source previews for the operator/agent to review. Capped at
+   * 5 entries — callers that need the full list use `wouldRewriteSourceIds`
+   * + `sparkle_get_note` per id.
+   */
+  preview: Array<{ source_id: string; source_title: string; snippet: string }>;
+}
+
+/**
+ * Dry-run companion to `applyTitleRename` (DX-2 / dry-run protocol). Reads
+ * the same `reference_index` and applies the same share-token leak guard
+ * but does NOT write — returns the predicted impact so an MCP agent (or the
+ * frontend rename dialog) can preview before committing.
+ *
+ * Stateless: no token, no in-flight pending operation. Agents call
+ * `applyTitleRename` (via `PATCH /api/items/:id`) when they've reviewed.
+ */
+export function previewTitleRename(
+  sqlite: Database.Database,
+  targetId: string,
+  oldTitle: string,
+  newTitle: string,
+): PreviewResult {
+  if (oldTitle === newTitle || oldTitle.trim() === "") {
+    return {
+      wouldRewriteCount: 0,
+      wouldRewriteSourceIds: [],
+      wouldSkipShareTokenSourceIds: [],
+      preview: [],
+    };
+  }
+
+  let sourceIds = sqlite
+    .prepare(
+      `SELECT DISTINCT source_id FROM reference_index
+       WHERE target_id = ? AND kind = 'wikilink'`,
+    )
+    .all(targetId) as { source_id: string }[];
+
+  if (sourceIds.length === 0) {
+    return {
+      wouldRewriteCount: 0,
+      wouldRewriteSourceIds: [],
+      wouldSkipShareTokenSourceIds: [],
+      preview: [],
+    };
+  }
+
+  const target = sqlite
+    .prepare("SELECT is_private FROM items_active WHERE id = ?")
+    .get(targetId) as { is_private: number } | undefined;
+  const wouldSkipShareTokenSourceIds: string[] = [];
+  if (target?.is_private === 1) {
+    const ids = sourceIds.map((s) => s.source_id);
+    const placeholders = ids.map(() => "?").join(",");
+    const sharedRows = sqlite
+      .prepare(`SELECT DISTINCT item_id FROM share_tokens WHERE item_id IN (${placeholders})`)
+      .all(...ids) as { item_id: string }[];
+    if (sharedRows.length > 0) {
+      const sharedSet = new Set(sharedRows.map((r) => r.item_id));
+      for (const id of ids) {
+        if (sharedSet.has(id)) wouldSkipShareTokenSourceIds.push(id);
+      }
+      sourceIds = sourceIds.filter((s) => !sharedSet.has(s.source_id));
+    }
+  }
+
+  const wouldRewriteSourceIds: string[] = [];
+  const preview: PreviewResult["preview"] = [];
+  for (const { source_id } of sourceIds) {
+    const row = sqlite
+      .prepare("SELECT title, content FROM items_active WHERE id = ?")
+      .get(source_id) as { title: string; content: string | null } | undefined;
+    if (!row) continue;
+    const oldContent = row.content ?? "";
+    const newContent = rewriteWikilinks(oldContent, oldTitle, newTitle);
+    if (newContent === oldContent) continue;
+    wouldRewriteSourceIds.push(source_id);
+    if (preview.length < 5) {
+      // Build a short snippet centered on the first wikilink occurrence.
+      const idx = oldContent.indexOf(`[[${oldTitle}`);
+      const start = Math.max(0, idx - 30);
+      const end = Math.min(oldContent.length, idx + 50);
+      preview.push({
+        source_id,
+        source_title: row.title,
+        snippet:
+          (start > 0 ? "…" : "") +
+          oldContent.slice(start, end) +
+          (end < oldContent.length ? "…" : ""),
+      });
+    }
+  }
+
+  return {
+    wouldRewriteCount: wouldRewriteSourceIds.length,
+    wouldRewriteSourceIds,
+    wouldSkipShareTokenSourceIds,
+    preview,
+  };
+}
+
 /**
  * Undo a recorded rename. Reads the audit row, swaps old↔new titles, and
  * applies the inverse rewrite. Records a new rename_history row so the
