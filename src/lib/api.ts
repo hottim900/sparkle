@@ -552,4 +552,46 @@ export async function getVaultPathBySparkleId(id: string): Promise<{ path: strin
   }
 }
 
+export interface WikilinkResolution {
+  id: string;
+  title: string;
+  origin: "active" | "vault";
+  snippet: string;
+}
+
+/**
+ * Resolve `[[Title]]` to a concrete item. Returns null when no match exists
+ * OR when the title collides with multiple rows — the renderer treats both
+ * as "unresolved" (purple). 4xx errors propagate, network errors throw.
+ */
+export async function resolveWikilink(title: string): Promise<WikilinkResolution | null> {
+  try {
+    return await request<WikilinkResolution>(
+      `/wikilinks/resolve?title=${encodeURIComponent(title)}`,
+    );
+  } catch (e) {
+    if (e instanceof ApiClientError && e.status === 404) return null;
+    throw e;
+  }
+}
+
+/**
+ * Resolve a legacy `筆記（xxxxxxxx）` short ID via the item-detail prefix
+ * endpoint. Returns null for 404 (target not found) and 409 (ambiguous
+ * prefix); other errors (5xx, auth) propagate so React Query renders them.
+ */
+export async function resolveLegacyShortId(
+  shortid: string,
+): Promise<{ id: string; title: string } | null> {
+  try {
+    const item = await request<{ id: string; title: string }>(
+      `/items/${encodeURIComponent(shortid)}`,
+    );
+    return { id: item.id, title: item.title };
+  } catch (e) {
+    if (e instanceof ApiClientError && (e.status === 404 || e.status === 409)) return null;
+    throw e;
+  }
+}
+
 export { ApiClientError };

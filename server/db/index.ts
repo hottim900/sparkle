@@ -11,7 +11,7 @@ import { extractSparkleId } from "../lib/frontmatter.js";
 
 const DB_PATH = process.env.DATABASE_URL || "./data/todo.db";
 
-const TARGET_VERSION = 25;
+const TARGET_VERSION = 26;
 
 /**
  * Migration v24 halt payload — bilingual operator-facing error.
@@ -475,6 +475,89 @@ function runMigrations(sqlite: Database.Database) {
   if (version < 25) {
     migrateV24toV25(sqlite);
   }
+
+  // Step 25→26: Add reference_index + rename_history + items_active.reindex_dirty.
+  // Foundation for wikilink-first cross-references (PR 1). reference_index is the
+  // reverse-lookup table the rename engine (PR 3) reads to find every source that
+  // cites a renamed item. rename_history is a placeholder used by PR 3's undo flow.
+  // All existing items_active rows are marked dirty=1 so the background worker
+  // (server/lib/wikilink-worker.ts) builds the initial index over its first few cycles.
+  if (version < 26) {
+    migrateV25toV26(sqlite);
+  }
+}
+
+/**
+ * Migration 25→26: wikilink reference index + rename history + reindex_dirty flag.
+ *
+ * Three additions, all additive (no DROP/RENAME):
+ *   1. items_active.reindex_dirty INTEGER NOT NULL DEFAULT 0 — write-hook flag the
+ *      background worker drains every 60s. Default 0 so future inserts via raw SQL
+ *      don't pile into the queue silently.
+ *   2. reference_index — reverse-lookup (target_id → sources that cite it). No FK
+ *      on target_id because the target may live in items_vault; rebuild reconciles.
+ *      source_id FK CASCADE so deleting an active row drops its outgoing refs.
+ *   3. rename_history — append-only audit log written by PR 3's rename engine.
+ *      Shipped now so PR 3 doesn't ship a separate migration just for one table.
+ *
+ * Mark every existing active row dirty=1. The worker scans WHERE dirty=1 LIMIT 50
+ * per cycle, so the initial index builds over ceil(rows / 50) minutes after deploy.
+ * Acceptable: until the worker finishes, the renderer falls back to "unresolved"
+ * for refs whose target hasn't been indexed yet.
+ *
+ * Idempotent on re-run (PRAGMA table_info + CREATE TABLE IF NOT EXISTS).
+ */
+export function migrateV25toV26(sqlite: Database.Database): void {
+  const cols = sqlite.prepare("PRAGMA table_info(items_active)").all() as { name: string }[];
+  const hasReindexDirty = cols.some((c) => c.name === "reindex_dirty");
+
+  const tx = sqlite.transaction(() => {
+    if (!hasReindexDirty) {
+      sqlite.exec("ALTER TABLE items_active ADD COLUMN reindex_dirty INTEGER NOT NULL DEFAULT 0");
+    }
+
+    sqlite.exec(`
+      CREATE TABLE IF NOT EXISTS reference_index (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        source_id TEXT NOT NULL,
+        target_id TEXT NOT NULL,
+        char_offset INTEGER NOT NULL,
+        raw_title TEXT NOT NULL,
+        kind TEXT NOT NULL DEFAULT 'wikilink',
+        FOREIGN KEY (source_id) REFERENCES items_active(id) ON DELETE CASCADE
+      );
+      CREATE INDEX IF NOT EXISTS idx_reference_index_target_id ON reference_index(target_id);
+      CREATE INDEX IF NOT EXISTS idx_reference_index_source_id ON reference_index(source_id);
+      CREATE INDEX IF NOT EXISTS idx_reference_index_source_offset
+        ON reference_index(source_id, char_offset DESC);
+    `);
+
+    sqlite.exec(`
+      CREATE TABLE IF NOT EXISTS rename_history (
+        id TEXT PRIMARY KEY,
+        target_id TEXT NOT NULL,
+        old_title TEXT NOT NULL,
+        new_title TEXT NOT NULL,
+        source_count INTEGER NOT NULL DEFAULT 0,
+        performed_at TEXT NOT NULL,
+        performed_by TEXT NOT NULL DEFAULT 'system',
+        undo_state TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_rename_history_target_id ON rename_history(target_id);
+      CREATE INDEX IF NOT EXISTS idx_rename_history_performed_at
+        ON rename_history(performed_at DESC);
+    `);
+
+    sqlite.exec(
+      "CREATE INDEX IF NOT EXISTS idx_items_active_reindex_dirty ON items_active(reindex_dirty) WHERE reindex_dirty = 1",
+    );
+
+    sqlite.exec("UPDATE items_active SET reindex_dirty = 1");
+  });
+  tx();
+  setSchemaVersion(sqlite, 26);
+
+  logger.info({ event: "migration_v26_complete" }, "migration v26: wikilink index tables created");
 }
 
 /**
@@ -1071,6 +1154,7 @@ export function initializeDatabase(sqlite: Database.Database) {
         paused INTEGER NOT NULL DEFAULT 0,
         paused_at TEXT,
         paused_context TEXT,
+        reindex_dirty INTEGER NOT NULL DEFAULT 0,
         created TEXT NOT NULL,
         modified TEXT NOT NULL,
         CHECK (
@@ -1090,6 +1174,35 @@ export function initializeDatabase(sqlite: Database.Database) {
       CREATE INDEX idx_items_active_due ON items_active(due) WHERE due IS NOT NULL;
       CREATE INDEX idx_items_active_linked_note_id
         ON items_active(linked_note_id) WHERE linked_note_id IS NOT NULL;
+      CREATE INDEX idx_items_active_reindex_dirty
+        ON items_active(reindex_dirty) WHERE reindex_dirty = 1;
+
+      CREATE TABLE reference_index (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        source_id TEXT NOT NULL,
+        target_id TEXT NOT NULL,
+        char_offset INTEGER NOT NULL,
+        raw_title TEXT NOT NULL,
+        kind TEXT NOT NULL DEFAULT 'wikilink',
+        FOREIGN KEY (source_id) REFERENCES items_active(id) ON DELETE CASCADE
+      );
+      CREATE INDEX idx_reference_index_target_id ON reference_index(target_id);
+      CREATE INDEX idx_reference_index_source_id ON reference_index(source_id);
+      CREATE INDEX idx_reference_index_source_offset
+        ON reference_index(source_id, char_offset DESC);
+
+      CREATE TABLE rename_history (
+        id TEXT PRIMARY KEY,
+        target_id TEXT NOT NULL,
+        old_title TEXT NOT NULL,
+        new_title TEXT NOT NULL,
+        source_count INTEGER NOT NULL DEFAULT 0,
+        performed_at TEXT NOT NULL,
+        performed_by TEXT NOT NULL DEFAULT 'system',
+        undo_state TEXT
+      );
+      CREATE INDEX idx_rename_history_target_id ON rename_history(target_id);
+      CREATE INDEX idx_rename_history_performed_at ON rename_history(performed_at DESC);
 
       CREATE TABLE items_vault (
         id TEXT PRIMARY KEY,

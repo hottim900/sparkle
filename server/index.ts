@@ -45,6 +45,8 @@ import { dailyNoteRouter } from "./routes/daily-note.js";
 import { lineBriefRouter } from "./routes/line-brief.js";
 import { checkAndGenerateDailyNote } from "./lib/daily-note-scheduler.js";
 import { checkAndSendLineBrief } from "./lib/line-brief-scheduler.js";
+import { checkAndDrainReindexQueue } from "./lib/wikilink-worker.js";
+import { wikilinksRouter } from "./routes/wikilinks.js";
 import { startVaultScanner } from "./lib/vault-scanner.js";
 
 // --- Startup validation ---
@@ -221,6 +223,7 @@ app.route("/api/dashboard", dashboardRouter);
 app.route("/api/daily-note", dailyNoteRouter);
 app.route("/api/line-brief", lineBriefRouter);
 app.route("/api/vault", vaultRouter);
+app.route("/api/wikilinks", wikilinksRouter);
 app.route("/api", sharesRouter);
 
 // Health check endpoint (unauthenticated — skipped in auth middleware)
@@ -478,6 +481,8 @@ app.post("/api/import", async (c) => {
               category_id: item.category_id,
               created: item.created,
               modified: item.modified,
+              // Import overwrites title + content — reindex.
+              reindex_dirty: 1,
             })
             .where(eq(itemsActive.id, item.id))
             .run();
@@ -490,6 +495,8 @@ app.post("/api/import", async (c) => {
               tags: JSON.stringify(item.tags),
               aliases: JSON.stringify(item.aliases),
               is_private: 0,
+              // Fresh insert with user-supplied content — reindex.
+              reindex_dirty: 1,
             })
             .run();
           imported++;
@@ -577,6 +584,11 @@ dailyNoteTimer.unref();
 // LINE daily brief scheduler — checks every 60s if it's time to push
 const lineBriefTimer = setInterval(() => checkAndSendLineBrief(sqlite), 60_000);
 lineBriefTimer.unref();
+
+// Wikilink reindex worker — drains items_active.reindex_dirty=1 in 50-row
+// batches every 60s. Populates reference_index for the rename engine (PR 3).
+const wikilinkWorkerTimer = setInterval(() => checkAndDrainReindexQueue(sqlite), 60_000);
+wikilinkWorkerTimer.unref();
 
 // Vault scanner — indexes entire vault into vault_files table every 5 minutes.
 // vault_files.sparkle_id is the source-of-truth for vault path resolution

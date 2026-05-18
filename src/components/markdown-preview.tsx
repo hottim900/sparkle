@@ -1,5 +1,6 @@
 import ReactMarkdown from "react-markdown";
 import { remarkPlugins, rehypePlugins, sharedComponents } from "@/lib/markdown-config";
+import { wikilinkMarkdownComponents } from "@/components/wikilink-text";
 
 interface MarkdownPreviewProps {
   content: string;
@@ -12,6 +13,7 @@ export function MarkdownPreview({ content }: MarkdownPreviewProps) {
       rehypePlugins={rehypePlugins}
       components={{
         ...sharedComponents,
+        ...wikilinkMarkdownComponents,
         h1: ({ children }) => <h1 className="text-2xl font-bold mt-4 mb-2">{children}</h1>,
         h2: ({ children }) => <h2 className="text-xl font-bold mt-3 mb-2">{children}</h2>,
         h3: ({ children }) => <h3 className="text-lg font-semibold mt-2 mb-1">{children}</h3>,

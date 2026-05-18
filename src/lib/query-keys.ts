@@ -47,4 +47,7 @@ export const queryKeys = {
     file: (path: string) => ["vault", "file", path] as const,
     bySparkleId: (id: string) => ["vault", "by-sparkle-id", id] as const,
   },
+  wikilinks: {
+    resolve: (title: string) => ["wikilinks", "resolve", title] as const,
+  },
 } as const;
