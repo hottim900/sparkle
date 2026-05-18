@@ -175,6 +175,29 @@ sparkle_edit_note({ id, revision: "<new>", ops: [...] })  // 直接重試，不�
 
 **CONTENT_TOO_LARGE** — 編輯後總長超過 50000 字。\`delta_per_op\` 列出每個 op 對長度的貢獻；裁掉貢獻最大的那個再試。
 
+## 跨筆記引用：\`[[Title]]\` wikilink
+
+從 v1.5.1.0 起，Sparkle 跨筆記引用使用 Obsidian-native \`[[Title]]\` 語法。Sparkle UI 和匯出後的 Obsidian vault 渲染一致——點擊跳轉、hover preview、unresolved 標示都成立。
+
+### 寫入規則（重要）
+
+- **新內容一律用 \`[[Title]]\`** 而非舊的 \`筆記（xxxxxxxx）\` 短 ID 語法。短 ID 引用會以 dashed-border legacy chip 顯示，提示使用者改寫。
+- **別名語法**：\`[[Real Title|顯示文字]]\`。pipe 左側是用來解析的真實標題，右側是渲染文字。
+- **conservative parser**：拒絕跨行、空白、超過 256 字元、含巢狀 \`[[\` 的引用。Code block 內的 \`[[...]]\` 不會被解析（fenced 和 inline backtick 都會跳過）。
+- **active-priority 解析**：當標題同時存在於 items_active 和 items_vault 時，active 優先。Collision（多列同名）時 resolver 回 null，渲染為紫色 unresolved。
+- **\`未命名\` 是 allowlist**：fleeting 快速捕捉常用此預設值；resolver 視為 unresolvable，不會把多個 \`未命名\` 任選一個。
+
+### 工作流
+
+1. 寫筆記內容前，用 sparkle_resolve_wikilink 確認你想引用的 title 確實存在且唯一（避免寫了 \`[[Foo]]\` 結果 unresolved）。
+2. 若 collision（多個 active 同名），改用更具體的 title，或先用 sparkle_update_note 改 metadata 讓標題唯一。
+3. 寫入後 reference_index 在背景 60s 內更新；rename engine（PR 3 落地後）會用 reference_index 反向查 source。
+4. 若需要把舊的 \`筆記（xxxxxxxx）\` 批次改寫，等 PR 4 backfill migration（v27）落地，不要手動逐筆改。
+
+### Disaster recovery
+
+若 resolver 行為怪異（parser bug fix 後、手動 SQL 編輯 content 繞過寫入鉤）：呼叫 \`sparkle_rebuild_reference_index\` 觸發全量重建。Worker 以 50/分鐘 batch 速度補完——大型 DB 可能花數十分鐘。**不要把這當作 routine 工具，寫入鉤已維持 index 即時。**
+
 ## 工具使用模式
 
 | 情境 | 工具 |
@@ -195,6 +218,8 @@ sparkle_edit_note({ id, revision: "<new>", ops: [...] })  // 直接重試，不�
 | 修改 vault 檔案 | sparkle_write_obsidian（按 sparkle_id）、sparkle_write_obsidian_by_path（按路徑）|
 | 搜尋 vault 內容 | sparkle_search_obsidian（全文搜尋 vault .md 檔案）|
 | 列出 vault 檔案 | sparkle_list_obsidian（列出 vault 檔案與目錄結構）|
+| 解析 wikilink | sparkle_resolve_wikilink（\`[[Title]]\` → item id + snippet；collision/miss 回 resolved:false）|
+| 重建 reference 索引 | sparkle_rebuild_reference_index（disaster recovery，非 routine）|
 
 ## 行為準則
 
