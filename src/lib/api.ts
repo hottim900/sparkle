@@ -594,4 +594,43 @@ export async function resolveLegacyShortId(
   }
 }
 
+// --- Wikilink admin APIs (PR 9) ---
+
+export interface RenameHistoryRow {
+  id: string;
+  target_id: string;
+  old_title: string;
+  new_title: string;
+  source_count: number;
+  performed_at: string;
+  performed_by: string;
+}
+
+export async function listRecentRenames(limit = 50): Promise<{ renames: RenameHistoryRow[] }> {
+  return request(`/wikilinks/admin/recent-renames?limit=${limit}`);
+}
+
+export async function undoRename(historyId: string): Promise<{
+  status: string;
+  historyId: string;
+  rewrittenCount: number;
+  rewrittenSourceIds: string[];
+}> {
+  return request(`/wikilinks/admin/undo-rename/${encodeURIComponent(historyId)}`, {
+    method: "POST",
+  });
+}
+
+export interface TitleCollisionGroup {
+  normalized: string;
+  rows: Array<{ id: string; title: string; type: string; status: string; modified: string }>;
+}
+
+export async function listTitleCollisions(): Promise<{
+  collisions: TitleCollisionGroup[];
+  total: number;
+}> {
+  return request("/wikilinks/admin/title-collisions");
+}
+
 export { ApiClientError };

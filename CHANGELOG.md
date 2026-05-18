@@ -1,5 +1,31 @@
 # Changelog
 
+## [1.5.8.0] - 2026-05-18
+
+### Added
+
+- **ENG-8 perf gate.** `server/lib/__tests__/rename-engine-perf.test.ts` measures `applyTitleRename` over 50 sources × 11 trials; asserts P50 and P99 both stay under 500ms. The gate runs in the standard `npx vitest run` so regressions block CI. 500ms is the "user notices and gets nervous" threshold from the design doc (line 204-205); typical sync rename should be well under 50ms.
+- **E2E rename flow.** `e2e/wikilink-rename.spec.ts` covers three scenarios: title change rewrites the source's content + `swept_references` lands in the PATCH response (DX-5 contract), `preview-rename` returns counts without modifying source content, and `POST /api/items` rejects duplicate titles with 409 `TITLE_COLLISION`. Each test uses a UUID-suffixed title to avoid cross-test collisions in the shared E2E DB.
+- **Admin frontend UIs.** Two new TanStack Router file routes:
+  - `/admin/recent-renames` (`src/routes/admin/recent-renames.tsx`) — table of recent `rename_history` rows with one-click undo (confirms via native `window.confirm` before calling `POST /admin/undo-rename/:id`). Undo rows are visually distinguished by an `undo` marker in the executor column.
+  - `/admin/title-collisions` (`src/routes/admin/title-collisions.tsx`) — groups of items_active rows that share a normalized title. Each row clicks through to `/item/:id` so the operator can rename or merge.
+- **Three new API client functions** in `src/lib/api.ts`: `listRecentRenames`, `undoRename`, `listTitleCollisions`. Type definitions exported for downstream use.
+
+### Tests
+
+- **ENG-7 microtask-parallel stress test** (`wikilink-write-hooks.test.ts`): schedules 10 concurrent `createItem` calls with the same title via `Promise.allSettled`; asserts exactly 1 fulfilled + 9 rejected with `TitleCollisionError` + only 1 row in DB. Proves the `BEGIN IMMEDIATE` gate works under microtask contention (was previously only tested serially).
+- **`swept_references` API contract tests** (`items-title-collision.test.ts`): title-change PATCH → response has the field with correct counts; non-title PATCH → field absent; first-time title set on empty row → field absent (not a rename).
+- **`preview-rename` NFC self-rename test** (`wikilinks.test.ts`): target stored as NFC composed, preview with NFD decomposed form → `would_rewrite_count = 0`. Uses explicit Unicode escapes so any normalize-on-save editor/git filter can't collapse the literals to identical bytes.
+- **`rename-engine-integration.test.ts` NFC test hardening** — added explicit `expect(composed).not.toBe(decomposed)` sanity assertion + escape-preservation comment so the test fails loud if a future formatter collapses the strings (the multi-agent audit caught this exact risk).
+- **`rename-history-cleanup.test.ts` day-boundary flake fix** — switched the no-op test from `new Date().toISOString()` (which could flip rows in/out of the 30d window at midnight) to explicit fixed dates passed via the `now` parameter.
+- **`wikilink-text.test.tsx` matchMedia cleanup** — added `beforeEach`/`afterEach` that capture and restore `window.matchMedia` so the mock installed for mobile/desktop branching tests doesn't leak into later test files when the worker is shared.
+
+### Notes
+
+Picks up the 3 "weak defer" items the multi-agent audit (post-#343) flagged as having unconvincing rationale: ENG-8 perf gate, E2E rename flow, admin frontend UIs. Real deferrals stay deferred — DES-5 rename dialog (UX taste call), DX-3 cite_as (semantics unclear), DX-2 stateful confirm_token (stateless preview already shipped). Test gap fixes were direct findings from the same audit's coverage analysis.
+
+Full suite: **1827 passing** (up from 1817). Lint + tsc clean.
+
 ## [1.5.7.0] - 2026-05-18
 
 ### Added

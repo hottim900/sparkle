@@ -370,4 +370,28 @@ describe("GET /api/wikilinks/admin/preview-rename", () => {
     };
     expect(src.content).toBe("see [[Hub]] here");
   });
+
+  it("returns 0 rewrites when newTitle is NFC-equivalent to oldTitle (self-rename)", async () => {
+    // Use explicit \u escapes for the decomposed form — any
+    // normalize-on-save editor or git filter would collapse the inline
+    // literals to identical bytes, masking the test. With escapes the
+    // strings are guaranteed-distinct at parse time, then converge under
+    // .normalize("NFC").
+    const composed = "Café"; // single codepoint
+    const decomposed = "Café"; // base + combining accent
+    expect(composed).not.toBe(decomposed); // sanity: bytes differ
+    expect(composed.normalize("NFC")).toBe(decomposed.normalize("NFC")); // converge
+
+    const target = insertActiveRow(testSqlite, { title: composed });
+
+    const res = await authedGet(
+      `/api/wikilinks/admin/preview-rename?target_id=${target}&new_title=${encodeURIComponent(
+        decomposed,
+      )}`,
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { would_rewrite_count: number };
+    // Both normalize to U+00E9 — engine treats as no-op rename.
+    expect(body.would_rewrite_count).toBe(0);
+  });
 });
