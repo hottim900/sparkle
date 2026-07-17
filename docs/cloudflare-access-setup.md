@@ -7,12 +7,13 @@
 1. [前置條件](#前置條件)
 2. [啟用 Zero Trust 免費方案](#啟用-zero-trust-免費方案)
 3. [設定身份驗證方式](#設定身份驗證方式)
-4. [建立 Access Policy](#建立-access-policy)
-5. [建立 Access Application](#建立-access-application)
-6. [建立 Bypass Applications](#建立-bypass-applications)
-7. [驗證](#驗證)
-8. [Service Token（程式化存取）](#service-token程式化存取)
-9. [常見問題](#常見問題)
+4. [便利性設定：GitHub 登入 + 較長 Session](#便利性設定github-登入--較長-session)
+5. [建立 Access Policy](#建立-access-policy)
+6. [建立 Access Application](#建立-access-application)
+7. [建立 Bypass Applications](#建立-bypass-applications)
+8. [驗證](#驗證)
+9. [Service Token（程式化存取）](#service-token程式化存取)
+10. [常見問題](#常見問題)
 
 ---
 
@@ -50,7 +51,7 @@ Cloudflare Access 是 Cloudflare Zero Trust 平台的一部分，個人使用免
 
 Cloudflare Access 支援多種身份驗證方式（Identity Provider）。以下列出三種推薦選項，依簡易度排序。
 
-### 選項 A：Email OTP（推薦，零設定）
+### 選項 A：Email OTP（零設定）
 
 這是最簡單的方式，完全不需要額外設定。
 
@@ -62,7 +63,7 @@ Cloudflare Access 支援多種身份驗證方式（Identity Provider）。以下
 2. 在 **Login methods** 區塊，確認 **One-time PIN** 已啟用（預設就是啟用的）
 3. 完成！不需要其他設定
 
-> **適合情境**：個人使用，只有你一個人會存取。
+> **適合情境**：第一次設定、想快速上線。日常使用若覺得驗證碼太頻繁，建議改用 GitHub 或 Google 登入並拉長 Session Duration。
 
 ### 選項 B：Google 登入
 
@@ -75,12 +76,12 @@ Cloudflare Access 支援多種身份驗證方式（Identity Provider）。以下
    - Application type：Web application
    - Authorized redirect URIs：加入 `https://<your-team-name>.cloudflareaccess.com/cdn-cgi/access/callback`
 3. 記下 Client ID 和 Client Secret
-4. 回到 Zero Trust Dashboard > Settings > Authentication > Login methods
+4. 回到 Zero Trust Dashboard > Integrations > Identity providers（舊版 UI 可能在 Settings > Authentication > Login methods）
 5. 點擊 **Add new** > **Google**
 6. 填入 Client ID 和 Client Secret
 7. 儲存
 
-> **注意**：`<your-team-name>` 是你在啟用 Zero Trust 時選擇的 team name。
+> **注意**：`<your-team-name>` 是你的 Cloudflare Zero Trust team name，不是 Sparkle hostname。若 team domain 是 `tim-home.cloudflareaccess.com`，team name 就是 `tim-home`。
 
 ### 選項 C：GitHub 登入
 
@@ -94,10 +95,79 @@ Cloudflare Access 支援多種身份驗證方式（Identity Provider）。以下
    - Homepage URL：`https://<your-team-name>.cloudflareaccess.com`
    - Authorization callback URL：`https://<your-team-name>.cloudflareaccess.com/cdn-cgi/access/callback`
 3. 記下 Client ID，並產生一組 Client Secret
-4. 回到 Zero Trust Dashboard > Settings > Authentication > Login methods
+4. 回到 Zero Trust Dashboard > Integrations > Identity providers（舊版 UI 可能在 Settings > Authentication > Login methods）
 5. 點擊 **Add new** > **GitHub**
 6. 填入 Client ID 和 Client Secret
-7. 儲存
+7. 儲存後點擊 **Finish setup**，在 GitHub 授權 Cloudflare Access 讀取 email 與 organization/team 資訊
+8. 回到 Identity providers 頁面，點擊 GitHub login method 旁的 **Test** 確認連線正常
+
+> **注意**：GitHub OAuth 的 Homepage URL 和 callback URL 必須使用 `*.cloudflareaccess.com` 的 team domain，不要填 Sparkle 的公開網址（例如 `sparkle.example.com`）。
+
+---
+
+## 便利性設定：GitHub 登入 + 較長 Session
+
+如果你的目標是減少 Email OTP 驗證碼，同時保留 Cloudflare Access 這層保護，建議使用這組設定：
+
+- 登入方式：GitHub（或 Google）
+- Global session duration：`1 month`
+- Sparkle application session duration：`1 month`
+- Sparkle policy session duration：`Same as application` 或 `1 month`
+- Sparkle application 只啟用 GitHub login method，並開啟 instant authentication
+
+### 1. 拉長全域 Session
+
+1. 前往 Cloudflare Dashboard > **Zero Trust**
+2. 前往 **Access controls > Access settings**
+3. 找到 **Set your global session duration**，點擊 **Edit**
+4. 設為 `1 month`
+5. 儲存
+
+### 2. 拉長 Sparkle Application Session
+
+1. 前往 **Access controls > Applications**
+2. 開啟 **Sparkle** application，點擊 **Configure**
+3. 找到 **Session Duration**
+4. 設為 `1 month`
+5. 儲存
+
+### 3. 檢查 Policy Session
+
+Policy 的 session duration 會覆蓋 application duration，所以也要檢查：
+
+1. 前往 **Access controls > Policies**
+2. 開啟 Sparkle 使用的 allow policy（例如 `Allow owner`）
+3. 找到 **Session Duration**
+4. 設為 **Same as application** 或 `1 month`
+5. 儲存
+
+### 4. 讓 Sparkle 只用 GitHub 登入
+
+1. 前往 **Access controls > Applications**
+2. 開啟 **Sparkle** application，點擊 **Configure**
+3. 前往 **Authentication**
+4. 關閉 **Accept all available identity providers**（如果有啟用）
+5. 只選擇 **GitHub**
+6. 取消選擇 **One-time PIN / Email OTP**
+7. 啟用 **Apply instant authentication**
+8. 儲存
+
+完成後，瀏覽器應該直接導向 GitHub，不再顯示 Email OTP 或 Cloudflare 的登入方式選擇頁。
+
+### 5. 重新測試登入
+
+先登出 Cloudflare Access：
+
+```text
+https://<your-sparkle-domain>/cdn-cgi/access/logout
+```
+
+再用無痕視窗開啟 Sparkle。預期流程：
+
+1. 開啟 Sparkle URL
+2. Cloudflare 直接導向 GitHub
+3. GitHub 授權完成後回到 Sparkle
+4. 如果該瀏覽器沒有 Sparkle 自己的 `AUTH_TOKEN`，Sparkle 仍會要求輸入一次存取權杖
 
 ---
 
@@ -148,7 +218,7 @@ Application 定義了「哪個網站」要受到 Cloudflare Access 保護。
 
 4. 填寫 Application 資訊：
    - **Application name**：`Sparkle`
-   - **Session Duration**：`7 days`（建議。兼顧便利性與安全性，每週重新驗證一次）
+   - **Session Duration**：`7 days`（平衡便利性與安全性）或 `1 month`（偏重便利性，個人自用常見選擇）
 
 5. 在 **Application domain** 區塊：
    - **Subdomain**：你的 Sparkle hostname 的子網域部分（例如 `sparkle`）
@@ -160,7 +230,7 @@ Application 定義了「哪個網站」要受到 Cloudflare Access 保護。
 
 7. 儲存
 
-> **提示**：Session Duration 設為 7 天表示你登入一次後，一週內不需要重新驗證。Cloudflare 預設為 30 天，但縮短至 7 天可以降低 session 被盜用的風險窗口，同時個人使用每週登入一次也不會太麻煩。
+> **提示**：Session Duration 越長，重新驗證頻率越低，但 session 被盜用後的有效時間也越長。若 Sparkle 是個人自用且裝置管理可信，可以選 `1 month` 來減少登入摩擦；若想更保守，選 `7 days`。
 
 ---
 
@@ -194,10 +264,10 @@ Application 定義了「哪個網站」要受到 Cloudflare Access 保護。
 
 以下是設定 Bypass 路徑時常見的錯誤，任何一項都可能導致嚴重安全漏洞：
 
-| 錯誤路徑 | 風險 |
-|----------|------|
-| `/*` 或留空 | 整個網站完全暴露，任何人無需登入即可存取所有功能和資料 |
-| `/api/*` | 所有 API 端點暴露，攻擊者只需猜到 Bearer token 即可存取全部資料 |
+| 錯誤路徑         | 風險                                                                                                                    |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `/*` 或留空      | 整個網站完全暴露，任何人無需登入即可存取所有功能和資料                                                                  |
+| `/api/*`         | 所有 API 端點暴露，攻擊者只需猜到 Bearer token 即可存取全部資料                                                         |
 | `/api/webhook/*` | 雖然目前只有 `/api/webhook/line` 一個端點，但使用萬用字元會讓未來新增的任何 webhook 路徑自動被 bypass，違反最小權限原則 |
 
 > **正確做法**：只 bypass `/api/webhook/`。如果未來新增其他 webhook 端點，再逐一評估是否需要 bypass。
@@ -245,10 +315,10 @@ curl -I -X POST https://YOUR_DOMAIN/api/webhook/line
 
 **預期結果**：
 
-| 端點 | 預期回應 | 意義 |
-|------|---------|------|
-| `/api/items` | `302` 或 `403` | CF Access 正確保護 API |
-| `/api/webhook/line` | `401` | Bypass 生效，請求到達 Sparkle 但缺少 LINE signature 被拒絕 |
+| 端點                | 預期回應       | 意義                                                       |
+| ------------------- | -------------- | ---------------------------------------------------------- |
+| `/api/items`        | `302` 或 `403` | CF Access 正確保護 API                                     |
+| `/api/webhook/line` | `401`          | Bypass 生效，請求到達 Sparkle 但缺少 LINE signature 被拒絕 |
 
 > 如果 `/api/items` 回傳 `401` 而非 `302`/`403`，表示 CF Access 沒有保護該路徑，請檢查 Application 設定。
 
@@ -318,7 +388,55 @@ curl -I -X POST https://YOUR_DOMAIN/api/webhook/line
 
 ### Q: Session 過期了怎麼辦？
 
-重新登入即可。你在 Sparkle 中儲存的資料不受影響。如果你設定了建議的 7 天 Session Duration，每週只需要重新登入一次。
+重新登入即可。你在 Sparkle 中儲存的資料不受影響。如果你設定 `1 month` Session Duration，每個瀏覽器或 PWA 大約每月重新驗證一次；如果設定 `7 days`，則約每週一次。
+
+### Q: `<your-team-name>` 是什麼？
+
+這是你的 Cloudflare Zero Trust team name，不是 Sparkle app hostname。
+
+查詢方式：
+
+1. Cloudflare Dashboard > **Zero Trust**
+2. 前往 **Settings**
+3. 查看 **Team name and domain**
+
+如果畫面顯示：
+
+```text
+Team domain: tim-home.cloudflareaccess.com
+```
+
+那麼 GitHub OAuth 要填：
+
+```text
+Homepage URL:
+https://tim-home.cloudflareaccess.com
+
+Authorization callback URL:
+https://tim-home.cloudflareaccess.com/cdn-cgi/access/callback
+```
+
+不要填 `https://sparkle.example.com` 這類 Sparkle 公開網址。
+
+### Q: GitHub 登入後出現 `That account does not have access`？
+
+這代表 GitHub OAuth 成功，但 Cloudflare Access policy 沒有允許這個 GitHub identity。
+
+排查步驟：
+
+1. 前往 **Zero Trust > Insights > Logs**
+2. 開啟 **Access authentication logs**
+3. 找到最新的 denied Sparkle login
+4. 打開該筆紀錄，確認 **User email** 和 **Connection**（應為 GitHub）
+5. 前往 **Access controls > Policies**
+6. 開啟 Sparkle 的 allow policy（例如 `Allow owner`）
+7. 在 **Include** 規則中使用：
+   - **Selector**：`Emails`
+   - **Value**：Access log 裡顯示的 **User email**
+8. 確認沒有錯誤的 **Require** 規則，例如舊的 One-time PIN、錯誤 email domain、或未設定好的 GitHub organization/team
+9. 回到 **Access controls > Applications > Sparkle > Policies**，確認這個 allow policy 已套用到 Sparkle application
+
+如果你使用 GitHub organization/team policy，且剛加入 organization 或剛修改權限，請到 GitHub > **Settings > Applications > Authorized OAuth Apps** 撤銷 Cloudflare Access，然後重新登入 Sparkle，讓 GitHub 重新授權並更新 organization/team 權限。
 
 ### Q: LINE Bot 不通怎麼辦？
 
@@ -336,6 +454,7 @@ curl -I -X POST https://YOUR_DOMAIN/api/webhook/line
 ### Q: 可以讓多人使用嗎？
 
 可以。在 Allow Policy 的 Include 規則中，你可以：
+
 - 新增多個 email 地址
 - 或使用 email domain 規則（例如允許所有 `@yourcompany.com` 的人）
 
@@ -358,5 +477,9 @@ curl -I -X POST https://YOUR_DOMAIN/api/webhook/line
 ## 參考資料
 
 - [Cloudflare Access: Self-hosted applications](https://developers.cloudflare.com/cloudflare-one/applications/configure-apps/self-hosted-public-app/)
+- [Cloudflare Access: Session management](https://developers.cloudflare.com/cloudflare-one/access-controls/access-settings/session-management/)
+- [Cloudflare Access: GitHub identity provider](https://developers.cloudflare.com/cloudflare-one/integrations/identity-providers/github/)
+- [Cloudflare Access: Policies](https://developers.cloudflare.com/cloudflare-one/access-controls/policies/)
+- [Cloudflare Access: Authentication logs](https://developers.cloudflare.com/cloudflare-one/insights/logs/dashboard-logs/access-authentication-logs/)
 - [Cloudflare Zero Trust Free Plan](https://www.cloudflare.com/plans/zero-trust-services/)
 - [Sparkle Cloudflare Tunnel 設定](../scripts/setup-cloudflared.sh)
