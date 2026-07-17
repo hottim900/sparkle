@@ -261,6 +261,7 @@ Cloudflare Tunnel 透過 Cloudflare 的網路將你的 Sparkle 實例對外公�
 
 - 免費方案最多支援 50 位使用者（不需信用卡）
 - 支援 Email OTP、Google、GitHub 等身份驗證方式
+- 若想減少登入提示，建議使用 GitHub 或 Google 登入，並拉長 Access session duration（例如 `1 month`）
 - LINE Bot webhook 設定為繞過身份驗證
 - MCP HTTP 伺服器的 hostname（若有設定）**不可**設定 CF Access — Claude.ai 伺服器需要直接存取；OAuth 提供獨立的認證機制
 - MCP stdio 伺服器和 localhost 存取不受影響

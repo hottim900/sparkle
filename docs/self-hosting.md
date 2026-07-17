@@ -261,6 +261,7 @@ Key points:
 
 - Free for up to 50 users (no credit card required)
 - Supports Email OTP, Google, GitHub, and other identity providers
+- For fewer login prompts, use GitHub or Google login with a longer Access session duration (for example, `1 month`)
 - LINE Bot webhook is configured to bypass authentication
 - MCP HTTP server hostname (if configured) must **not** have CF Access — Claude.ai servers need direct access; OAuth provides its own authentication
 - MCP stdio server and localhost access are not affected
