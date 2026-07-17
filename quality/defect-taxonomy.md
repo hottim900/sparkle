@@ -300,24 +300,23 @@ grep -rn "fts\|MATCH" server/ --include="*.ts"
 
 ### 定義
 
-SQLite migration 中的不安全操作：`SELECT *` 在 INSERT 中（欄位順序依賴）、缺少 foreign_keys OFF 的 DROP TABLE、transaction 內的 schema version 設定。
+SQLite migration 中的不安全操作：`INSERT ... SELECT *` 的欄位順序依賴、table rebuild 時 foreign key 切換與恢復不完整、schema 變更與版本推進缺乏原子性、缺少備份或重跑保護。
 
 ### 搜查方式
 
 ```bash
-# Migration 相關程式碼（已有 PostToolUse hook 保護）
-grep -n "SELECT \*" server/db/index.ts
-grep -n "DROP TABLE" server/db/index.ts
-grep -n "setSchemaVersion" server/db/index.ts
+# 靜態檢視 + 行為測試（Codex PostToolUse 與 pre-commit 會條件式執行測試）
+rg -n "INSERT\\s+INTO|SELECT\\s+\\*|DROP TABLE|foreign_keys|setSchemaVersion" server/db/index.ts
+npx vitest run server/db/__tests__/migration*.test.ts
 ```
 
-> **注意：** 已有 `.claude/hooks/migration-safety.sh` PostToolUse hook 做自動檢查。此分類主要用於回顧性搜查。
+> **注意：** 本機 Codex PostToolUse hook 會呼叫 `scripts/hooks/migration-safety.sh`，在 `apply_patch` 修改 `server/db/index.ts` 後執行 migration suite；`.husky/pre-commit` 與 CI 是硬 gate。PostToolUse 只提供即時回饋，不取代 commit / remote checks。
 
-**搜查狀態：** ✅ 已搜查（2026-04-05）
+**搜查狀態：** ✅ 已搜查（2026-07-18）
 
 ### 搜查結果
 
-**發現：** 無缺陷。Migration v0-13 均使用明確列列表（無 SELECT \*）、FK 管理正確、setSchemaVersion 在 transaction 外、idempotent 保護完整。
+**發現：** Migration v0-27 行為測試通過。v23 覆蓋 foreign key 關閉後的 `finally` 恢復；v24/v25 覆蓋 schema 變更與 `setSchemaVersion` 的原子 rollback；v25/v27 覆蓋備份、磁碟與重跑路徑。舊 PostToolUse hook 對 Codex `apply_patch` 輸入會 silent no-op，且錯誤禁止 transaction 內推進版本，已改為直接執行 migration suite。
 
 ### 探索測試種子
 

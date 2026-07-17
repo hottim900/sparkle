@@ -23,3 +23,6 @@ playwright-report/
 e2e/.auth/
 .gstack/
 quality/duplicate-sparkle-id.json
+.agents/
+.codex/
+AGENTS.md
