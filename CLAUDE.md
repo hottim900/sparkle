@@ -21,6 +21,7 @@ npm run test:e2e     # E2E tests (requires build)
 npm run lint:fix     # ESLint auto-fix
 npm run format       # Prettier write
 npm run build        # Production frontend → dist/
+npm run prepare      # Initialize Husky after creating a worktree
 # MCP server (in mcp-server/)
 cd mcp-server && npm run dev:http  # MCP HTTP server on :3001 (Claude.ai connector)
 cd mcp-server && npm run dev       # MCP stdio server (Claude Code, launched automatically)
@@ -42,7 +43,7 @@ Type conversion auto-maps status server-side. `category_id` preserved; `due`/`li
 
 Mutations on items_vault from MCP (`sparkle_update_note`, `sparkle_advance_note`, `sparkle_pause_note`, `sparkle_resume_note`) and REST (`PATCH /api/items/:id` on vault rows) return `VAULT_READONLY` (409). Use `sparkle_write_obsidian` for content edits or `sparkle_release_note` / `DELETE /api/items/:id/vault-stub` to drop Sparkle's record while preserving the vault `.md`.
 
-DB migration version 0→25, idempotent. Migration safety enforced by PostToolUse hook. v24 halts on orphans / unparseable frontmatter, v25 halts on backup-disk failures, all via `process.exit(78)` paired with systemd `RestartPreventExitStatus=78` — apply via `scripts/migrate-systemd-unit.sh`. v25 backups land in `~/sparkle-backups/` via `VACUUM INTO` (rollback playbook: `docs/migration-v25.md`).
+DB migration version 0→27, idempotent. Migration safety is enforced by the local Codex PostToolUse hook (which calls `scripts/hooks/migration-safety.sh`), conditional pre-commit migration tests, and CI. Schema changes and `setSchemaVersion` belong in the same transaction when atomic rollback is required. v24 halts on orphans / unparseable frontmatter; v25 and v27 halt on backup / disk failures. Halts use `process.exit(78)` with systemd `RestartPreventExitStatus=78` — apply via `scripts/migrate-systemd-unit.sh`. v25/v27 backups land in `~/sparkle-backups/` via `VACUUM INTO` (rollback playbooks: `docs/migration-v25.md`, `docs/migration-v27.md`).
 
 - Boolean settings: use `getBoolSetting(all, key, defaultValue)` — never raw `=== "true"`. New boolean settings MUST have a migration INSERT OR IGNORE + fresh install seed.
 
@@ -115,7 +116,7 @@ Key routing rules:
 - Design system, brand → invoke design-consultation
 - Visual audit, design polish → invoke design-review
 - Architecture review → invoke plan-eng-review
-- Save progress, checkpoint, resume → invoke checkpoint
+- Save progress → invoke context-save; resume → invoke context-restore
 - Code quality, health check → invoke health
 
 ## Maintenance

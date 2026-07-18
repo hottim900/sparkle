@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.5.11.0] - 2026-07-18
+
+### Fixed
+
+- **Codex migration checks now run for real `apply_patch` edits.** The shared hook parses Codex's raw patch payload, detects add/update/delete/move operations on `server/db/index.ts`, runs the complete migration suite, and returns structured failure context. Malformed input and repository-resolution failures are surfaced instead of silently passing.
+- **Git hooks now enforce the intended commit and push gates.** Pre-commit propagates `lint-staged` failures, rejects partially staged migrations, and runs migration tests when the migration source is staged. Pre-push checks the destination ref, so `HEAD:main` and multi-ref pushes containing `main` cannot bypass the feature-branch workflow.
+- **Worktree hook setup is explicit.** Project guidance now includes `npm run prepare` after worktree creation, while machine-local `AGENTS.md`, `.agents/`, and `.codex/` configuration stay out of Git and cannot collide with production pulls.
+
+### Added
+
+- **Hook regression coverage.** Nineteen tests exercise Codex payload handling, migration-suite success and failure, malformed input, repository errors, lint enforcement, staged migration behavior, and feature/main/multi-ref pushes.
+
 ## [1.5.9.0] - 2026-05-18
 
 ### Fixed
