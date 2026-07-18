@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.5.12.0] - 2026-07-19
+
+### Fixed
+
+- **Chinese, Japanese, and Korean IME candidate text is no longer auto-saved.** Normal and private editors now suppress title, source, and content saves throughout composition and persist only the committed value. Native `isComposing` transitions are handled even when a synthetic `compositionEnd` is missing.
+- **Auto-saves are serialized per item and field.** Newer edits wait for an older request to settle, including blur-triggered saves, so a late stale response cannot overwrite the latest value. Concurrent saves for different fields remain independent and keep the save indicator accurate.
+- **Switching items no longer strands drafts or save status.** A switch during composition retains only the last safe committed snapshot, never the intermediate IME text, and resets stale `儲存中` / `已儲存` state for the next item.
+
+### Tests
+
+- **Expanded IME and auto-save regression coverage.** Tests cover normal/private title, source, and content fields; native fallback; blur; debounce cancellation; item switching; failure retry; stale generations; concurrent fields; unmount cleanup; and save-status transitions.
+
 ## [1.5.11.0] - 2026-07-18
 
 ### Fixed
