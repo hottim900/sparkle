@@ -41,7 +41,21 @@ describe("ItemContentEditor", () => {
     await user.click(screen.getByText("編輯"));
     const textarea = screen.getByPlaceholderText("Markdown 內容...");
     fireEvent.change(textarea, { target: { value: "new content" } });
-    expect(defaultProps.onChange).toHaveBeenCalledWith("new content");
+    expect(defaultProps.onChange).toHaveBeenCalledWith("new content", undefined);
+  });
+
+  it("reports native IME composition state with content changes", async () => {
+    const user = userEvent.setup();
+    render(<ItemContentEditor {...defaultProps} />);
+    await user.click(screen.getByText("編輯"));
+    const textarea = screen.getByPlaceholderText("Markdown 內容...");
+
+    fireEvent.input(textarea, {
+      target: { value: "ㄓ" },
+      isComposing: true,
+    });
+
+    expect(defaultProps.onChange).toHaveBeenCalledWith("ㄓ", true);
   });
 
   it("onBlur triggers when textarea loses focus", async () => {

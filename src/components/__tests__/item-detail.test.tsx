@@ -3,12 +3,15 @@ import { screen, fireEvent, act, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { type AppContextValue } from "@/lib/app-context";
 import { ItemDetail } from "@/components/item-detail";
+import { PrivateItemDetail } from "@/routes/private";
 import type { Item } from "@/lib/types";
 import * as api from "@/lib/api";
+import * as privateApi from "@/lib/private-api";
 import { toast } from "sonner";
 import { renderWithContext } from "@/test-utils";
 
 vi.mock("@/lib/api");
+vi.mock("@/lib/private-api");
 
 vi.mock("sonner", () => ({
   toast: { success: vi.fn(), error: vi.fn() },
@@ -16,6 +19,7 @@ vi.mock("sonner", () => ({
 
 vi.mock("@tanstack/react-router", () => ({
   useNavigate: () => vi.fn(),
+  createFileRoute: () => (options: unknown) => options,
 }));
 
 const mockItem: Item = {
@@ -69,6 +73,14 @@ const mockItemWithAliases: Item = {
   aliases: '["alias-one","alias-two"]',
 };
 
+const mockPrivateItem: Item = {
+  ...mockItem,
+  id: "private-test-1",
+  title: "私密原標題",
+  content: "私密原內容",
+  is_private: 1,
+};
+
 function renderItemDetail(
   contextOverrides: Partial<AppContextValue> = {},
   props: { onDeleted?: () => void } = {},
@@ -118,8 +130,8 @@ describe("ItemDetail auto-save", () => {
     expect(titleInput).toHaveValue("New Ti");
 
     // Step 2: Debounce fires after 1500ms — saveField("title", "New Ti") starts
-    act(() => {
-      vi.advanceTimersByTime(1500);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
     });
     expect(api.updateItem).toHaveBeenCalledWith("test-1", { title: "New Ti" });
 
@@ -191,6 +203,7 @@ describe("ItemDetail title editing", () => {
   });
 
   it("debounced save triggers after 1500ms", async () => {
+    vi.mocked(api.updateItem).mockReturnValue(new Promise(() => {}));
     renderItemDetail();
     await act(async () => {
       await vi.advanceTimersByTimeAsync(0);
@@ -228,6 +241,1510 @@ describe("ItemDetail title editing", () => {
 
     expect(api.updateItem).toHaveBeenCalledWith("test-1", { title: "Blur Save" });
   });
+
+  it("does not save an intermediate IME composition value", async () => {
+    renderItemDetail();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    const titleInput = screen.getByPlaceholderText("標題");
+    fireEvent.compositionStart(titleInput);
+    fireEvent.change(titleInput, { target: { value: "ㄓ" } });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000);
+    });
+    expect(api.updateItem).not.toHaveBeenCalled();
+
+    fireEvent.change(titleInput, { target: { value: "中" } });
+    fireEvent.compositionEnd(titleInput, { data: "中" });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+    });
+
+    expect(api.updateItem).toHaveBeenCalledTimes(1);
+    expect(api.updateItem).toHaveBeenCalledWith("test-1", { title: "中" });
+  });
+
+  it("does not flush an intermediate IME value when the title blurs during composition", async () => {
+    renderItemDetail();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    const titleInput = screen.getByPlaceholderText("標題");
+    fireEvent.compositionStart(titleInput);
+    fireEvent.change(titleInput, { target: { value: "ㄓ" } });
+    fireEvent.blur(titleInput);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000);
+    });
+    expect(api.updateItem).not.toHaveBeenCalled();
+
+    fireEvent.change(titleInput, { target: { value: "中" } });
+    fireEvent.compositionEnd(titleInput, { data: "中" });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+    });
+
+    expect(api.updateItem).toHaveBeenCalledTimes(1);
+    expect(api.updateItem).toHaveBeenCalledWith("test-1", { title: "中" });
+  });
+
+  it("uses native isComposing as a fallback without requiring compositionEnd", async () => {
+    renderItemDetail();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    const titleInput = screen.getByPlaceholderText("標題");
+    fireEvent.input(titleInput, {
+      target: { value: "ㄓ" },
+      isComposing: true,
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000);
+    });
+    expect(api.updateItem).not.toHaveBeenCalled();
+
+    fireEvent.input(titleInput, {
+      target: { value: "中" },
+      isComposing: false,
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+    });
+
+    expect(api.updateItem).toHaveBeenCalledTimes(1);
+    expect(api.updateItem).toHaveBeenCalledWith("test-1", { title: "中" });
+  });
+
+  it("cancels an existing debounce when IME composition starts", async () => {
+    renderItemDetail();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    const titleInput = screen.getByPlaceholderText("標題");
+    fireEvent.change(titleInput, { target: { value: "已提交" } });
+    fireEvent.compositionStart(titleInput);
+    fireEvent.change(titleInput, { target: { value: "已提交ㄓ" } });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000);
+    });
+    expect(api.updateItem).not.toHaveBeenCalled();
+
+    fireEvent.change(titleInput, { target: { value: "已提交中" } });
+    fireEvent.compositionEnd(titleInput, { data: "中" });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+    });
+
+    expect(api.updateItem).toHaveBeenCalledTimes(1);
+    expect(api.updateItem).toHaveBeenCalledWith("test-1", { title: "已提交中" });
+  });
+
+  it("does not let an earlier save response overwrite an active IME composition", async () => {
+    let resolveUpdate!: (value: Item) => void;
+    vi.mocked(api.updateItem).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveUpdate = resolve;
+        }),
+    );
+
+    renderItemDetail();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    const titleInput = screen.getByPlaceholderText("標題");
+    fireEvent.change(titleInput, { target: { value: "已提交" } });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+    });
+    expect(api.updateItem).toHaveBeenCalledWith("test-1", { title: "已提交" });
+
+    fireEvent.compositionStart(titleInput);
+    fireEvent.change(titleInput, { target: { value: "已提交ㄓ" } });
+    await act(async () => {
+      resolveUpdate({
+        ...mockItem,
+        title: "已提交",
+        modified: "2026-01-01T00:01:00.000Z",
+      });
+    });
+
+    expect(titleInput).toHaveValue("已提交ㄓ");
+  });
+
+  it("still persists the latest generation after an earlier title save resolves", async () => {
+    const resolvers: Array<(value: Item) => void> = [];
+    vi.mocked(api.updateItem).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolvers.push(resolve);
+        }),
+    );
+
+    renderItemDetail();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    const titleInput = screen.getByPlaceholderText("標題");
+    fireEvent.change(titleInput, { target: { value: "第一版" } });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+    });
+    expect(api.updateItem).toHaveBeenCalledTimes(1);
+
+    fireEvent.change(titleInput, { target: { value: "最新版" } });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+    });
+    expect(api.updateItem).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolvers[0]({
+        ...mockItem,
+        title: "第一版",
+        modified: "2026-01-01T00:01:00.000Z",
+      });
+    });
+
+    expect(api.updateItem).toHaveBeenCalledTimes(2);
+    expect(api.updateItem).toHaveBeenLastCalledWith("test-1", { title: "最新版" });
+
+    await act(async () => {
+      resolvers[1]({
+        ...mockItem,
+        title: "最新版",
+        modified: "2026-01-01T00:02:00.000Z",
+      });
+    });
+  });
+
+  it("serializes a blurred title save behind an in-flight generation", async () => {
+    const resolvers: Array<(value: Item) => void> = [];
+    vi.mocked(api.updateItem).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolvers.push(resolve);
+        }),
+    );
+
+    renderItemDetail();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    const titleInput = screen.getByPlaceholderText("標題");
+    fireEvent.change(titleInput, { target: { value: "第一版" } });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+    });
+    expect(api.updateItem).toHaveBeenCalledTimes(1);
+
+    fireEvent.change(titleInput, { target: { value: "blur 最新版" } });
+    fireEvent.blur(titleInput);
+    expect(api.updateItem).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolvers[0]({
+        ...mockItem,
+        title: "第一版",
+        modified: "2026-01-01T00:01:00.000Z",
+      });
+    });
+
+    expect(api.updateItem).toHaveBeenCalledTimes(2);
+    expect(api.updateItem).toHaveBeenLastCalledWith("test-1", { title: "blur 最新版" });
+
+    await act(async () => {
+      resolvers[1]({
+        ...mockItem,
+        title: "blur 最新版",
+        modified: "2026-01-01T00:02:00.000Z",
+      });
+    });
+  });
+
+  it("ignores a stale generation failure when the latest title save succeeds", async () => {
+    let rejectOld!: (reason: Error) => void;
+    let resolveLatest!: (value: Item) => void;
+    vi.mocked(api.updateItem)
+      .mockImplementationOnce(
+        () =>
+          new Promise((_resolve, reject) => {
+            rejectOld = reject;
+          }),
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveLatest = resolve;
+          }),
+      );
+
+    renderItemDetail();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    const titleInput = screen.getByPlaceholderText("標題");
+    fireEvent.change(titleInput, { target: { value: "舊版" } });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+    });
+    fireEvent.change(titleInput, { target: { value: "最新版" } });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+    });
+    expect(api.updateItem).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      rejectOld(new Error("舊請求逾時"));
+    });
+    expect(api.updateItem).toHaveBeenCalledTimes(2);
+    expect(api.updateItem).toHaveBeenLastCalledWith("test-1", { title: "最新版" });
+    expect(screen.getByText("儲存中...")).toBeInTheDocument();
+
+    await act(async () => {
+      resolveLatest({
+        ...mockItem,
+        title: "最新版",
+        modified: "2026-01-01T00:02:00.000Z",
+      });
+    });
+    expect(screen.getByText("已儲存")).toBeInTheDocument();
+    expect(toast.error).not.toHaveBeenCalledWith("舊請求逾時");
+  });
+
+  it("keeps an active IME draft dirty while another field save finishes", async () => {
+    let resolveSource!: (value: Item) => void;
+    vi.mocked(api.updateItem).mockImplementation((_id, patch) => {
+      if ("source" in patch) {
+        return new Promise((resolve) => {
+          resolveSource = resolve;
+        });
+      }
+      return Promise.resolve({
+        ...mockItem,
+        title: "組字完成",
+        modified: "2026-01-01T00:02:00.000Z",
+      });
+    });
+
+    renderItemDetail();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    fireEvent.change(screen.getByPlaceholderText("https://..."), {
+      target: { value: "https://example.com/pending" },
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+    });
+
+    const titleInput = screen.getByPlaceholderText("標題");
+    fireEvent.compositionStart(titleInput);
+    fireEvent.change(titleInput, { target: { value: "組字ㄓ" } });
+    await act(async () => {
+      resolveSource({
+        ...mockItem,
+        source: "https://example.com/pending",
+        modified: "2026-01-01T00:01:00.000Z",
+      });
+    });
+
+    expect(titleInput).toHaveValue("組字ㄓ");
+    expect(screen.queryByText("已儲存")).not.toBeInTheDocument();
+
+    fireEvent.change(titleInput, { target: { value: "組字完成" } });
+    fireEvent.compositionEnd(titleInput, { data: "完成" });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+    });
+    expect(api.updateItem).toHaveBeenLastCalledWith("test-1", { title: "組字完成" });
+  });
+
+  it("resets IME composition state when switching items", async () => {
+    const secondItem = {
+      ...mockItem,
+      id: "test-2",
+      title: "第二個項目",
+    };
+    vi.mocked(api.getItem).mockImplementation((id) =>
+      Promise.resolve(id === secondItem.id ? secondItem : mockItem),
+    );
+
+    const { rerender } = renderWithContext(<ItemDetail itemId={mockItem.id} />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    const firstTitleInput = screen.getByPlaceholderText("標題");
+    fireEvent.change(firstTitleInput, { target: { value: "第一個項目已提交" } });
+    fireEvent.input(firstTitleInput, {
+      target: { value: "第一個項目已提交ㄓ" },
+      isComposing: true,
+    });
+    fireEvent.compositionStart(firstTitleInput);
+    rerender(<ItemDetail itemId={secondItem.id} />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    const secondTitleInput = screen.getByPlaceholderText("標題");
+    fireEvent.change(secondTitleInput, { target: { value: "第二個項目已更新" } });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+    });
+
+    expect(api.updateItem).toHaveBeenCalledTimes(2);
+    expect(api.updateItem).toHaveBeenCalledWith(mockItem.id, {
+      title: "第一個項目已提交",
+    });
+    expect(api.updateItem).toHaveBeenCalledWith(secondItem.id, {
+      title: "第二個項目已更新",
+    });
+    expect(api.updateItem).not.toHaveBeenCalledWith(mockItem.id, {
+      title: "第一個項目已提交ㄓ",
+    });
+  });
+
+  it("resets save status when switching items during and after a save", async () => {
+    const secondItem = {
+      ...mockItem,
+      id: "test-2",
+      title: "第二個項目",
+    };
+    const resolvers: Array<(value: Item) => void> = [];
+    vi.mocked(api.getItem).mockImplementation((id) =>
+      Promise.resolve(id === secondItem.id ? secondItem : mockItem),
+    );
+    vi.mocked(api.updateItem).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolvers.push(resolve);
+        }),
+    );
+
+    const { rerender } = renderWithContext(<ItemDetail itemId={mockItem.id} />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    fireEvent.change(screen.getByPlaceholderText("標題"), {
+      target: { value: "第一個項目儲存中" },
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+    });
+    expect(screen.getByText("儲存中...")).toBeInTheDocument();
+
+    rerender(<ItemDetail itemId={secondItem.id} />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(screen.queryByText("儲存中...")).not.toBeInTheDocument();
+    expect(screen.queryByText("已儲存")).not.toBeInTheDocument();
+
+    await act(async () => {
+      resolvers[0]({
+        ...mockItem,
+        title: "第一個項目儲存中",
+        modified: "2026-01-01T00:01:00.000Z",
+      });
+    });
+    expect(screen.queryByText("儲存中...")).not.toBeInTheDocument();
+    expect(screen.queryByText("已儲存")).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByPlaceholderText("標題"), {
+      target: { value: "第二個項目已更新" },
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+      resolvers[1]({
+        ...secondItem,
+        title: "第二個項目已更新",
+        modified: "2026-01-01T00:02:00.000Z",
+      });
+    });
+    expect(screen.getByText("已儲存")).toBeInTheDocument();
+
+    rerender(<ItemDetail itemId={mockItem.id} />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(screen.queryByText("已儲存")).not.toBeInTheDocument();
+  });
+
+  it("keeps pending auto-saves scoped to their item when switching", async () => {
+    const secondItem = {
+      ...mockItem,
+      id: "test-2",
+      title: "第二個項目",
+    };
+    vi.mocked(api.getItem).mockImplementation((id) =>
+      Promise.resolve(id === secondItem.id ? secondItem : mockItem),
+    );
+
+    const { rerender } = renderWithContext(<ItemDetail itemId={mockItem.id} />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    fireEvent.change(screen.getByPlaceholderText("標題"), {
+      target: { value: "第一個項目已更新" },
+    });
+
+    rerender(<ItemDetail itemId={secondItem.id} />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    fireEvent.change(screen.getByPlaceholderText("標題"), {
+      target: { value: "第二個項目已更新" },
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+    });
+
+    expect(api.updateItem).toHaveBeenCalledTimes(2);
+    expect(api.updateItem).toHaveBeenCalledWith(mockItem.id, {
+      title: "第一個項目已更新",
+    });
+    expect(api.updateItem).toHaveBeenCalledWith(secondItem.id, {
+      title: "第二個項目已更新",
+    });
+  });
+
+  it("restores a failed pending edit when returning to an item", async () => {
+    const secondItem = {
+      ...mockItem,
+      id: "test-2",
+      title: "第二個項目",
+    };
+    vi.mocked(api.getItem).mockImplementation((id) =>
+      Promise.resolve(id === secondItem.id ? secondItem : mockItem),
+    );
+    vi.mocked(api.updateItem).mockRejectedValueOnce(new Error("暫時無法儲存"));
+
+    const { rerender } = renderWithContext(<ItemDetail itemId={mockItem.id} />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    fireEvent.change(screen.getByPlaceholderText("標題"), {
+      target: { value: "尚未儲存的第一個項目" },
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+    });
+
+    rerender(<ItemDetail itemId={secondItem.id} />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    rerender(<ItemDetail itemId={mockItem.id} />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(screen.getByPlaceholderText("標題")).toHaveValue("尚未儲存的第一個項目");
+  });
+
+  it("retries a failed debounced save when the field blurs", async () => {
+    vi.mocked(api.updateItem)
+      .mockRejectedValueOnce(new Error("暫時無法儲存"))
+      .mockResolvedValueOnce({
+        ...mockItem,
+        title: "稍後重試",
+        modified: "2026-01-01T00:01:00.000Z",
+      });
+
+    renderItemDetail();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    const titleInput = screen.getByPlaceholderText("標題");
+    fireEvent.change(titleInput, { target: { value: "稍後重試" } });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+    });
+    expect(api.updateItem).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      fireEvent.blur(titleInput);
+    });
+
+    expect(api.updateItem).toHaveBeenCalledTimes(2);
+    expect(api.updateItem).toHaveBeenLastCalledWith("test-1", { title: "稍後重試" });
+  });
+
+  it("does not let an unrelated immediate save clear a pending title edit", async () => {
+    let resolveTitle!: (value: Item) => void;
+    let resolveTags!: (value: Item) => void;
+    vi.mocked(api.updateItem).mockImplementation((_id, patch) => {
+      if ("title" in patch) {
+        return new Promise((resolve) => {
+          resolveTitle = resolve;
+        });
+      }
+      if ("tags" in patch) {
+        return new Promise((resolve) => {
+          resolveTags = resolve;
+        });
+      }
+      return Promise.resolve(mockItem);
+    });
+
+    renderItemDetail();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    const titleInput = screen.getByPlaceholderText("標題");
+    fireEvent.change(titleInput, { target: { value: "尚未完成的標題" } });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+    });
+
+    fireEvent.change(screen.getByPlaceholderText("新增標籤..."), {
+      target: { value: "review-tag" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "新增標籤" }));
+    await act(async () => {
+      resolveTags({ ...mockItem, tags: '["review-tag"]' });
+    });
+
+    expect(titleInput).toHaveValue("尚未完成的標題");
+
+    await act(async () => {
+      resolveTitle({
+        ...mockItem,
+        title: "尚未完成的標題",
+        modified: "2026-01-01T00:01:00.000Z",
+      });
+    });
+  });
+
+  it("keeps concurrent title and source auto-saves scoped by field", async () => {
+    renderItemDetail();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    fireEvent.change(screen.getByPlaceholderText("標題"), {
+      target: { value: "同時更新標題" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("https://..."), {
+      target: { value: "https://例え.テスト/同時更新" },
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+    });
+
+    expect(api.updateItem).toHaveBeenCalledTimes(2);
+    expect(api.updateItem).toHaveBeenCalledWith(mockItem.id, {
+      title: "同時更新標題",
+    });
+    expect(api.updateItem).toHaveBeenCalledWith(mockItem.id, {
+      source: "https://例え.テスト/同時更新",
+    });
+  });
+
+  it("shows saving until every concurrent field request finishes", async () => {
+    let resolveTitle!: (value: Item) => void;
+    let resolveSource!: (value: Item) => void;
+    vi.mocked(api.updateItem).mockImplementation((_id, patch) => {
+      if ("title" in patch) {
+        return new Promise((resolve) => {
+          resolveTitle = resolve;
+        });
+      }
+      return new Promise((resolve) => {
+        resolveSource = resolve;
+      });
+    });
+
+    renderItemDetail();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    fireEvent.change(screen.getByPlaceholderText("標題"), {
+      target: { value: "並行標題" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("https://..."), {
+      target: { value: "https://example.com/concurrent" },
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+    });
+    expect(screen.getByText("儲存中...")).toBeInTheDocument();
+
+    await act(async () => {
+      resolveTitle({ ...mockItem, title: "並行標題" });
+    });
+    expect(screen.getByText("儲存中...")).toBeInTheDocument();
+    expect(screen.queryByText("已儲存")).not.toBeInTheDocument();
+
+    await act(async () => {
+      resolveSource({ ...mockItem, source: "https://example.com/concurrent" });
+    });
+    expect(screen.getByText("已儲存")).toBeInTheDocument();
+  });
+
+  it("does not send a duplicate save when blur occurs during or after a debounced request", async () => {
+    let resolveUpdate!: (value: Item) => void;
+    vi.mocked(api.updateItem).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveUpdate = resolve;
+        }),
+    );
+
+    renderItemDetail();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    const titleInput = screen.getByPlaceholderText("標題");
+    fireEvent.change(titleInput, { target: { value: "只存一次" } });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+    });
+    expect(api.updateItem).toHaveBeenCalledTimes(1);
+
+    fireEvent.blur(titleInput);
+    expect(api.updateItem).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolveUpdate({
+        ...mockItem,
+        title: "只存一次",
+        modified: "2026-01-01T00:01:00.000Z",
+      });
+    });
+    fireEvent.blur(titleInput);
+    expect(api.updateItem).toHaveBeenCalledTimes(1);
+  });
+
+  it("cancels scheduled auto-save timers when the editor unmounts", async () => {
+    const { unmount } = renderItemDetail();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    fireEvent.change(screen.getByPlaceholderText("標題"), {
+      target: { value: "不應晚到的儲存" },
+    });
+    unmount();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+    });
+
+    expect(api.updateItem).not.toHaveBeenCalled();
+  });
+});
+
+describe("ItemDetail content IME auto-save", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.useFakeTimers();
+    setupDefaultMocks();
+    vi.mocked(api.updateItem).mockResolvedValue(mockItem);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("saves only the committed content after IME composition ends", async () => {
+    renderItemDetail();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "編輯" }));
+    const textarea = screen.getByPlaceholderText("Markdown 內容...");
+    fireEvent.compositionStart(textarea);
+    fireEvent.change(textarea, { target: { value: "內容ㄓ" } });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000);
+    });
+    expect(api.updateItem).not.toHaveBeenCalled();
+
+    fireEvent.change(textarea, { target: { value: "內容中" } });
+    fireEvent.compositionEnd(textarea, { data: "中" });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+    });
+
+    expect(api.updateItem).toHaveBeenCalledTimes(1);
+    expect(api.updateItem).toHaveBeenCalledWith("test-1", { content: "內容中" });
+  });
+
+  it("uses native isComposing as a fallback for content when compositionStart is missed", async () => {
+    renderItemDetail();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "編輯" }));
+    const textarea = screen.getByPlaceholderText("Markdown 內容...");
+    fireEvent.input(textarea, {
+      target: { value: "內容ㄓ" },
+      isComposing: true,
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000);
+    });
+    expect(api.updateItem).not.toHaveBeenCalled();
+
+    fireEvent.input(textarea, {
+      target: { value: "內容中" },
+      isComposing: false,
+    });
+    fireEvent.compositionEnd(textarea, { data: "中" });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+    });
+
+    expect(api.updateItem).toHaveBeenCalledTimes(1);
+    expect(api.updateItem).toHaveBeenCalledWith("test-1", { content: "內容中" });
+  });
+});
+
+describe("PrivateItemDetail IME auto-save", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.useFakeTimers();
+    vi.mocked(privateApi.getPrivateItem).mockResolvedValue(mockPrivateItem);
+    vi.mocked(privateApi.getPrivateTags).mockResolvedValue([]);
+    vi.mocked(privateApi.updatePrivateItem).mockResolvedValue(mockPrivateItem);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("saves only the committed private title after IME composition ends", async () => {
+    renderWithContext(
+      <PrivateItemDetail
+        token="private-token"
+        itemId={mockPrivateItem.id}
+        onBack={vi.fn()}
+        onDeleted={vi.fn()}
+      />,
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    const titleInput = screen.getByPlaceholderText("標題");
+    fireEvent.compositionStart(titleInput);
+    fireEvent.change(titleInput, { target: { value: "私密ㄓ" } });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000);
+    });
+    expect(privateApi.updatePrivateItem).not.toHaveBeenCalled();
+
+    fireEvent.change(titleInput, { target: { value: "私密中" } });
+    fireEvent.compositionEnd(titleInput, { data: "中" });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+    });
+
+    expect(privateApi.updatePrivateItem).toHaveBeenCalledTimes(1);
+    expect(privateApi.updatePrivateItem).toHaveBeenCalledWith("private-token", mockPrivateItem.id, {
+      title: "私密中",
+    });
+  });
+
+  it("cancels an existing private debounce when IME composition starts", async () => {
+    renderWithContext(
+      <PrivateItemDetail
+        token="private-token"
+        itemId={mockPrivateItem.id}
+        onBack={vi.fn()}
+        onDeleted={vi.fn()}
+      />,
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    const titleInput = screen.getByPlaceholderText("標題");
+    fireEvent.change(titleInput, { target: { value: "私密已提交" } });
+    fireEvent.compositionStart(titleInput);
+    fireEvent.change(titleInput, { target: { value: "私密已提交ㄓ" } });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000);
+    });
+    expect(privateApi.updatePrivateItem).not.toHaveBeenCalled();
+
+    fireEvent.change(titleInput, { target: { value: "私密已提交中" } });
+    fireEvent.compositionEnd(titleInput, { data: "中" });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+    });
+
+    expect(privateApi.updatePrivateItem).toHaveBeenCalledTimes(1);
+    expect(privateApi.updatePrivateItem).toHaveBeenCalledWith("private-token", mockPrivateItem.id, {
+      title: "私密已提交中",
+    });
+  });
+
+  it("uses native isComposing as a private fallback without requiring compositionEnd", async () => {
+    renderWithContext(
+      <PrivateItemDetail
+        token="private-token"
+        itemId={mockPrivateItem.id}
+        onBack={vi.fn()}
+        onDeleted={vi.fn()}
+      />,
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    const titleInput = screen.getByPlaceholderText("標題");
+    fireEvent.input(titleInput, {
+      target: { value: "私密ㄓ" },
+      isComposing: true,
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000);
+    });
+    expect(privateApi.updatePrivateItem).not.toHaveBeenCalled();
+
+    fireEvent.input(titleInput, {
+      target: { value: "私密中" },
+      isComposing: false,
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+    });
+
+    expect(privateApi.updatePrivateItem).toHaveBeenCalledTimes(1);
+    expect(privateApi.updatePrivateItem).toHaveBeenCalledWith("private-token", mockPrivateItem.id, {
+      title: "私密中",
+    });
+  });
+
+  it("persists the latest private generation after an earlier save resolves", async () => {
+    const resolvers: Array<(value: Item) => void> = [];
+    vi.mocked(privateApi.updatePrivateItem).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolvers.push(resolve);
+        }),
+    );
+
+    renderWithContext(
+      <PrivateItemDetail
+        token="private-token"
+        itemId={mockPrivateItem.id}
+        onBack={vi.fn()}
+        onDeleted={vi.fn()}
+      />,
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    const titleInput = screen.getByPlaceholderText("標題");
+    fireEvent.change(titleInput, { target: { value: "私密第一版" } });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+    });
+    expect(privateApi.updatePrivateItem).toHaveBeenCalledTimes(1);
+
+    fireEvent.change(titleInput, { target: { value: "私密最新版" } });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+    });
+    expect(privateApi.updatePrivateItem).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolvers[0]({
+        ...mockPrivateItem,
+        title: "私密第一版",
+        modified: "2026-01-01T00:01:00.000Z",
+      });
+    });
+
+    expect(privateApi.updatePrivateItem).toHaveBeenCalledTimes(2);
+    expect(privateApi.updatePrivateItem).toHaveBeenLastCalledWith(
+      "private-token",
+      mockPrivateItem.id,
+      { title: "私密最新版" },
+    );
+
+    await act(async () => {
+      resolvers[1]({
+        ...mockPrivateItem,
+        title: "私密最新版",
+        modified: "2026-01-01T00:02:00.000Z",
+      });
+    });
+  });
+
+  it("serializes a blurred private title save behind an in-flight generation", async () => {
+    const resolvers: Array<(value: Item) => void> = [];
+    vi.mocked(privateApi.updatePrivateItem).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolvers.push(resolve);
+        }),
+    );
+
+    renderWithContext(
+      <PrivateItemDetail
+        token="private-token"
+        itemId={mockPrivateItem.id}
+        onBack={vi.fn()}
+        onDeleted={vi.fn()}
+      />,
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    const titleInput = screen.getByPlaceholderText("標題");
+    fireEvent.change(titleInput, { target: { value: "私密第一版" } });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+    });
+    expect(privateApi.updatePrivateItem).toHaveBeenCalledTimes(1);
+
+    fireEvent.change(titleInput, { target: { value: "私密 blur 最新版" } });
+    fireEvent.blur(titleInput);
+    expect(privateApi.updatePrivateItem).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolvers[0]({
+        ...mockPrivateItem,
+        title: "私密第一版",
+        modified: "2026-01-01T00:01:00.000Z",
+      });
+    });
+
+    expect(privateApi.updatePrivateItem).toHaveBeenCalledTimes(2);
+    expect(privateApi.updatePrivateItem).toHaveBeenLastCalledWith(
+      "private-token",
+      mockPrivateItem.id,
+      { title: "私密 blur 最新版" },
+    );
+
+    await act(async () => {
+      resolvers[1]({
+        ...mockPrivateItem,
+        title: "私密 blur 最新版",
+        modified: "2026-01-01T00:02:00.000Z",
+      });
+    });
+  });
+
+  it("ignores a stale private generation failure after the latest save succeeds", async () => {
+    let rejectOld!: (reason: Error) => void;
+    let resolveLatest!: (value: Item) => void;
+    vi.mocked(privateApi.updatePrivateItem)
+      .mockImplementationOnce(
+        () =>
+          new Promise((_resolve, reject) => {
+            rejectOld = reject;
+          }),
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveLatest = resolve;
+          }),
+      );
+
+    renderWithContext(
+      <PrivateItemDetail
+        token="private-token"
+        itemId={mockPrivateItem.id}
+        onBack={vi.fn()}
+        onDeleted={vi.fn()}
+      />,
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    const titleInput = screen.getByPlaceholderText("標題");
+    fireEvent.change(titleInput, { target: { value: "私密舊版" } });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+    });
+    fireEvent.change(titleInput, { target: { value: "私密最新版" } });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+    });
+    expect(privateApi.updatePrivateItem).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      rejectOld(new Error("私密舊請求逾時"));
+    });
+    expect(privateApi.updatePrivateItem).toHaveBeenCalledTimes(2);
+    expect(privateApi.updatePrivateItem).toHaveBeenLastCalledWith(
+      "private-token",
+      mockPrivateItem.id,
+      { title: "私密最新版" },
+    );
+    expect(screen.getByText("儲存中...")).toBeInTheDocument();
+
+    await act(async () => {
+      resolveLatest({
+        ...mockPrivateItem,
+        title: "私密最新版",
+        modified: "2026-01-01T00:02:00.000Z",
+      });
+    });
+    expect(screen.getByText("已儲存")).toBeInTheDocument();
+    expect(toast.error).not.toHaveBeenCalledWith("私密舊請求逾時");
+  });
+
+  it("keeps a private IME draft dirty while another field save finishes", async () => {
+    let resolveSource!: (value: Item) => void;
+    vi.mocked(privateApi.updatePrivateItem).mockImplementation((_token, _id, patch) => {
+      if ("source" in patch) {
+        return new Promise((resolve) => {
+          resolveSource = resolve;
+        });
+      }
+      return Promise.resolve({
+        ...mockPrivateItem,
+        title: "私密組字完成",
+        modified: "2026-01-01T00:02:00.000Z",
+      });
+    });
+
+    renderWithContext(
+      <PrivateItemDetail
+        token="private-token"
+        itemId={mockPrivateItem.id}
+        onBack={vi.fn()}
+        onDeleted={vi.fn()}
+      />,
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    fireEvent.change(screen.getByPlaceholderText("https://..."), {
+      target: { value: "https://example.com/private-pending" },
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+    });
+
+    const titleInput = screen.getByPlaceholderText("標題");
+    fireEvent.compositionStart(titleInput);
+    fireEvent.change(titleInput, { target: { value: "私密組字ㄓ" } });
+    await act(async () => {
+      resolveSource({
+        ...mockPrivateItem,
+        source: "https://example.com/private-pending",
+        modified: "2026-01-01T00:01:00.000Z",
+      });
+    });
+
+    expect(titleInput).toHaveValue("私密組字ㄓ");
+    expect(screen.queryByText("已儲存")).not.toBeInTheDocument();
+
+    fireEvent.change(titleInput, { target: { value: "私密組字完成" } });
+    fireEvent.compositionEnd(titleInput, { data: "完成" });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+    });
+    expect(privateApi.updatePrivateItem).toHaveBeenLastCalledWith(
+      "private-token",
+      mockPrivateItem.id,
+      { title: "私密組字完成" },
+    );
+  });
+
+  it("saves only committed private content even when blur occurs during composition", async () => {
+    renderWithContext(
+      <PrivateItemDetail
+        token="private-token"
+        itemId={mockPrivateItem.id}
+        onBack={vi.fn()}
+        onDeleted={vi.fn()}
+      />,
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "編輯" }));
+    const textarea = screen.getByPlaceholderText("Markdown 內容...");
+    fireEvent.compositionStart(textarea);
+    fireEvent.change(textarea, { target: { value: "私密內容ㄓ" } });
+    fireEvent.blur(textarea);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000);
+    });
+    expect(privateApi.updatePrivateItem).not.toHaveBeenCalled();
+
+    fireEvent.change(textarea, { target: { value: "私密內容中" } });
+    fireEvent.compositionEnd(textarea, { data: "中" });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+    });
+
+    expect(privateApi.updatePrivateItem).toHaveBeenCalledTimes(1);
+    expect(privateApi.updatePrivateItem).toHaveBeenCalledWith("private-token", mockPrivateItem.id, {
+      content: "私密內容中",
+    });
+  });
+
+  it("resets private IME composition state when switching items", async () => {
+    const secondPrivateItem = {
+      ...mockPrivateItem,
+      id: "private-test-2",
+      title: "第二個私密項目",
+    };
+    vi.mocked(privateApi.getPrivateItem).mockImplementation((_token, id) =>
+      Promise.resolve(id === secondPrivateItem.id ? secondPrivateItem : mockPrivateItem),
+    );
+
+    const { rerender } = renderWithContext(
+      <PrivateItemDetail
+        token="private-token"
+        itemId={mockPrivateItem.id}
+        onBack={vi.fn()}
+        onDeleted={vi.fn()}
+      />,
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    const firstTitleInput = screen.getByPlaceholderText("標題");
+    fireEvent.change(firstTitleInput, { target: { value: "第一個私密項目已提交" } });
+    fireEvent.input(firstTitleInput, {
+      target: { value: "第一個私密項目已提交ㄓ" },
+      isComposing: true,
+    });
+    fireEvent.compositionStart(firstTitleInput);
+    rerender(
+      <PrivateItemDetail
+        token="private-token"
+        itemId={secondPrivateItem.id}
+        onBack={vi.fn()}
+        onDeleted={vi.fn()}
+      />,
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    const secondTitleInput = screen.getByPlaceholderText("標題");
+    fireEvent.change(secondTitleInput, { target: { value: "第二個私密項目已更新" } });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+    });
+
+    expect(privateApi.updatePrivateItem).toHaveBeenCalledTimes(2);
+    expect(privateApi.updatePrivateItem).toHaveBeenCalledWith("private-token", mockPrivateItem.id, {
+      title: "第一個私密項目已提交",
+    });
+    expect(privateApi.updatePrivateItem).toHaveBeenCalledWith(
+      "private-token",
+      secondPrivateItem.id,
+      { title: "第二個私密項目已更新" },
+    );
+    expect(privateApi.updatePrivateItem).not.toHaveBeenCalledWith(
+      "private-token",
+      mockPrivateItem.id,
+      { title: "第一個私密項目已提交ㄓ" },
+    );
+  });
+
+  it("keeps pending private auto-saves scoped to their item when switching", async () => {
+    const secondPrivateItem = {
+      ...mockPrivateItem,
+      id: "private-test-2",
+      title: "第二個私密項目",
+    };
+    vi.mocked(privateApi.getPrivateItem).mockImplementation((_token, id) =>
+      Promise.resolve(id === secondPrivateItem.id ? secondPrivateItem : mockPrivateItem),
+    );
+
+    const { rerender } = renderWithContext(
+      <PrivateItemDetail
+        token="private-token"
+        itemId={mockPrivateItem.id}
+        onBack={vi.fn()}
+        onDeleted={vi.fn()}
+      />,
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    fireEvent.change(screen.getByPlaceholderText("標題"), {
+      target: { value: "第一個私密項目已更新" },
+    });
+
+    rerender(
+      <PrivateItemDetail
+        token="private-token"
+        itemId={secondPrivateItem.id}
+        onBack={vi.fn()}
+        onDeleted={vi.fn()}
+      />,
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    fireEvent.change(screen.getByPlaceholderText("標題"), {
+      target: { value: "第二個私密項目已更新" },
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+    });
+
+    expect(privateApi.updatePrivateItem).toHaveBeenCalledTimes(2);
+    expect(privateApi.updatePrivateItem).toHaveBeenCalledWith("private-token", mockPrivateItem.id, {
+      title: "第一個私密項目已更新",
+    });
+    expect(privateApi.updatePrivateItem).toHaveBeenCalledWith(
+      "private-token",
+      secondPrivateItem.id,
+      { title: "第二個私密項目已更新" },
+    );
+  });
+
+  it("restores a failed pending private edit when returning to an item", async () => {
+    const secondPrivateItem = {
+      ...mockPrivateItem,
+      id: "private-test-2",
+      title: "第二個私密項目",
+    };
+    vi.mocked(privateApi.getPrivateItem).mockImplementation((_token, id) =>
+      Promise.resolve(id === secondPrivateItem.id ? secondPrivateItem : mockPrivateItem),
+    );
+    vi.mocked(privateApi.updatePrivateItem).mockRejectedValueOnce(new Error("暫時無法儲存"));
+
+    const { rerender } = renderWithContext(
+      <PrivateItemDetail
+        token="private-token"
+        itemId={mockPrivateItem.id}
+        onBack={vi.fn()}
+        onDeleted={vi.fn()}
+      />,
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    fireEvent.change(screen.getByPlaceholderText("標題"), {
+      target: { value: "尚未儲存的第一個私密項目" },
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+    });
+
+    rerender(
+      <PrivateItemDetail
+        token="private-token"
+        itemId={secondPrivateItem.id}
+        onBack={vi.fn()}
+        onDeleted={vi.fn()}
+      />,
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    rerender(
+      <PrivateItemDetail
+        token="private-token"
+        itemId={mockPrivateItem.id}
+        onBack={vi.fn()}
+        onDeleted={vi.fn()}
+      />,
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(screen.getByPlaceholderText("標題")).toHaveValue("尚未儲存的第一個私密項目");
+  });
+
+  it("saves only the committed private source URL after IME composition ends", async () => {
+    renderWithContext(
+      <PrivateItemDetail
+        token="private-token"
+        itemId={mockPrivateItem.id}
+        onBack={vi.fn()}
+        onDeleted={vi.fn()}
+      />,
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    const sourceInput = screen.getByPlaceholderText("https://...");
+    fireEvent.compositionStart(sourceInput);
+    fireEvent.change(sourceInput, { target: { value: "https://例え.ㄊ" } });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000);
+    });
+    expect(privateApi.updatePrivateItem).not.toHaveBeenCalled();
+
+    fireEvent.change(sourceInput, { target: { value: "https://例え.テスト" } });
+    fireEvent.compositionEnd(sourceInput, { data: "テスト" });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+    });
+
+    expect(privateApi.updatePrivateItem).toHaveBeenCalledTimes(1);
+    expect(privateApi.updatePrivateItem).toHaveBeenCalledWith("private-token", mockPrivateItem.id, {
+      source: "https://例え.テスト",
+    });
+  });
+
+  it("retries a failed private save without duplicating the in-flight retry", async () => {
+    let resolveRetry!: (value: Item) => void;
+    vi.mocked(privateApi.updatePrivateItem)
+      .mockRejectedValueOnce(new Error("暫時無法儲存"))
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveRetry = resolve;
+          }),
+      );
+
+    renderWithContext(
+      <PrivateItemDetail
+        token="private-token"
+        itemId={mockPrivateItem.id}
+        onBack={vi.fn()}
+        onDeleted={vi.fn()}
+      />,
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    const titleInput = screen.getByPlaceholderText("標題");
+    fireEvent.change(titleInput, { target: { value: "私密稍後重試" } });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+    });
+    expect(privateApi.updatePrivateItem).toHaveBeenCalledTimes(1);
+
+    fireEvent.blur(titleInput);
+    fireEvent.blur(titleInput);
+    expect(privateApi.updatePrivateItem).toHaveBeenCalledTimes(2);
+
+    await act(async () => {
+      resolveRetry({
+        ...mockPrivateItem,
+        title: "私密稍後重試",
+        modified: "2026-01-01T00:01:00.000Z",
+      });
+    });
+    fireEvent.blur(titleInput);
+    expect(privateApi.updatePrivateItem).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps concurrent private title and source auto-saves scoped by field", async () => {
+    renderWithContext(
+      <PrivateItemDetail
+        token="private-token"
+        itemId={mockPrivateItem.id}
+        onBack={vi.fn()}
+        onDeleted={vi.fn()}
+      />,
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    fireEvent.change(screen.getByPlaceholderText("標題"), {
+      target: { value: "同時更新私密標題" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("https://..."), {
+      target: { value: "https://例え.テスト/私密同步" },
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+    });
+
+    expect(privateApi.updatePrivateItem).toHaveBeenCalledTimes(2);
+    expect(privateApi.updatePrivateItem).toHaveBeenCalledWith("private-token", mockPrivateItem.id, {
+      title: "同時更新私密標題",
+    });
+    expect(privateApi.updatePrivateItem).toHaveBeenCalledWith("private-token", mockPrivateItem.id, {
+      source: "https://例え.テスト/私密同步",
+    });
+  });
+
+  it("keeps the private save indicator busy until all field requests finish", async () => {
+    let resolveTitle!: (value: Item) => void;
+    let resolveSource!: (value: Item) => void;
+    vi.mocked(privateApi.updatePrivateItem).mockImplementation((_token, _id, patch) => {
+      if ("title" in patch) {
+        return new Promise((resolve) => {
+          resolveTitle = resolve;
+        });
+      }
+      return new Promise((resolve) => {
+        resolveSource = resolve;
+      });
+    });
+
+    renderWithContext(
+      <PrivateItemDetail
+        token="private-token"
+        itemId={mockPrivateItem.id}
+        onBack={vi.fn()}
+        onDeleted={vi.fn()}
+      />,
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    fireEvent.change(screen.getByPlaceholderText("標題"), {
+      target: { value: "私密並行標題" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("https://..."), {
+      target: { value: "https://example.com/private-concurrent" },
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+    });
+    expect(screen.getByText("儲存中...")).toBeInTheDocument();
+
+    await act(async () => {
+      resolveTitle({ ...mockPrivateItem, title: "私密並行標題" });
+    });
+    expect(screen.getByText("儲存中...")).toBeInTheDocument();
+    expect(screen.queryByText("已儲存")).not.toBeInTheDocument();
+
+    await act(async () => {
+      resolveSource({
+        ...mockPrivateItem,
+        source: "https://example.com/private-concurrent",
+      });
+    });
+    expect(screen.getByText("已儲存")).toBeInTheDocument();
+  });
 });
 
 describe("ItemDetail source URL", () => {
@@ -246,6 +1763,7 @@ describe("ItemDetail source URL", () => {
   });
 
   it("debounced save on source URL change", async () => {
+    vi.mocked(api.updateItem).mockReturnValue(new Promise(() => {}));
     renderItemDetail();
     await act(async () => {
       await vi.advanceTimersByTimeAsync(0);
@@ -256,11 +1774,37 @@ describe("ItemDetail source URL", () => {
 
     expect(api.updateItem).not.toHaveBeenCalled();
 
-    act(() => {
-      vi.advanceTimersByTime(1500);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
     });
 
     expect(api.updateItem).toHaveBeenCalledWith("test-1", { source: "https://example.com" });
+  });
+
+  it("saves only the committed source URL after IME composition ends", async () => {
+    renderItemDetail();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    const sourceInput = screen.getByPlaceholderText("https://...");
+    fireEvent.compositionStart(sourceInput);
+    fireEvent.change(sourceInput, { target: { value: "https://例え.ㄊ" } });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000);
+    });
+    expect(api.updateItem).not.toHaveBeenCalled();
+
+    fireEvent.change(sourceInput, { target: { value: "https://例え.テスト" } });
+    fireEvent.compositionEnd(sourceInput, { data: "テスト" });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+    });
+
+    expect(api.updateItem).toHaveBeenCalledTimes(1);
+    expect(api.updateItem).toHaveBeenCalledWith("test-1", {
+      source: "https://例え.テスト",
+    });
   });
 });
 

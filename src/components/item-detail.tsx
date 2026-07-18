@@ -75,6 +75,7 @@ export function ItemDetail({ itemId, onDeleted, onBack, onNavigate }: ItemDetail
     allTags,
     saveField,
     debouncedSave,
+    beginComposition,
     flushSave,
     addTag,
     removeTag,
@@ -95,6 +96,13 @@ export function ItemDetail({ itemId, onDeleted, onBack, onNavigate }: ItemDetail
   const [shareOpen, setShareOpen] = useState(false);
   const [aliasInput, setAliasInput] = useState("");
   const [createTodoRequested, setCreateTodoRequested] = useState(false);
+  const composingFieldRef = useRef<"title" | "source" | "content" | null>(null);
+  const nativeCompositionFieldRef = useRef<"title" | "source" | "content" | null>(null);
+
+  useEffect(() => {
+    composingFieldRef.current = null;
+    nativeCompositionFieldRef.current = null;
+  }, [itemId]);
 
   // Reverse-lookup query (raw) — kept alongside the derived `resolvedVaultPath`
   // because the announce-on-change effect needs the live `data?.path` to compare
@@ -370,11 +378,36 @@ export function ItemDetail({ itemId, onDeleted, onBack, onNavigate }: ItemDetail
             <Input
               value={item.title}
               onChange={(e) => {
+                const isComposing = (e.nativeEvent as InputEvent).isComposing;
                 setIsDirty(true);
                 setItem({ ...item, title: e.target.value });
-                debouncedSave("title", e.target.value);
+                if (isComposing === true && composingFieldRef.current !== "title") {
+                  composingFieldRef.current = "title";
+                  nativeCompositionFieldRef.current = "title";
+                  beginComposition("title");
+                } else if (isComposing === false && nativeCompositionFieldRef.current === "title") {
+                  composingFieldRef.current = null;
+                  nativeCompositionFieldRef.current = null;
+                  debouncedSave("title", e.target.value);
+                } else if (composingFieldRef.current !== "title") {
+                  debouncedSave("title", e.target.value);
+                }
               }}
-              onBlur={() => flushSave("title", item.title)}
+              onCompositionStart={() => {
+                composingFieldRef.current = "title";
+                nativeCompositionFieldRef.current = null;
+                beginComposition("title");
+              }}
+              onCompositionEnd={(e) => {
+                composingFieldRef.current = null;
+                nativeCompositionFieldRef.current = null;
+                debouncedSave("title", e.currentTarget.value);
+              }}
+              onBlur={() => {
+                if (composingFieldRef.current !== "title") {
+                  flushSave("title", item.title);
+                }
+              }}
               className="text-lg font-semibold border-0 px-0 focus-visible:ring-0"
               placeholder="標題"
             />
@@ -512,11 +545,39 @@ export function ItemDetail({ itemId, onDeleted, onBack, onNavigate }: ItemDetail
                 value={item.source ?? ""}
                 onChange={(e) => {
                   const val = e.target.value || null;
+                  const isComposing = (e.nativeEvent as InputEvent).isComposing;
                   setIsDirty(true);
                   setItem({ ...item, source: val });
-                  debouncedSave("source", val);
+                  if (isComposing === true && composingFieldRef.current !== "source") {
+                    composingFieldRef.current = "source";
+                    nativeCompositionFieldRef.current = "source";
+                    beginComposition("source");
+                  } else if (
+                    isComposing === false &&
+                    nativeCompositionFieldRef.current === "source"
+                  ) {
+                    composingFieldRef.current = null;
+                    nativeCompositionFieldRef.current = null;
+                    debouncedSave("source", val);
+                  } else if (composingFieldRef.current !== "source") {
+                    debouncedSave("source", val);
+                  }
                 }}
-                onBlur={() => flushSave("source", item.source)}
+                onCompositionStart={() => {
+                  composingFieldRef.current = "source";
+                  nativeCompositionFieldRef.current = null;
+                  beginComposition("source");
+                }}
+                onCompositionEnd={(e) => {
+                  composingFieldRef.current = null;
+                  nativeCompositionFieldRef.current = null;
+                  debouncedSave("source", e.currentTarget.value || null);
+                }}
+                onBlur={() => {
+                  if (composingFieldRef.current !== "source") {
+                    flushSave("source", item.source);
+                  }
+                }}
                 placeholder="https://..."
               />
             </div>
@@ -594,12 +655,39 @@ export function ItemDetail({ itemId, onDeleted, onBack, onNavigate }: ItemDetail
               key={itemId}
               content={item.content}
               offlineWarning={!isOnline}
-              onChange={(content) => {
+              onChange={(content, isComposing) => {
                 setIsDirty(true);
                 setItem({ ...item, content });
+                if (isComposing === true && composingFieldRef.current !== "content") {
+                  composingFieldRef.current = "content";
+                  nativeCompositionFieldRef.current = "content";
+                  beginComposition("content");
+                } else if (
+                  isComposing === false &&
+                  nativeCompositionFieldRef.current === "content"
+                ) {
+                  composingFieldRef.current = null;
+                  nativeCompositionFieldRef.current = null;
+                  debouncedSave("content", content);
+                } else if (composingFieldRef.current !== "content") {
+                  debouncedSave("content", content);
+                }
+              }}
+              onCompositionStart={() => {
+                composingFieldRef.current = "content";
+                nativeCompositionFieldRef.current = null;
+                beginComposition("content");
+              }}
+              onCompositionEnd={(content) => {
+                composingFieldRef.current = null;
+                nativeCompositionFieldRef.current = null;
                 debouncedSave("content", content);
               }}
-              onBlur={() => flushSave("content", item.content)}
+              onBlur={() => {
+                if (composingFieldRef.current !== "content") {
+                  flushSave("content", item.content);
+                }
+              }}
             />
           </div>
 

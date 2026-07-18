@@ -16,7 +16,9 @@ const CONTENT_PREVIEW_MIN_HEIGHT = "min-h-[240px]";
 
 interface ItemContentEditorProps {
   content: string;
-  onChange: (content: string) => void;
+  onChange: (content: string, isComposing: boolean | undefined) => void;
+  onCompositionStart?: () => void;
+  onCompositionEnd?: (content: string) => void;
   onBlur: () => void;
   offlineWarning?: boolean;
 }
@@ -24,6 +26,8 @@ interface ItemContentEditorProps {
 export function ItemContentEditor({
   content,
   onChange,
+  onCompositionStart,
+  onCompositionEnd,
   onBlur,
   offlineWarning,
 }: ItemContentEditorProps) {
@@ -80,7 +84,9 @@ export function ItemContentEditor({
       ) : (
         <Textarea
           value={content}
-          onChange={(e) => onChange(e.target.value)}
+          onChange={(e) => onChange(e.target.value, (e.nativeEvent as InputEvent).isComposing)}
+          onCompositionStart={onCompositionStart}
+          onCompositionEnd={(e) => onCompositionEnd?.(e.currentTarget.value)}
           onBlur={onBlur}
           placeholder="Markdown 內容..."
           rows={CONTENT_TEXTAREA_ROWS}

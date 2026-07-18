@@ -328,7 +328,23 @@ const todoStatuses: { value: ItemStatus; label: string }[] = [
   { value: "archived", label: "已封存" },
 ];
 
-function PrivateItemDetail({
+interface PrivatePendingFieldSave {
+  field: string;
+  value: unknown;
+  generation: number;
+  phase: "composing" | "scheduled" | "in-flight" | "failed";
+  saveOnCompositionAbandon?: boolean;
+  timeout?: ReturnType<typeof setTimeout>;
+}
+
+type SavePrivateField = (
+  field: string,
+  value: unknown,
+  pendingGeneration?: number,
+  ownerItemId?: string,
+) => Promise<void>;
+
+export function PrivateItemDetail({
   token,
   itemId,
   onBack,
@@ -347,8 +363,18 @@ function PrivateItemDetail({
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [titleConfirmOpen, setTitleConfirmOpen] = useState(false);
   const [pendingNextStatus, setPendingNextStatus] = useState<string | null>(null);
-  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const savedTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const editGenerationRef = useRef(0);
+  const pendingSavesRef = useRef(new Map<string, Map<string, PrivatePendingFieldSave>>());
+  const inFlightSaveCountRef = useRef(new Map<string, number>());
+  const failedSaveBatchRef = useRef(new Set<string>());
+  const autosaveInFlightRef = useRef(new Map<string, Map<string, number>>());
+  const saveFieldRef = useRef<SavePrivateField | null>(null);
+  const activeItemIdRef = useRef(itemId);
+  const previousItemIdRef = useRef(itemId);
+  activeItemIdRef.current = itemId;
+  const composingFieldRef = useRef<"title" | "source" | "content" | null>(null);
+  const nativeCompositionFieldRef = useRef<"title" | "source" | "content" | null>(null);
 
   const { data: serverItem, isLoading } = useQuery({
     queryKey: queryKeys.private.detail(itemId),
@@ -363,69 +389,260 @@ function PrivateItemDetail({
 
   // Reset on item switch
   useEffect(() => {
+    const previousItemId = previousItemIdRef.current;
+    previousItemIdRef.current = itemId;
+    if (previousItemId !== itemId) {
+      const previousPendingSaves = pendingSavesRef.current.get(previousItemId);
+      for (const pendingSave of previousPendingSaves?.values() ?? []) {
+        if (pendingSave.phase !== "composing") continue;
+        if (!pendingSave.saveOnCompositionAbandon) {
+          previousPendingSaves?.delete(pendingSave.field);
+          continue;
+        }
+        if (autosaveInFlightRef.current.get(previousItemId)?.has(pendingSave.field)) {
+          pendingSave.phase = "scheduled";
+          continue;
+        }
+        pendingSave.phase = "in-flight";
+        void saveFieldRef.current?.(
+          pendingSave.field,
+          pendingSave.value,
+          pendingSave.generation,
+          previousItemId,
+        );
+      }
+      if (previousPendingSaves?.size === 0) {
+        pendingSavesRef.current.delete(previousItemId);
+      }
+    }
     setIsDirty(false);
     setLocalItem(null);
     setPreviewMode(true);
     setSaveStatus("idle");
+    composingFieldRef.current = null;
+    nativeCompositionFieldRef.current = null;
   }, [itemId]);
 
   // Sync server to local
   useEffect(() => {
-    if (serverItem && !isDirty) setLocalItem(serverItem);
+    if (!serverItem || isDirty) return;
+    const pendingFields = pendingSavesRef.current.get(serverItem.id);
+    if (!pendingFields?.size) {
+      setLocalItem(serverItem);
+      return;
+    }
+    const pendingItem = { ...serverItem } as ParsedItem & Record<string, unknown>;
+    for (const [field, pendingSave] of pendingFields) {
+      pendingItem[field] = pendingSave.value;
+    }
+    setLocalItem(pendingItem);
+    setIsDirty(true);
   }, [serverItem, isDirty]);
 
   // Cleanup timeouts
   useEffect(() => {
+    const pendingSaves = pendingSavesRef.current;
     return () => {
-      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+      for (const itemPendingSaves of pendingSaves.values()) {
+        for (const pendingSave of itemPendingSaves.values()) {
+          if (pendingSave.timeout) clearTimeout(pendingSave.timeout);
+        }
+      }
       if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
     };
   }, []);
 
   const saveField = useCallback(
-    async (field: string, value: unknown) => {
-      if (!localItem) return;
-      setSaveStatus("saving");
-      if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+    async (
+      field: string,
+      value: unknown,
+      pendingGeneration?: number,
+      ownerItemId = localItem?.id,
+    ) => {
+      if (!ownerItemId) return;
+      if (pendingGeneration !== undefined) {
+        let itemInFlightFields = autosaveInFlightRef.current.get(ownerItemId);
+        if (!itemInFlightFields) {
+          itemInFlightFields = new Map();
+          autosaveInFlightRef.current.set(ownerItemId, itemInFlightFields);
+        }
+        itemInFlightFields.set(field, pendingGeneration);
+      }
+      const previousInFlightCount = inFlightSaveCountRef.current.get(ownerItemId) ?? 0;
+      if (previousInFlightCount === 0) {
+        failedSaveBatchRef.current.delete(ownerItemId);
+      }
+      inFlightSaveCountRef.current.set(ownerItemId, previousInFlightCount + 1);
+      if (activeItemIdRef.current === ownerItemId) {
+        setSaveStatus("saving");
+        if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+      }
       try {
-        const updated = await updatePrivateItem(token, localItem.id, { [field]: value });
+        const updated = await updatePrivateItem(token, ownerItemId, { [field]: value });
         const serverModified = updated.modified;
-        setLocalItem((prev) => (prev ? { ...prev, modified: serverModified } : prev));
-        if (!saveTimeoutRef.current) {
-          setIsDirty(false);
+        setLocalItem((prev) =>
+          prev?.id === ownerItemId ? { ...prev, modified: serverModified } : prev,
+        );
+        if (
+          pendingGeneration !== undefined &&
+          pendingSavesRef.current.get(ownerItemId)?.get(field)?.generation === pendingGeneration
+        ) {
+          const itemPendingSaves = pendingSavesRef.current.get(ownerItemId);
+          itemPendingSaves?.delete(field);
+          if (itemPendingSaves?.size === 0) {
+            pendingSavesRef.current.delete(ownerItemId);
+          }
+          if (activeItemIdRef.current === ownerItemId && !itemPendingSaves?.size) {
+            setIsDirty(false);
+          }
         }
         queryClient.invalidateQueries({ queryKey: queryKeys.private.list() });
-        queryClient.invalidateQueries({ queryKey: queryKeys.private.detail(localItem.id) });
-        setSaveStatus("saved");
-        savedTimerRef.current = setTimeout(() => setSaveStatus("idle"), 2000);
+        queryClient.invalidateQueries({ queryKey: queryKeys.private.detail(ownerItemId) });
       } catch (err) {
-        setSaveStatus("idle");
-        toast.error(err instanceof Error ? err.message : "儲存失敗");
+        const pendingSave = pendingSavesRef.current.get(ownerItemId)?.get(field);
+        const failureIsCurrent =
+          pendingGeneration === undefined || pendingSave?.generation === pendingGeneration;
+        if (pendingGeneration !== undefined && pendingSave && failureIsCurrent) {
+          pendingSave.phase = "failed";
+        }
+        if (failureIsCurrent) {
+          failedSaveBatchRef.current.add(ownerItemId);
+        }
+        if (failureIsCurrent) {
+          toast.error(err instanceof Error ? err.message : "儲存失敗");
+        }
+      } finally {
+        if (pendingGeneration !== undefined) {
+          const itemInFlightFields = autosaveInFlightRef.current.get(ownerItemId);
+          if (itemInFlightFields?.get(field) === pendingGeneration) {
+            itemInFlightFields.delete(field);
+            if (itemInFlightFields.size === 0) {
+              autosaveInFlightRef.current.delete(ownerItemId);
+            }
+          }
+        }
+
+        const remainingInFlight = (inFlightSaveCountRef.current.get(ownerItemId) ?? 1) - 1;
+        if (remainingInFlight > 0) {
+          inFlightSaveCountRef.current.set(ownerItemId, remainingInFlight);
+        } else {
+          inFlightSaveCountRef.current.delete(ownerItemId);
+        }
+
+        if (activeItemIdRef.current === ownerItemId && remainingInFlight === 0) {
+          const batchFailed = failedSaveBatchRef.current.has(ownerItemId);
+          failedSaveBatchRef.current.delete(ownerItemId);
+          if (batchFailed || pendingSavesRef.current.get(ownerItemId)?.size) {
+            setSaveStatus("idle");
+          } else {
+            setSaveStatus("saved");
+            savedTimerRef.current = setTimeout(() => setSaveStatus("idle"), 2000);
+          }
+        } else if (remainingInFlight === 0) {
+          failedSaveBatchRef.current.delete(ownerItemId);
+        }
+
+        const queuedSave = pendingSavesRef.current.get(ownerItemId)?.get(field);
+        if (
+          pendingGeneration !== undefined &&
+          queuedSave &&
+          queuedSave.generation !== pendingGeneration &&
+          queuedSave.phase === "scheduled" &&
+          !queuedSave.timeout
+        ) {
+          queuedSave.phase = "in-flight";
+          void saveFieldRef.current?.(field, queuedSave.value, queuedSave.generation, ownerItemId);
+        }
       }
     },
     [localItem, token, queryClient],
   );
+  saveFieldRef.current = saveField;
 
   const debouncedSave = useCallback(
     (field: string, value: unknown) => {
-      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-      saveTimeoutRef.current = setTimeout(() => {
-        saveTimeoutRef.current = undefined;
-        saveField(field, value);
+      const ownerItemId = localItem?.id;
+      if (!ownerItemId) return;
+      editGenerationRef.current += 1;
+      const generation = editGenerationRef.current;
+      let itemPendingSaves = pendingSavesRef.current.get(ownerItemId);
+      if (!itemPendingSaves) {
+        itemPendingSaves = new Map();
+        pendingSavesRef.current.set(ownerItemId, itemPendingSaves);
+      }
+      const previousPending = itemPendingSaves.get(field);
+      if (previousPending?.timeout) clearTimeout(previousPending.timeout);
+      const pendingSave: PrivatePendingFieldSave = {
+        field,
+        value,
+        generation,
+        phase: "scheduled",
+      };
+      itemPendingSaves.set(field, pendingSave);
+      pendingSave.timeout = setTimeout(() => {
+        const currentPending = pendingSavesRef.current.get(ownerItemId)?.get(field);
+        if (currentPending?.generation === generation) {
+          currentPending.timeout = undefined;
+          if (autosaveInFlightRef.current.get(ownerItemId)?.has(field)) {
+            return;
+          }
+          currentPending.phase = "in-flight";
+          saveField(field, value, generation, ownerItemId);
+        }
       }, 1500);
     },
-    [saveField],
+    [localItem?.id, saveField],
+  );
+
+  const beginComposition = useCallback(
+    (field: string) => {
+      const ownerItemId = localItem?.id;
+      if (!ownerItemId) return;
+      let itemPendingSaves = pendingSavesRef.current.get(ownerItemId);
+      if (!itemPendingSaves) {
+        itemPendingSaves = new Map();
+        pendingSavesRef.current.set(ownerItemId, itemPendingSaves);
+      }
+      const pendingSave = itemPendingSaves.get(field);
+      if (pendingSave?.phase === "composing") return;
+      editGenerationRef.current += 1;
+      const generation = editGenerationRef.current;
+      if (pendingSave?.timeout) clearTimeout(pendingSave.timeout);
+      itemPendingSaves.set(field, {
+        field,
+        value: (localItem as ParsedItem & Record<string, unknown>)[field],
+        generation,
+        phase: "composing",
+        saveOnCompositionAbandon: pendingSave !== undefined,
+      });
+    },
+    [localItem],
   );
 
   const flushSave = useCallback(
-    (field: string, value: unknown) => {
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-        saveTimeoutRef.current = undefined;
-        saveField(field, value);
+    (field: string, _value: unknown) => {
+      const ownerItemId = localItem?.id;
+      if (!ownerItemId) return;
+      const pendingSave = pendingSavesRef.current.get(ownerItemId)?.get(field);
+      if (
+        !pendingSave ||
+        pendingSave.field !== field ||
+        pendingSave.phase === "composing" ||
+        pendingSave.phase === "in-flight"
+      ) {
+        return;
       }
+      if (pendingSave.timeout) {
+        clearTimeout(pendingSave.timeout);
+        pendingSave.timeout = undefined;
+      }
+      if (autosaveInFlightRef.current.get(ownerItemId)?.has(field)) {
+        return;
+      }
+      pendingSave.phase = "in-flight";
+      saveField(field, pendingSave.value, pendingSave.generation, ownerItemId);
     },
-    [saveField],
+    [localItem?.id, saveField],
   );
 
   const addTag = useCallback(
@@ -643,11 +860,36 @@ function PrivateItemDetail({
         <Input
           value={localItem.title}
           onChange={(e) => {
+            const isComposing = (e.nativeEvent as InputEvent).isComposing;
             setIsDirty(true);
             setLocalItem({ ...localItem, title: e.target.value });
-            debouncedSave("title", e.target.value);
+            if (isComposing === true && composingFieldRef.current !== "title") {
+              composingFieldRef.current = "title";
+              nativeCompositionFieldRef.current = "title";
+              beginComposition("title");
+            } else if (isComposing === false && nativeCompositionFieldRef.current === "title") {
+              composingFieldRef.current = null;
+              nativeCompositionFieldRef.current = null;
+              debouncedSave("title", e.target.value);
+            } else if (composingFieldRef.current !== "title") {
+              debouncedSave("title", e.target.value);
+            }
           }}
-          onBlur={() => flushSave("title", localItem.title)}
+          onCompositionStart={() => {
+            composingFieldRef.current = "title";
+            nativeCompositionFieldRef.current = null;
+            beginComposition("title");
+          }}
+          onCompositionEnd={(e) => {
+            composingFieldRef.current = null;
+            nativeCompositionFieldRef.current = null;
+            debouncedSave("title", e.currentTarget.value);
+          }}
+          onBlur={() => {
+            if (composingFieldRef.current !== "title") {
+              flushSave("title", localItem.title);
+            }
+          }}
           className="text-lg font-semibold border-0 px-0 focus-visible:ring-0"
           placeholder="標題"
         />
@@ -737,11 +979,36 @@ function PrivateItemDetail({
             value={localItem.source ?? ""}
             onChange={(e) => {
               const val = e.target.value || null;
+              const isComposing = (e.nativeEvent as InputEvent).isComposing;
               setIsDirty(true);
               setLocalItem({ ...localItem, source: val });
-              debouncedSave("source", val);
+              if (isComposing === true && composingFieldRef.current !== "source") {
+                composingFieldRef.current = "source";
+                nativeCompositionFieldRef.current = "source";
+                beginComposition("source");
+              } else if (isComposing === false && nativeCompositionFieldRef.current === "source") {
+                composingFieldRef.current = null;
+                nativeCompositionFieldRef.current = null;
+                debouncedSave("source", val);
+              } else if (composingFieldRef.current !== "source") {
+                debouncedSave("source", val);
+              }
             }}
-            onBlur={() => flushSave("source", localItem.source)}
+            onCompositionStart={() => {
+              composingFieldRef.current = "source";
+              nativeCompositionFieldRef.current = null;
+              beginComposition("source");
+            }}
+            onCompositionEnd={(e) => {
+              composingFieldRef.current = null;
+              nativeCompositionFieldRef.current = null;
+              debouncedSave("source", e.currentTarget.value || null);
+            }}
+            onBlur={() => {
+              if (composingFieldRef.current !== "source") {
+                flushSave("source", localItem.source);
+              }
+            }}
             placeholder="https://..."
           />
         </div>
@@ -799,11 +1066,39 @@ function PrivateItemDetail({
             <Textarea
               value={localItem.content}
               onChange={(e) => {
+                const isComposing = (e.nativeEvent as InputEvent).isComposing;
                 setIsDirty(true);
                 setLocalItem({ ...localItem, content: e.target.value });
-                debouncedSave("content", e.target.value);
+                if (isComposing === true && composingFieldRef.current !== "content") {
+                  composingFieldRef.current = "content";
+                  nativeCompositionFieldRef.current = "content";
+                  beginComposition("content");
+                } else if (
+                  isComposing === false &&
+                  nativeCompositionFieldRef.current === "content"
+                ) {
+                  composingFieldRef.current = null;
+                  nativeCompositionFieldRef.current = null;
+                  debouncedSave("content", e.target.value);
+                } else if (composingFieldRef.current !== "content") {
+                  debouncedSave("content", e.target.value);
+                }
               }}
-              onBlur={() => flushSave("content", localItem.content)}
+              onCompositionStart={() => {
+                composingFieldRef.current = "content";
+                nativeCompositionFieldRef.current = null;
+                beginComposition("content");
+              }}
+              onCompositionEnd={(e) => {
+                composingFieldRef.current = null;
+                nativeCompositionFieldRef.current = null;
+                debouncedSave("content", e.currentTarget.value);
+              }}
+              onBlur={() => {
+                if (composingFieldRef.current !== "content") {
+                  flushSave("content", localItem.content);
+                }
+              }}
               placeholder="Markdown 內容..."
               rows={10}
               className="font-mono text-sm"
