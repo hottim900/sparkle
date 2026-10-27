@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.13.1] - 2026-10-27
+
+### Fixed
+
+- **Update the native SQLite engine to 3.53.2.** better-sqlite3 12.11.1 includes the WAL-reset corruption fix and FTS5 security fixes that npm vulnerability metadata does not cover.
+- **Verify the actual native SQLite version in CI and deployment.** A runtime gate checks the loaded addon against the patched minimum before production restart.
+
 ## [1.5.13.0] - 2026-10-27
 
 ### Fixed

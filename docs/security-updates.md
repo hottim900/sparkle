@@ -32,6 +32,33 @@ curl --fail http://localhost:3000/api/health
   舊 token 若沒有正確 audience，需重新授權連線。
 - CI 分別掃描根目錄與 `mcp-server/` 的 lockfile，high 以上告警會阻擋合併。
 
+## 原生 SQLite 與主機元件
+
+`better-sqlite3` 12.11.1 內含 SQLite 3.53.2，修正 WAL-reset 資料損毀競態，
+以及 CVE-2026-11822 / CVE-2026-11824 的 FTS5 問題。先前的 12.6.2 內含 3.51.2；
+這些原生程式庫問題不會完整反映在 npm audit。Sparkle 沒有提供任意 SQL，
+也沒有停用 defensive mode，因此未確認 FTS5 CVE 的利用前提成立；仍更新原生引擎。
+
+安裝依賴後執行 `npm run security:native`，檢查實際載入的 SQLite 至少為 3.53.2。
+CI 與部署在重啟服務前都會執行此檢查。升級前以 SQLite backup API 保存一致的資料庫備份，
+升級後驗證備份完整性、FTS 搜尋與服務健康狀態；本次不變更 schema。
+
+主機的 cloudflared、Brotli、zlib、NSS 與 Poppler 必須另外維護：
+
+- cloudflared 更新至官方 2026.10.4（Go 1.27.3），下載時比對官方 release asset 的 SHA-256，
+  再以 `govulncheck -mode=binary` 掃描。更新執行檔後，必須重啟所有共用該檔案的 tunnel；
+  只替換路徑不會更新已執行中的 Go runtime。此主機的 Sparkle 與 LAN Share tunnel 共用執行檔。
+- Ubuntu 24.04 安全更新至少包含 `libbrotli1` 1.1.0-2ubuntu0.1、
+  `zlib1g` 1:1.3.dfsg-3.1ubuntu2.3、`libnss3` 2:3.98-1ubuntu0.3，
+  以及 `libpoppler134` / `poppler-utils` 24.02.0-1ubuntu9.11。
+  本次一併更新 `distro-info-data`；套件更新後檢查是否有使用舊函式庫、需要重啟的程序。
+
+公告依據：[SQLite CVE](https://sqlite.org/cves.html)、
+[WAL-reset 修正](https://sqlite.org/wal.html#walresetbug)、
+[cloudflared 2026.10.4](https://github.com/cloudflare/cloudflared/releases/tag/2026.10.4)、
+[Ubuntu Brotli USN-8956-1](https://ubuntu.com/security/notices/USN-8956-1)、
+[Ubuntu zlib USN-8954-1](https://ubuntu.com/security/notices/USN-8954-1)。
+
 ## 對應公告
 
 - [Node CVE-2026-111497：Brotli decoder 記憶體破壞](https://nodejs.org/en/blog/vulnerability/october-2026-security-releases)。Node 22.23.4 同時包含先前漏掉的安全修補。

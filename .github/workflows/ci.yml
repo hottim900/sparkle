@@ -47,6 +47,9 @@ jobs:
       - name: Audit dependencies
         run: npm audit --audit-level=high
 
+      - name: Check native SQLite security version
+        run: npm run security:native
+
       - name: Lint
         run: npm run lint
 
