@@ -20,7 +20,14 @@ jobs:
       - name: Pull latest code
         run: cd $SPARKLE_DIR && git fetch origin main && git checkout main && git pull --ff-only origin main
 
-      - name: Install dependencies
+      - name: Select patched Node runtime
+        # setup-node selects the same patched runtime used by CI and .nvmrc.
+        # systemd paths must be updated separately when upgrading Node.
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: ${{ env.SPARKLE_DIR }}/.nvmrc
+
+      - name: Install application dependencies
         run: cd $SPARKLE_DIR && npm ci
 
       - name: Build frontend

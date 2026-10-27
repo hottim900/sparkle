@@ -12,6 +12,7 @@ import { registerDashboardTools } from "./tools/dashboard.js";
 import { registerWikilinkTools } from "./tools/wikilinks.js";
 import { SPARKLE_INSTRUCTIONS } from "./docs/instructions.js";
 import { registerDocResources } from "./docs/resources.js";
+import { MAX_TOOL_INPUT_ELEMENTS } from "./http-security.js";
 
 const require = createRequire(import.meta.url);
 const pkg = require("../package.json") as { version: string };
@@ -19,7 +20,7 @@ const pkg = require("../package.json") as { version: string };
 export function createSparkleServer(): McpServer {
   const server = new McpServer(
     { name: "sparkle", version: pkg.version },
-    { instructions: SPARKLE_INSTRUCTIONS },
+    { instructions: SPARKLE_INSTRUCTIONS, maxToolInputElements: MAX_TOOL_INPUT_ELEMENTS },
   );
 
   registerSearchTools(server);

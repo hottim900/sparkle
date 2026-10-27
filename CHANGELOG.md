@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.5.13.0] - 2026-10-27
+
+### Fixed
+
+- **Patch vulnerable application, MCP, and build dependencies.** Both npm lockfiles now pass the full dependency audit with zero known vulnerabilities. Node 22.23.4 is the minimum supported runtime, with matching CI, Docker, and deployment configuration.
+- **Reject compressed MCP requests before authentication.** JSON and OAuth parsers disable inflation and enforce request limits; tool calls also enforce an SDK input-element budget before schema validation.
+- **Bind MCP tokens to this server.** Token issuance and validation enforce the configured resource audience; invalid or legacy tokens return 401 for reauthorization.
+- **Keep runtime upgrades explicit.** A systemd upgrade helper replaces Node paths through service overrides while preserving local settings. CI now audits MCP dependencies separately.
+
+### Tests
+
+- Added HTTP parser, real MCP transport, and bearer-authentication regression coverage. Security guards were disabled in an isolated negative control to verify the tests fail without them. MCP tests now use their own Node environment configuration.
+- Browser tests wait for the server's listening message and fully drain queued reference-index batches before rename assertions, avoiding environment hangs and shared-fixture backlog failures.
+
 ## [1.5.12.0] - 2026-07-19
 
 ### Fixed

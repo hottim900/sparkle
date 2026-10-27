@@ -6,7 +6,7 @@
 
 ## 系統需求
 
-- **Node.js 22+**（better-sqlite3 與 Node 24 不相容）
+- **Node.js 22.23.4 或更新的 22.x 版本**（執行 `nvm install && nvm use`；版本見 `.nvmrc`）
 - **npm**
 - 建議使用 **Linux**（macOS 及 WSL2 亦可運作）
 
