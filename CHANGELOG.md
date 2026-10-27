@@ -12,7 +12,7 @@
 ### Tests
 
 - Added HTTP parser, real MCP transport, and bearer-authentication regression coverage. Security guards were disabled in an isolated negative control to verify the tests fail without them. MCP tests now use their own Node environment configuration.
-- Browser tests wait for the server's listening message and fully drain queued reference-index batches before rename assertions, avoiding environment hangs and shared-fixture backlog failures.
+- Browser tests use a supported Ubuntu 24.04 runner, wait for the server's listening message, and fully drain queued reference-index batches before rename assertions, avoiding environment hangs and shared-fixture backlog failures.
 
 ## [1.5.12.0] - 2026-07-19
 
