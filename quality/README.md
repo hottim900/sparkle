@@ -156,6 +156,8 @@
 
 ## 待追蹤發現
 
+- **2026-10-27 CVE 修補**：兩份 npm lockfile 已更新至掃描 0 告警；MCP 停用壓縮本文、啟用輸入元素限制及 token audience 驗證。Node 最低版本提高為 22.23.4；systemd 需以 `scripts/upgrade-node-runtime.sh` 切換已安裝的 Node。驗證與操作見 [安全更新](../docs/security-updates.md)。
+
 搜查中發現但尚未建立正式項目的問題。
 
 > **AI 行動指引：** 此段落僅供參考。**不要主動升級為正式項目** — 由人類決定何時建立。

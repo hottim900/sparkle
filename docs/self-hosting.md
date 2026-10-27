@@ -6,7 +6,7 @@ This guide covers deploying Sparkle as a production server with HTTPS, optional 
 
 ## Prerequisites
 
-- **Node.js 22+** (better-sqlite3 is incompatible with Node 24)
+- **Node.js 22.23.4 or later in the 22.x line** (`nvm install && nvm use`; see `.nvmrc`)
 - **npm**
 - **Linux** recommended (also works on macOS and WSL2)
 

@@ -30,7 +30,8 @@ jobs:
             revert
 
   test:
-    runs-on: ubuntu-latest
+    # Playwright 1.58 supports Ubuntu 24.04; ubuntu-latest is moving to 26.
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
 
     steps:
@@ -38,7 +39,7 @@ jobs:
 
       - uses: actions/setup-node@v6
         with:
-          node-version: 22
+          node-version-file: ".nvmrc"
           cache: "npm"
 
       - run: npm ci
@@ -61,6 +62,10 @@ jobs:
       - name: Install MCP server deps
         working-directory: mcp-server
         run: npm ci
+
+      - name: Audit MCP server dependencies
+        working-directory: mcp-server
+        run: npm audit --audit-level=high
 
       - name: Type-check (MCP server)
         working-directory: mcp-server

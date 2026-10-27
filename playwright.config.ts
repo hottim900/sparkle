@@ -59,8 +59,9 @@ export default defineConfig({
   ],
   webServer: {
     command: `npx tsx server/index.ts`,
-    port: PORT,
-    reuseExistingServer: !process.env.CI,
+    // A closed localhost port can silently drop SYNs under WSL mirrored
+    // networking. Wait for the listen callback instead of probing it first.
+    wait: { stdout: /Server running on http:\/\// },
     env: {
       AUTH_TOKEN,
       DATABASE_URL: TEST_DB,

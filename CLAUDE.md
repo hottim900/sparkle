@@ -15,7 +15,7 @@ Sparkle 是 Obsidian 的活躍前端，不是獨立 PKM。Sparkle 負責捕捉�
 ```bash
 npm run dev          # Vite on :5173, proxies /api to :3000
 npm run dev:server   # Hono on :3000 with tsx watch
-nvm use 22           # Required for better-sqlite3 native module
+nvm use           # Required for better-sqlite3 native module
 npx vitest run       # Unit tests
 npm run test:e2e     # E2E tests (requires build)
 npm run lint:fix     # ESLint auto-fix
@@ -50,7 +50,7 @@ DB migration version 0→27, idempotent. Migration safety is enforced by the loc
 ## Conventions
 
 - UI language: 繁體中文
-- Node >=22 <24, enforced by `.npmrc engine-strict=true`
+- Node >=22.23.4 <24, enforced by `.npmrc engine-strict=true`
 - SQLite WAL mode, FTS5 trigram tokenizer (Chinese support)
 - Commit: `@commitlint/config-conventional` via `.husky/commit-msg`. Types: feat, fix, docs, chore, refactor, test, perf, ci, build, style, revert
 - Worktree 開發：**此機器同時是開發和生產環境，main working directory 必須留在 main branch。** 所有 session 用 `claude --worktree`，agent 用 `isolation: "worktree"`。

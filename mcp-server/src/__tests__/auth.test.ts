@@ -1,8 +1,13 @@
 // @vitest-environment node
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { SparkleClientsStore, SparkleAuthProvider } from "../auth.js";
+import { createHmac, createSecretKey } from "node:crypto";
+import { decodeJwt, SignJWT } from "jose";
+import { requireBearerAuth } from "@modelcontextprotocol/sdk/server/auth/middleware/bearerAuth.js";
+import type { Request, Response } from "express";
 
 const TEST_PIN = "test-pin-1234";
+const RESOURCE = new URL("https://sparkle.example.com/mcp");
 
 describe("SparkleClientsStore", () => {
   let store: SparkleClientsStore;
@@ -48,7 +53,7 @@ describe("SparkleAuthProvider", () => {
   };
 
   beforeEach(() => {
-    provider = new SparkleAuthProvider(TEST_PIN);
+    provider = new SparkleAuthProvider(TEST_PIN, RESOURCE);
   });
 
   describe("authorize", () => {
@@ -165,6 +170,20 @@ describe("SparkleAuthProvider", () => {
       expect(tokens.token_type).toBe("bearer");
       expect(tokens.expires_in).toBe(365 * 24 * 60 * 60);
       expect(tokens.scope).toBe("mcp:tools");
+      expect(decodeJwt(tokens.access_token).aud).toBe(RESOURCE.href);
+    });
+
+    it("rejects token issuance for another resource", async () => {
+      const code = await createAuthCode(provider, mockClient, mockParams);
+      await expect(
+        provider.exchangeAuthorizationCode(
+          mockClient,
+          code,
+          undefined,
+          undefined,
+          new URL("https://other.example.com/mcp"),
+        ),
+      ).rejects.toThrow("Token resource must match this MCP server");
     });
 
     it("rejects reuse of the same code", async () => {
@@ -195,7 +214,22 @@ describe("SparkleAuthProvider", () => {
       expect(authInfo.clientId).toBe("test-client-id");
       expect(authInfo.scopes).toEqual(["mcp:tools"]);
       expect(authInfo.expiresAt).toBeDefined();
+      expect(authInfo.resource?.href).toBe(RESOURCE.href);
     });
+
+    it.each([undefined, "https://other.example.com/mcp"])(
+      "rejects correctly signed tokens with invalid audience %s",
+      async (aud) => {
+        const key = createSecretKey(
+          createHmac("sha256", "sparkle-mcp-jwt-key").update(TEST_PIN).digest(),
+        );
+        const token = await new SignJWT({ sub: mockClient.client_id, aud })
+          .setProtectedHeader({ alg: "HS256" })
+          .setExpirationTime("1h")
+          .sign(key);
+        await expect(provider.verifyAccessToken(token)).rejects.toThrow("Invalid or expired token");
+      },
+    );
 
     it("throws for invalid token", async () => {
       await expect(provider.verifyAccessToken("invalid")).rejects.toThrow(
@@ -219,6 +253,75 @@ describe("SparkleAuthProvider", () => {
       await expect(provider.verifyAccessToken(tokens.access_token)).rejects.toThrow(
         "Token has been revoked",
       );
+    });
+  });
+
+  describe("requireBearerAuth", () => {
+    async function authenticateToken(token: string) {
+      const request = { headers: { authorization: `Bearer ${token}` } } as Request;
+      const response = {
+        set: vi.fn().mockReturnThis(),
+        status: vi.fn().mockReturnThis(),
+        json: vi.fn().mockReturnThis(),
+      };
+      const next = vi.fn();
+
+      await requireBearerAuth({ verifier: provider, expectedResource: RESOURCE })(
+        request,
+        response as unknown as Response,
+        next,
+      );
+
+      return { request, response, next };
+    }
+
+    it("authenticates a token issued for this MCP server", async () => {
+      const code = await createAuthCode(provider, mockClient, mockParams);
+      const tokens = await provider.exchangeAuthorizationCode(mockClient, code);
+      const { request, response, next } = await authenticateToken(tokens.access_token);
+
+      expect(next).toHaveBeenCalledOnce();
+      expect(response.status).not.toHaveBeenCalled();
+      expect(request.auth?.resource?.href).toBe(RESOURCE.href);
+    });
+
+    it.each([undefined, "https://other.example.com/mcp"])(
+      "returns a 401 challenge for a signed token with invalid audience %s",
+      async (aud) => {
+        const key = createSecretKey(
+          createHmac("sha256", "sparkle-mcp-jwt-key").update(TEST_PIN).digest(),
+        );
+        const token = await new SignJWT({ sub: mockClient.client_id, aud })
+          .setProtectedHeader({ alg: "HS256" })
+          .setExpirationTime("1h")
+          .sign(key);
+        const { response, next } = await authenticateToken(token);
+
+        expect(next).not.toHaveBeenCalled();
+        expect(response.status).toHaveBeenCalledWith(401);
+        expect(response.json).toHaveBeenCalledWith({
+          error: "invalid_token",
+          error_description: "Invalid or expired token",
+        });
+        expect(response.set).toHaveBeenCalledWith(
+          "WWW-Authenticate",
+          expect.stringContaining('Bearer error="invalid_token"'),
+        );
+      },
+    );
+
+    it("returns a 401 challenge for a revoked token", async () => {
+      const code = await createAuthCode(provider, mockClient, mockParams);
+      const tokens = await provider.exchangeAuthorizationCode(mockClient, code);
+      await provider.revokeToken(mockClient, { token: tokens.access_token });
+      const { response, next } = await authenticateToken(tokens.access_token);
+
+      expect(next).not.toHaveBeenCalled();
+      expect(response.status).toHaveBeenCalledWith(401);
+      expect(response.json).toHaveBeenCalledWith({
+        error: "invalid_token",
+        error_description: "Token has been revoked",
+      });
     });
   });
 

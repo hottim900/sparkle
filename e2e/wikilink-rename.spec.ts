@@ -1,9 +1,22 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type APIRequestContext } from "@playwright/test";
 import { createItemViaApi } from "./helpers";
 import { AUTH_TOKEN } from "../playwright.config";
 
 const PORT = process.env.PORT || 3456;
 const API_BASE = `http://localhost:${PORT}/api`;
+
+async function drainReferenceIndex(request: APIRequestContext): Promise<void> {
+  // Earlier tests can leave more than one 50-row batch in the shared queue.
+  for (let batch = 0; batch < 20; batch++) {
+    const response = await request.post(`${API_BASE}/wikilinks/admin/drain-now`, {
+      headers: { Authorization: `Bearer ${AUTH_TOKEN}` },
+    });
+    expect(response.ok()).toBe(true);
+    const { count, max_per_call } = await response.json();
+    if (count < max_per_call) return;
+  }
+  throw new Error("Reference index queue did not drain within 20 batches");
+}
 
 /**
  * End-to-end rename flow: create source + target, rename target via API
@@ -37,9 +50,7 @@ test.describe("Wikilink rename engine end-to-end", () => {
     // is populated before the rename. Routine writes set reindex_dirty=1
     // but the background worker only drains every 60s — too slow for E2E.
     // /admin/drain-now runs drainReindexQueue() in-request (PR 9).
-    await request.post(`${API_BASE}/wikilinks/admin/drain-now`, {
-      headers: { Authorization: `Bearer ${AUTH_TOKEN}` },
-    });
+    await drainReferenceIndex(request);
 
     // Now rename the target. PATCH response should carry swept_references.
     const renameRes = await request.patch(`${API_BASE}/items/${target.id}`, {
@@ -94,9 +105,7 @@ test.describe("Wikilink rename engine end-to-end", () => {
 
     // Force synchronous reindex drain (PR 9 endpoint) so preview has
     // reference_index data — the background worker's 60s tick is too slow.
-    await request.post(`${API_BASE}/wikilinks/admin/drain-now`, {
-      headers: { Authorization: `Bearer ${AUTH_TOKEN}` },
-    });
+    await drainReferenceIndex(request);
 
     const previewRes = await request.get(
       `${API_BASE}/wikilinks/admin/preview-rename?target_id=${target.id}&new_title=ProposedNew-${suffix}`,

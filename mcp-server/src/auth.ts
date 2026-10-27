@@ -18,6 +18,10 @@ import type {
   OAuthTokenRevocationRequest,
 } from "@modelcontextprotocol/sdk/shared/auth.js";
 import { SignJWT, jwtVerify, type JWTPayload } from "jose";
+import {
+  InvalidTargetError,
+  InvalidTokenError,
+} from "@modelcontextprotocol/sdk/server/auth/errors.js";
 // --- Clients Store ---
 
 const MAX_CLIENTS = 20;
@@ -84,7 +88,10 @@ export class SparkleAuthProvider implements OAuthServerProvider {
   private readonly pin: string;
   private readonly jwtKey: KeyObject;
 
-  constructor(pin: string) {
+  constructor(
+    pin: string,
+    private readonly resource: URL,
+  ) {
     this.pin = pin;
     this.jwtKey = deriveSigningKey(pin);
   }
@@ -206,6 +213,9 @@ export class SparkleAuthProvider implements OAuthServerProvider {
     _redirectUri?: string,
     resource?: URL,
   ): Promise<OAuthTokens> {
+    if (resource && resource.href !== this.resource.href) {
+      throw new InvalidTargetError("Token resource must match this MCP server");
+    }
     const codeData = this.codes.get(authorizationCode);
     if (!codeData) {
       throw new Error("Invalid authorization code");
@@ -226,7 +236,7 @@ export class SparkleAuthProvider implements OAuthServerProvider {
     const accessToken = await new SignJWT({
       sub: client.client_id,
       scope: scopes.join(" "),
-      ...(resource ? { aud: resource.toString() } : {}),
+      aud: this.resource.href,
     })
       .setProtectedHeader({ alg: "HS256" })
       .setJti(randomUUID())
@@ -254,18 +264,21 @@ export class SparkleAuthProvider implements OAuthServerProvider {
   async verifyAccessToken(token: string): Promise<AuthInfo> {
     let payload: JWTPayload;
     try {
-      const result = await jwtVerify(token, this.jwtKey, { algorithms: ["HS256"] });
+      const result = await jwtVerify(token, this.jwtKey, {
+        algorithms: ["HS256"],
+        audience: this.resource.href,
+      });
       payload = result.payload;
     } catch {
-      throw new Error("Invalid or expired token");
+      throw new InvalidTokenError("Invalid or expired token");
     }
 
     if (payload.jti && this.revokedTokens.has(payload.jti)) {
-      throw new Error("Token has been revoked");
+      throw new InvalidTokenError("Token has been revoked");
     }
 
     if (!payload.sub) {
-      throw new Error("Invalid token: missing sub claim");
+      throw new InvalidTokenError("Invalid token: missing sub claim");
     }
 
     let resource: URL | undefined;

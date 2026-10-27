@@ -10,6 +10,7 @@ import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import { createSparkleServer } from "./server.js";
 import { SparkleAuthProvider } from "./auth.js";
 import { logger } from "./logger.js";
+import { createRequestParsers } from "./http-security.js";
 
 // --- Env validation ---
 
@@ -32,7 +33,8 @@ if (MCP_ISSUER_URL.startsWith("http://localhost")) {
 
 // --- OAuth provider ---
 
-const provider = new SparkleAuthProvider(process.env.MCP_AUTH_PIN);
+const resourceUrl = new URL(`${MCP_ISSUER_URL}/mcp`);
+const provider = new SparkleAuthProvider(process.env.MCP_AUTH_PIN, resourceUrl);
 
 // --- Express app ---
 
@@ -42,22 +44,27 @@ app.use((req, res, next) => {
   const start = Date.now();
   res.on("finish", () => {
     logger.info(
-      { method: req.method, path: req.path, status: res.statusCode, responseTime: Date.now() - start, ip: req.ip },
+      {
+        method: req.method,
+        path: req.path,
+        status: res.statusCode,
+        responseTime: Date.now() - start,
+        ip: req.ip,
+      },
       "request completed",
     );
   });
   next();
 });
 app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
+app.use(...createRequestParsers());
 
 // OAuth routes (/.well-known/*, /authorize, /token, /register, /revoke)
 app.use(
   mcpAuthRouter({
     provider,
     issuerUrl: new URL(MCP_ISSUER_URL),
-    resourceServerUrl: new URL(`${MCP_ISSUER_URL}/mcp`),
+    resourceServerUrl: resourceUrl,
     scopesSupported: ["mcp:tools"],
     resourceName: "Sparkle MCP Server",
   }),
@@ -82,7 +89,7 @@ app.post("/authorize/submit", (req, res) => {
 
 // --- MCP transport ---
 
-const authMiddleware = requireBearerAuth({ verifier: provider });
+const authMiddleware = requireBearerAuth({ verifier: provider, expectedResource: resourceUrl });
 
 // --- Session store ---
 

@@ -9,57 +9,41 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as VaultRouteImport } from './routes/vault'
-import { Route as SharesRouteImport } from './routes/shares'
-import { Route as SettingsRouteImport } from './routes/settings'
-import { Route as PrivateRouteImport } from './routes/private'
-import { Route as DashboardRouteImport } from './routes/dashboard'
-import { Route as AllRouteImport } from './routes/all'
-import { Route as ListRouteImport } from './routes/_list'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as ItemIdRouteImport } from './routes/item.$id'
-import { Route as AdminTitleCollisionsRouteImport } from './routes/admin/title-collisions'
-import { Route as AdminRecentRenamesRouteImport } from './routes/admin/recent-renames'
-import { Route as ListUnreviewedRouteImport } from './routes/_list/unreviewed'
-import { Route as ListTodosRouteImport } from './routes/_list/todos'
-import { Route as ListStaleRouteImport } from './routes/_list/stale'
-import { Route as ListRecentRouteImport } from './routes/_list/recent'
-import { Route as ListPausedRouteImport } from './routes/_list/paused'
-import { Route as ListNotesRouteImport } from './routes/_list/notes'
-import { Route as ListAttentionRouteImport } from './routes/_list/attention'
+import { Route as ListRouteImport } from './routes/_list'
+import { Route as AllRouteImport } from './routes/all'
+import { Route as DashboardRouteImport } from './routes/dashboard'
+import { Route as PrivateRouteImport } from './routes/private'
+import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as SharesRouteImport } from './routes/shares'
+import { Route as VaultRouteImport } from './routes/vault'
 import { Route as ListArchivedRouteImport } from './routes/_list/archived'
-import { Route as ListTodosIndexRouteImport } from './routes/_list/todos/index'
-import { Route as ListScratchIndexRouteImport } from './routes/_list/scratch/index'
+import { Route as ListAttentionRouteImport } from './routes/_list/attention'
+import { Route as ListNotesRouteImport } from './routes/_list/notes'
+import { Route as ListPausedRouteImport } from './routes/_list/paused'
+import { Route as ListRecentRouteImport } from './routes/_list/recent'
+import { Route as ListStaleRouteImport } from './routes/_list/stale'
+import { Route as ListTodosRouteImport } from './routes/_list/todos'
+import { Route as ListUnreviewedRouteImport } from './routes/_list/unreviewed'
+import { Route as AdminRecentRenamesRouteImport } from './routes/admin/recent-renames'
+import { Route as AdminTitleCollisionsRouteImport } from './routes/admin/title-collisions'
+import { Route as ItemIdRouteImport } from './routes/item.$id'
 import { Route as ListNotesIndexRouteImport } from './routes/_list/notes/index'
-import { Route as ListTodosDoneRouteImport } from './routes/_list/todos/done'
-import { Route as ListNotesPermanentRouteImport } from './routes/_list/notes/permanent'
-import { Route as ListNotesFleetingRouteImport } from './routes/_list/notes/fleeting'
-import { Route as ListNotesExportedRouteImport } from './routes/_list/notes/exported'
 import { Route as ListNotesDevelopingRouteImport } from './routes/_list/notes/developing'
+import { Route as ListNotesExportedRouteImport } from './routes/_list/notes/exported'
+import { Route as ListNotesFleetingRouteImport } from './routes/_list/notes/fleeting'
+import { Route as ListNotesPermanentRouteImport } from './routes/_list/notes/permanent'
+import { Route as ListScratchIndexRouteImport } from './routes/_list/scratch/index'
+import { Route as ListTodosIndexRouteImport } from './routes/_list/todos/index'
+import { Route as ListTodosDoneRouteImport } from './routes/_list/todos/done'
 
-const VaultRoute = VaultRouteImport.update({
-  id: '/vault',
-  path: '/vault',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const SharesRoute = SharesRouteImport.update({
-  id: '/shares',
-  path: '/shares',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SettingsRoute = SettingsRouteImport.update({
-  id: '/settings',
-  path: '/settings',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const PrivateRoute = PrivateRouteImport.update({
-  id: '/private',
-  path: '/private',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const DashboardRoute = DashboardRouteImport.update({
-  id: '/dashboard',
-  path: '/dashboard',
+const ListRoute = ListRouteImport.update({
+  id: '/_list',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AllRoute = AllRouteImport.update({
@@ -67,58 +51,34 @@ const AllRoute = AllRouteImport.update({
   path: '/all',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ListRoute = ListRouteImport.update({
-  id: '/_list',
+const DashboardRoute = DashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+const PrivateRoute = PrivateRouteImport.update({
+  id: '/private',
+  path: '/private',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ItemIdRoute = ItemIdRouteImport.update({
-  id: '/item/$id',
-  path: '/item/$id',
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AdminTitleCollisionsRoute = AdminTitleCollisionsRouteImport.update({
-  id: '/admin/title-collisions',
-  path: '/admin/title-collisions',
+const SharesRoute = SharesRouteImport.update({
+  id: '/shares',
+  path: '/shares',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AdminRecentRenamesRoute = AdminRecentRenamesRouteImport.update({
-  id: '/admin/recent-renames',
-  path: '/admin/recent-renames',
+const VaultRoute = VaultRouteImport.update({
+  id: '/vault',
+  path: '/vault',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ListUnreviewedRoute = ListUnreviewedRouteImport.update({
-  id: '/unreviewed',
-  path: '/unreviewed',
-  getParentRoute: () => ListRoute,
-} as any)
-const ListTodosRoute = ListTodosRouteImport.update({
-  id: '/todos',
-  path: '/todos',
-  getParentRoute: () => ListRoute,
-} as any)
-const ListStaleRoute = ListStaleRouteImport.update({
-  id: '/stale',
-  path: '/stale',
-  getParentRoute: () => ListRoute,
-} as any)
-const ListRecentRoute = ListRecentRouteImport.update({
-  id: '/recent',
-  path: '/recent',
-  getParentRoute: () => ListRoute,
-} as any)
-const ListPausedRoute = ListPausedRouteImport.update({
-  id: '/paused',
-  path: '/paused',
-  getParentRoute: () => ListRoute,
-} as any)
-const ListNotesRoute = ListNotesRouteImport.update({
-  id: '/notes',
-  path: '/notes',
+const ListArchivedRoute = ListArchivedRouteImport.update({
+  id: '/archived',
+  path: '/archived',
   getParentRoute: () => ListRoute,
 } as any)
 const ListAttentionRoute = ListAttentionRouteImport.update({
@@ -126,39 +86,59 @@ const ListAttentionRoute = ListAttentionRouteImport.update({
   path: '/attention',
   getParentRoute: () => ListRoute,
 } as any)
-const ListArchivedRoute = ListArchivedRouteImport.update({
-  id: '/archived',
-  path: '/archived',
+const ListNotesRoute = ListNotesRouteImport.update({
+  id: '/notes',
+  path: '/notes',
   getParentRoute: () => ListRoute,
 } as any)
-const ListTodosIndexRoute = ListTodosIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => ListTodosRoute,
-} as any)
-const ListScratchIndexRoute = ListScratchIndexRouteImport.update({
-  id: '/scratch/',
-  path: '/scratch/',
+const ListPausedRoute = ListPausedRouteImport.update({
+  id: '/paused',
+  path: '/paused',
   getParentRoute: () => ListRoute,
+} as any)
+const ListRecentRoute = ListRecentRouteImport.update({
+  id: '/recent',
+  path: '/recent',
+  getParentRoute: () => ListRoute,
+} as any)
+const ListStaleRoute = ListStaleRouteImport.update({
+  id: '/stale',
+  path: '/stale',
+  getParentRoute: () => ListRoute,
+} as any)
+const ListTodosRoute = ListTodosRouteImport.update({
+  id: '/todos',
+  path: '/todos',
+  getParentRoute: () => ListRoute,
+} as any)
+const ListUnreviewedRoute = ListUnreviewedRouteImport.update({
+  id: '/unreviewed',
+  path: '/unreviewed',
+  getParentRoute: () => ListRoute,
+} as any)
+const AdminRecentRenamesRoute = AdminRecentRenamesRouteImport.update({
+  id: '/admin/recent-renames',
+  path: '/admin/recent-renames',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminTitleCollisionsRoute = AdminTitleCollisionsRouteImport.update({
+  id: '/admin/title-collisions',
+  path: '/admin/title-collisions',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ItemIdRoute = ItemIdRouteImport.update({
+  id: '/item/$id',
+  path: '/item/$id',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const ListNotesIndexRoute = ListNotesIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => ListNotesRoute,
 } as any)
-const ListTodosDoneRoute = ListTodosDoneRouteImport.update({
-  id: '/done',
-  path: '/done',
-  getParentRoute: () => ListTodosRoute,
-} as any)
-const ListNotesPermanentRoute = ListNotesPermanentRouteImport.update({
-  id: '/permanent',
-  path: '/permanent',
-  getParentRoute: () => ListNotesRoute,
-} as any)
-const ListNotesFleetingRoute = ListNotesFleetingRouteImport.update({
-  id: '/fleeting',
-  path: '/fleeting',
+const ListNotesDevelopingRoute = ListNotesDevelopingRouteImport.update({
+  id: '/developing',
+  path: '/developing',
   getParentRoute: () => ListNotesRoute,
 } as any)
 const ListNotesExportedRoute = ListNotesExportedRouteImport.update({
@@ -166,10 +146,30 @@ const ListNotesExportedRoute = ListNotesExportedRouteImport.update({
   path: '/exported',
   getParentRoute: () => ListNotesRoute,
 } as any)
-const ListNotesDevelopingRoute = ListNotesDevelopingRouteImport.update({
-  id: '/developing',
-  path: '/developing',
+const ListNotesFleetingRoute = ListNotesFleetingRouteImport.update({
+  id: '/fleeting',
+  path: '/fleeting',
   getParentRoute: () => ListNotesRoute,
+} as any)
+const ListNotesPermanentRoute = ListNotesPermanentRouteImport.update({
+  id: '/permanent',
+  path: '/permanent',
+  getParentRoute: () => ListNotesRoute,
+} as any)
+const ListScratchIndexRoute = ListScratchIndexRouteImport.update({
+  id: '/scratch/',
+  path: '/scratch/',
+  getParentRoute: () => ListRoute,
+} as any)
+const ListTodosIndexRoute = ListTodosIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => ListTodosRoute,
+} as any)
+const ListTodosDoneRoute = ListTodosDoneRouteImport.update({
+  id: '/done',
+  path: '/done',
+  getParentRoute: () => ListTodosRoute,
 } as any)
 
 export interface FileRoutesByFullPath {
@@ -358,46 +358,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/vault': {
-      id: '/vault'
-      path: '/vault'
-      fullPath: '/vault'
-      preLoaderRoute: typeof VaultRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/shares': {
-      id: '/shares'
-      path: '/shares'
-      fullPath: '/shares'
-      preLoaderRoute: typeof SharesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/settings': {
-      id: '/settings'
-      path: '/settings'
-      fullPath: '/settings'
-      preLoaderRoute: typeof SettingsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/private': {
-      id: '/private'
-      path: '/private'
-      fullPath: '/private'
-      preLoaderRoute: typeof PrivateRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/dashboard': {
-      id: '/dashboard'
-      path: '/dashboard'
-      fullPath: '/dashboard'
-      preLoaderRoute: typeof DashboardRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/all': {
-      id: '/all'
-      path: '/all'
-      fullPath: '/all'
-      preLoaderRoute: typeof AllRouteImport
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_list': {
@@ -407,74 +372,53 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ListRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+    '/all': {
+      id: '/all'
+      path: '/all'
+      fullPath: '/all'
+      preLoaderRoute: typeof AllRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/item/$id': {
-      id: '/item/$id'
-      path: '/item/$id'
-      fullPath: '/item/$id'
-      preLoaderRoute: typeof ItemIdRouteImport
+    '/dashboard': {
+      id: '/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof DashboardRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin/title-collisions': {
-      id: '/admin/title-collisions'
-      path: '/admin/title-collisions'
-      fullPath: '/admin/title-collisions'
-      preLoaderRoute: typeof AdminTitleCollisionsRouteImport
+    '/private': {
+      id: '/private'
+      path: '/private'
+      fullPath: '/private'
+      preLoaderRoute: typeof PrivateRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin/recent-renames': {
-      id: '/admin/recent-renames'
-      path: '/admin/recent-renames'
-      fullPath: '/admin/recent-renames'
-      preLoaderRoute: typeof AdminRecentRenamesRouteImport
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/_list/unreviewed': {
-      id: '/_list/unreviewed'
-      path: '/unreviewed'
-      fullPath: '/unreviewed'
-      preLoaderRoute: typeof ListUnreviewedRouteImport
-      parentRoute: typeof ListRoute
+    '/shares': {
+      id: '/shares'
+      path: '/shares'
+      fullPath: '/shares'
+      preLoaderRoute: typeof SharesRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/_list/todos': {
-      id: '/_list/todos'
-      path: '/todos'
-      fullPath: '/todos'
-      preLoaderRoute: typeof ListTodosRouteImport
-      parentRoute: typeof ListRoute
+    '/vault': {
+      id: '/vault'
+      path: '/vault'
+      fullPath: '/vault'
+      preLoaderRoute: typeof VaultRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/_list/stale': {
-      id: '/_list/stale'
-      path: '/stale'
-      fullPath: '/stale'
-      preLoaderRoute: typeof ListStaleRouteImport
-      parentRoute: typeof ListRoute
-    }
-    '/_list/recent': {
-      id: '/_list/recent'
-      path: '/recent'
-      fullPath: '/recent'
-      preLoaderRoute: typeof ListRecentRouteImport
-      parentRoute: typeof ListRoute
-    }
-    '/_list/paused': {
-      id: '/_list/paused'
-      path: '/paused'
-      fullPath: '/paused'
-      preLoaderRoute: typeof ListPausedRouteImport
-      parentRoute: typeof ListRoute
-    }
-    '/_list/notes': {
-      id: '/_list/notes'
-      path: '/notes'
-      fullPath: '/notes'
-      preLoaderRoute: typeof ListNotesRouteImport
+    '/_list/archived': {
+      id: '/_list/archived'
+      path: '/archived'
+      fullPath: '/archived'
+      preLoaderRoute: typeof ListArchivedRouteImport
       parentRoute: typeof ListRoute
     }
     '/_list/attention': {
@@ -484,26 +428,68 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ListAttentionRouteImport
       parentRoute: typeof ListRoute
     }
-    '/_list/archived': {
-      id: '/_list/archived'
-      path: '/archived'
-      fullPath: '/archived'
-      preLoaderRoute: typeof ListArchivedRouteImport
+    '/_list/notes': {
+      id: '/_list/notes'
+      path: '/notes'
+      fullPath: '/notes'
+      preLoaderRoute: typeof ListNotesRouteImport
       parentRoute: typeof ListRoute
     }
-    '/_list/todos/': {
-      id: '/_list/todos/'
-      path: '/'
-      fullPath: '/todos/'
-      preLoaderRoute: typeof ListTodosIndexRouteImport
-      parentRoute: typeof ListTodosRoute
-    }
-    '/_list/scratch/': {
-      id: '/_list/scratch/'
-      path: '/scratch'
-      fullPath: '/scratch/'
-      preLoaderRoute: typeof ListScratchIndexRouteImport
+    '/_list/paused': {
+      id: '/_list/paused'
+      path: '/paused'
+      fullPath: '/paused'
+      preLoaderRoute: typeof ListPausedRouteImport
       parentRoute: typeof ListRoute
+    }
+    '/_list/recent': {
+      id: '/_list/recent'
+      path: '/recent'
+      fullPath: '/recent'
+      preLoaderRoute: typeof ListRecentRouteImport
+      parentRoute: typeof ListRoute
+    }
+    '/_list/stale': {
+      id: '/_list/stale'
+      path: '/stale'
+      fullPath: '/stale'
+      preLoaderRoute: typeof ListStaleRouteImport
+      parentRoute: typeof ListRoute
+    }
+    '/_list/todos': {
+      id: '/_list/todos'
+      path: '/todos'
+      fullPath: '/todos'
+      preLoaderRoute: typeof ListTodosRouteImport
+      parentRoute: typeof ListRoute
+    }
+    '/_list/unreviewed': {
+      id: '/_list/unreviewed'
+      path: '/unreviewed'
+      fullPath: '/unreviewed'
+      preLoaderRoute: typeof ListUnreviewedRouteImport
+      parentRoute: typeof ListRoute
+    }
+    '/admin/recent-renames': {
+      id: '/admin/recent-renames'
+      path: '/admin/recent-renames'
+      fullPath: '/admin/recent-renames'
+      preLoaderRoute: typeof AdminRecentRenamesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/title-collisions': {
+      id: '/admin/title-collisions'
+      path: '/admin/title-collisions'
+      fullPath: '/admin/title-collisions'
+      preLoaderRoute: typeof AdminTitleCollisionsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/item/$id': {
+      id: '/item/$id'
+      path: '/item/$id'
+      fullPath: '/item/$id'
+      preLoaderRoute: typeof ItemIdRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/_list/notes/': {
       id: '/_list/notes/'
@@ -512,25 +498,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ListNotesIndexRouteImport
       parentRoute: typeof ListNotesRoute
     }
-    '/_list/todos/done': {
-      id: '/_list/todos/done'
-      path: '/done'
-      fullPath: '/todos/done'
-      preLoaderRoute: typeof ListTodosDoneRouteImport
-      parentRoute: typeof ListTodosRoute
-    }
-    '/_list/notes/permanent': {
-      id: '/_list/notes/permanent'
-      path: '/permanent'
-      fullPath: '/notes/permanent'
-      preLoaderRoute: typeof ListNotesPermanentRouteImport
-      parentRoute: typeof ListNotesRoute
-    }
-    '/_list/notes/fleeting': {
-      id: '/_list/notes/fleeting'
-      path: '/fleeting'
-      fullPath: '/notes/fleeting'
-      preLoaderRoute: typeof ListNotesFleetingRouteImport
+    '/_list/notes/developing': {
+      id: '/_list/notes/developing'
+      path: '/developing'
+      fullPath: '/notes/developing'
+      preLoaderRoute: typeof ListNotesDevelopingRouteImport
       parentRoute: typeof ListNotesRoute
     }
     '/_list/notes/exported': {
@@ -540,12 +512,40 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ListNotesExportedRouteImport
       parentRoute: typeof ListNotesRoute
     }
-    '/_list/notes/developing': {
-      id: '/_list/notes/developing'
-      path: '/developing'
-      fullPath: '/notes/developing'
-      preLoaderRoute: typeof ListNotesDevelopingRouteImport
+    '/_list/notes/fleeting': {
+      id: '/_list/notes/fleeting'
+      path: '/fleeting'
+      fullPath: '/notes/fleeting'
+      preLoaderRoute: typeof ListNotesFleetingRouteImport
       parentRoute: typeof ListNotesRoute
+    }
+    '/_list/notes/permanent': {
+      id: '/_list/notes/permanent'
+      path: '/permanent'
+      fullPath: '/notes/permanent'
+      preLoaderRoute: typeof ListNotesPermanentRouteImport
+      parentRoute: typeof ListNotesRoute
+    }
+    '/_list/scratch/': {
+      id: '/_list/scratch/'
+      path: '/scratch'
+      fullPath: '/scratch/'
+      preLoaderRoute: typeof ListScratchIndexRouteImport
+      parentRoute: typeof ListRoute
+    }
+    '/_list/todos/': {
+      id: '/_list/todos/'
+      path: '/'
+      fullPath: '/todos/'
+      preLoaderRoute: typeof ListTodosIndexRouteImport
+      parentRoute: typeof ListTodosRoute
+    }
+    '/_list/todos/done': {
+      id: '/_list/todos/done'
+      path: '/done'
+      fullPath: '/todos/done'
+      preLoaderRoute: typeof ListTodosDoneRouteImport
+      parentRoute: typeof ListTodosRoute
     }
   }
 }
