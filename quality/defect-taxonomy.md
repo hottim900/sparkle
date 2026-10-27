@@ -378,6 +378,8 @@ grep -rn "eval(\|new Function(" src/ server/ --include="*.ts" --include="*.tsx"
 
 **範圍：** 認證、secret 儲存、CSP/XSS 全面搜查。
 
+**增量搜查（2026-10-27 原生依賴）：** npm lockfile 掃描之外，實測 better-sqlite3 12.6.2 內嵌 SQLite 3.51.2，升至 12.11.1 / 3.53.2 以納入 WAL-reset 與 FTS5 修補。未發現任意 SQL 入口或停用 defensive mode 的呼叫，FTS5 CVE 利用前提未成立。主機 cloudflared 與 Ubuntu 函式庫另行更新；npm audit 不視為原生或主機元件的安全證據。詳見 `docs/security-updates.md`。
+
 **發現：**
 
 - Issue #180（Defect, Low）— `server/routes/settings.ts:92` 錯誤回應洩漏伺服器檔案系統路徑（`Vault path is not writable: ${vaultPath}`）
@@ -593,6 +595,8 @@ git tag --sort=-v:refname | head -5
 ### 搜查結果
 
 **範圍：** MCP server source vs dist、.env.example vs process.env 使用處、systemd service 路徑、package.json version vs git tag。
+
+**增量搜查（2026-10-27 原生 runtime）：** 新增 `npm run security:native`，在 CI 與部署重啟前檢查實際載入的 SQLite >=3.53.2；cloudflared 替換後須重啟所有共用執行檔的服務，並核對執行中程序，避免檔案版本與程序版本不一致。
 
 **發現：**
 

@@ -156,6 +156,8 @@
 
 ## 待追蹤發現
 
+- **2026-10-27 原生與主機補查**：npm audit 未涵蓋 better-sqlite3 內嵌 SQLite 與 cloudflared 的 Go runtime。升級 better-sqlite3 至 12.11.1（SQLite 3.53.2），新增 CI / deploy 的實際引擎版本檢查；主機 cloudflared 與 Ubuntu 套件另行更新並驗證。範圍與操作見 [安全更新](../docs/security-updates.md)。
+
 - **2026-10-27 CVE 修補**：兩份 npm lockfile 已更新至掃描 0 告警；MCP 停用壓縮本文、啟用輸入元素限制及 token audience 驗證。Node 最低版本提高為 22.23.4；systemd 需以 `scripts/upgrade-node-runtime.sh` 切換已安裝的 Node。驗證與操作見 [安全更新](../docs/security-updates.md)。
 
 搜查中發現但尚未建立正式項目的問題。
