@@ -32,7 +32,7 @@ jobs:
   test:
     # Playwright 1.58 supports Ubuntu 24.04; ubuntu-latest is moving to 26.
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 25
 
     steps:
       - uses: actions/checkout@v6
@@ -102,6 +102,15 @@ jobs:
       - name: Install Playwright browsers
         if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: npx playwright install chromium
+
+      - name: Use official HTTPS Ubuntu archive
+        # The Azure HTTP mirror can take over 11 minutes for 22 MB of packages.
+        run: |
+          for source_file in /etc/apt/sources.list /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources; do
+            if [[ -f "$source_file" ]]; then
+              sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' "$source_file"
+            fi
+          done
 
       - name: Install Playwright OS deps
         run: npx playwright install-deps chromium
