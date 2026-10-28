@@ -91,6 +91,7 @@ grep -rn "captureException\|captureMessage" server/ src/ --include="*.ts" --incl
 - DEF-026 — `mcp-server/src/vault.ts` writeVaultFileBySparkleId 寫入不驗證 frontmatter，sparkle_id 追蹤靜默斷裂（High / S2-Major）— 已修復 PR #167
 - `server/db/index.ts:268,362` — 多餘的 bare catch 包裹 `IF NOT EXISTS` 語句，可能吞掉非預期 SQLite 錯誤（Low，未建 DEF）
 - TD-026 — `mcp-server/src/http.ts` 15 處 console.\* 代替結構化 logger，繞過 Sentry 和結構化日誌（Medium）（2026-03-20 增量發現）
+- **2026-10-28 健康檢查修復**：`scripts/health-monitor.sh` 在 LINE 發送失敗後仍更新去重旗標，導致告警不再重試、恢復通知被遺失。改為發送成功才更新旗標，失敗回傳非零並留待下次排程重試；以假 curl 覆蓋告警與恢復失敗、成功去重及再次故障。同步檢查 `error-summary.sh`：每小時重新掃描、不保存去重旗標，無同類問題。
 
 **增量搜查（2026-04-05 vault/private/daily-note 新增功能）：**
 

@@ -13,6 +13,7 @@
 # 行為:
 #   - 健康檢查失敗 → 發送告警（僅首次，用標記檔防止重複通知）
 #   - 健康檢查恢復 → 發送恢復通知並清除標記檔
+#   - 通知發送失敗 → 保留目前狀態，下一次排程重試
 #   - 健康檢查正常 → 靜默退出
 #
 # 建議 cron 設定:
@@ -62,17 +63,23 @@ if curl -sf --max-time 10 "$HEALTH_URL" >/dev/null 2>&1; then
     # 服務正常
     if [[ -f "$ALERT_FLAG" ]]; then
         log "服務已恢復，發送恢復通知"
-        send_line_push "🟢 Sparkle 服務已恢復\n主機: $(hostname)\n時間: $(date '+%Y-%m-%d %H:%M:%S')" || \
+        if send_line_push "🟢 Sparkle 服務已恢復\n主機: $(hostname)\n時間: $(date '+%Y-%m-%d %H:%M:%S')"; then
+            rm -f "$ALERT_FLAG"
+        else
             log "WARN: LINE 恢復通知發送失敗"
-        rm -f "$ALERT_FLAG"
+            exit 1
+        fi
     fi
 else
     # 服務異常
     if [[ ! -f "$ALERT_FLAG" ]]; then
         log "服務異常，發送告警通知"
-        send_line_push "🔴 Sparkle 服務異常\n主機: $(hostname)\n時間: $(date '+%Y-%m-%d %H:%M:%S')" || \
+        if send_line_push "🔴 Sparkle 服務異常\n主機: $(hostname)\n時間: $(date '+%Y-%m-%d %H:%M:%S')"; then
+            touch "$ALERT_FLAG"
+        else
             log "WARN: LINE 告警通知發送失敗"
-        touch "$ALERT_FLAG"
+            exit 1
+        fi
     else
         log "服務仍然異常（已通知，跳過）"
     fi
