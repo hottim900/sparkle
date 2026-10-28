@@ -1,6 +1,6 @@
 {
   "name": "sparkle",
-  "version": "1.5.15.0",
+  "version": "1.5.16.0",
   "description": "Self-hosted PKM frontend for Obsidian: quick capture (PWA / LINE Bot / MCP) → Zettelkasten maturity → vault export",
   "license": "MIT",
   "repository": {
@@ -14,7 +14,7 @@
   "scripts": {
     "dev": "vite",
     "dev:server": "tsx watch --env-file=.env server/index.ts",
-    "build": "vite build",
+    "build": "node --disable-proto=throw node_modules/vite/bin/vite.js build",
     "start": "NODE_ENV=production node --env-file=.env --import tsx server/index.ts",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",

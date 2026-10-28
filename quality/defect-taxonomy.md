@@ -332,6 +332,8 @@ npx vitest run server/db/__tests__/migration*.test.ts
 
 ## D-AUTH: 認證、授權與安全防線
 
+**2026-10-28 建置依賴補查**：deepmerge 的 GHSA-gcqx-w48m-w2h4 尚無修補版。已確認目前 plugin 僅合併靜態 defaults；以 Node `--disable-proto=throw` 防護 npm build，實際建置入口的 regression tests 可重現並攔截公告路徑。完整 audit 仍有同一依賴鏈的 4 個 low 項目；追蹤與移除防護條件見 `docs/security-updates.md`，不以降級或忽略公告宣稱修補完成。
+
 ### 定義
 
 三個子面向：
