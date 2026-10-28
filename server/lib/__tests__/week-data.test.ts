@@ -19,13 +19,14 @@ function insertRawItem(
     created?: string;
     modified?: string;
     is_private?: number;
+    paused?: number;
   },
 ) {
   const id = overrides.id ?? crypto.randomUUID();
   sqlite
     .prepare(
-      `INSERT INTO items_active (id, type, title, content, status, priority, due, tags, origin, source, aliases, created, modified, is_private, viewed_at)
-       VALUES (?, ?, ?, '', ?, ?, ?, '[]', '', NULL, '[]', ?, ?, ?, NULL)`,
+      `INSERT INTO items_active (id, type, title, content, status, priority, due, tags, origin, source, aliases, created, modified, is_private, paused, viewed_at)
+       VALUES (?, ?, ?, '', ?, ?, ?, '[]', '', NULL, '[]', ?, ?, ?, ?, NULL)`,
     )
     .run(
       id,
@@ -37,6 +38,7 @@ function insertRawItem(
       overrides.created ?? new Date().toISOString(),
       overrides.modified ?? new Date().toISOString(),
       overrides.is_private ?? 0,
+      overrides.paused ?? 0,
     );
   return id;
 }
@@ -302,6 +304,29 @@ describe("getWeekData", () => {
 
     // Sunday (03-29): both still overdue
     expect(result.days[6]!.overdue_count).toBe(2);
+  });
+
+  it("excludes paused overdue todos and counts them again after resuming", () => {
+    insertRawItem(sqlite, {
+      id: "paused-overdue",
+      type: "todo",
+      status: "active",
+      due: "2026-03-20",
+      paused: 1,
+    });
+    insertRawItem(sqlite, {
+      type: "todo",
+      status: "active",
+      due: "2026-03-20",
+    });
+
+    expect(getWeekData(sqlite, monday).days.map((day) => day.overdue_count)).toEqual(
+      Array(7).fill(1),
+    );
+    sqlite.prepare("UPDATE items_active SET paused = 0 WHERE id = ?").run("paused-overdue");
+    expect(getWeekData(sqlite, monday).days.map((day) => day.overdue_count)).toEqual(
+      Array(7).fill(2),
+    );
   });
 
   it("does not count done/archived todos in overdue_count", () => {

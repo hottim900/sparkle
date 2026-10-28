@@ -524,6 +524,37 @@ describe("Dashboard queries exclude paused items", () => {
     expect(body.overdue_count).toBe(1);
   });
 
+  it("week overdue counts follow pause and resume mutations", async () => {
+    insertItem({ id: "week-normal", title: "Active overdue", due: "2026-03-20" });
+    insertItem({ id: "week-paused", title: "Paused overdue", due: "2026-03-20", paused: 1 });
+
+    const weekCounts = async () => {
+      const res = await app.request("/api/dashboard/week?start=2026-03-23", {
+        headers: authHeaders(),
+      });
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      return body.days.map((day: { overdue_count: number }) => day.overdue_count);
+    };
+
+    expect(await weekCounts()).toEqual(Array(7).fill(1));
+    const resumed = await app.request("/api/items/week-paused", {
+      method: "PATCH",
+      headers: jsonHeaders(),
+      body: JSON.stringify({ paused: false }),
+    });
+    expect(resumed.status).toBe(200);
+    expect(await weekCounts()).toEqual(Array(7).fill(2));
+
+    const paused = await app.request("/api/items/week-paused", {
+      method: "PATCH",
+      headers: jsonHeaders(),
+      body: JSON.stringify({ paused: true }),
+    });
+    expect(paused.status).toBe(200);
+    expect(await weekCounts()).toEqual(Array(7).fill(1));
+  });
+
   it("paused unreviewed item excluded from unreviewed dashboard", async () => {
     insertItem({
       id: "unreviewed-normal",

@@ -39,7 +39,7 @@ Full field reference in `conventions-detail` skill (invoke `/conventions-detail`
 
 Type conversion auto-maps status server-side. `category_id` preserved; `due`/`linked_note_id` cleared on todo→note; tags/priority/aliases cleared on →scratch.
 
-`paused` flag: cross-type pause mechanism (boolean, orthogonal to status) — lives on items_active only. Paused items excluded from stale/attention/overdue/focus/unreviewed queries; visible in search and dedicated `/paused` page. Auto-cleared on archive/export/done.
+`paused` flag: cross-type pause mechanism (boolean, orthogonal to status) — lives on items_active only. Paused items excluded from stale/attention/overdue/focus/unreviewed queries, including weekly overdue counts; visible in search and dedicated `/paused` page. Auto-cleared on archive/export/done.
 
 Mutations on items_vault from MCP (`sparkle_update_note`, `sparkle_advance_note`, `sparkle_pause_note`, `sparkle_resume_note`) and REST (`PATCH /api/items/:id` on vault rows) return `VAULT_READONLY` (409). Use `sparkle_write_obsidian` for content edits or `sparkle_release_note` / `DELETE /api/items/:id/vault-stub` to drop Sparkle's record while preserving the vault `.md`.
 

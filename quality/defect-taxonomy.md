@@ -283,6 +283,7 @@ grep -rn "fts\|MATCH" server/ --include="*.ts"
 
 - DEF-010 — `listItems()` tag filter 路徑使用 `sql.raw(sortField)` 繞過參數化查詢，違反防禦縱深（High / S2-Major）
 - DEF-020 — `shares.ts` 兩處使用 `SELECT *`，回傳多餘欄位。已修復為明確欄位列表。（Low / S4-Trivial）✅ Done
+- **2026-10-28 健康檢查修復**：`getWeekData()` 的週逾期查詢漏掉 `paused = 0`，與 dashboard、focus、LINE brief、daily note 的逾期語意不一致。已對齊既有 type/status/private/paused 條件，補上記憶體 DB 與實際 PATCH 暫停／恢復 → GET week 的 regression tests。週檢視活動與到期列表仍依原本時間軸語意保留。
 
 **審查但判定合理：** FTS5 外部內容表正確、GROUP BY + LEFT JOIN 安全、統計 CASE WHEN 邏輯正確、short ID prefix LIKE 查詢使用 Drizzle `like()` 安全函式。
 
