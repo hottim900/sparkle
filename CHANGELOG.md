@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.16.0] - 2026-10-28
+
+### Fixed
+
+- **Block prototype poisoning during frontend builds.** Vite and the current PWA build path run with Node's prototype-access guard while the deepmerge advisory has no upstream fix. The four low-severity build dependency audit entries remain tracked; this is a mitigation, not an upstream patch.
+- **Clarify patched Node selection for development shells.** Runtime setup now documents selecting the default version and reselecting the project version when a shell inherits an older Node path.
+
 ## [1.5.15.0] - 2026-10-28
 
 ### Fixed
