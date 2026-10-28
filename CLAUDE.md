@@ -53,6 +53,7 @@ DB migration version 0→27, idempotent. Migration safety is enforced by the loc
 - Node >=22.23.4 <24, enforced by `.npmrc engine-strict=true`
 - SQLite WAL mode, FTS5 trigram tokenizer (Chinese support)
 - Native SQLite >=3.53.2; run `npm run security:native` after dependency installation. CI and deployment check the loaded engine, since npm audit does not inspect the embedded SQLite source. See `docs/security-updates.md` for native and host patching.
+- Monitoring: update outage deduplication flags only after successful LINE delivery. Failed outage and recovery notifications must retry on the next health check.
 - Commit: `@commitlint/config-conventional` via `.husky/commit-msg`. Types: feat, fix, docs, chore, refactor, test, perf, ci, build, style, revert
 - Worktree 開發：**此機器同時是開發和生產環境，main working directory 必須留在 main branch。** 所有 session 用 `claude --worktree`，agent 用 `isolation: "worktree"`。
 - 分支策略：**禁止直接 commit 到 main。** 一律 feature branch → PR → squash merge。命名：`{type}/{short-description}`。PR 標題必須符合 conventional commit 格式。

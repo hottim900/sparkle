@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.5.14.0] - 2026-10-28
+
+### Fixed
+
+- **Retry monitoring notifications after a failed LINE delivery.** Outage alerts are marked as delivered only after a successful send, and recovery notifications keep retrying until delivered. Successful notifications remain deduplicated.
+
 ## [1.5.13.1] - 2026-10-27
 
 ### Fixed
