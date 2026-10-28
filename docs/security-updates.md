@@ -1,5 +1,23 @@
 # 安全更新與 Node runtime
 
+## 2026-10-28 建置依賴緩解
+
+`deepmerge` 的 [GHSA-gcqx-w48m-w2h4](https://github.com/advisories/GHSA-gcqx-w48m-w2h4)
+影響 4.2.0–4.3.1，截至本次檢查尚無上游修補版。根目錄 npm audit 的 4 個 low 項目
+來自同一條 `vite-plugin-pwa → workbox-build → @rollup/plugin-node-resolve → deepmerge`
+建置依賴鏈；MCP 與 `npm audit --omit=dev` 均無告警。
+
+目前 `@rollup/plugin-node-resolve` 只用 deepmerge 複製套件內靜態 defaults，
+未發現筆記內容或 API 輸入進入這次公告的合併路徑。這是本專案的可達性判斷，並非上游已修補。
+
+`npm run build` 現在透過 Node `--disable-proto=throw` 啟動 Vite，阻擋公告中的
+`__proto__` 原型寫入；遇到該路徑會中止建置。CI、部署與 Docker 都使用同一個 build script。
+Regression tests 透過實際 npm build 入口驗證 target/source 的原型注入被攔截，以及普通巢狀合併仍可運作；
+完整 PWA 建置另行驗證相容性。
+
+這是緩解措施，完整 audit 仍保留 4 個 low 項目；不得宣稱零告警，也不要套用會降級 PWA 工具鏈的
+`npm audit fix --force`。上游發布修補後，重新評估依賴更新並驗證建置與 E2E，再決定是否移除防護。
+
 ## 2026-10-27 修補
 
 Sparkle 與 MCP server 必須使用 Node 22.23.4 或更新的 22.x 版本。
@@ -11,8 +29,12 @@ systemd 的 `ExecStart` 是絕對路徑，安裝新 Node 或修改 `.nvmrc` 不�
 ```bash
 nvm install
 nvm use
+nvm alias default "$(cat .nvmrc)"
 sudo bash scripts/upgrade-node-runtime.sh "$(command -v node)"
 ```
+
+`nvm alias default` 適用於新 shell 的預設版本；繼承舊 Node PATH 的 shell 仍需執行 `nvm use`，
+也可在登入／互動 shell 初始化時依目前專案 `.nvmrc` 選版，沒有專案設定時才選 default。
 
 可先加 `--dry-run` 預覽。腳本只新增兩個服務的 `90-node-runtime.conf` drop-in，
 保留原有防火牆、記憶體限制與 migration halt 設定，再重載 systemd、重啟服務並檢查狀態。
