@@ -616,7 +616,8 @@ export function getWeekData(sqlite: Database.Database, startDate: string): WeekD
          AND status NOT IN ('done', 'archived')
          AND due IS NOT NULL
          AND due < ?
-         AND is_private = 0`,
+         AND is_private = 0
+         AND paused = 0`,
     )
     .all(dates[6]) as { due: string }[];
 

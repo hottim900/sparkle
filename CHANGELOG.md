@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.5.15.0] - 2026-10-28
+
+### Fixed
+
+- **Keep paused todos out of weekly overdue counts.** Pausing and resuming a todo now updates the week view's overdue badges consistently with the dashboard, focus list, daily note, and LINE brief.
+
 ## [1.5.14.0] - 2026-10-28
 
 ### Fixed
